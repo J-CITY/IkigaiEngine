@@ -54,6 +54,21 @@ cmake --build build
 Run local server
 python -m http.server 8000
 
+- Emscripten Assimp
+Download Assimp Release 5.0.1 (https://github.com/assimp/assimp/releases/tag/v5.0.1)
+Run the following commands after installing Emscripten (https://emscripten.org/docs/getting_started/downloads.html):
+cd assimp-5.0.1
+emcmake cmake -DCMAKE_BUILD_TYPE=Release . 
+emmake make
+cd ..
+Link the static libraries in your CMake project:
+include_directories("${PROJECT_SOURCE_DIR}/assimp-5.0.1/include")
+link_libraries("${PROJECT_SOURCE_DIR}/assimp-5.0.1/lib/libassimp.a")
+link_libraries("${PROJECT_SOURCE_DIR}/assimp-5.0.1/lib/libIrrXML.a")
+link_libraries("${PROJECT_SOURCE_DIR}/assimp-5.0.1/lib/libzlib.a")
+
+
+
 //TODO: set canvas size
 
 //Create link
