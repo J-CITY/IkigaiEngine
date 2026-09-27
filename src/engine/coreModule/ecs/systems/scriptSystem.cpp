@@ -139,5 +139,5 @@ bool IKIGAI::ECS::ScriptSystem::registerToLuaContext(ScriptComponent& component,
 }
 
 void IKIGAI::ECS::ScriptSystem::unregisterFromLuaContext(ScriptComponent& component) {
-	component.getTable() = sol::nil;
+	component.getTable() = sol::lua_nil;
 }

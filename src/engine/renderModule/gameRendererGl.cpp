@@ -1,7 +1,10 @@
 #include "gameRendererGl.h"
 
+
+#ifdef OPENGL_BACKEND
 #include "backends/gl/shaderGl.h"
 #include "backends/gl/uniformBufferGl.h"
+#endif
 #include "backends/interface/frameBufferInterface.h"
 #include "coreModule/core/core.h"
 #include "resourceModule/serviceManager.h"
@@ -103,8 +106,9 @@ namespace IKIGAI::RENDER {
 			//std::static_pointer_cast<ShaderGl>(drawable.material->getShader())->bind();
 			
 			//TODO: use render for it
+#ifdef OPENGL_BACKEND
 			std::static_pointer_cast<ShaderGl>(drawable.material->getShader())->setMat4("engine_Model.model", drawable.world);
-
+#endif
 			BonesUBO data;
 			if (drawable.skeleton && drawable.animationPlayable) {
 				data.use = 1;

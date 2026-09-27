@@ -128,7 +128,9 @@ namespace IKIGAI::WINDOW {
 		VkSurfaceKHR createVulkanSurface(VkInstance instance);
 		std::vector<const char*> getSDLVulkanExtentions();
 #endif
-
+#ifdef METAL_BACKEND
+		void* getMetalLayer();
+#endif
 
 		void initImGUI();
 	private:

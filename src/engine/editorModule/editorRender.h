@@ -43,7 +43,7 @@ namespace IKIGAI::EDITOR {
 			std::unordered_map<std::string, std::shared_ptr<RENDER::TextureInterface>> mTextureCache;
 
 			std::string mResPath;
-			File::FileType mResType = File::FileType::TEXT;//??
+			File::FileType mResType;
 			CommandHistory mCommandHistory;
 		};
 		inline static GlobalState GlobalState;
@@ -55,7 +55,7 @@ namespace IKIGAI::EDITOR {
 		std::unique_ptr<Internal> mData;
 
 
-		virtual ~EditorRender() = default;
+		virtual ~EditorRender();
 		void draw();
 		void drawPopup();
 	};

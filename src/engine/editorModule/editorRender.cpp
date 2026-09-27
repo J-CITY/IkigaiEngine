@@ -57,6 +57,8 @@ struct EditorRender::Internal {
 	
 };
 
+EditorRender::~EditorRender() = default;
+
 EditorRender::EditorRender() {
 	mData = std::make_unique<Internal>();
 

@@ -661,6 +661,16 @@ void Window::initImGUI() {
 #endif
 }
 
+#ifdef METAL_BACKEND
+void* Window::getMetalLayer() {
+	static SDL_MetalView view = nullptr;
+    if (!view) {
+        view = SDL_Metal_CreateView(mContext->mWindow);
+    }
+    return SDL_Metal_GetLayer(view);
+}
+#endif
+
 WindowSettings& Window::getSetting() {
 	return mWindowSettings;
 }
@@ -720,6 +730,9 @@ void Window::create(Window* sharedWindow) {
 #ifdef VULKAN_BACKEND
 	flags = (SDL_WindowFlags)(flags | SDL_WINDOW_VULKAN);
 #endif
+#ifdef METAL_BACKEND
+	flags = (SDL_WindowFlags)(flags | SDL_WINDOW_METAL);
+#endif
 	SDL_Window* _window{
 		SDL_CreateWindow(mWindowSettings.title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, displaySize.x, displaySize.y,flags)
 	};
@@ -749,6 +762,10 @@ void Window::create(Window* sharedWindow) {
 		SDL_GL_MakeCurrent(sharedWindow->mContext->mWindow, sharedWindow->mContext->mContext);
 	}
 	mContext->mContext = SDL_GL_CreateContext(mContext->mWindow);
+#endif
+#ifdef METAL_BACKEND
+	// mMetalLayer can be stored in Window::Internal if we want, or created on the fly.
+	// But SDL_Metal_CreateView is already called in getMetalLayer if needed, or we just call it once here.
 #endif
 	//initImGUI();
 }

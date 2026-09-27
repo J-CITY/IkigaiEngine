@@ -6,8 +6,8 @@
 #include <string>
 #include <unordered_map>
 #include <filesystem>
-
-
+#include <list>
+#include <ostream>
 namespace IKIGAI
 {
 	namespace RENDER
@@ -53,6 +53,9 @@ namespace IKIGAI::EDITOR {
 		static FileType GetFileType(const std::filesystem::path& path);
 		static std::string GetExtension(const std::filesystem::path& path);
 	};
+	inline std::ostream& operator<<(std::ostream& os, File::FileType type) {
+		return os << static_cast<int>(type);
+	}
 
 	class FileBrowserWindow: public EditorWindow{
 		std::string mPath;

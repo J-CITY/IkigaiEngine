@@ -72,7 +72,7 @@ namespace IKIGAI::ECS {
 	}
 
 	template<template<typename...> class Container, typename...ComponentType>
-	void moveComponent(Entity entity, std::shared_ptr<ComponentArrayInterface> arrTo, std::shared_ptr<ComponentArrayInterface> arrFrom, const std::string& tname, Container<ComponentType...> opt) {
+	void moveComponent(Entity entity, std::shared_ptr<ComponentArrayInterface> arrTo, std::shared_ptr<ComponentArrayInterface> arrFrom, const std::string& tname, [[maybe_unused]] Container<ComponentType...> opt) {
 		(moveComponentImpl<ComponentType>(entity, arrTo, arrFrom, tname), ...);
 	}
 
@@ -382,7 +382,7 @@ namespace IKIGAI::ECS {
 		}
 	private:
 		template <typename T>
-		void tryGetComponent(std::vector<UTILS::WeakPtr<ComponentBase>>& res, Entity entity) {
+		void tryGetComponent([[maybe_unused]] std::vector<UTILS::WeakPtr<ComponentBase>>& res, [[maybe_unused]] Entity entity) {
 			//auto arr = getComponentArray<T>();
 			//if (arr->count(entity)) {
 			//	res.push_back(arr->getDataBasePtr(entity));
@@ -390,7 +390,7 @@ namespace IKIGAI::ECS {
 		}
 
 		template<template<typename...> class Container, typename...ComponentType>
-		std::vector<UTILS::WeakPtr<ComponentBase>> tryGetComponents(Entity entity, Container<ComponentType...> opt) {
+		std::vector<UTILS::WeakPtr<ComponentBase>> tryGetComponents(Entity entity, [[maybe_unused]] Container<ComponentType...> opt) {
 			std::vector<UTILS::WeakPtr<ComponentBase>> res;
 			(tryGetComponent<ComponentType>(res, entity), ...);
 			return res;
@@ -443,12 +443,12 @@ namespace IKIGAI::ECS {
 		void enabledComponentImpl(Entity id) {
 			if (getComponentArrayOff<T>()->count(id)) {
 				auto data = getComponentArrayOff<T>()->removeData(id);
-				getComponentArray<T>()->insertData(id, data);
+				getComponentArray<T>()->insertData(id, std::move(data));
 			}
 		}
 
 		template<template<typename...> class Container, typename...ComponentType>
-		void enabledComponent(Entity id, Container<ComponentType...> opt) {
+		void enabledComponent(Entity id, [[maybe_unused]] Container<ComponentType...> opt) {
 			(enabledComponentImpl<ComponentType>(id), ...);
 		}
 
@@ -459,13 +459,13 @@ namespace IKIGAI::ECS {
 		template<typename T>
 		void disableComponentImpl(Entity id) {
 			if (getComponentArray<T>()->count(id)) {
-				auto&& data = getComponentArray<T>()->removeData(id);
-				getComponentArrayOff<T>()->insertData(id, data);
+				auto data = getComponentArray<T>()->removeData(id);
+				getComponentArrayOff<T>()->insertData(id, std::move(data));
 			}
 		}
 
 		template<template<typename...> class Container, typename...ComponentType>
-		void disableComponent(Entity id, Container<ComponentType...> opt) {
+		void disableComponent(Entity id, [[maybe_unused]] Container<ComponentType...> opt) {
 			(disableComponentImpl<ComponentType>(id), ...);
 		}
 	};

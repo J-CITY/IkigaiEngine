@@ -52,6 +52,11 @@
 #include <renderModule/backends/dx12/driverDx12.h>
 #include <renderModule/gameRendererDx12.h>
 #endif
+#ifdef METAL_BACKEND
+namespace IKIGAI::RENDER {
+    std::unique_ptr<DriverInterface> CreateDriverMetal();
+}
+#endif
 
 
 //namespace IKIGAI
@@ -145,6 +150,10 @@ Core:: Core(
 		driver = std::make_unique<RENDER::DriverDx12>();
 		//driver->init();
 	//}
+#endif
+#ifdef METAL_BACKEND
+	driver = RENDER::CreateDriverMetal();
+	driver->init();
 #endif
 	if (!driver) {
 		throw;

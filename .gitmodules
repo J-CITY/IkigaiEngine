@@ -53,13 +53,13 @@
 	url = https://github.com/J-CITY/vfspp.git
 [submodule "3rd/SPIRV-Reflect"]
 	path = 3rd/SPIRV-Reflect
-	url = https://github.com/KhronosGroup/SPIRV-Reflect
+	url = https://github.com/KhronosGroup/SPIRV-Reflect.git
 [submodule "3rd/SPIRV-Cross"]
 	path = 3rd/SPIRV-Cross
-	url = https://github.com/KhronosGroup/SPIRV-Cross
+	url = https://github.com/KhronosGroup/SPIRV-Cross.git
 [submodule "3rd/glslang"]
 	path = 3rd/glslang
-	url = https://github.com/KhronosGroup/glslang
+	url = https://github.com/KhronosGroup/glslang.git
 [submodule "3rd/serdepp"]
 	path = 3rd/serdepp
 	url = https://github.com/injae/serdepp.git

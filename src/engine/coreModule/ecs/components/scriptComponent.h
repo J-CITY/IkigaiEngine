@@ -37,7 +37,7 @@ namespace IKIGAI::ECS {
 		void setScript(const std::string& name);
 
 		std::string name;
-		sol::table object = sol::nil;
+		sol::table object = sol::lua_nil;
 	public:
 		IKI_PROPERTY(Name=Path, Type=std::string, Getter=getScriptName, Setter=setScript, Flags=[USE_IN_EDITOR_COMPONENT_INSPECTOR], EditWidget=STRING)
 		static auto GetMembers() {
@@ -57,12 +57,12 @@ namespace IKIGAI::ECS {
 	};
 
 	template <>
-	inline std::string ECS::GetType<ScriptComponent>() {
+	inline std::string GetType<ScriptComponent>() {
 		return "class IKIGAI::ECS::ScriptComponent";
 	}
 
 	template <>
-	inline std::string IKIGAI::ECS::GetComponentName<ScriptComponent>() {
+	inline std::string GetComponentName<ScriptComponent>() {
 		return "ScriptComponent";
 	}
 }

@@ -193,7 +193,7 @@ namespace IKIGAI::ECS2 {
 		}
 
 		template<typename T>
-		RawType<T>& forEachComponentsImpl(Archetype& archetype, size_t i, Entity entity) {
+		RawType<T>& forEachComponentsImpl(Archetype& archetype, size_t i, [[maybe_unused]] Entity entity) {
 			using U = RawType<T>;
 			static_assert(std::is_base_of_v<Component, U>, "Must inherit from class Component");
 			ComponentType id = getComponentType<U>();
@@ -301,7 +301,7 @@ namespace IKIGAI::ECS2 {
 			if (!mSingletonComponent.contains(type)) {
 				return nullptr;
 			}
-			return mSingletonComponent.at(type)->getWeak<T>();
+			return mSingletonComponent.at(type)->template getWeak<T>();
 		}
 
 		template<typename T>

@@ -73,7 +73,7 @@ void IKIGAI::SCRIPTING::LuaActorBinder::BindActor(sol::state & p_luaState) {
 		//	if (behaviour)
 		//		return behaviour->getTable();
 		//	else
-		//		return sol::nil;
+		//		return sol::lua_nil;
 		//},
 		
 		//TODO:

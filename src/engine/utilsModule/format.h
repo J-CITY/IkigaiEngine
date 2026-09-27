@@ -1,10 +1,9 @@
 #pragma once
 #ifndef USING_GLES
 #include <format>
-#else
-#include <sstream>
 #endif
-
+#include <sstream>
+#include <string_view>
 
 namespace IKIGAI::UTILS
 {

@@ -73,3 +73,18 @@ vkCmdPipelineBarrier(fd->CommandBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPU
 ImGuiImplVulkanFuncs_vkCmdBeginRenderingKHR = reinterpret_cast<PFN_vkCmdBeginRenderingKHR>(loader_func("vkCmdBeginRendering", user_data));
 ImGuiImplVulkanFuncs_vkCmdEndRenderingKHR = reinterpret_cast<PFN_vkCmdEndRenderingKHR>(loader_func("vkCmdEndRendering", user_data));
 --------------------------
+
+
+macOS
+brew install sdl2 glew vulkan-headers vulkan-loader
+cmake -B mac/build -S mac
+
+
+cmake --build mac/build -j 8
+
+xcode
+# Генерируем проект для Xcode в папку mac/build_xcode
+cmake -G Xcode -B mac/build_xcode -S mac
+
+# Открываем созданный проект в Xcode
+open mac/build_xcode/IkigaiEngine.xcodeproj
