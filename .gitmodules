@@ -4,9 +4,6 @@
 [submodule "3rd/soloud"]
 	path = 3rd/soloud
 	url = https://github.com/jarikomppa/soloud.git
-[submodule "3rd/glfw"]
-	path = 3rd/glfw
-	url = https://github.com/glfw/glfw.git
 [submodule "3rd/freetype"]
 	path = 3rd/freetype
 	url = https://github.com/freetype/freetype.git
