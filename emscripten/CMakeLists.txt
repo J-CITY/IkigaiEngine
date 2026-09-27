@@ -177,6 +177,7 @@ add_library(imgui SHARED ${IMGUI_FILES})
 # DEFINES
 add_compile_definitions(NOMINMAX)
 add_compile_definitions(USE_SDL)
+add_compile_definitions(SOL_NO_EXCEPTIONS=1)
 add_compile_definitions(USING_GLES)
 # if (backend == opengl)
 add_compile_definitions(OPENGL_BACKEND)
