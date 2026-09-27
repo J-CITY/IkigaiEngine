@@ -1,16 +1,16 @@
 /******************************************************************************
  * Spine Runtimes License Agreement
- * Last updated July 28, 2023. Replaces all prior versions.
+ * Last updated April 5, 2025. Replaces all prior versions.
  *
- * Copyright (c) 2013-2023, Esoteric Software LLC
+ * Copyright (c) 2013-2025, Esoteric Software LLC
  *
  * Integration of the Spine Runtimes into software or otherwise creating
  * derivative works of the Spine Runtimes is permitted under the terms and
  * conditions of Section 2 of the Spine Editor License Agreement:
  * http://esotericsoftware.com/spine-editor-license
  *
- * Otherwise, it is permitted to integrate the Spine Runtimes into software or
- * otherwise create derivative works of the Spine Runtimes (collectively,
+ * Otherwise, it is permitted to integrate the Spine Runtimes into software
+ * or otherwise create derivative works of the Spine Runtimes (collectively,
  * "Products"), provided that each user of the Products must obtain their own
  * Spine Editor license and redistribution of the Products in any form must
  * include this license and copyright notice.
@@ -23,8 +23,8 @@
  * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES,
  * BUSINESS INTERRUPTION, OR LOSS OF USE, DATA, OR PROFITS) HOWEVER CAUSED AND
  * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THE
- * SPINE RUNTIMES, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THE SPINE RUNTIMES, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
 #include <spine/SequenceTimeline.h>
@@ -74,6 +74,15 @@ void SequenceTimeline::apply(Skeleton &skeleton, float lastTime, float time, Vec
 	if (slotAttachment != _attachment) {
 		if (slotAttachment == NULL || !slotAttachment->getRTTI().instanceOf(VertexAttachment::rtti) || ((VertexAttachment *) slotAttachment)->getTimelineAttachment() != _attachment) return;
 	}
+	Sequence *sequence = NULL;
+	if (_attachment->getRTTI().instanceOf(RegionAttachment::rtti)) sequence = ((RegionAttachment *) _attachment)->getSequence();
+	if (_attachment->getRTTI().instanceOf(MeshAttachment::rtti)) sequence = ((MeshAttachment *) _attachment)->getSequence();
+	if (!sequence) return;
+
+	if (direction == MixDirection_Out) {
+		if (blend == MixBlend_Setup) slot->setSequenceIndex(-1);
+		return;
+	}
 
 	Vector<float> &frames = this->_frames;
 	if (time < frames[0]) {// Time is before first frame.
@@ -86,14 +95,10 @@ void SequenceTimeline::apply(Skeleton &skeleton, float lastTime, float time, Vec
 	int modeAndIndex = (int) frames[i + MODE];
 	float delay = frames[i + DELAY];
 
-	Sequence *sequence = NULL;
-	if (_attachment->getRTTI().instanceOf(RegionAttachment::rtti)) sequence = ((RegionAttachment *) _attachment)->getSequence();
-	if (_attachment->getRTTI().instanceOf(MeshAttachment::rtti)) sequence = ((MeshAttachment *) _attachment)->getSequence();
-	if (!sequence) return;
 	int index = modeAndIndex >> 4, count = (int) sequence->getRegions().size();
 	int mode = modeAndIndex & 0xf;
 	if (mode != SequenceMode::hold) {
-		index += (int) (((time - before) / delay + 0.00001));
+		index += (int) (((time - before) / delay + 0.0001));
 		switch (mode) {
 			case SequenceMode::once:
 				index = MathUtil::min(count - 1, index);

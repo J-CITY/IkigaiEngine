@@ -1,16 +1,16 @@
 /******************************************************************************
  * Spine Runtimes License Agreement
- * Last updated July 28, 2023. Replaces all prior versions.
+ * Last updated April 5, 2025. Replaces all prior versions.
  *
- * Copyright (c) 2013-2023, Esoteric Software LLC
+ * Copyright (c) 2013-2025, Esoteric Software LLC
  *
  * Integration of the Spine Runtimes into software or otherwise creating
  * derivative works of the Spine Runtimes is permitted under the terms and
  * conditions of Section 2 of the Spine Editor License Agreement:
  * http://esotericsoftware.com/spine-editor-license
  *
- * Otherwise, it is permitted to integrate the Spine Runtimes into software or
- * otherwise create derivative works of the Spine Runtimes (collectively,
+ * Otherwise, it is permitted to integrate the Spine Runtimes into software
+ * or otherwise create derivative works of the Spine Runtimes (collectively,
  * "Products"), provided that each user of the Products must obtain their own
  * Spine Editor license and redistribution of the Products in any form must
  * include this license and copyright notice.
@@ -23,8 +23,8 @@
  * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES,
  * BUSINESS INTERRUPTION, OR LOSS OF USE, DATA, OR PROFITS) HOWEVER CAUSED AND
  * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THE
- * SPINE RUNTIMES, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+ * THE SPINE RUNTIMES, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *****************************************************************************/
 
 #ifndef SPINE_STRING_H
@@ -179,13 +179,41 @@ namespace spine {
 			return *this;
 		}
 
-		bool startsWith(const String &needle) {
+		bool startsWith(const String &needle) const {
 			if (needle.length() > length()) return false;
 			for (int i = 0; i < (int)needle.length(); i++) {
 				if (buffer()[i] != needle.buffer()[i]) return false;
 			}
 			return true;
 		}
+
+        int lastIndexOf(const char c) const {
+            for (int i = (int)length() - 1; i >= 0; i--) {
+                if (buffer()[i] == c) return i;
+            }
+            return -1;
+        }
+
+        String substring(int startIndex, int length) const {
+            if (startIndex < 0 || startIndex >= (int)_length || length < 0 || startIndex + length > (int)_length) {
+                return String();
+            }
+            char* subStr = SpineExtension::calloc<char>(length + 1, __FILE__, __LINE__);
+            memcpy(subStr, _buffer + startIndex, length);
+            subStr[length] = '\0';
+            return String(subStr, true, true);
+        }
+
+        String substring(int startIndex) const {
+            if (startIndex < 0 || startIndex >= (int)_length) {
+                return String();
+            }
+            int length = (int)_length - startIndex;
+            char* subStr = SpineExtension::calloc<char>(length + 1, __FILE__, __LINE__);
+            memcpy(subStr, _buffer + startIndex, length);
+            subStr[length] = '\0';
+            return String(subStr, true, true);
+        }
 
 		friend bool operator==(const String &a, const String &b) {
 			if (a._buffer == b._buffer) return true;
