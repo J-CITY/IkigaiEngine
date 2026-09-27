@@ -25,3 +25,6 @@ emscripten/out
 src/engine/generated
 assets/
 assetses/
+mac/out
+.DS_Store
+mac/.DS_Store
