@@ -115,7 +115,14 @@ std::string DriverVk::State::getName() {
 		(mFrameBuffer ? std::to_string(mFrameBuffer->getId()) : "0");
 }
 
-DriverVk::DriverVk() {
+static PFN_vkGetInstanceProcAddr initVolk() {
+	if (volkInitialize() != VK_SUCCESS) {
+		throw std::runtime_error("Failed to initialize volk");
+	}
+	return volkGetInstanceProcAddr;
+}
+
+DriverVk::DriverVk() : mContext(initVolk()) {
 	UtilityVk::mDriver = this;
 	DriverVk::init();
 }
@@ -214,6 +221,7 @@ void DriverVk::init() {
 		);
 
 	mInstance = mContext.createInstance(structureChain.get<vk::InstanceCreateInfo>());
+	volkLoadInstance(*mInstance);
 
 #if defined(DEBUG) || defined(_DEBUG) 
 	mDebugMessenger = mInstance.createDebugUtilsMessengerEXT(debugMessengerInfo);
@@ -280,6 +288,7 @@ void DriverVk::init() {
 	deviceInfo.setPNext(&deviceFeatures.get<vk::PhysicalDeviceFeatures2>());
 
 	mDevice = mPhysicalDevice.createDevice(deviceInfo);
+	volkLoadDevice(*mDevice);
 
 	mQueue = mDevice.getQueue(mQueueFamilyIndex, 0);
 

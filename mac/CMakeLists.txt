@@ -125,7 +125,19 @@ list(FILTER LUA_FILES EXCLUDE REGEX "luac\\.c$")
 add_library(lua STATIC ${LUA_FILES})
 target_include_directories(lua PUBLIC "${THIRD_PARTY_DIR}/lua")
 
-# 9. SoLoud
+# 9. Volk
+add_library(volk STATIC "${THIRD_PARTY_DIR}/volk/volk.c" "${THIRD_PARTY_DIR}/volk/volk.h")
+target_include_directories(volk PUBLIC "${THIRD_PARTY_DIR}/Vulkan-Headers/include")
+
+# 10. SDL2
+if(USE_SDL2)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_TEST OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${THIRD_PARTY_DIR}/SDL2 ./3rd/SDL2/build)
+endif()
+
+# 10. SoLoud
 # On Windows there is a precompiled soloud_static_x64_d.lib, for macOS we build from source.
 file(GLOB_RECURSE SOLOUD_SOURCES 
     "${THIRD_PARTY_DIR}/soloud/src/audiosource/*.cpp"
@@ -207,6 +219,10 @@ target_include_directories(${APP_NAME} PRIVATE
     ${THIRD_PARTY_DIR}/vfspp/include
     ${THIRD_PARTY_DIR}/vfspp/include/vendor/miniz-cpp
     ${THIRD_PARTY_DIR}/sol/include
+    ${THIRD_PARTY_DIR}/volk
+    ${THIRD_PARTY_DIR}/Vulkan-Headers/include
+    ${THIRD_PARTY_DIR}/VMA/include
+    ${THIRD_PARTY_DIR}/D3D12MA/src
 )
 
 set(LIBS_TO_LINK
@@ -227,34 +243,10 @@ set(LIBS_TO_LINK
 )
 
 if(USE_SDL2)
-    # Check common Homebrew paths for SDL2 CMake configs
-    list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew/lib/cmake/SDL2" "/usr/local/lib/cmake/SDL2")
-    
-    find_package(SDL2 QUIET)
-    if(SDL2_FOUND)
-        if(TARGET SDL2::SDL2)
-            target_link_libraries(${APP_NAME} PRIVATE SDL2::SDL2 SDL2::SDL2main)
-            target_include_directories(imgui PRIVATE ${SDL2_INCLUDE_DIRS})
-            target_include_directories(soloud PRIVATE ${SDL2_INCLUDE_DIRS})
-        else()
-            target_link_libraries(${APP_NAME} PRIVATE ${SDL2_LIBRARIES})
-            target_include_directories(${APP_NAME} PRIVATE ${SDL2_INCLUDE_DIRS})
-            target_include_directories(imgui PRIVATE ${SDL2_INCLUDE_DIRS})
-            target_include_directories(soloud PRIVATE ${SDL2_INCLUDE_DIRS})
-        endif()
-    else()
-        # Fallback to manual search
-        find_path(SDL2_INCLUDE_DIR SDL.h PATH_SUFFIXES SDL2 include/SDL2 PATHS /opt/homebrew/include /usr/local/include)
-        find_library(SDL2_LIBRARY NAMES SDL2 PATHS /opt/homebrew/lib /usr/local/lib)
-        if(SDL2_INCLUDE_DIR AND SDL2_LIBRARY)
-            target_include_directories(${APP_NAME} PRIVATE ${SDL2_INCLUDE_DIR})
-            target_include_directories(imgui PRIVATE ${SDL2_INCLUDE_DIR})
-            target_include_directories(soloud PRIVATE ${SDL2_INCLUDE_DIR})
-            target_link_libraries(${APP_NAME} PRIVATE ${SDL2_LIBRARY})
-        else()
-            message(FATAL_ERROR "SDL2 not found. Please run: brew install sdl2")
-        endif()
-    endif()
+    target_link_libraries(${APP_NAME} PRIVATE SDL2::SDL2main SDL2::SDL2-static)
+    target_include_directories(imgui PRIVATE "${THIRD_PARTY_DIR}/SDL2/include")
+    target_include_directories(soloud PRIVATE "${THIRD_PARTY_DIR}/SDL2/include")
+    target_include_directories(${APP_NAME} PRIVATE "${THIRD_PARTY_DIR}/SDL2/include")
 endif()
 
 if(USE_OPENGL)
@@ -267,8 +259,7 @@ if(USE_OPENGL)
 endif()
 
 if(USE_VULKAN)
-    find_package(Vulkan REQUIRED)
-    target_link_libraries(${APP_NAME} PRIVATE Vulkan::Vulkan)
+    target_link_libraries(${APP_NAME} PRIVATE volk)
 endif()
 
 # System frameworks

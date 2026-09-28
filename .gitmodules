@@ -60,3 +60,19 @@
 [submodule "3rd/serdepp"]
 	path = 3rd/serdepp
 	url = https://github.com/injae/serdepp.git
+[submodule "3rd/volk"]
+	path = 3rd/volk
+	url = https://github.com/zeux/volk.git
+[submodule "3rd/Vulkan-Headers"]
+	path = 3rd/Vulkan-Headers
+	url = https://github.com/KhronosGroup/Vulkan-Headers.git
+[submodule "3rd/SDL2"]
+	path = 3rd/SDL2
+	url = https://github.com/libsdl-org/SDL.git
+	branch = SDL2
+[submodule "3rd/VMA"]
+	path = 3rd/VMA
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "3rd/D3D12MA"]
+	path = 3rd/D3D12MA
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator.git

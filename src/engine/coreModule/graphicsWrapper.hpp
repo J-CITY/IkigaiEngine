@@ -23,7 +23,7 @@
 #endif
 
 #ifdef VULKAN_BACKEND
-#include <vulkan/vulkan.h>
+#include <volk.h>
 #endif
 
 #endif

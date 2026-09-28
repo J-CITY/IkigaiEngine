@@ -105,7 +105,7 @@ target_include_directories(imgui PUBLIC
 )
 
 if(USE_SDL2)
-    target_include_directories(imgui PRIVATE "${THIRD_PARTY_DIR}/SDL2_windows/include")
+    target_include_directories(imgui PRIVATE "${THIRD_PARTY_DIR}/SDL2/include")
 endif()
 
 # 7. Spine
@@ -119,6 +119,18 @@ list(FILTER LUA_FILES EXCLUDE REGEX "lua\\.c$")
 list(FILTER LUA_FILES EXCLUDE REGEX "luac\\.c$")
 add_library(lua STATIC ${LUA_FILES})
 target_include_directories(lua PUBLIC "${THIRD_PARTY_DIR}/lua")
+
+# 9. Volk
+add_library(volk STATIC "${THIRD_PARTY_DIR}/volk/volk.c" "${THIRD_PARTY_DIR}/volk/volk.h")
+target_include_directories(volk PUBLIC "${THIRD_PARTY_DIR}/Vulkan-Headers/include")
+
+# 10. SDL2
+if(USE_SDL2)
+    set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+    set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    set(SDL_TEST OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${THIRD_PARTY_DIR}/SDL2 ./3rd/SDL2/build)
+endif()
 
 # --- Main Application ---
 
@@ -187,6 +199,10 @@ target_include_directories(${APP_NAME} PRIVATE
     ${THIRD_PARTY_DIR}/vfspp/include
     ${THIRD_PARTY_DIR}/vfspp/include/vendor/miniz-cpp
     ${THIRD_PARTY_DIR}/sol/include
+    ${THIRD_PARTY_DIR}/volk
+    ${THIRD_PARTY_DIR}/Vulkan-Headers/include
+    ${THIRD_PARTY_DIR}/VMA/include
+    ${THIRD_PARTY_DIR}/D3D12MA/src
 )
 
 set(LIBS_TO_LINK
@@ -212,19 +228,17 @@ if(USE_OPENGL)
 endif()
 
 if(USE_VULKAN)
-    target_link_libraries(${APP_NAME} PRIVATE ${THIRD_PARTY_DIR}/VulkanSDK/Lib/vulkan-1.lib)
+    target_link_libraries(${APP_NAME} PRIVATE volk)
 endif()
 
 if(USE_DX12)
     target_link_libraries(${APP_NAME} PRIVATE d3d12.lib d3dcompiler.lib dxcompiler.lib)
+    target_sources(${APP_NAME} PRIVATE "${THIRD_PARTY_DIR}/D3D12MA/src/D3D12MemAlloc.cpp")
 endif()
 
 if(USE_SDL2)
-    target_link_libraries(${APP_NAME} PRIVATE
-        "${THIRD_PARTY_DIR}/SDL2_windows/lib/x64/SDL2.lib"
-        "${THIRD_PARTY_DIR}/SDL2_windows/lib/x64/SDL2main.lib"
-    )
-    target_include_directories(${APP_NAME} PRIVATE "${THIRD_PARTY_DIR}/SDL2_windows/include")
+    target_link_libraries(${APP_NAME} PRIVATE SDL2::SDL2main SDL2::SDL2-static)
+    target_include_directories(${APP_NAME} PRIVATE "${THIRD_PARTY_DIR}/SDL2/include")
 endif()
 
 # SoLoud

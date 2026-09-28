@@ -8,7 +8,7 @@ set(THIRD_PARTY_DIR "../3rd")
 set(MAIN_SOURCE_DIR "../src")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/out)
 
-include_directories(${THIRD_PARTY_DIR}/SDL/include)
+include_directories(${THIRD_PARTY_DIR}/SDL2/include)
 include_directories(${THIRD_PARTY_DIR}/glm)
 include_directories(${THIRD_PARTY_DIR}/tiny-obj-loader)
 include_directories(${THIRD_PARTY_DIR}/SDL2_image)
