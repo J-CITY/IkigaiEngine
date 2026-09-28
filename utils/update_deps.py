@@ -33,7 +33,7 @@ def download_and_extract_glew():
 if __name__ == "__main__":
     # Change working directory to 3rd/
     script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in globals() else os.getcwd()
-    os.chdir(script_dir)
+    os.chdir(os.path.join(script_dir, "..", "3rd"))
     
     download_and_extract_glew()
     print("Done!")

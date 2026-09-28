@@ -7,7 +7,7 @@ import sys
 
 def update_spine():
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    target_dir = os.path.join(current_dir, "spine")
+    target_dir = os.path.join(current_dir, "..", "3rd", "spine", "spine")
     
     zip_url = "https://github.com/EsotericSoftware/spine-runtimes/archive/refs/heads/4.2.zip"
     print(f"Downloading {zip_url} ...")
