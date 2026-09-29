@@ -19,9 +19,7 @@
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
-#ifdef OCULUS
-#include <renderModule/gameRendererGl.h>
-#endif
+#include <renderModule/gameRenderer.h>
 
 using namespace IKIGAI::CORE;
 

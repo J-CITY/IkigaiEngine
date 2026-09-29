@@ -189,6 +189,22 @@ namespace IKIGAI::RENDER {
                              indexBufferOffset:byteOffset 
                                  instanceCount:instance];
     }
+    
+    void DriverMetal::setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) {
+        if (!mCurrentEncoder) return;
+        
+        // Note: The index (e.g. 1) must match where SPIRV-Cross maps the push constants. 
+        // SPIRV-Cross usually puts push constants at an unassigned buffer index (often 0 or the next free slot).
+        // If VertexBuffer is at index 0, Push Constant might be mapped to index 1 or 25 by SPIRV-Cross.
+        const int PUSH_CONSTANT_BUFFER_INDEX = 1; 
+
+        if (stage == ShaderType::VERTEX) {
+            [mCurrentEncoder setVertexBytes:data length:size atIndex:PUSH_CONSTANT_BUFFER_INDEX];
+        } else if (stage == ShaderType::FRAGMENT) {
+            [mCurrentEncoder setFragmentBytes:data length:size atIndex:PUSH_CONSTANT_BUFFER_INDEX];
+        }
+    }
+
     void DriverMetal::setTexture(size_t bind, std::shared_ptr<TextureInterface> data) {
         if (!data || !mCurrentEncoder) return;
         auto tex = std::static_pointer_cast<TextureMetal>(data);

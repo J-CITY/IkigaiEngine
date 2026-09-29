@@ -1,6 +1,6 @@
 #include "renderTargetComponent.h"
 
-#include "renderModule/gameRendererGl.h"
+#include "renderModule/gameRenderer.h"
 #include "renderModule/gameRendererInterface.h"
 #include "sceneModule/sceneManager.h"
 

@@ -189,7 +189,11 @@ ComPtr<ID3DBlob> d3dUtil::CompileShader(ShaderReflection& reflection, const std:
             }
             ShaderReflection::Uniform uniform;
             uniform.mName = shaderInputBindDesc.Name;
-            uniform.mType = ShaderReflection::UniformType::UNIFORM_BUFFER;
+            if (uniform.mName == "Constants" || uniform.mName == "engine_Model" || uniform.mName == "$Globals") {
+                uniform.mType = ShaderReflection::UniformType::PUSH_CONSTANT;
+            } else {
+                uniform.mType = ShaderReflection::UniformType::UNIFORM_BUFFER;
+            }
             uniform.mRootId = reflection.mUniforms.size();
             uniform.mBind = shaderInputBindDesc.BindPoint;
             uniform.mSet = shaderInputBindDesc.Space;

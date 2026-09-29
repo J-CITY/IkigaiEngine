@@ -55,6 +55,7 @@ namespace IKIGAI {
 			void onResize(); // override;
 
 			void setMSAA(bool value) override;
+			void setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) override;
 			void setPrimitiveMode(PrimitiveMode param) override;
 			void setRasterization(RasterizationMode param) override;
 			void setViewport(const Viewport& param) override;

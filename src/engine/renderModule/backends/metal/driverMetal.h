@@ -46,6 +46,8 @@ namespace IKIGAI::RENDER {
         void draw(uint32_t count, uint32_t offset, uint32_t instance) override;
         void drawIndexed(uint32_t count, uint32_t offset, uint32_t instance) override;
 
+        void setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) override;
+
         void setTexture(size_t bind, std::shared_ptr<TextureInterface> data) override;
         void setUniformBuffer(size_t bind, std::shared_ptr<UniformBufferInterface> data) override;
         void setStorageBuffer(size_t bind, std::shared_ptr<StorageBufferInterface> data) override;

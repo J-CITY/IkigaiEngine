@@ -97,6 +97,11 @@ void ShaderDx12::buildRootSignature() {
 			elem.InitAsDescriptorTable(1, &texTables.back(), D3D12_SHADER_VISIBILITY_PIXEL);
 			slotRootParameters.push_back(elem);
 		}
+		else if (uniform.mType == ShaderReflection::UniformType::PUSH_CONSTANT) {
+			elem.InitAsConstants(uniform.mSize / 4, uniform.mBind, uniform.mSet);
+			mPushConstantRootIndex = slotRootParameters.size();
+			slotRootParameters.push_back(elem);
+		}
 	}
 
 	auto staticSamplers = DriverDx12::GetStaticSamplers();

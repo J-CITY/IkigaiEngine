@@ -13,7 +13,7 @@
 #include <renderModule/backends/vk/frameBufferVk.h>
 #endif
 
-#include <renderModule/gameRendererGl.h>
+#include <renderModule/gameRenderer.h>
 #include <../../3rd/imgui/imgui/imgui.h>
 #include <../../3rd/imgui/imgui/imgui_impl_glfw.h>
 

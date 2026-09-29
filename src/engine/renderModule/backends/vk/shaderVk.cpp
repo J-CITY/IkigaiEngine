@@ -1,4 +1,4 @@
-﻿#include "shaderVk.h"
+#include "shaderVk.h"
 
 #include <cassert>
 
@@ -59,6 +59,10 @@ std::tuple<vk::raii::PipelineLayout, vk::raii::DescriptorSetLayout, std::vector<
 			stageFlag |= vk::ShaderStageFlagBits::eFragment;
 		}
 
+		if (uniform.mType == IKIGAI::RENDER::ShaderReflection::UniformType::PUSH_CONSTANT) {
+			continue;
+		}
+
 		auto descriptor_set_layout_binding = vk::DescriptorSetLayoutBinding()
 			.setDescriptorType(ShaderTypeMap.at(uniform.mType))
 			.setDescriptorCount(1)
@@ -74,8 +78,19 @@ std::tuple<vk::raii::PipelineLayout, vk::raii::DescriptorSetLayout, std::vector<
 
 	auto descriptor_set_layout = UtilityVk::GetDriver()->mDevice.createDescriptorSetLayout(descriptor_set_layout_create_info);
 
+	std::vector<vk::PushConstantRange> push_constant_ranges;
+	for (const auto& uniform : mReflection.mUniforms) {
+		if (uniform.mType == IKIGAI::RENDER::ShaderReflection::UniformType::PUSH_CONSTANT) {
+			vk::ShaderStageFlags stageFlag{};
+			if (uniform.mShaderMask & (size_t)ShaderType::VERTEX) stageFlag |= vk::ShaderStageFlagBits::eVertex;
+			if (uniform.mShaderMask & (size_t)ShaderType::FRAGMENT) stageFlag |= vk::ShaderStageFlagBits::eFragment;
+			push_constant_ranges.push_back(vk::PushConstantRange().setStageFlags(stageFlag).setOffset(uniform.mBind).setSize(uniform.mSize));
+		}
+	}
+
 	auto pipeline_layout_create_info = vk::PipelineLayoutCreateInfo()
-		.setSetLayouts(*descriptor_set_layout);
+		.setSetLayouts(*descriptor_set_layout)
+		.setPushConstantRanges(push_constant_ranges);
 
 	auto pipeline_layout = UtilityVk::GetDriver()->mDevice.createPipelineLayout(pipeline_layout_create_info);
 
@@ -200,6 +215,26 @@ void IKIGAI::RENDER::ShaderVk::_getReflection(std::string path, ShaderType type)
 			uniform.mSize = sz;
 		}
 	}
+
+	for (auto i = 0; i < module.push_constant_block_count; i++) {
+		const auto& block = module.push_constant_blocks[i];
+		
+		if (mReflection.mNameToUniforms.contains(block.name)) {
+			mReflection.mUniforms[mReflection.mNameToUniforms.at(block.name)].mShaderMask |= (size_t)type;
+			continue;
+		}
+
+		ShaderReflection::Uniform uniform;
+		uniform.mType = ShaderReflection::UniformType::PUSH_CONSTANT;
+		uniform.mName = block.name;
+		uniform.mSize = block.size;
+		uniform.mBind = block.offset;
+		uniform.mShaderMask = (size_t)type;
+		
+		mReflection.mNameToUniforms[uniform.mName] = mReflection.mUniforms.size();
+		mReflection.mUniforms.push_back(uniform);
+	}
+
 	if (type == ShaderType::VERTEX) {
 		for (auto i = 0; i < module.input_variable_count; i++) {
 			auto& descr = module.input_variables[i];

@@ -466,6 +466,12 @@ void DriverVk::end() {
 	mQueue.submit(submit_info, *frame.fence);
 }
 
+void DriverVk::setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) {
+	if (mCurrentState.mShader && *mCurrentState.mShader->mPipelineLayout) {
+		auto vkStage = stage == ShaderType::VERTEX ? vk::ShaderStageFlagBits::eVertex : vk::ShaderStageFlagBits::eFragment;
+		getCurrentFrame().mCommandBuffer.pushConstants(*mCurrentState.mShader->mPipelineLayout, vkStage, offset, size, data);
+	}
+}
 
 vk::raii::Pipeline DriverVk::createState(const State& pipeline_state) {
 	auto pipeline_shader_stage_create_info = {

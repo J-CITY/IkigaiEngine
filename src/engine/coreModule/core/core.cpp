@@ -32,25 +32,23 @@
 #include "coreModule/ecs/components/renderTargetComponent.h"
 #include "ecsModule/world.h"
 #include "editorModule/editorRender.h"
-#include "renderModule/gameRendererGl.h"
+#include "renderModule/gameRenderer.h"
 #include "renderModule/render.h"
 #include "resourceModule/skeletonAnimationManager.h"
 #include "resourceModule/skeletonBlendspaceManager.h"
 #include "resourceModule/skeletonManager.h"
 #include "resourceModule/skeletonStateGraphManager.h"
+#include <renderModule/gameRenderer.h>
 #ifdef OPENGL_BACKEND
 #include <renderModule/backends/gl/driverGl.h>
-#include <renderModule/gameRendererGl.h>
 #endif
 
 #ifdef VULKAN_BACKEND
 #include <renderModule/backends/vk/driverVk.h>
-#include <renderModule/gameRendererVk.h>
 #endif
 
 #ifdef DX12_BACKEND
 #include <renderModule/backends/dx12/driverDx12.h>
-#include <renderModule/gameRendererDx12.h>
 #endif
 #ifdef METAL_BACKEND
 namespace IKIGAI::RENDER {
@@ -291,7 +289,7 @@ Core:: Core(
 
 //#ifdef OPENGL_BACKEND
 //	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL) {
-		renderer = std::make_unique<RENDER::GameRendererGl>(*this);
+		renderer = std::make_unique<RENDER::GameRenderer>(*this);
 //	}
 //#endif
 //#ifdef VULKAN_BACKEND

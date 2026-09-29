@@ -85,6 +85,7 @@ namespace IKIGAI::RENDER {
 		CLEANUP,
 		SET_FRAMEBUFFER,
 		RESET_FRAMEBUFFER,
+		SET_PUSH_CONSTANT,
 		EXIT
 	};
 
@@ -274,6 +275,13 @@ namespace IKIGAI::RENDER {
 		void flush(DriverInterface* driver) override;
 	};
 
+	struct CmdSetPushConstant : CommandHeader {
+		ShaderType stage;
+		uint32_t offset;
+		uint32_t dataSize;
+		std::byte data[128];
+	};
+
 	class Renderer {
 		std::unique_ptr<RenderExecutorInterface> mExecutor;
 		DriverInterface* mDriver = nullptr;
@@ -388,6 +396,19 @@ namespace IKIGAI::RENDER {
 			push<CmdSetFrameBuffer>(OpCode::SET_FRAMEBUFFER, frameBuffer);
 		}
 		void resetFrameBuffer() { push<CommandHeader>(OpCode::RESET_FRAMEBUFFER); }
+
+		void setPushConstant(ShaderType stage, uint32_t offset, uint32_t dataSize, const void* data) {
+			size_t allocSize = sizeof(CmdSetPushConstant);
+			size_t alignedSize = (allocSize + 7) & ~7;
+			auto* cmd = reinterpret_cast<CmdSetPushConstant*>(mExecutor->allocate(alignedSize));
+			cmd->op = OpCode::SET_PUSH_CONSTANT;
+			cmd->size = alignedSize;
+			cmd->stage = stage;
+			cmd->offset = offset;
+			cmd->dataSize = dataSize;
+			memcpy(cmd->data, data, dataSize);
+			mExecutor->submit(cmd, mDriver);
+		}
 
 		std::shared_ptr<UniformBufferInterface> createUniformBuffer(const void* data,
 			size_t size) {

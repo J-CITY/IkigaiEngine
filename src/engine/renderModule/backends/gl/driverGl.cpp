@@ -204,6 +204,14 @@ void IKIGAI::RENDER::DriverGl::setMSAA(bool value) {
 #endif
 }
 
+void IKIGAI::RENDER::DriverGl::setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) {
+  if (mShader) {
+    if (size == sizeof(MATH::Matrix4f)) {
+      mShader->setMat4("engine_Model.model", *reinterpret_cast<const MATH::Matrix4f*>(static_cast<const uint8_t*>(data) + offset));
+    }
+  }
+}
+
 void IKIGAI::RENDER::DriverGl::setPrimitiveMode(PrimitiveMode param) {
   mPrimitiveMode = param;
   setDirty(Dirty::PRIMITIVE_MODE);

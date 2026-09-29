@@ -33,6 +33,7 @@ namespace IKIGAI::RENDER {
 		
 		std::map<ShaderType, Microsoft::WRL::ComPtr<ID3DBlob>> mBlobs;
 		Microsoft::WRL::ComPtr<ID3D12RootSignature> mRootSignature;
+		int mPushConstantRootIndex = -1;
 
 		void buildRootSignature();
 	};

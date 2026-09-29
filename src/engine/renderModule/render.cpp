@@ -187,6 +187,11 @@ namespace IKIGAI::RENDER {
 				break;
 			}
 			case OpCode::RESET_FRAMEBUFFER: driver->resetFrameBuffer(); break;
+			case OpCode::SET_PUSH_CONSTANT: {
+				auto* cmd = reinterpret_cast<const CmdSetPushConstant*>(header);
+				driver->setPushConstant(cmd->stage, cmd->offset, cmd->dataSize, cmd->data);
+				break;
+			}
 
 			default: break;
 			}

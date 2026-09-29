@@ -419,6 +419,17 @@ void DriverDx12::set4xMsaaState(bool value) {
 	}
 }
 
+void DriverDx12::setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) {
+	if (mCurrentState.mShader && mCurrentState.mShader->mPushConstantRootIndex != -1) {
+		mCommandList->SetGraphicsRoot32BitConstants(
+			mCurrentState.mShader->mPushConstantRootIndex,
+			size / 4,
+			data,
+			offset / 4
+		);
+	}
+}
+
 bool DriverDx12::get4xMsaaState() const {
 	return m4xMsaaState;
 }

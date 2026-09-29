@@ -187,6 +187,8 @@ namespace IKIGAI::RENDER {
 
 		virtual void setMSAA(bool value) = 0;
 
+		virtual void setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) {}
+
 		virtual std::shared_ptr<UniformBufferInterface>
 			createUniformBuffer(const void* data, size_t size) = 0;
 		virtual std::shared_ptr<StorageBufferInterface>

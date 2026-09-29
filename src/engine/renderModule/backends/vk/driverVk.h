@@ -213,6 +213,7 @@ namespace IKIGAI::RENDER {
 		void setUniformBuffer(const std::string& name, std::shared_ptr<UniformBufferInterface> data) override;
 		void setStorageBuffer(const std::string& name, std::shared_ptr<StorageBufferInterface> data) override;
 		void setMSAA(bool value) override;
+		void setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) override;
 
 		std::shared_ptr<TextureInterface> createTexture(const std::string& path, bool generateMipmap = true, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr) override;
 		std::shared_ptr<TextureInterface> createTextureAtlas(const std::string& path, bool generateMipmap = true, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr) override;

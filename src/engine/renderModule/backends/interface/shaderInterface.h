@@ -5,6 +5,7 @@
 #include <optional>
 
 #include "reflectionStructs.h"
+#include "mathModule/math.h"
 
 
 namespace IKIGAI::RENDER {

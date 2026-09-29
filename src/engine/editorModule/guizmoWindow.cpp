@@ -13,7 +13,7 @@
 #include "windowModule/window/window.h"
 
 #ifdef OPENGL_BACKEND
-#include "renderModule/gameRendererGl.h"
+#include "renderModule/gameRenderer.h"
 #endif
 
 using namespace IKIGAI::EDITOR;

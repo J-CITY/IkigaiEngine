@@ -78,6 +78,7 @@ namespace IKIGAI::RENDER {
 		void setVertexBuffer(std::shared_ptr<VertexBufferInterface> buffer) override;
 		void setIndexBuffer(std::shared_ptr<IndexBufferInterface> buffer) override;
 		void setShader(std::shared_ptr<ShaderInterface> shader) override;
+		void setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) override;
 		void setTriangleOrientation(TriangleOrientation value) override {};
 
 		void draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) override;
