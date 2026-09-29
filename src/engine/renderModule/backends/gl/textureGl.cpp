@@ -505,7 +505,7 @@ void TextureGl::bindImage(uint32_t unit, uint32_t mip_level, uint32_t layer, uns
 }
 
 void* TextureGl::getImguiId() {
-	return reinterpret_cast<void*>(id);
+	return reinterpret_cast<void*>(static_cast<uintptr_t>(id));
 }
 
 void TextureGl::recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) {

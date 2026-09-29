@@ -337,7 +337,7 @@ void FileBrowserWindow::drawFolder(std::string_view path)
 
 void FileBrowserWindow::drawItem(File& file) {
 	ImGui::PushID(("fileTree_" + std::to_string(file.uid)).c_str());
-	ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_Selected;
+	ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_Selected;
 	auto path = file.path.string();
 	bool isDirectory = std::filesystem::is_directory(path);
 	if (!isDirectory) {

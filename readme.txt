@@ -1,17 +1,14 @@
-Install SDL
-
 - Win
-Все либы в 3rd папку
-Download https://www.libsdl.org/release/SDL2-devel-2.0.9-VC.zip
-Extract to ./3rd/SDL_windows folder
+1. Подготовка окружения (скачивание зависимостей и сабмодулей):
+python utils/setup_env.py
 
-Download GLEW https://github.com/nigels-com/glew/releases/download/glew-2.1.0/glew-2.1.0-win32.zip
-Extract to ./3rd/glew
+2. Генерация проекта Visual Studio:
+python run_vs.py -c vs22 -a x64 -g opengl  # Для OpenGL
+# или
+python run_vs.py -c vs22 -a x64 -g vulkan  # Для Vulkan
+# или
+python run_vs.py -c vs22 -a x64 -g dx12    # Для DirectX 12
 
-# generate VS project
-cmake -G "Visual Studio 17 2022" ./ -Bbuild
-
-# скопировать dll в windows\out\
 --------------------------------------------------------------
 - Android
 

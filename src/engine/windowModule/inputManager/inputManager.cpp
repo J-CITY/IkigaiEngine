@@ -78,6 +78,7 @@ float InputManager::getAxisPosition(int id, INPUT::Gamepad::GAMEPAD_AXIS axis) c
 	case INPUT::Gamepad::GAMEPAD_AXIS::rightStick_X: return gp->getData().mRightSticX;
 	case INPUT::Gamepad::GAMEPAD_AXIS::rightStick_Y: return gp->getData().mRightSticY;
 	}
+	return 0.0f;
 }
 
 float InputManager::getTriggerValue(int id, INPUT::Gamepad::GAMEPAD_TRIGGER tgr) const {
@@ -90,6 +91,7 @@ float InputManager::getTriggerValue(int id, INPUT::Gamepad::GAMEPAD_TRIGGER tgr)
 	case INPUT::Gamepad::GAMEPAD_TRIGGER::rightTrigger: return gp->getData().mLeftTrigger;
 	case INPUT::Gamepad::GAMEPAD_TRIGGER::leftTrigger: return gp->getData().mRightTrigger;
 	}
+	return 0.0f;
 }
 
 bool InputManager::isGamepadExist(int id) const {

@@ -855,7 +855,7 @@ template <class CLASS_T, class MEMBER_T> struct MemberInfo {
 	MemberInfo(std::string_view name, Data_t Class_t::*memberPtr,
 						 Meta_t meta = Meta_t())
 			: mName(name), mPtr(memberPtr), mMetadata(meta) {
-		mGetter = [](const MemberInfo *_this, Class_t &obj) {
+		mGetter = [](const MemberInfo *_this, Class_t &obj) -> MEMBER_T {
 			return obj.*(_this->mPtr);
 		};
 		mSetter = [](const MemberInfo *_this, Class_t &obj, Data_t data) {
@@ -867,7 +867,7 @@ template <class CLASS_T, class MEMBER_T> struct MemberInfo {
 						 void (Class_t::*memberSetPtr)(MEMBER_T), Meta_t meta = Meta_t())
 			: mName(name), mPtrGet(memberGetPtr), mPtrSet(memberSetPtr),
 				mMetadata(meta) {
-		mGetter = [](const MemberInfo *_this, Class_t &obj) {
+		mGetter = [](const MemberInfo *_this, Class_t &obj) -> MEMBER_T {
 			return (obj.*(_this->mPtrGet))();
 		};
 		mSetter = [](const MemberInfo *_this, Class_t &obj, Data_t data) {
@@ -881,7 +881,7 @@ template <class CLASS_T, class MEMBER_T> struct MemberInfo {
 						 Meta_t meta = Meta_t())
 			: mName(name), mPtrGetLambda(memberGetPtr), mPtrSetLambda(memberSetPtr),
 				mMetadata(meta) {
-		mGetter = [](const MemberInfo *_this, Class_t &obj) {
+		mGetter = [](const MemberInfo *_this, Class_t &obj) -> MEMBER_T {
 			return _this->mPtrGetLambda(obj);
 		};
 		mSetter = [](const MemberInfo *_this, Class_t &obj, Data_t data) {

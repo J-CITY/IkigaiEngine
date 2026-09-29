@@ -62,7 +62,7 @@ bool IKIGAI::RESOURCES::File::isOpened() const {
 
 void IKIGAI::RESOURCES::File::open(FileMode mode) const {
     if (mInternal->mFile) {
-	    mInternal->mFile->Open(static_cast<vfspp::IFile::FileMode>(mode));
+	    (void)mInternal->mFile->Open(static_cast<vfspp::IFile::FileMode>(mode));
     }
 }
 
@@ -112,30 +112,30 @@ IKIGAI::RESOURCES::FileSystem::~FileSystem() = default;
 
 void IKIGAI::RESOURCES::FileSystem::addNativeFileSystem(const std::string& path, const std::string& pathInFs) {
 	vfspp::IFileSystemPtr fs(new vfspp::NativeFileSystem(pathInFs, path));
-	fs->Initialize();
+	(void)fs->Initialize();
 	mInternal->mVFS->AddFileSystem(pathInFs, fs);
 }
 
 void IKIGAI::RESOURCES::FileSystem::addZipFileSystem(const std::string& path, const std::string& pathInFs) {
 	vfspp::IFileSystemPtr fs(new vfspp::ZipFileSystem(pathInFs, path));
-	fs->Initialize();
+	(void)fs->Initialize();
 	mInternal->mVFS->AddFileSystem(pathInFs, fs);
 }
 
 void IKIGAI::RESOURCES::FileSystem::addMemoryFileSystem(const std::string& pathInFs) {
 	vfspp::IFileSystemPtr fs(new vfspp::MemoryFileSystem(pathInFs));
-	fs->Initialize();
+	(void)fs->Initialize();
 	mInternal->mVFS->AddFileSystem(pathInFs, fs);
 }
 
 void IKIGAI::RESOURCES::FileSystem::addSdlFileSystem(const std::string& path, const std::string& pathInFs) {
 	vfspp::IFileSystemPtr fs(new SdlFileSystem(pathInFs, path));
-	fs->Initialize();
+	(void)fs->Initialize();
 	mInternal->mVFS->AddFileSystem(pathInFs, fs);
 }
 
 bool IKIGAI::RESOURCES::FileSystem::isValid(const std::string& path) const {
-	auto entry = mInternal->mVFS->GetEntryInfo(path);
+	auto entry = mInternal->mVFS->GetEntry(path);
 	return entry.has_value();
 }
 
@@ -144,23 +144,23 @@ bool IKIGAI::RESOURCES::FileSystem::isFileExist(const std::string& path) const {
 }
 
 std::string IKIGAI::RESOURCES::FileSystem::getFileExtension(const std::string& path) const {
-	auto entry = mInternal->mVFS->GetEntryInfo(path);
+	auto entry = mInternal->mVFS->GetEntry(path);
 	return entry ? entry->Extension() : "";
 }
 
 std::string IKIGAI::RESOURCES::FileSystem::getFileName(const std::string& path) const {
-	auto entry = mInternal->mVFS->GetEntryInfo(path);
+	auto entry = mInternal->mVFS->GetEntry(path);
 	return entry ? entry->Filename() : "";
 }
 
 std::optional<std::string> IKIGAI::RESOURCES::FileSystem::getAbsolutePath(const std::string& path) const {
-	auto entry = mInternal->mVFS->GetEntryInfo(path);
+	auto entry = mInternal->mVFS->GetEntry(path);
 	if (entry) return entry->NativePath();
     return std::nullopt;
 }
 
 bool IKIGAI::RESOURCES::FileSystem::isDir(const std::string& path) const {
-	auto entry = mInternal->mVFS->GetEntryInfo(path);
+	auto entry = mInternal->mVFS->GetEntry(path);
 	return entry ? entry->IsDirectory() : false;
 }
 
@@ -186,7 +186,7 @@ std::shared_ptr<IKIGAI::RESOURCES::File> IKIGAI::RESOURCES::FileSystem::getFile(
 }
 
 std::optional<std::string> IKIGAI::RESOURCES::FileSystem::getFilePath(const std::string& path) const {
-    auto entry = mInternal->mVFS->GetEntryInfo(path);
+    auto entry = mInternal->mVFS->GetEntry(path);
     if (entry) return entry->VirtualPath();
 	return std::nullopt;
 }

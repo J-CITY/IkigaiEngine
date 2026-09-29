@@ -53,7 +53,7 @@ void SpineController::setSkin(const std::string& name)
 {
     spine::Skeleton* skeleton = _drawable->getSkeleton();
     skeleton->setSkin(name.c_str());
-    skeleton->updateWorldTransform();
+    skeleton->updateWorldTransform(spine::Physics_Update);
     currentSkin = name;
 }
 bool SpineController::setAnimation(const std::string& name, bool loop, int trackIndex,
@@ -112,7 +112,7 @@ float SpineController::getAnimationDuration(const std::string& name) const {
 void SpineController::setPos(float x, float y) {
     spine::Skeleton* skeleton = _drawable->getSkeleton();
     skeleton->setPosition(x, y);
-    skeleton->updateWorldTransform();
+    skeleton->updateWorldTransform(spine::Physics_Update);
 }
 
 void SpineController::setPMA(bool use)
@@ -145,7 +145,7 @@ bool SpineController::create(const std::string& pathSkel, const std::string& pat
     spine::Skeleton* skeleton = _drawable->getSkeleton();
     skeleton->setPosition(0.0f, 0.0f);
     skeleton->setSkin("default");
-    skeleton->updateWorldTransform();
+    skeleton->updateWorldTransform(spine::Physics_Update);
 
     return true;
 }
@@ -220,7 +220,7 @@ void SkeletonDrawable::update(float deltaTime) {
     //skeleton->update(deltaTime);
     state->update(deltaTime * timeScale);
     state->apply(*skeleton);
-    skeleton->updateWorldTransform();
+    skeleton->updateWorldTransform(spine::Physics_Update);
 }
 
 void SkeletonDrawable::draw() {

@@ -8,8 +8,16 @@ import sys
 def update_spine():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     target_dir = os.path.join(current_dir, "..", "3rd", "spine", "spine")
+    spine_version = "4.2"
+    version_file = os.path.join(target_dir, "version.txt")
     
-    zip_url = "https://github.com/EsotericSoftware/spine-runtimes/archive/refs/heads/4.2.zip"
+    if os.path.exists(version_file):
+        with open(version_file, "r") as f:
+            if f.read().strip() == spine_version:
+                print(f"Spine {spine_version} is already up to date. Skipping download.")
+                return
+                
+    zip_url = f"https://github.com/EsotericSoftware/spine-runtimes/archive/refs/heads/{spine_version}.zip"
     print(f"Downloading {zip_url} ...")
     
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -57,7 +65,11 @@ def update_spine():
                 
         print("Cleaning up temporary files and deleting archive...")
         
-    print("Spine-cpp updated successfully in 3rd/spine/spine!")
+    # Save version
+    with open(version_file, "w") as f:
+        f.write(spine_version)
+
+    print(f"Spine-cpp updated successfully to version {spine_version} in 3rd/spine/spine!")
 
 if __name__ == "__main__":
     update_spine()

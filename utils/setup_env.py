@@ -9,8 +9,11 @@ def main():
     print("Updating git submodules...")
     subprocess.run(["git", "submodule", "update", "--init", "--recursive"], cwd=root_dir, check=True)
     
-    print("\nUpdating GLEW (update_deps.py)...")
-    subprocess.run([sys.executable, os.path.join(script_dir, "update_deps.py")], cwd=root_dir, check=True)
+    print("\nUpdating GLEW (update_glew.py)...")
+    subprocess.run([sys.executable, os.path.join(script_dir, "update_glew.py")], cwd=root_dir, check=True)
+    
+    print("\nUpdating Spine...")
+    subprocess.run([sys.executable, os.path.join(script_dir, "update_spine.py")], cwd=root_dir, check=True)
     
     print("\nEnvironment setup complete!")
 

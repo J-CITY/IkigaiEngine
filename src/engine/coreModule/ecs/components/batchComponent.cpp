@@ -434,7 +434,7 @@ Slot* TextureAtlas::GetSlot(uint32_t x, uint32_t y)
 {
 	uint32_t index = x + y * mNumHorizontalSlots;
 
-	for (auto slot : mAvailableSlots)
+	for (auto& slot : mAvailableSlots)
 	{
 		if (slot.id == index)
 			return &slot;
@@ -445,7 +445,7 @@ Slot* TextureAtlas::GetSlot(uint32_t x, uint32_t y)
 
 Slot* TextureAtlas::GetNextVacantSlotIndex()
 {
-	for (auto slot : mAvailableSlots)
+	for (auto& slot : mAvailableSlots)
 	{
 		if (!slot.checkedSlot)
 			return &slot;
@@ -479,6 +479,9 @@ const AtlasSizeAndTextureRectPair TextureAtlas::GetAtlasSizeAndTextureRectPair(u
 	{
 		//TS_CORE_ERROR("Could not find texture ID: {0}", texID);
 	}
+
+	ASSERT("TextureAtlas::GetAtlasSizeAndTextureRectPair bad texID");
+	return AtlasSizeAndTextureRectPair(MATH::Vector2f(mAtlasWidth, mAtlasHeight), {});
 }
 
 void TextureAtlas::CreateTextureAtlasTexture()
@@ -707,7 +710,7 @@ void BatchComponent::CreateAtlases(const MaterialRenderer& material)
 		if (atlasData.second.size() > 0 && !atlasData.second[0]) {
 			continue;
 		}
-		mTextureAtlasCreator[atlasData.first] = std::make_shared<TextureAtlasCreator>(2048, 2048, atlasData.second);
+		mTextureAtlasCreator[atlasData.first] = std::make_shared<TextureAtlasCreator>(2048.0f, 2048.0f, atlasData.second);
 
 		ids.push_back(mTextureAtlasCreator[atlasData.first]->GetTextureAtlases()[0].mAtlasTexture->id);
 	}

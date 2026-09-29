@@ -1,5 +1,5 @@
 #pragma once
-#define SPINE_USE_STD_FUNCTION
+
 #include <functional>
 #include <string>
 #include <spine/spine.h>

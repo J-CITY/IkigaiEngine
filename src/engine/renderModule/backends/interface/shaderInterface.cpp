@@ -39,6 +39,7 @@ IKIGAI::RENDER::ShaderInterface::ConstructRealPath(const std::string &path) {
 #endif
 
   // TODO: assert
+  return path;
 }
 
 void IKIGAI::RENDER::ShaderInterface::GetReflection(

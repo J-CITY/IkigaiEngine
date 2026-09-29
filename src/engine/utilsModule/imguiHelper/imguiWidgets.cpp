@@ -252,7 +252,7 @@ inline float BezierValue(float dt01, float P[4]) {
 	ImVec2 Q[4] = {{0, 0}, {P[0], P[1]}, {P[2], P[3]}, {1, 1}};
 	ImVec2 results[STEPS + 1];
 	ImGui::bezier_table<STEPS>(Q, results);
-	return results[(int)((dt01 < 0 ? 0 : dt01 > 1 ? 1 : dt01) * STEPS)].y;
+	return results[(int)((dt01 < 0 ? 0 : dt01 > 1 ? 1 : dt01) * static_cast<float>(STEPS))].y;
 }
 
 int ImGui::Bezier(const char* label, float P[])

@@ -14,6 +14,7 @@ include_directories(${THIRD_PARTY_DIR}/tiny-obj-loader)
 include_directories(${THIRD_PARTY_DIR}/SDL2_image)
 include_directories(${THIRD_PARTY_DIR}/serdepp/include)
 include_directories(${THIRD_PARTY_DIR}/magic_enum/include)
+include_directories(${THIRD_PARTY_DIR}/magic_enum/include/magic_enum)
 include_directories(${THIRD_PARTY_DIR}/nameof/include)
 include_directories(${THIRD_PARTY_DIR}/json/single_include)
 include_directories(${THIRD_PARTY_DIR}/vfspp/include)
@@ -182,6 +183,7 @@ add_compile_definitions(USING_GLES)
 # if (backend == opengl)
 add_compile_definitions(OPENGL_BACKEND)
 add_compile_definitions(OPENGL_SIMPLE_RENDER)
+add_compile_definitions(SPINE_USE_STD_FUNCTION)
 
 add_executable(
     cross_test

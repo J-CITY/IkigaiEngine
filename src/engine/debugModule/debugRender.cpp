@@ -1,4 +1,4 @@
-﻿#include "debugRender.h"
+#include "debugRender.h"
 #ifdef USE_EDITOR_
 #include <memory>
 
@@ -149,7 +149,7 @@ std::shared_ptr<IKIGAI::ECS::Object> recursiveDraw(IKIGAI::SCENE_SYSTEM::Scene& 
 	auto i = 0u;
 	for (auto node : nodeList) {
 		ImGui::PushID(("node_" + std::to_string(i)).c_str());
-		ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_OpenOnArrow;
+		ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_OpenOnArrow;
 
 		bool isParent = node->getChildren().size();
 
@@ -729,7 +729,7 @@ private:
 
 	void drawItem(File& file) {
 		ImGui::PushID(("fileTree_" + std::to_string(file.uid)).c_str());
-		ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_Selected;
+		ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_Selected;
 		auto path = file.path.string();
 		bool isDirectory = std::filesystem::is_directory(path);
 		if (!isDirectory) {
@@ -841,7 +841,7 @@ std::shared_ptr<IKIGAI::GUI::GuiObject> recursiveDrawGui(IKIGAI::SCENE_SYSTEM::S
 	auto i = 0u;
 	for (auto node : nodeList) {
 		ImGui::PushID(("node_" + std::to_string(i)).c_str());
-		ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_Selected;
+		ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_Selected;
 
 		bool isParent = node->childs.size();
 

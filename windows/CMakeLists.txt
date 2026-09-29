@@ -112,6 +112,7 @@ endif()
 file(GLOB_RECURSE SPINE_FILES "${THIRD_PARTY_DIR}/spine/spine/*.cpp" "${THIRD_PARTY_DIR}/spine/spine/*.h")
 add_library(spine STATIC ${SPINE_FILES})
 target_include_directories(spine PUBLIC "${THIRD_PARTY_DIR}/spine")
+target_compile_definitions(spine PUBLIC SPINE_USE_STD_FUNCTION)
 
 # 8. Lua
 file(GLOB_RECURSE LUA_FILES "${THIRD_PARTY_DIR}/lua/*.c")
@@ -159,7 +160,7 @@ add_custom_command(
 
 # Properties
 set_target_properties(${APP_NAME} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-target_compile_options(${APP_NAME} PRIVATE /bigobj /MP)
+target_compile_options(${APP_NAME} PRIVATE /bigobj /MP12 /Zm200)
 
 # Definitions
 target_compile_definitions(${APP_NAME} PRIVATE NOMINMAX)
@@ -192,12 +193,13 @@ target_include_directories(${APP_NAME} PRIVATE
     ${THIRD_PARTY_DIR}/glm
     ${THIRD_PARTY_DIR}/serdepp/include
     ${THIRD_PARTY_DIR}/magic_enum/include
+    ${THIRD_PARTY_DIR}/magic_enum/include/magic_enum
     ${THIRD_PARTY_DIR}/nameof/include
     ${THIRD_PARTY_DIR}/json/single_include
     ${THIRD_PARTY_DIR}/soloud/include
     ${THIRD_PARTY_DIR}/fmt/include
     ${THIRD_PARTY_DIR}/vfspp/include
-    ${THIRD_PARTY_DIR}/vfspp/include/vendor/miniz-cpp
+    ${THIRD_PARTY_DIR}/vfspp/vendor/miniz-cpp
     ${THIRD_PARTY_DIR}/sol/include
     ${THIRD_PARTY_DIR}/volk
     ${THIRD_PARTY_DIR}/Vulkan-Headers/include
@@ -247,3 +249,5 @@ target_link_libraries(${APP_NAME} PRIVATE
 )
 
 target_link_libraries(${APP_NAME} PRIVATE ${LIBS_TO_LINK})
+
+set_target_properties(${APP_NAME} PROPERTIES LINK_FLAGS "/NODEFAULTLIB:LIBCMT /NODEFAULTLIB:LIBCMTD /ignore:4099")

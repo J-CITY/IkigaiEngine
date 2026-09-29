@@ -72,7 +72,7 @@ namespace IKIGAI::ECS {
 		static auto GetMembers() {
 			return std::tuple{
 				IKIGAI::UTILS::MakeMemberInfoLambda<SpotLight, const MATH::Vector3f&>("Color",
-				[](SpotLight& obj) { return obj.getColor(); },
+				[](SpotLight& obj) -> const MATH::Vector3f& { return obj.getColor(); },
 				[](SpotLight& obj, const MATH::Vector3f& data) { obj.setColor(data); },
 				UTILS::Meta_t{
 					{UTILS::MetaParam::FLAGS, UTILS::MetaInfo::USE_IN_EDITOR_COMPONENT_INSPECTOR},

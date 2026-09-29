@@ -33,7 +33,7 @@ std::shared_ptr<IKIGAI::ECS::Object> recursiveDraw(IKIGAI::SCENE_SYSTEM::Scene& 
 	for (auto node : nodeList) {
 		if (!parentEntity && node->getParent()) continue;
 		ImGui::PushID(("node_" + std::to_string(i)).c_str());
-		ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_OpenOnArrow;
+		ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_OpenOnArrow;
 
 		bool isParent = node->getChildren().size();
 
@@ -231,15 +231,14 @@ void TreeWindow::drawNodeTree() {
 
 					if (found) {
 						searchedObjectsIds.insert(obj->getID().getUniqueId());
-						std::function<void(std::shared_ptr<IKIGAI::ECS::Object>)> expandAll;
-						expandAll = [&expandAll](std::shared_ptr<IKIGAI::ECS::Object> obj) {
+						auto expandAll = [](auto& self, std::shared_ptr<IKIGAI::ECS::Object> obj) -> void {
 							ImGui::TreeNodeSetOpen(static_cast<int>(obj->getID().getUniqueId()), true);
 							if (obj->getParent()) {
-								expandAll(obj->getParent());
+								self(self, obj->getParent());
 							}
 						};
 						if (obj->getParent()) {
-							expandAll(obj->getParent());
+							expandAll(expandAll, obj->getParent());
 						}
 					}
 				}

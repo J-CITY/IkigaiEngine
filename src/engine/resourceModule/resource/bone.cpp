@@ -1,4 +1,4 @@
-﻿#include "bone.h"
+#include "bone.h"
 #include "bone.h"
 
 #include <cassert>
@@ -1133,12 +1133,12 @@ std::vector<Blander::AnimWithBlendInfo> Blander::getAnimationForBlending(MATH::V
     point.x *= scaleFactor;
     point.y *= scaleFactor;
     for (std::size_t i = 0; i < context->triangulation->triangles.size(); i += 3) {
-        auto ax = context->triangulation->coords[2 * context->triangulation->triangles[i]];        //tx0
-        auto ay = context->triangulation->coords[2 * context->triangulation->triangles[i] + 1];    //ty0
-        auto bx = context->triangulation->coords[2 * context->triangulation->triangles[i + 1]];    //tx1
-        auto by = context->triangulation->coords[2 * context->triangulation->triangles[i + 1] + 1];//ty1
-        auto cx = context->triangulation->coords[2 * context->triangulation->triangles[i + 2]];    //tx2
-        auto cy = context->triangulation->coords[2 * context->triangulation->triangles[i + 2] + 1]; //ty2
+        float ax = static_cast<float>(context->triangulation->coords[2 * context->triangulation->triangles[i]]);        //tx0
+        float ay = static_cast<float>(context->triangulation->coords[2 * context->triangulation->triangles[i] + 1]);    //ty0
+        float bx = static_cast<float>(context->triangulation->coords[2 * context->triangulation->triangles[i + 1]]);    //tx1
+        float by = static_cast<float>(context->triangulation->coords[2 * context->triangulation->triangles[i + 1] + 1]);//ty1
+        float cx = static_cast<float>(context->triangulation->coords[2 * context->triangulation->triangles[i + 2]]);    //tx2
+        float cy = static_cast<float>(context->triangulation->coords[2 * context->triangulation->triangles[i + 2] + 1]); //ty2
 	    if (isInside(ax, ay, bx, by, cx, cy, point.x, point.y)) {
 
             float dist0 = 0.0f;
@@ -1185,9 +1185,9 @@ std::vector<Blander::AnimWithBlendInfo> Blander::getAnimationForBlending(MATH::V
                 }
             }
  
-            res.push_back({context->animNames[{ax, ay}], dist0});
-            res.push_back({context->animNames[{bx, by}], dist1});
-            res.push_back({context->animNames[{cx, cy}], dist2});
+            res.push_back({context->animNames[{ax, ay}], static_cast<float>(dist0)});
+            res.push_back({context->animNames[{bx, by}], static_cast<float>(dist1)});
+            res.push_back({context->animNames[{cx, cy}], static_cast<float>(dist2)});
 
             //TODO: sort
 

@@ -77,8 +77,8 @@ int CurveEditorExt(const char* label, std::vector<IKIGAI::ANIMATION::Curve>& val
 		*new_count = points_count;
 	}
 
-	if (!BeginChildFrame(id, size, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
-		EndChildFrame();
+	if (!BeginChild(id, size, ImGuiChildFlags_FrameStyle, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+		EndChild();
 		return -1;
 	}
 
@@ -86,7 +86,7 @@ int CurveEditorExt(const char* label, std::vector<IKIGAI::ANIMATION::Curve>& val
 
 	ImGuiWindow* window = GetCurrentWindow();
 	if (window->SkipItems) {
-		EndChildFrame();
+		EndChild();
 		return -1;
 	}
 
@@ -140,7 +140,7 @@ int CurveEditorExt(const char* label, std::vector<IKIGAI::ANIMATION::Curve>& val
 
 	const ImRect inner_bb = window->InnerClipRect;
 	if (inner_bb.GetWidth() == 0 || inner_bb.GetHeight() == 0) {
-		EndChildFrame();
+		EndChild();
 		return -1;
 	}
 	const ImRect frame_bb(inner_bb.Min - style.FramePadding, inner_bb.Max + style.FramePadding);
@@ -583,7 +583,7 @@ int CurveEditorExt(const char* label, std::vector<IKIGAI::ANIMATION::Curve>& val
 
 	if (hovered_point) *hovered_point = hovered_idx;
 
-	EndChildFrame();
+	EndChild();
 	RenderText(ImVec2(frame_bb.Max.x + style.ItemInnerSpacing.x, inner_bb.Min.y), label);
 	return changed_idx;
 }
@@ -626,8 +626,8 @@ int SplineEditorExt(const char* label, tinyspline::BSpline& spline, std::vector<
 		*new_count = points_count;
 	}
 
-	if (!BeginChildFrame(id, size, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
-		EndChildFrame();
+	if (!BeginChild(id, size, ImGuiChildFlags_FrameStyle, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+		EndChild();
 		return -1;
 	}
 
@@ -635,7 +635,7 @@ int SplineEditorExt(const char* label, tinyspline::BSpline& spline, std::vector<
 
 	ImGuiWindow* window = GetCurrentWindow();
 	if (window->SkipItems) {
-		EndChildFrame();
+		EndChild();
 		return -1;
 	}
 
@@ -668,7 +668,7 @@ int SplineEditorExt(const char* label, tinyspline::BSpline& spline, std::vector<
 
 	const ImRect inner_bb = window->InnerClipRect;
 	if (inner_bb.GetWidth() == 0 || inner_bb.GetHeight() == 0) {
-		EndChildFrame();
+		EndChild();
 		return -1;
 	}
 	const ImRect frame_bb(inner_bb.Min - style.FramePadding, inner_bb.Max + style.FramePadding);
@@ -881,7 +881,7 @@ int SplineEditorExt(const char* label, tinyspline::BSpline& spline, std::vector<
 
 	if (hovered_point) *hovered_point = hovered_idx;
 
-	EndChildFrame();
+	EndChild();
 	RenderText(ImVec2(frame_bb.Max.x + style.ItemInnerSpacing.x, inner_bb.Min.y), label);
 	return changed_idx;
 }
@@ -1343,7 +1343,7 @@ IKIGAI::ANIMATION::TimelineAnimationDescriptor IKIGAI::EDITOR::TimelineAnimation
 
 
 std::unique_ptr<IKIGAI::ANIMATION::Animation> IKIGAI::EDITOR::TimelineAnimationWindow::fromDescriptor(IKIGAI::ANIMATION::TimelineAnimationDescriptor& desc) {
-	mAnimation = std::make_unique<ANIMATION::Animation>(desc.framesCount, desc.FPS, desc.isLooped);
+	mAnimation = std::make_unique<ANIMATION::Animation>(static_cast<unsigned int>(desc.framesCount), static_cast<unsigned int>(desc.FPS), desc.isLooped);
 
 	for (auto& track : desc.tracks) {
 		Prop prop;

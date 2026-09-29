@@ -117,6 +117,7 @@ target_include_directories(imgui PUBLIC
 file(GLOB_RECURSE SPINE_FILES "${THIRD_PARTY_DIR}/spine/spine/*.cpp" "${THIRD_PARTY_DIR}/spine/spine/*.h")
 add_library(spine STATIC ${SPINE_FILES})
 target_include_directories(spine PUBLIC "${THIRD_PARTY_DIR}/spine")
+target_compile_definitions(spine PUBLIC SPINE_USE_STD_FUNCTION)
 
 # 8. Lua
 file(GLOB_RECURSE LUA_FILES "${THIRD_PARTY_DIR}/lua/*.c")
@@ -213,11 +214,12 @@ target_include_directories(${APP_NAME} PRIVATE
     ${THIRD_PARTY_DIR}/glm
     ${THIRD_PARTY_DIR}/serdepp/include
     ${THIRD_PARTY_DIR}/magic_enum/include
+    ${THIRD_PARTY_DIR}/magic_enum/include/magic_enum
     ${THIRD_PARTY_DIR}/nameof/include
     ${THIRD_PARTY_DIR}/json/single_include
     ${THIRD_PARTY_DIR}/fmt/include
     ${THIRD_PARTY_DIR}/vfspp/include
-    ${THIRD_PARTY_DIR}/vfspp/include/vendor/miniz-cpp
+    ${THIRD_PARTY_DIR}/vfspp/vendor/miniz-cpp
     ${THIRD_PARTY_DIR}/sol/include
     ${THIRD_PARTY_DIR}/volk
     ${THIRD_PARTY_DIR}/Vulkan-Headers/include

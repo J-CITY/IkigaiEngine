@@ -9,6 +9,13 @@ def download_and_extract_glew():
     url = f"https://github.com/nigels-com/glew/releases/download/glew-{glew_version}/glew-{glew_version}-win32.zip"
     zip_path = "glew.zip"
     target_dir = "glew"
+    version_file = os.path.join(target_dir, "version.txt")
+
+    if os.path.exists(version_file):
+        with open(version_file, "r") as f:
+            if f.read().strip() == glew_version:
+                print(f"GLEW {glew_version} is already up to date. Skipping download.")
+                return
 
     print(f"Downloading GLEW {glew_version}...")
     urllib.request.urlretrieve(url, zip_path)
@@ -25,6 +32,10 @@ def download_and_extract_glew():
         
     # Rename extracted folder to 'glew'
     os.rename(extracted_folder, target_dir)
+    
+    # Save version
+    with open(version_file, "w") as f:
+        f.write(glew_version)
     
     # Cleanup zip
     os.remove(zip_path)

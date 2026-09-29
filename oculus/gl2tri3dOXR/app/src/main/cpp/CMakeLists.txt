@@ -53,6 +53,7 @@ include_directories(${THIRD_PARTY_DIR}/glm)
 include_directories(${THIRD_PARTY_DIR}/tiny-obj-loader)
 include_directories(${THIRD_PARTY_DIR}/serdepp/include)
 include_directories(${THIRD_PARTY_DIR}/magic_enum/include)
+include_directories(${THIRD_PARTY_DIR}/magic_enum/include/magic_enum)
 include_directories(${THIRD_PARTY_DIR}/nameof/include)
 include_directories(${THIRD_PARTY_DIR}/json/single_include)
 include_directories(${THIRD_PARTY_DIR}/assimp/include)
@@ -152,6 +153,7 @@ file(GLOB_RECURSE LUA_FILES
 
 add_library(soloud STATIC ${SOLOUD_FILES})
 add_library(spine STATIC ${SPINE_FILES})
+target_compile_definitions(spine PUBLIC SPINE_USE_STD_FUNCTION)
 add_library(lua STATIC ${LUA_FILES})
 # ------------------------------------------------------------------------
 #    openxr_app
