@@ -32,12 +32,14 @@ def main():
     parser.add_argument('-p', type=str, default="win", help='Platform: win, uwp, linux , macos, android, ios, web, switch (default: win)')
     parser.add_argument('-e', type=bool, default=True, help='Edittor mode (default: True)')
     parser.add_argument('-g', type=str, default="opengl", choices=['opengl', 'vulkan', 'dx12'], help='Graphics API (default: opengl)')
+    parser.add_argument('-b', type=str, default=None, help='Build directory path')
     args = parser.parse_args()
 
     platform_arg = args.p.lower()
 
     if platform_arg == 'win':
-        command = ['cmake', './windows', '-B./windows/build']
+        build_dir = args.b if args.b else './windows/build'
+        command = ['cmake', './windows', f'-B{build_dir}']
         if (args.c == 'vs22'):
             command.extend(['-G', 'Visual Studio 17 2022', '-T', 'host=x64'])
         elif (args.c == 'vs19'):
@@ -51,30 +53,34 @@ def main():
         command.append('-DUSE_DX12=' + ('ON' if args.g == 'dx12' else 'OFF'))
         
         subprocess.run(command)
-        create_assets_link('./windows/build')
+        create_assets_link(build_dir)
 
     elif platform_arg == 'mac':
-        command = ['cmake', './mac', '-B./mac/build']
+        build_dir = args.b if args.b else './mac/build'
+        command = ['cmake', './mac', f'-B{build_dir}']
         command.append('-DUSE_OPENGL=' + ('ON' if args.g == 'opengl' else 'OFF'))
         command.append('-DUSE_VULKAN=' + ('ON' if args.g == 'vulkan' else 'OFF'))
         subprocess.run(command)
-        create_assets_link('./mac/build')
+        create_assets_link(build_dir)
 
     elif platform_arg == 'web':
         import os
-        command = ['emcmake', 'cmake', './emscripten', '-B./emscripten/build']
+        build_dir = args.b if args.b else './emscripten/build'
+        command = ['emcmake', 'cmake', './emscripten', f'-B{build_dir}']
         subprocess.run(command, shell=(os.name == 'nt'))
-        create_assets_link('./emscripten/build')
+        create_assets_link(build_dir)
 
     elif platform_arg == 'android':
-        command = ['cmake', './android', '-B./android/build']
+        build_dir = args.b if args.b else './android/build'
+        command = ['cmake', './android', f'-B{build_dir}']
         subprocess.run(command)
-        create_assets_link('./android/build')
+        create_assets_link(build_dir)
 
     elif platform_arg == 'oculus':
-        command = ['cmake', './oculus', '-B./oculus/build']
+        build_dir = args.b if args.b else './oculus/build'
+        command = ['cmake', './oculus', f'-B{build_dir}']
         subprocess.run(command)
-        create_assets_link('./oculus/build')
+        create_assets_link(build_dir)
     
     else:
         print(f"Unknown platform: {platform_arg}")
