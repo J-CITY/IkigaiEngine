@@ -12,8 +12,8 @@
 #include "uniformBufferVk.h"
 #include "textureVk.h"
 
-#include "../spirv_reflect.h"
-#include "../spirv.h"
+#include <spirv_reflect.h>
+#include <spirv.h>
 #include <resourceModule/serviceManager.h>
 #include "../interface/reflectionStructs.h"
 

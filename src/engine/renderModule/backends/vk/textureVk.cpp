@@ -11,9 +11,15 @@
 #include "driverVk.h"
 
 #include <resourceModule/textureManager.h>
-#include "../../gameRendererVk.h"
+
 #include <resourceModule/serviceManager.h>
 #include <renderModule/backends/interface/atlasInterface.h>
+
+#include <cmath>
+#include <algorithm>
+static uint32_t GetMipCount(uint32_t width, uint32_t height) {
+	return static_cast<uint32_t>(std::floor(std::log2(std::max(width, height)))) + 1;
+}
 
 static const std::unordered_map<IKIGAI::RENDER::PixelFormat, vk::Format> FormatMap = {
 	{IKIGAI::RENDER::PixelFormat::R_FLOAT, vk::Format::eR32Sfloat},
@@ -292,19 +298,16 @@ void* IKIGAI::RENDER::TextureVk::getImguiId() {
 	return (void*)mDescriptorSet;
 }
 
-#include <coreModule/glmWrapper.hpp>
-uint32_t GetMipCount(uint32_t width, uint32_t height) {
-	return static_cast<uint32_t>(glm::floor(glm::log2(static_cast<float>(glm::max(width, height))))) + 1;
-}
 
-std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(const std::string& path, UTILS::IAllocator* allocator, ResourceDeleter deleter) {
+
+std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(const std::string& path, UTILS::IAllocator* allocator, TextureDeleter deleter) {
 	IKIGAI::RENDER::TextureResource res;
 	res.useMipmap = true;
 	res.pathTexture.push_back(path);
 	return Create(res, allocator, deleter);
 }
 
-std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(const TextureResource& descriptor, UTILS::IAllocator* allocator, ResourceDeleter deleter) {
+std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(const TextureResource& descriptor, UTILS::IAllocator* allocator, TextureDeleter deleter) {
 	auto& _descriptor = const_cast<TextureResource&>(descriptor);
 	//Load data
 	std::vector<void*> textureData;
@@ -360,7 +363,7 @@ std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(con
 	return tex;
 }
 
-std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator, ResourceDeleter deleter) {
+std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator, TextureDeleter deleter) {
 	auto& _d = const_cast<TextureResource&>(descriptor);
 	std::vector<void*> textureData;
 	bool needFree = false;
@@ -404,33 +407,33 @@ std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(con
 
 // --------------- TextureAtlasVk ---------------
 
-AtlasRect IKIGAI::RENDER::TextureAtlasVk::getPiece(const std::string& name) const {
+IKIGAI::RENDER::AtlasRect IKIGAI::RENDER::TextureAtlasVk::getPiece(const std::string& name) const {
 	if (mAtlas.mRects.contains(name)) return mAtlas.mRects.at(name);
-	return AtlasRect{};
+	return IKIGAI::RENDER::AtlasRect{};
 }
 
-AtlasRect IKIGAI::RENDER::TextureAtlasVk::getPieceUV(const std::string& name) const {
+IKIGAI::RENDER::AtlasRect IKIGAI::RENDER::TextureAtlasVk::getPieceUV(const std::string& name) const {
 	if (mAtlas.mRects.contains(name)) {
 		auto res = mAtlas.mRects.at(name);
 		res.mX /= mWidth; res.mY /= mHeight;
 		res.mW /= mWidth; res.mH /= mHeight;
 		return res;
 	}
-	return AtlasRect{};
+	return IKIGAI::RENDER::AtlasRect{};
 }
 
 void IKIGAI::RENDER::TextureAtlasVk::recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) {
 	TextureVk::recreate(descriptor, fileData);
 }
 
-std::shared_ptr<IKIGAI::RENDER::TextureAtlasVk> IKIGAI::RENDER::TextureAtlasVk::CreateAtlas(const std::string& path, bool generateMipmap, UTILS::IAllocator* allocator, ResourceDeleter deleter) {
+std::shared_ptr<IKIGAI::RENDER::TextureAtlasVk> IKIGAI::RENDER::TextureAtlasVk::CreateAtlas(const std::string& path, bool generateMipmap, UTILS::IAllocator* allocator, TextureDeleter deleter) {
 	TextureResource res;
 	res.useMipmap = generateMipmap;
 	res.pathTexture.push_back(path);
 	return CreateAtlasFromResource(res, allocator, deleter);
 }
 
-std::shared_ptr<IKIGAI::RENDER::TextureAtlasVk> IKIGAI::RENDER::TextureAtlasVk::CreateAtlasFromResource(const TextureResource& descriptor, UTILS::IAllocator* allocator, ResourceDeleter deleter) {
+std::shared_ptr<IKIGAI::RENDER::TextureAtlasVk> IKIGAI::RENDER::TextureAtlasVk::CreateAtlasFromResource(const TextureResource& descriptor, UTILS::IAllocator* allocator, TextureDeleter deleter) {
 	auto& _d = const_cast<TextureResource&>(descriptor);
 	std::vector<void*> textureData;
 	if (!_d.pathTexture.empty()) {
@@ -467,7 +470,7 @@ std::shared_ptr<IKIGAI::RENDER::TextureAtlasVk> IKIGAI::RENDER::TextureAtlasVk::
 	return tex;
 }
 
-std::shared_ptr<IKIGAI::RENDER::TextureAtlasVk> IKIGAI::RENDER::TextureAtlasVk::CreateAtlasFromResource(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator, ResourceDeleter deleter) {
+std::shared_ptr<IKIGAI::RENDER::TextureAtlasVk> IKIGAI::RENDER::TextureAtlasVk::CreateAtlasFromResource(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator, TextureDeleter deleter) {
 	auto& _d = const_cast<TextureResource&>(descriptor);
 	std::vector<void*> textureData;
 	bool needFree = false;

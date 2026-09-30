@@ -12,9 +12,9 @@
 #include "renderModule/backends/interface/textureInterface.h"
 
 #ifdef VULKAN_BACKEND
+#include <volk.h>
 #include <queue>
 #include "swapChainHandler.h"
-#include "commandHandler.h"
 #include <assimp/scene.h>
 #include "../interface/driverInterface.h"
 
@@ -30,6 +30,8 @@ namespace IKIGAI::RENDER {
 	
 	class DriverVk : public DriverInterface {
 	public:
+		struct VolkInitializer { VolkInitializer(); };
+		VolkInitializer mVolkInit;
 		vk::raii::Context mContext;
 		vk::raii::Instance mInstance = nullptr;
 		vk::raii::PhysicalDevice mPhysicalDevice = nullptr;
@@ -66,6 +68,8 @@ namespace IKIGAI::RENDER {
 
 		uint32_t mSemaphoreIndex = 0;
 		uint32_t mFrameIndex = 0;
+		uint32_t mWidth = 0;
+		uint32_t mHeight = 0;
 
 		struct State {
 			std::shared_ptr<ShaderVk> mShader;
@@ -103,7 +107,7 @@ namespace IKIGAI::RENDER {
 
 		//PipelineStateVK pipeline_state;
 		//std::optional<Scissor> scissor;
-		//std::optional<Viewport> viewport;
+		bool mMSAA = false;
 		//std::optional<DepthMode> depth_mode = DepthMode();
 		//std::optional<StencilMode> stencil_mode;
 		//CullMode cull_mode = CullMode::None;
@@ -215,12 +219,12 @@ namespace IKIGAI::RENDER {
 		void setMSAA(bool value) override;
 		void setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) override;
 
-		std::shared_ptr<TextureInterface> createTexture(const std::string& path, bool generateMipmap = true, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr) override;
-		std::shared_ptr<TextureInterface> createTextureAtlas(const std::string& path, bool generateMipmap = true, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr) override;
-		std::shared_ptr<TextureInterface> createTexture(const TextureResource& res, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr) override;
-		std::shared_ptr<TextureInterface> createTexture(const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr) override;
-		std::shared_ptr<TextureInterface> createTextureAtlas(const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr) override;
-		std::shared_ptr<TextureInterface> createTexture(const std::string& name, const std::vector<uint8_t>& data, bool generateMipmap, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr) override;
+		std::shared_ptr<TextureInterface> createTexture(const std::string& path, bool generateMipmap = true, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) override;
+		std::shared_ptr<TextureInterface> createTextureAtlas(const std::string& path, bool generateMipmap = true, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) override;
+		std::shared_ptr<TextureInterface> createTexture(const TextureResource& res, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) override;
+		std::shared_ptr<TextureInterface> createTexture(const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) override;
+		std::shared_ptr<TextureInterface> createTextureAtlas(const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) override;
+		std::shared_ptr<TextureInterface> createTexture(const std::string& name, const std::vector<uint8_t>& data, bool generateMipmap, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) override;
 
 		std::shared_ptr<ShaderInterface> createShader(const std::string& vertexPath, const std::string& fragmentPath) override;
 		std::shared_ptr<ShaderInterface> createShader(const ShaderResource& res, UTILS::IAllocator* allocator = nullptr, ShaderDeleter deleter = nullptr) override;
@@ -238,6 +242,11 @@ namespace IKIGAI::RENDER {
 		void setTriangleOrientation(TriangleOrientation value) override;
 		void draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) override;
 		void drawIndexed(uint32_t index_count, uint32_t index_offset, uint32_t instance_count) override;
+		void draw(const MeshInterface& mesh, PrimitiveMode primitive, uint32_t instances) override;
+		std::shared_ptr<UniformBufferInterface> createUniformBuffer(const void* data, size_t size) override;
+		std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void* data, size_t size, size_t stride) override;
+		void setFrameBuffer(std::shared_ptr<FrameBufferInterface> frameBuffer) override;
+		void resetFrameBuffer() override;
 		void submit() override;
 		void resetViewport() override;;
 		void resetScissor() override;;

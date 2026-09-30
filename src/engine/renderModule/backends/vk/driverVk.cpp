@@ -115,20 +115,19 @@ std::string DriverVk::State::getName() {
 		(mFrameBuffer ? std::to_string(mFrameBuffer->getId()) : "0");
 }
 
-static PFN_vkGetInstanceProcAddr initVolk() {
+DriverVk::VolkInitializer::VolkInitializer() {
 	if (volkInitialize() != VK_SUCCESS) {
 		throw std::runtime_error("Failed to initialize volk");
 	}
-	return volkGetInstanceProcAddr;
 }
 
-DriverVk::DriverVk() : mContext(initVolk()) {
+DriverVk::DriverVk() {
 	UtilityVk::mDriver = this;
 	DriverVk::init();
 }
 
 DriverVk::~DriverVk() {
-	end();
+	DriverVk::end();
 	wait();
 
 	//delete gContext;
@@ -1017,11 +1016,11 @@ void DriverVk::createSwapchain(unsigned int windowID, uint32_t width, uint32_t h
 }
 
 void DriverVk::nextFrame() {
-	const auto& image_acquired_semaphore = mFrames.at(mSemaphoreIndex).mImageAcquiredSemaphore;
+	const auto& image_acquired_semaphore = getCurrentSwapchainContext().frames.at(mSemaphoreIndex).mImageAcquiredSemaphore;
 
-	auto [result, image_index] = getCurrentSwapchainContext().swapchain.acquireNextImage(UINT64_MAX, *image_acquired_semaphore);
+	auto res = getCurrentSwapchainContext().swapchain.acquireNextImage(UINT64_MAX, *image_acquired_semaphore);
 
-	mFrameIndex = image_index;
+	mFrameIndex = res.value;
 }
 
 
@@ -1238,7 +1237,9 @@ void DriverVk::PushDescriptors(vk::raii::CommandBuffer& cmdlist, vk::PipelineBin
 void DriverVk::resize(size_t width, size_t height) {
 	end();
 	wait();
-	createSwapchain(width, height);
+	mWidth = static_cast<uint32_t>(width);
+	mHeight = static_cast<uint32_t>(height);
+	createSwapchain(mCurrentWindowID, mWidth, mHeight);
 	nextFrame();
 	begin();
 }
@@ -1268,7 +1269,7 @@ void DriverVk::setScissor(const Scissor& scissor) {
 	mScissor = scissor;
 }
 
-void DriverVk::setTexture(uint32_t binding, std::shared_ptr<TextureInterface> handle) {
+void DriverVk::setTexture(size_t binding, std::shared_ptr<TextureInterface> handle) {
 	mTextures[binding] = std::static_pointer_cast<TextureVk>(handle);
 	graphics_pipeline_ignore_bindings.erase(binding);
 }
@@ -1287,14 +1288,45 @@ void DriverVk::setIndexBuffer(const std::shared_ptr<IndexBufferInterface> buffer
 	mIndexBuffer = std::static_pointer_cast<IndexBufferVk>(buffer);;
 }
 
-void DriverVk::setUniformBuffer(uint32_t binding, std::shared_ptr<UniformBufferInterface> handle) {
+void DriverVk::setUniformBuffer(size_t binding, std::shared_ptr<UniformBufferInterface> handle) {
 	mUniformBuffers[binding] = std::static_pointer_cast<UniformBufferVk>(handle);
 	graphics_pipeline_ignore_bindings.erase(binding);
 }
 
-void DriverVk::setStorageBuffer(uint32_t binding, std::shared_ptr<StorageBufferInterface> handle) {
+void DriverVk::setStorageBuffer(size_t binding, std::shared_ptr<StorageBufferInterface> handle) {
 	mStorageBuffers[binding] = std::static_pointer_cast<StorageBufferVk>(handle);
 	//graphics_pipeline_ignore_bindings.erase(binding);
+}
+
+void DriverVk::setTexture(const std::string& name, std::shared_ptr<TextureInterface> data) {
+	if (!mCurrentState.mShader) return;
+	const auto& ref = mCurrentState.mShader->getReflection();
+	if (ref.mNameToUniforms.contains(name)) {
+		size_t idx = ref.mNameToUniforms.at(name);
+		setTexture(ref.mUniforms[idx].mBind, data);
+	}
+}
+
+void DriverVk::setUniformBuffer(const std::string& name, std::shared_ptr<UniformBufferInterface> data) {
+	if (!mCurrentState.mShader) return;
+	const auto& ref = mCurrentState.mShader->getReflection();
+	if (ref.mNameToUniforms.contains(name)) {
+		size_t idx = ref.mNameToUniforms.at(name);
+		setUniformBuffer(ref.mUniforms[idx].mBind, data);
+	}
+}
+
+void DriverVk::setStorageBuffer(const std::string& name, std::shared_ptr<StorageBufferInterface> data) {
+	if (!mCurrentState.mShader) return;
+	const auto& ref = mCurrentState.mShader->getReflection();
+	if (ref.mNameToUniforms.contains(name)) {
+		size_t idx = ref.mNameToUniforms.at(name);
+		setStorageBuffer(ref.mUniforms[idx].mBind, data);
+	}
+}
+
+void DriverVk::setMSAA(bool value) {
+	mMSAA = value;
 }
 
 void DriverVk::setBlending(const Blending& value) {
@@ -1415,7 +1447,7 @@ void DriverVk::submit() {
 
 	auto present_result = mQueue.presentKHR(presentInfo);
 
-	mSemaphoreIndex = (mSemaphoreIndex + 1) % mFrames.size();
+	mSemaphoreIndex = (mSemaphoreIndex + 1) % getCurrentSwapchainContext().frames.size();
 
 
 	wait();
@@ -1468,14 +1500,23 @@ std::shared_ptr<TextureInterface> DriverVk::createTexture(const std::string& nam
 }
 
 std::shared_ptr<ShaderInterface> DriverVk::createShader(const std::string& vertexPath, const std::string& fragmentPath) {
-	ShaderResource res;
-	res.vertexPath = vertexPath;
-	res.fragmentPath = fragmentPath;
-	return AllocateShader<ShaderVk>(nullptr, nullptr, res);
+	std::map<ShaderType, std::string> paths;
+	paths[ShaderType::VERTEX] = vertexPath;
+	paths[ShaderType::FRAGMENT] = fragmentPath;
+	return AllocateShader<ShaderVk>(nullptr, nullptr, paths);
 }
 
 std::shared_ptr<ShaderInterface> DriverVk::createShader(const ShaderResource& res, UTILS::IAllocator* allocator, ShaderDeleter deleter) {
-	return AllocateShader<ShaderVk>(allocator, deleter, res);
+	std::map<ShaderType, std::string> paths;
+	for (const auto& [k, v] : res.paths) {
+        if (k == "Vertex" || k == "VERTEX") paths[ShaderType::VERTEX] = v;
+        else if (k == "Fragment" || k == "FRAGMENT") paths[ShaderType::FRAGMENT] = v;
+        else if (k == "Geometry" || k == "GEOMETRY") paths[ShaderType::GEOMETRY] = v;
+        else if (k == "TessellationControl" || k == "TESSELLATION_CONTROL") paths[ShaderType::TESSELLATION_CONTROL] = v;
+        else if (k == "TessellationEvaluation" || k == "TESSELLATION_EVALUATION") paths[ShaderType::TESSELLATION_EVALUATION] = v;
+        else if (k == "Compute" || k == "COMPUTE") paths[ShaderType::COMPUTE] = v;
+    }
+	return AllocateShader<ShaderVk>(allocator, deleter, paths);
 }
 
 std::shared_ptr<ModelInterface> DriverVk::createModel(const std::string& path, UTILS::IAllocator* allocator, ModelDeleter deleter) {
@@ -1492,6 +1533,39 @@ std::shared_ptr<MaterialInterface> DriverVk::createMaterial(const MaterialResour
 		if (deleter) deleter(m);
 	};
 	return AllocateMaterial<MaterialVk>(allocator, std::move(finalDeleter), res);
+}
+
+std::shared_ptr<FrameBufferInterface> DriverVk::createFrameBuffer(const std::vector<std::shared_ptr<TextureInterface>>& textures, std::shared_ptr<TextureInterface> depth) {
+	return std::make_shared<FrameBufferVk>(textures, depth);
+}
+
+void DriverVk::draw(const MeshInterface& mesh, PrimitiveMode primitive, uint32_t instances) {
+	if (instances > 0) {
+		setPrimitiveMode(primitive);
+		mesh.bind();
+		if (mesh.getIndexCount() > 0) {
+			drawIndexed(static_cast<uint32_t>(mesh.getIndexCount()), 0, instances);
+		} else {
+			draw(static_cast<uint32_t>(mesh.getVertexCount()), 0, instances);
+		}
+		mesh.unbind();
+	}
+}
+
+std::shared_ptr<UniformBufferInterface> DriverVk::createUniformBuffer(const void* data, size_t size) {
+	return std::make_shared<UniformBufferVk>(const_cast<void*>(data), size);
+}
+
+std::shared_ptr<StorageBufferInterface> DriverVk::createStorageBuffer(const void* data, size_t size, size_t stride) {
+	return std::make_shared<StorageBufferVk>(const_cast<void*>(data), size, stride);
+}
+
+void DriverVk::setFrameBuffer(std::shared_ptr<FrameBufferInterface> frameBuffer) {
+	mCurrentState.mFrameBuffer = std::static_pointer_cast<FrameBufferVk>(frameBuffer);
+}
+
+void DriverVk::resetFrameBuffer() {
+	mCurrentState.mFrameBuffer = nullptr;
 }
 
 #endif

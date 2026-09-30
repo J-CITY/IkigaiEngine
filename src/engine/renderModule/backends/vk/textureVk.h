@@ -8,6 +8,7 @@
 
 #include "../interface/textureInterface.h"
 #include "../interface/driverInterface.h"
+#include "../interface/atlasInterface.h"
 #include "utilsModule/memoryAlloc.h"
 
 namespace IKIGAI::RENDER {
@@ -32,9 +33,9 @@ namespace IKIGAI::RENDER {
 		void* getImguiId() override;
 		void recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) override;
 
-		static std::shared_ptr<TextureVk> Create(const std::string& path, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr);
-		static std::shared_ptr<TextureVk> Create(const TextureResource& descriptor, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr);
-		static std::shared_ptr<TextureVk> Create(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr);
+		static std::shared_ptr<TextureVk> Create(const std::string& path, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr);
+		static std::shared_ptr<TextureVk> Create(const TextureResource& descriptor, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr);
+		static std::shared_ptr<TextureVk> Create(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr);
 		void setData(uint32_t width, uint32_t height, PixelFormat format, const std::vector<void*>& data, uint32_t mip_level,
 		             uint32_t offset_x, uint32_t offset_y);
 		void generateMips();
@@ -57,9 +58,9 @@ namespace IKIGAI::RENDER {
 		[[nodiscard]] AtlasRect getPiece(const std::string& name) const;
 		[[nodiscard]] AtlasRect getPieceUV(const std::string& name) const;
 
-		static std::shared_ptr<TextureAtlasVk> CreateAtlas(const std::string& path, bool generateMipmap, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr);
-		static std::shared_ptr<TextureAtlasVk> CreateAtlasFromResource(const TextureResource& res, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr);
-		static std::shared_ptr<TextureAtlasVk> CreateAtlasFromResource(const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr);
+		static std::shared_ptr<TextureAtlasVk> CreateAtlas(const std::string& path, bool generateMipmap, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr);
+		static std::shared_ptr<TextureAtlasVk> CreateAtlasFromResource(const TextureResource& res, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr);
+		static std::shared_ptr<TextureAtlasVk> CreateAtlasFromResource(const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr);
 	};
 }
 #endif

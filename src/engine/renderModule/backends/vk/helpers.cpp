@@ -6,12 +6,11 @@
 #include "driverVk.h"
 #include <stdexcept>
 #include "../interface/driverInterface.h"
+#include <resourceModule/serviceManager.h>
 
 using namespace IKIGAI;
 using namespace IKIGAI::RENDER;
 
-#include "../../gameRendererVk.h"
-#include <resourceModule/serviceManager.h>
 
 DriverVk* UtilityVk::GetDriver() {
 	return mDriver;

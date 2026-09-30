@@ -53,6 +53,7 @@ namespace IKIGAI {
 			void setIndexBuffer(std::shared_ptr<IndexBufferInterface> buffer) override;
 			void setShader(std::shared_ptr<ShaderInterface> shader) override;
 			void onResize(); // override;
+			void resize(size_t width, size_t height) override;
 
 			void setMSAA(bool value) override;
 			void setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) override;

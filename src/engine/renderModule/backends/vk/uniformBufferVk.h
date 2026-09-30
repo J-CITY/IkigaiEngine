@@ -19,7 +19,7 @@ namespace IKIGAI::RENDER {
 
 		}
 
-		void setData(const void* data, size_t sz) override;
+		void setData(const void* data, size_t sz, size_t offset = 0) override;
 		
 	};
 

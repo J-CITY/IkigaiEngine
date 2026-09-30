@@ -192,6 +192,12 @@ void IKIGAI::RENDER::DriverGl::onResize() {
   setDirty(Dirty::SCISSOR);
 }
 
+void IKIGAI::RENDER::DriverGl::resize(size_t width, size_t height) {
+  mWidth = width;
+  mHeight = height;
+  glViewport(0, 0, (GLsizei)width, (GLsizei)height);
+}
+
 // TODO: add support for FB
 void IKIGAI::RENDER::DriverGl::setMSAA(bool value) {
   mMSAA = value;

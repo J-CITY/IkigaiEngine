@@ -141,7 +141,7 @@ namespace IKIGAI::RENDER {
 		virtual void submit() = 0;
 		virtual void cleanup() = 0;
 
-		// virtual void resize(size_t width, size_t height) = 0;
+		virtual void resize(size_t width, size_t height) = 0;
 
 		virtual void setPrimitiveMode(PrimitiveMode topology) = 0;
 		virtual void setRasterization(RasterizationMode mode) = 0;

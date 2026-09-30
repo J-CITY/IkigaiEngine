@@ -23,6 +23,9 @@
 #include <d3d12.h>
 #endif
 
+#ifdef VULKAN_BACKEND
+#include <volk.h>
+#endif
 namespace IKIGAI::WINDOW {
 	struct WindowSettings {
 		bool isFullscreen = false;

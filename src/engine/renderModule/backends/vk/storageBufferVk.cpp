@@ -55,6 +55,36 @@ void IKIGAI::RENDER::StorageBufferVk::setData(const void* data, size_t sz, size_
 	UtilityVk::GetDriver()->destroyDeferred(std::move(staging_buffer_memory));
 }
 
+void IKIGAI::RENDER::StorageBufferVk::setSubData(const void* data, size_t sz, size_t offset) {
+	UtilityVk::GetDriver()->deactivateRenderPass();
+
+	if (UtilityVk::GetDriver()->mCurrentMemoryStage != vk::PipelineStageFlagBits2::eTransfer) {
+		UtilityVk::SetMemoryBarrier(UtilityVk::GetDriver()->getCurrentFrame().mCommandBuffer, UtilityVk::GetDriver()->mCurrentMemoryStage, vk::PipelineStageFlagBits2::eTransfer);
+		UtilityVk::GetDriver()->mCurrentMemoryStage = vk::PipelineStageFlagBits2::eTransfer;
+	}
+
+	if (sz < 65536) {
+		UtilityVk::GetDriver()->getCurrentFrame().mCommandBuffer.updateBuffer<uint8_t>(*mBuffer, offset, {(uint32_t)sz, (uint8_t*)data});
+		return;
+	}
+
+	auto [staging_buffer, staging_buffer_memory] = UtilityVk::CreateBuffer(sz, vk::BufferUsageFlagBits::eTransferSrc);
+
+	auto ptr = staging_buffer_memory.mapMemory(0, sz);
+	memcpy(ptr, data, sz);
+	staging_buffer_memory.unmapMemory();
+
+	vk::BufferCopy region;
+    region.setSrcOffset(0);
+    region.setDstOffset(offset);
+	region.setSize(sz);
+
+	UtilityVk::GetDriver()->getCurrentFrame().mCommandBuffer.copyBuffer(*staging_buffer, *mBuffer, {region});
+
+	UtilityVk::GetDriver()->destroyDeferred(std::move(staging_buffer));
+	UtilityVk::GetDriver()->destroyDeferred(std::move(staging_buffer_memory));
+}
+
 void IKIGAI::RENDER::StorageBufferVk::bind() {
 
 }

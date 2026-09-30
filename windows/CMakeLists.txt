@@ -108,6 +108,11 @@ if(USE_SDL2)
     target_include_directories(imgui PRIVATE "${THIRD_PARTY_DIR}/SDL2/include")
 endif()
 
+if(USE_VULKAN)
+    target_include_directories(imgui PRIVATE "${THIRD_PARTY_DIR}/Vulkan-Headers/include")
+    target_compile_definitions(imgui PRIVATE VK_NO_PROTOTYPES)
+endif()
+
 # 7. Spine
 file(GLOB_RECURSE SPINE_FILES "${THIRD_PARTY_DIR}/spine/spine/*.cpp" "${THIRD_PARTY_DIR}/spine/spine/*.h")
 add_library(spine STATIC ${SPINE_FILES})
@@ -124,6 +129,7 @@ target_include_directories(lua PUBLIC "${THIRD_PARTY_DIR}/lua")
 # 9. Volk
 add_library(volk STATIC "${THIRD_PARTY_DIR}/volk/volk.c" "${THIRD_PARTY_DIR}/volk/volk.h")
 target_include_directories(volk PUBLIC "${THIRD_PARTY_DIR}/Vulkan-Headers/include")
+target_compile_definitions(volk PUBLIC VK_NO_PROTOTYPES)
 
 # 10. SDL2
 if(USE_SDL2)

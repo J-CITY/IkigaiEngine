@@ -18,6 +18,7 @@ namespace IKIGAI::RENDER {
 		}
 
 		void setData(const void* data, size_t sz, size_t stride) override;
+		void setSubData(const void* data, size_t sz, size_t offset) override;
 
 		void bind() override;
 

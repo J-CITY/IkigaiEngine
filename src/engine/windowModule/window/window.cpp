@@ -1,7 +1,7 @@
 #include "window.h"
 
-#ifdef VUKLAN_BACKEND
-#include <vulkan/vulkan_core.h>
+#ifdef VULKAN_BACKEND
+#include <volk.h>
 #include "backends/imgui_impl_vulkan.h"
 #endif
 #include "renderModule/backends/dx12/d3dUtil.h"
@@ -631,20 +631,20 @@ void Window::initImGUI() {
 	init_info.QueueFamily = driverVk->mQueueFamilyIndex;
 	init_info.Queue = *driverVk->mQueue;
 	init_info.DescriptorPool = driverVk->mImguiPool;
-	init_info.Subpass = 0;
+	init_info.PipelineInfoMain.Subpass = 0;
 	init_info.MinImageCount = 3;
 	init_info.ImageCount = 3;
-	init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
+	init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 	init_info.UseDynamicRendering = true;
 
 	static auto _swapchainImageFormat = VK_FORMAT_B8G8R8A8_UNORM;
-	init_info.PipelineRenderingCreateInfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-	init_info.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-	init_info.PipelineRenderingCreateInfo.pColorAttachmentFormats = &_swapchainImageFormat;
-	init_info.PipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
-	init_info.PipelineRenderingCreateInfo.stencilAttachmentFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
+	init_info.PipelineInfoMain.PipelineRenderingCreateInfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
+	init_info.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
+	init_info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &_swapchainImageFormat;
+	init_info.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
+	init_info.PipelineInfoMain.PipelineRenderingCreateInfo.stencilAttachmentFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
 
-	ImGui_ImplVulkan_LoadFunctions([](const char* functionName, void* vulkanInstance) {
+	ImGui_ImplVulkan_LoadFunctions(VK_API_VERSION_1_3, [](const char* functionName, void* vulkanInstance) {
 		if (strcmp("vkCmdBeginRenderingKHR", functionName) == 0) {
 			return vkGetInstanceProcAddr(*(reinterpret_cast<VkInstance*>(vulkanInstance)), "vkCmdBeginRendering");
 		}
@@ -655,7 +655,6 @@ void Window::initImGUI() {
 	}, &init_info.Instance);
 
 	ImGui_ImplVulkan_Init(&init_info);
-	ImGui_ImplVulkan_CreateFontsTexture();
 #endif
 
 #endif

@@ -18,7 +18,7 @@ IKIGAI::RENDER::UniformBufferVk::~UniformBufferVk() {
 	UtilityVk::GetDriver()->destroyDeferred(std::move(mDeviceMemory));
 }
 
-void IKIGAI::RENDER::UniformBufferVk::setData(const void* data, size_t sz) {
+void IKIGAI::RENDER::UniformBufferVk::setData(const void* data, size_t sz, size_t offset) {
 	UtilityVk::GetDriver()->deactivateRenderPass();
 
 	if (sz > mSizeByte) {

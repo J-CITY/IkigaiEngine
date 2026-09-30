@@ -22,12 +22,7 @@
 #include "utilsModule/imguiHelper/ImGuiFileBrowser.h"
 #include "renderModule/backends/interface/resourceStruct.h"
 
-#ifdef DX12_BACKEND
-#include "renderModule/gameRendererDx12.h"
-#endif
-
 #ifdef VULKAN_BACKEND
-#include "renderModule/gameRendererVk.h"
 #include "backends/imgui_impl_vulkan.h"
 #endif
 
