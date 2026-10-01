@@ -96,6 +96,13 @@ namespace IKIGAI::RENDER {
 	struct RenderSettings {
 		enum class Backend { OPENGL, VULKAN, DIRECTX12 };
 		Backend backend = Backend::OPENGL;
+
+		template<class Context>
+		constexpr static auto serde(Context& context, RenderSettings& value) {
+			using namespace serde::attribute;
+			serde::serde_struct(context, value)
+				.field(&RenderSettings::backend, "backend");
+		}
 	};
 
 	class DriverInterface {

@@ -6,27 +6,29 @@
 #ifdef VULKAN_BACKEND
 
 IKIGAI::RENDER::StorageBufferVk::StorageBufferVk(void* data, size_t size, size_t stride) : StorageBufferInterface(size, stride) {
-	std::tie(mBuffer, mDeviceMemory) = UtilityVk::CreateBuffer(mSizeByte, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst);
-	if (data) {
+	if (mSizeByte > 0) {
+		std::tie(mBuffer, mDeviceMemory) = UtilityVk::CreateBuffer(mSizeByte, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst);
+	}
+	if (data && mSizeByte > 0) {
 		StorageBufferVk::setData(data, size, stride);
 	}
 }
 
 IKIGAI::RENDER::StorageBufferVk::~StorageBufferVk() {
-	UtilityVk::GetDriver()->destroyDeferred(std::move(mBuffer));
-	UtilityVk::GetDriver()->destroyDeferred(std::move(mDeviceMemory));
+	if (*mBuffer) UtilityVk::GetDriver()->destroyDeferred(std::move(mBuffer));
+	if (*mDeviceMemory) UtilityVk::GetDriver()->destroyDeferred(std::move(mDeviceMemory));
 }
 
 void IKIGAI::RENDER::StorageBufferVk::setData(const void* data, size_t sz, size_t stride) {
 	UtilityVk::GetDriver()->deactivateRenderPass();
 
-	if (sz * stride > mSizeByte) {
+	if (sz * stride > mSizeByte || !*mBuffer) {
 		mSize = sz;
 		mStride = stride;
 		mSizeByte = mSize * mStride;
-		UtilityVk::GetDriver()->destroyDeferred(std::move(mBuffer));
-		UtilityVk::GetDriver()->destroyDeferred(std::move(mDeviceMemory));
-		std::tie(mBuffer, mDeviceMemory) = UtilityVk::CreateBuffer(mSizeByte, vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+		if (*mBuffer) UtilityVk::GetDriver()->destroyDeferred(std::move(mBuffer));
+		if (*mDeviceMemory) UtilityVk::GetDriver()->destroyDeferred(std::move(mDeviceMemory));
+		std::tie(mBuffer, mDeviceMemory) = UtilityVk::CreateBuffer(mSizeByte, vk::BufferUsageFlagBits::eStorageBuffer | vk::BufferUsageFlagBits::eTransferDst);
 	}
 
 	if (UtilityVk::GetDriver()->mCurrentMemoryStage != vk::PipelineStageFlagBits2::eTransfer) {
@@ -56,6 +58,9 @@ void IKIGAI::RENDER::StorageBufferVk::setData(const void* data, size_t sz, size_
 }
 
 void IKIGAI::RENDER::StorageBufferVk::setSubData(const void* data, size_t sz, size_t offset) {
+	if (!*mBuffer) {
+		return;
+	}
 	UtilityVk::GetDriver()->deactivateRenderPass();
 
 	if (UtilityVk::GetDriver()->mCurrentMemoryStage != vk::PipelineStageFlagBits2::eTransfer) {

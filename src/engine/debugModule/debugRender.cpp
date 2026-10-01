@@ -125,15 +125,7 @@ std::shared_ptr<RENDER::MaterialInterface> editMaterial;
 std::function<void(std::string)> fileChooserCb;
 std::function<std::string()> fileFormatsCb;
 
-#ifdef OPENGL_BACKEND
-std::unordered_map<std::string, unsigned> textureCache;
-#endif
-#ifdef VULKAN_BACKEND
-std::unordered_map<std::string, std::shared_ptr<RENDER::TextureVk>> textureCache;
-#endif
-#ifdef DX12_BACKEND
-std::unordered_map<std::string, std::shared_ptr<RENDER::TextureDx12>> textureCache;
-#endif
+	std::unordered_map<std::string, std::shared_ptr<RENDER::TextureInterface>> textureCache;
 
 std::shared_ptr<IKIGAI::ECS::Object> recursiveDraw(IKIGAI::SCENE_SYSTEM::Scene& activeScene, std::shared_ptr<IKIGAI::ECS::Object> parentEntity) {
 	std::shared_ptr<IKIGAI::ECS::Object> selectedNode;
@@ -687,26 +679,11 @@ private:
 			}
 			auto pos = ImGui::GetCursorPos();
 			ImGui::SetCursorPos(ImVec2(pos.x, pos.y - elementSize));
+			auto imguiId = textureCache.at(imPath)->getImguiId();
 #ifdef OPENGL_BACKEND
-			ImGui::Image(reinterpret_cast<ImTextureID>((uintptr_t)textureCache.at(imPath)), { static_cast<float>(elementSize), static_cast<float>(elementSize) }, ImVec2(0, 1), ImVec2(1, 0));
-#endif
-#ifdef VULKAN_BACKEND
-			ImGui::Image((ImTextureID)textureCache.at(imPath)->descriptor_set, { static_cast<float>(elementSize), static_cast<float>(elementSize) });
-#endif
-#ifdef DX12_BACKEND
-			auto device = RENDER::GameRendererDx12::mApp->mDriver;
-			//UINT handle_increment = device->mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-			//int descriptor_index = 1; // The descriptor table index to use (not normally a hard-coded constant, but in this case we'll assume we have slot 1 reserved for us)
-			//D3D12_CPU_DESCRIPTOR_HANDLE my_texture_srv_cpu_handle = device->mSrvDescHeap->GetCPUDescriptorHandleForHeapStart();
-			//my_texture_srv_cpu_handle.ptr += (handle_increment * descriptor_index);
-			//D3D12_GPU_DESCRIPTOR_HANDLE my_texture_srv_gpu_handle = device->mSrvDescHeap->GetGPUDescriptorHandleForHeapStart();
-			//my_texture_srv_gpu_handle.ptr += (handle_increment * descriptor_index);
-			//ImGui::Image((ImTextureID)my_texture_srv_gpu_handle.ptr, { static_cast<float>(elementSize), static_cast<float>(elementSize) });
-
-			//ID3D12DescriptorHeap* dh4[] = { device->mTexturesDescHeap.Get() };
-			//device->imguiHeaps.push_back(textureCache.at(imPath)->UploadHeap.Get());
-			//device->mCommandList->SetDescriptorHeaps(1, dh4);
-			ImGui::Image((ImTextureID)textureCache.at(imPath)->mGpuSrv.ptr, { static_cast<float>(elementSize), static_cast<float>(elementSize) });
+			ImGui::Image(reinterpret_cast<ImTextureID>(imguiId), { static_cast<float>(elementSize), static_cast<float>(elementSize) }, ImVec2(0, 1), ImVec2(1, 0));
+#else
+			ImGui::Image(reinterpret_cast<ImTextureID>(imguiId), { static_cast<float>(elementSize), static_cast<float>(elementSize) });
 #endif
 			ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + 100);
 			ImGui::Text(entry.path().filename().string().c_str());
@@ -1660,36 +1637,7 @@ DebugRender::DebugRender() {
 	ArchTheme();
 
 	// Setup Platform/Renderer backends
-#ifdef OPENGL_BACKEND
-	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL) {
-		auto& window = RESOURCES::ServiceManager::Get<WINDOW_SYSTEM::Window>().getContext();
-		ImGui_ImplGlfw_InitForOpenGL(&window, false);
-		const char* glsl_version = "#version 330";
-		ImGui_ImplOpenGL3_Init(glsl_version);
-	}
-#endif
 
-#ifdef DX12_BACKEND
-	auto& gr = reinterpret_cast<RENDER::GameRendererDx12&>(RESOURCES::ServiceManager::Get<RENDER::GameRendererInterface>());
-	auto render = reinterpret_cast<RENDER::GameRendererDx12&>(RESOURCES::ServiceManager::Get<RENDER::GameRendererInterface>()).mDriver;
-
-
-	ImGui_ImplWin32_Init(gr.mhMainWnd);
-	ImGui_ImplDX12_Init(render->mDevice.Get(), 1,
-		DXGI_FORMAT_R8G8B8A8_UNORM, render->mTexturesDescHeap.Get(),
-		render->mTexturesDescHeap->GetCPUDescriptorHandleForHeapStart(),
-		render->mTexturesDescHeap->GetGPUDescriptorHandleForHeapStart());
-
-#endif
-
-#if defined  OPENGL_BACKEND || defined  VULKAN_BACKEND
-	RESOURCES::ServiceManager::Get<WINDOW_SYSTEM::Window>().keyEvent.add([](GLFWwindow* window, int key, int scancode, int action, int mods){
-		ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
-	});
-	RESOURCES::ServiceManager::Get<WINDOW_SYSTEM::Window>().mouseButtonEvent.add([](GLFWwindow* window, int button, int action, int mods) {
-		ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
-	});
-#endif
 
 	//DEBUG CAMERA
 	debugCamera = std::make_unique<ECS::Object>(ECS::Object::Id_(-123100), "DEBUG_CAMERA", "EDITOR");
@@ -1712,128 +1660,11 @@ DebugRender::DebugRender() {
 
 
 	m_movableChildData["GizmoTools"] = MovableChildData{ ImVec2(0, 0) , ImVec2(0, 0) , true, false };
-#ifdef OPENGL_BACKEND
-	textureCache["default_texture"] = ImGuiLoadTextureFromFileGl(UTILS::getRealPath("Textures/default.png")).value();
-#endif
-#ifdef VULKAN_BACKEND
-	textureCache["default_texture"] = ImGuiLoadTextureFromFileVk(UTILS::getRealPath("Textures/default.png"));
-#endif
-#ifdef DX12_BACKEND
-	textureCache["default_texture"] = ImGuiLoadTextureFromFileDx12(UTILS::getRealPath("Textures/default.png"));
-#endif
-}
-#ifdef VULKAN_BACKEND
-#include <renderModule/gameRendererVk.h>
-static ImGui_ImplVulkanH_Window g_MainWindowData;
-static VkAllocationCallbacks* g_Allocator = nullptr;
-static int                      g_MinImageCount = 2;
-
-static void SetupVulkanWindow(ImGui_ImplVulkanH_Window* wd, VkSurfaceKHR surface, int width, int height)
-{
-	auto render = reinterpret_cast<RENDER::GameRendererVk&>(RESOURCES::ServiceManager::Get<RENDER::GameRendererInterface>()).getDriver();
-
-	wd->Surface = surface;
-
-	// Check for WSI support
-	VkBool32 res;
-	vkGetPhysicalDeviceSurfaceSupportKHR(render->m_MainDevice.PhysicalDevice, render->m_QueueFamilyIndices.GraphicsFamily, wd->Surface, &res);
-	if (res != VK_TRUE)
-	{
-		fprintf(stderr, "Error no WSI support on physical device 0\n");
-		exit(-1);
-	}
-
-	// Select Surface Format
-	const VkFormat requestSurfaceImageFormat[] = { VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8_UNORM, VK_FORMAT_R8G8B8_UNORM };
-	const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
-	wd->SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(render->m_MainDevice.PhysicalDevice, wd->Surface, requestSurfaceImageFormat, (size_t)IM_ARRAYSIZE(requestSurfaceImageFormat), requestSurfaceColorSpace);
-
-	// Select Present Mode
-#ifdef IMGUI_UNLIMITED_FRAME_RATE
-	VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_FIFO_KHR };
-#else
-	VkPresentModeKHR present_modes[] = { VK_PRESENT_MODE_FIFO_KHR };
-#endif
-	wd->PresentMode = ImGui_ImplVulkanH_SelectPresentMode(render->m_MainDevice.PhysicalDevice, wd->Surface, &present_modes[0], IM_ARRAYSIZE(present_modes));
-	//printf("[vulkan] Selected PresentMode = %d\n", wd->PresentMode);
-
-	// Create SwapChain, RenderPass, Framebuffer, etc.
-	//IM_ASSERT(g_MinImageCount >= 2);
-	ImGui_ImplVulkanH_CreateOrResizeWindow(render->m_VulkanInstance, render->m_MainDevice.PhysicalDevice, render->m_MainDevice.LogicalDevice, wd, render->m_QueueFamilyIndices.GraphicsFamily, g_Allocator, width, height, g_MinImageCount);
+	textureCache["default_texture"] = RESOURCES::ServiceManager::Get<RENDER::Renderer>().createTexture(UTILS::getRealPath("Textures/default.png"));
 }
 
-void DebugRender::initForVk() {
-	auto render = reinterpret_cast<RENDER::GameRendererVk&>(RESOURCES::ServiceManager::Get<RENDER::GameRendererInterface>()).getDriver();
-
-	//ImGui_ImplVulkanH_Window* wd = &g_MainWindowData;
-	//auto size = RESOURCES::ServiceManager::Get<WINDOW_SYSTEM::Window>().getSize();
-	//SetupVulkanWindow(wd, render->m_Surface, size.x, size.y);
-	
-
-	auto rd = render->GetRenderData();
-
-	ImGui_ImplVulkan_InitInfo init_info = {};
-	init_info.Instance = render->m_VulkanInstance;
-	init_info.PhysicalDevice = render->m_MainDevice.PhysicalDevice;
-	init_info.Device = render->m_MainDevice.LogicalDevice;
-	init_info.PipelineCache = VK_NULL_HANDLE;
-	init_info.Allocator = nullptr;
-	init_info.QueueFamily = rd.graphic_queue_index;
-	init_info.Queue = rd.graphic_queue;
-	init_info.DescriptorPool = rd.imgui_descriptor_pool;
-	init_info.MinImageCount = rd.min_image_count;
-	init_info.ImageCount = rd.image_count;
-	init_info.CheckVkResultFn = nullptr;
-
-
-	ImGui_ImplVulkan_Init(&init_info, render->defaultFb->m_RenderPass);
-
-	VkCommandPool command_pool = render->m_CommandHandler.GetCommandPool();
-
-	VkCommandBuffer command_buffer = render->m_CommandHandler.GetCommandBuffer(0);
-
-	vkResetCommandPool(rd.device, command_pool, 0);
-	VkCommandBufferBeginInfo begin_info = {};
-	begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-	vkBeginCommandBuffer(command_buffer, &begin_info);
-
-	ImGui_ImplVulkan_CreateFontsTexture(command_buffer);
-
-	VkSubmitInfo end_info = {};
-	end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	end_info.commandBufferCount = 1;
-	end_info.pCommandBuffers = &command_buffer;
-	vkEndCommandBuffer(command_buffer);
-	vkQueueSubmit(rd.graphic_queue, 1, &end_info, VK_NULL_HANDLE);
-	vkDeviceWaitIdle(rd.device);
-	ImGui_ImplVulkan_DestroyFontUploadObjects();
-}
-#endif
 
 DebugRender::~DebugRender() {
-#ifdef OPENGL_BACKEND
-	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL) {
-		ImGui_ImplOpenGL3_Shutdown();
-		ImGui_ImplGlfw_Shutdown();
-		ImGui::DestroyContext();
-	}
-#endif
-#ifdef VULKAN_BACKEND
-	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::VULKAN) {
-		ImGui_ImplVulkan_Shutdown();
-		ImGui_ImplGlfw_Shutdown();
-		ImGui::DestroyContext();
-	}
-#endif
-
-#ifdef DX12_BACKEND
-	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::DIRECTX12) {
-		ImGui_ImplDX12_Shutdown();
-		ImGui_ImplWin32_Shutdown();
-		ImGui::DestroyContext();
-	}
-#endif
 }
 
 void DebugRender::drawWindowWidget(CORE_SYSTEM::Core& core) {
@@ -2785,142 +2616,8 @@ void DebugRender::drawComponentInspector() {
 }
 
 void DebugRender::drawTextureWatcher() {
-	
-#ifdef VULKAN_BACKEND
-	ImGui::Begin("Texture Watcher", nullptr);
-	auto& renderer = RESOURCES::ServiceManager::Get<RENDER::GameRendererInterface>();
-	auto _renderer = reinterpret_cast<RENDER::GameRendererVk*>(&renderer);
-
-	auto winSize = RESOURCES::ServiceManager::Get<WINDOW_SYSTEM::Window>().getSize();
-	ImVec2 imWinSize = ImGui::GetWindowSize();
-
-	float w = 0.0f;
-	float h = 0.0f;
-	if (imWinSize.x < imWinSize.y) {
-		w = imWinSize.x;
-		h = (winSize.y * imWinSize.x) / winSize.x;
-	}
-	else
-	{
-		w = (imWinSize.y * winSize.x) / winSize.y;
-		h = imWinSize.y;
-	}
-	if (h > 100.0f) {
-		h -= 60.0f;
-	}
-
-	ImGui::Image((ImTextureID)_renderer->mTextures["deferredResult"]->descriptor_set, ImVec2(w, h));
-	ImGui::End();
-#endif
-
-
-#ifdef DX12_BACKEND
-	ImGui::Begin("Texture Watcher", nullptr);
-	auto& renderer = RESOURCES::ServiceManager::Get<RENDER::GameRendererInterface>();
-	auto _renderer = reinterpret_cast<RENDER::GameRendererDx12*>(&renderer);
-
-	auto winSize = RESOURCES::ServiceManager::Get<WINDOW_SYSTEM::Window>().getSize();
-	ImVec2 imWinSize = ImGui::GetWindowSize();
-
-	float w = 0.0f;
-	float h = 0.0f;
-	if (imWinSize.x < imWinSize.y) {
-		w = imWinSize.x;
-		h = (winSize.y * imWinSize.x) / winSize.x;
-	}
-	else
-	{
-		w = (imWinSize.y * winSize.x) / winSize.y;
-		h = imWinSize.y;
-	}
-	if (h > 100.0f) {
-		h -= 60.0f;
-	}
-	auto device = RENDER::GameRendererDx12::mApp->mDriver;
-
-	//ID3D12DescriptorHeap* dh4[] = { device->mTexturesDescHeap.Get() };
-	//device->mCommandList->SetDescriptorHeaps(1, dh4);
-	if (_renderer->mTextures["gAlbedoSpecTex"])
-	ImGui::Image((ImTextureID)_renderer->mTextures["gAlbedoSpecTex"]->mGpuSrv.ptr, ImVec2(w, h));
-	
-	ImGui::End();
-#endif
-
-#ifdef OPENGL_BACKEND
-	ImGui::Begin("Texture Watcher", nullptr);
-	auto& renderer = RESOURCES::ServiceManager::Get<RENDER::GameRendererInterface>();
-	auto _renderer = reinterpret_cast<RENDER::GameRendererGl*>(&renderer);
-
-
-	static std::vector<std::string> items = { "Before Post Processing" };
-	static bool b = false;
-	if (!b) {
-		items.clear();
-		items.push_back("Before Post Processing");
-		for (auto& e : _renderer->mTextures) {
-			items.push_back(e.first);
-		}
-		//b = true;
-	}
-
-
-	static int selectedIndex = 0;
-	static std::string selectedName = items[0];
-	if (ImGui::BeginCombo("##textures_combo", selectedName.c_str())) {
-		for (int i = 0; i < items.size(); ++i) {
-			const bool isSelected = (selectedIndex == i);
-			if (ImGui::Selectable(items[i].c_str(), isSelected)) {
-				selectedIndex = i;
-				selectedName = items[i];
-			}
-
-			// Set the initial focus when opening the combo
-			// (scrolling + keyboard navigation focus)
-			if (isSelected) {
-				ImGui::SetItemDefaultFocus();
-			}
-		}
-		ImGui::EndCombo();
-	}
-
-
-	auto winSize = RESOURCES::ServiceManager::Get<WINDOW_SYSTEM::Window>().getSize();
-	ImVec2 imWinSize = ImGui::GetWindowSize();
-	
-	float w = 0.0f;
-	float h = 0.0f;
-	if (imWinSize.x < imWinSize.y) {
-		w = imWinSize.x;
-		h = (winSize.y * imWinSize.x) / winSize.x;
-	}
-	else
-	{
-		w = (imWinSize.y * winSize.x) / winSize.y;
-		h = imWinSize.y;
-	}
-	if (h > 100.0f) {
-		h -= 60.0f;
-	}
-
-	if (selectedIndex == 0) {
-		//unsigned id = *ECS::BatchComponent::ids.begin();
-		//ImGui::Image(reinterpret_cast<ImTextureID>(id), ImVec2(w, h), ImVec2(0, 1), ImVec2(1, 0));
-		ImGui::Image(reinterpret_cast<ImTextureID>((uintptr_t)_renderer->mDeferredTexture->id), ImVec2(w, h), ImVec2(0, 1), ImVec2(1, 0));
-	}
-	else {
-		auto tex = _renderer->mTextures[selectedName];
-		if (tex->type == RENDER::TextureType::TEXTURE_3D || tex->type == RENDER::TextureType::TEXTURE_2D_ARRAY) {
-			_renderer->initDebug3dTextureFB(tex);
-			ImGui::Checkbox("IsRGB", &_renderer->debug3dTextureIsRGB);
-			ImGui::Checkbox("IsPersp", &_renderer->debug3dTextureIsPersp);
-			ImGui::SliderInt("Layer", &_renderer->debug3dTextureLayersCur, 0, _renderer->debug3dTextureLayers-1);
-			ImGui::Image(reinterpret_cast<ImTextureID>((uintptr_t)_renderer->mTextures["debug3dTexture"]->id), ImVec2(w, h), ImVec2(0, 1), ImVec2(1, 0));
-		}
-		else {
-			ImGui::Image(reinterpret_cast<ImTextureID>((uintptr_t)_renderer->mTextures[selectedName]->id), ImVec2(w, h), ImVec2(0, 1), ImVec2(1, 0));
-		}
-	}
-	ImGui::End();
+#if 0
+	// Obsolete
 #endif
 }
 

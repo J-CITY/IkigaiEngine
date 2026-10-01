@@ -13,6 +13,7 @@
 #include <resourceModule/textureManager.h>
 
 #include <resourceModule/serviceManager.h>
+#include <resourceModule/fileSystem/fileSystem.h>
 #include <renderModule/backends/interface/atlasInterface.h>
 
 #include <cmath>
@@ -57,6 +58,10 @@ IKIGAI::RENDER::TextureVk::TextureVk(const TextureResource& descriptor, const st
 }
 
 void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const std::vector<void*>& data) {
+	if (descriptor.width == 0 || descriptor.height == 0) {
+		return;
+	}
+
 	auto usage =
 		vk::ImageUsageFlagBits::eSampled |
 		vk::ImageUsageFlagBits::eTransferDst |
@@ -315,17 +320,22 @@ std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(con
 		IKIGAI::UTILS::STBiSetFlipVerticallyOnLoad(true);
 		for (const auto& path : _descriptor.pathTexture) {
 			int width = 0, height = 0, channels = 0;
+			
+			auto file = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RESOURCES::FileSystem>().getFile(path, IKIGAI::RESOURCES::FileMode::READ);
+			if (!file) continue;
+			auto fileData = file->read();
+			
 			if (_descriptor.isFloat) {
-				auto* data = IKIGAI::UTILS::STBiLoadf(path.c_str(), &width, &height, &channels, 0);
-				textureData.push_back(data);
+				auto* data = IKIGAI::UTILS::STBiLoadfFromMemory(fileData.data(), fileData.size(), &width, &height, &channels, 0);
+				if (data) textureData.push_back(data);
 			} else {
-				auto* data = IKIGAI::UTILS::STBiLoad(path.c_str(), &width, &height, &channels, 0);
+				auto* data = IKIGAI::UTILS::STBiLoadFromMemory(fileData.data(), fileData.size(), &width, &height, &channels, 0);
 				if (channels == 3) {
 					UTILS::STBiImageFree((unsigned char*)data);
-					data = IKIGAI::UTILS::STBiLoad(path.c_str(), &width, &height, &channels, 4);
+					data = IKIGAI::UTILS::STBiLoadFromMemory(fileData.data(), fileData.size(), &width, &height, &channels, 4);
 					channels = 4;
 				}
-				textureData.push_back(data);
+				if (data) textureData.push_back(data);
 			}
 			_descriptor.width = width;
 			_descriptor.height = height;

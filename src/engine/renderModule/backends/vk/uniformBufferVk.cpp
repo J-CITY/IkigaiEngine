@@ -7,25 +7,27 @@
 #ifdef VULKAN_BACKEND
 
 IKIGAI::RENDER::UniformBufferVk::UniformBufferVk(void* data, size_t size) : UniformBufferInterface(size) {
-	std::tie(mBuffer, mDeviceMemory) = UtilityVk::CreateBuffer(mSizeByte, vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst);
-	if (data) {
-		//UniformBufferVk::setData(data, size);
+	if (mSizeByte > 0) {
+		std::tie(mBuffer, mDeviceMemory) = UtilityVk::CreateBuffer(mSizeByte, vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst);
+	}
+	if (data && mSizeByte > 0) {
+		UniformBufferVk::setData(data, size, 0);
 	}
 }
 
 IKIGAI::RENDER::UniformBufferVk::~UniformBufferVk() {
-	UtilityVk::GetDriver()->destroyDeferred(std::move(mBuffer));
-	UtilityVk::GetDriver()->destroyDeferred(std::move(mDeviceMemory));
+	if (*mBuffer) UtilityVk::GetDriver()->destroyDeferred(std::move(mBuffer));
+	if (*mDeviceMemory) UtilityVk::GetDriver()->destroyDeferred(std::move(mDeviceMemory));
 }
 
 void IKIGAI::RENDER::UniformBufferVk::setData(const void* data, size_t sz, size_t offset) {
 	UtilityVk::GetDriver()->deactivateRenderPass();
 
-	if (sz > mSizeByte) {
+	if (sz > mSizeByte || !*mBuffer) {
 		mSizeByte = sz;
-		UtilityVk::GetDriver()->destroyDeferred(std::move(mBuffer));
-		UtilityVk::GetDriver()->destroyDeferred(std::move(mDeviceMemory));
-		std::tie(mBuffer, mDeviceMemory) = UtilityVk::CreateBuffer(mSizeByte, vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+		if (*mBuffer) UtilityVk::GetDriver()->destroyDeferred(std::move(mBuffer));
+		if (*mDeviceMemory) UtilityVk::GetDriver()->destroyDeferred(std::move(mDeviceMemory));
+		std::tie(mBuffer, mDeviceMemory) = UtilityVk::CreateBuffer(mSizeByte, vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst);
 	}
 
 	if (UtilityVk::GetDriver()->mCurrentMemoryStage != vk::PipelineStageFlagBits2::eTransfer) {

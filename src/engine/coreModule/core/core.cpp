@@ -4,6 +4,7 @@
 #include "windowModule/window/window.h"
 #include "windowModule/windowManager.h"
 #include <utilsModule/log/logger.h>
+#include <utilsModule/jsonLoader.h>
 
 #include "../config.h"
 #include "resourceModule/materialManager.h"
@@ -115,11 +116,11 @@ Core:: Core(
 	//	throw;
 	//}
 	
-	//auto renderSettings = IKIGAI::UTILS::loadConfigFile<RENDER::RenderSettings>("Configs/render.json");
-	//if (renderSettings.isErr()) {
-	//	LOG_ERROR(renderSettings.unwrapErr().msg);
-	//	throw;
-	//} 
+	auto renderSettings = IKIGAI::UTILS::FromJson<RENDER::RenderSettings>("/Configs/render.json");
+	if (renderSettings.isErr()) {
+		LOG_ERROR << renderSettings.unwrapErr().text;
+		throw std::runtime_error(renderSettings.unwrapErr().text);
+	} 
 	modelManager = std::make_unique<RESOURCES::ModelLoader>();
 	textureManager = std::make_unique<RESOURCES::TextureLoader>();
 	shaderManager = std::make_unique<RESOURCES::ShaderLoader>();
@@ -128,7 +129,7 @@ Core:: Core(
 	inputManager = std::make_unique<INPUT_SYSTEM::InputManager>(*window);
 	RESOURCES::ServiceManager::Set<WINDOW::Window>(window.get());
 
-	//RENDER::DriverInterface::settings = renderSettings.unwrap();;
+	RENDER::DriverInterface::settings = renderSettings.unwrap();
 #ifdef OPENGL_BACKEND
 	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL) {
 		driver = std::make_unique<RENDER::DriverGl>();
@@ -136,10 +137,10 @@ Core:: Core(
 	}
 #endif
 #ifdef VULKAN_BACKEND
-	//if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::VULKAN) {
+	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::VULKAN) {
 		driver = std::make_unique<RENDER::DriverVk>();
 		//driver->init();
-	//}
+	}
 #endif
 
 #ifdef DX12_BACKEND
@@ -287,24 +288,7 @@ Core:: Core(
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonBlendspaceLoader>(skeletonBlendspaceLoader.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonAnimationLoader>(skeletonAnimationLoader.get());
 
-//#ifdef OPENGL_BACKEND
-//	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL) {
-		renderer = std::make_unique<RENDER::GameRenderer>(*this);
-//	}
-//#endif
-//#ifdef VULKAN_BACKEND
-//	//if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::VULKAN) {
-//		renderer = std::make_unique<RENDER::GameRendererVk>(*this);
-//	//}
-//#endif
-//#ifdef DX12_BACKEND
-//	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::DIRECTX12) {
-//		renderer = std::make_unique<RENDER::GameRendererDx12>(hInstance, *this);
-//		//driver->init();
-//
-//		static_cast<RENDER::GameRendererDx12*>(renderer.get())->Initialize();
-//	}
-//#endif
+	renderer = std::make_unique<RENDER::GameRenderer>(*this);
 	if (!renderer) {
 		throw;
 	}
@@ -317,7 +301,7 @@ Core:: Core(
 	//driver->init();
 
 //#ifdef VULKAN_BACKEND
-//	reinterpret_cast<RENDER::GameRendererVk*>(renderer.get())->createVkResources();
+//	reinterpret_cast<RENDER::GameRenderer*>(renderer.get())->createVkResources();
 //#endif
 	//debugRender = std::make_unique<DEBUG::DebugRender>();
 
