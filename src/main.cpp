@@ -129,8 +129,13 @@
 
 #ifndef OCULUS
 #include "coreModule/core/app.h"
+#include "renderModule/backends/driverFactory.h"
 
 #include <iostream>
+#include <string>
+#ifdef DX12_BACKEND
+#include <Windows.h>
+#endif
 
 #include "ecsModule/world.h"
 #include "sceneModule/sceneManager.h"
@@ -425,7 +430,17 @@ void main() {
     }
 }
 
-int main(int, char *[]) {
+int main(int argc, char* argv[]) {
+  for (int i = 1; i < argc; ++i) {
+    const std::string arg = argv[i];
+    const std::string prefix = "--render-backend=";
+    if (arg.rfind(prefix, 0) == 0) {
+      IKIGAI::RENDER::SetCliRenderBackendOverride(arg.substr(prefix.size()));
+    }
+  }
+#ifdef DX12_BACKEND
+  IKIGAI::CORE::App::hInstance = GetModuleHandleW(nullptr);
+#endif
   IKIGAI::CORE::App app;
   app.getCore()->sceneManager->loadFromFile("scenes/scene.json");
   std::cout << "START" << std::endl;

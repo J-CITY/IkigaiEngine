@@ -10,12 +10,9 @@
 #include "skeletalModule/skeleton.h"
 #include "skeletalModule/animation.h"
 #include <unordered_map>
-
-//#include <deprecated/stb.h>
-#ifdef OPENGL_BACKEND
-#include <renderModule/backends/gl/meshGl.h>
-#include <renderModule/backends/gl/modelGl.h>
-#endif
+#include <renderModule/backends/meshFactory.h>
+#include <renderModule/backends/interface/driverInterface.h>
+#include <renderModule/backends/interface/modelInterface.h>
 
 
 using namespace IKIGAI;
@@ -56,9 +53,7 @@ bool AssimpParser::LoadModel(const std::string& fileName,
 	processNode(&identity, scene->mRootNode, scene, model, boneMapping);
 	//}
 	if (model->getUseBatching()) {
-#ifdef OPENGL_BACKEND
-		dynamic_cast<RENDER::ModelGl*>(model.get())->createBuffers(globalVertices, globalIndices);
-#endif
+		model->createBuffers(globalVertices, globalIndices);
 	}
 
 
@@ -97,9 +92,7 @@ bool AssimpParser::LoadModel(const std::string& fileName, const std::vector<uint
 		processNode(&identity, scene->mRootNode, scene, model, boneMapping);
 	//}
 	if (model->getUseBatching()) {
-#ifdef OPENGL_BACKEND
-		dynamic_cast<RENDER::ModelGl*>(model.get())->createBuffers(globalVertices, globalIndices);
-#endif
+		model->createBuffers(globalVertices, globalIndices);
 	}
 
 
@@ -213,17 +206,6 @@ void AssimpParser::processMaterials(const aiScene* scene, std::vector<std::strin
 		}
 	}
 }
-#include <renderModule/backends/interface/driverInterface.h>
-#ifdef VULKAN_BACKEND
-#include <renderModule/backends/vk/meshVk.h>
-#include <renderModule/backends/vk/modelVk.h>
-#endif
-
-#ifdef DX12_BACKEND
-#include <renderModule/backends/dx12/meshDx12.h>
-#include <renderModule/backends/dx12/modelDx12.h>
-#endif
-
 void AssimpParser::processNode(void* transform, aiNode* node, const aiScene* scene, ResourcePtr<RENDER::ModelInterface> model, const std::unordered_map<std::string, int>& boneMapping) {
 	aiMatrix4x4 nodeTransformation = *reinterpret_cast<aiMatrix4x4*>(transform) * node->mTransformation;
 
@@ -263,47 +245,20 @@ void AssimpParser::processNode(void* transform, aiNode* node, const aiScene* sce
 		loadBones(vertices, mesh, scene, model, boneMapping);
 		//loadBones(NumVertices, mesh, bones, m_BoneMapping, m_NumBones, m_BoneInfo);'
 		std::shared_ptr<RENDER::MeshInterface> newMash;
-#ifdef OPENGL_BACKEND
-		if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL) {
-			if (needSaveVerts) {
-				globalVerticesPerMesh->push_back(vertices);
-				globalIndicesPerMesh->push_back(indices);
-			}
-			if (model->getUseBatching()) {
-				newMash = std::make_shared<RENDER::MeshGl>(vertices, indices, globalIndices.size(), mesh->mMaterialIndex);
-				globalVertices.insert(globalVertices.end(), vertices.begin(), vertices.end());
-				globalIndices.insert(globalIndices.end(), indices.begin(), indices.end());
-			}
-			else {
-				newMash = std::make_shared<RENDER::MeshGl>(vertices, indices, mesh->mMaterialIndex);
+		if (needSaveVerts && RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL) {
+			globalVerticesPerMesh->push_back(vertices);
+			globalIndicesPerMesh->push_back(indices);
+		}
+		if (model->getUseBatching()) {
+			newMash = RENDER::CreateMesh(vertices, indices, globalIndices.size(), mesh->mMaterialIndex);
+			globalVertices.insert(globalVertices.end(), vertices.begin(), vertices.end());
+			globalIndices.insert(globalIndices.end(), indices.begin(), indices.end());
+		} else {
+			newMash = RENDER::CreateMesh(vertices, indices, mesh->mMaterialIndex);
+			if (newMash) {
 				newMash->unbind();
 			}
 		}
-#endif
-#ifdef VULKAN_BACKEND
-		if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::VULKAN) {
-			if (model->getUseBatching()) {
-				newMash = std::make_shared<RENDER::MeshVk>(vertices, indices, globalIndices.size(), mesh->mMaterialIndex);
-				globalVertices.insert(globalVertices.end(), vertices.begin(), vertices.end());
-				globalIndices.insert(globalIndices.end(), indices.begin(), indices.end());
-			}
-			else {
-				newMash = std::make_shared<RENDER::MeshVk>(vertices, indices, mesh->mMaterialIndex);
-			}
-		}
-#endif
-#ifdef DX12_BACKEND
-		if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::DIRECTX12) {
-			if (model->getUseBatching()) {
-				//newMash = std::make_shared<RENDER::MeshDx12>(vertices, indices, globalIndices.size(), mesh->mMaterialIndex);
-				//globalVertices.insert(globalVertices.end(), vertices.begin(), vertices.end());
-				//globalIndices.insert(globalIndices.end(), indices.begin(), indices.end());
-			}
-			else {
-				newMash = std::make_shared<RENDER::MeshDx12>(vertices, indices, mesh->mMaterialIndex);
-			}
-		}
-#endif
 
 		//newMash->m_pScene = scene;
 		//newMash->m_BoneMapping = m_BoneMapping;

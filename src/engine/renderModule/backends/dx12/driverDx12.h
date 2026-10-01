@@ -88,6 +88,7 @@ namespace IKIGAI::RENDER {
 		void submit() override;
 		Microsoft::WRL::ComPtr<ID3D12Device> getDevice();
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> getCommandList();
+		Microsoft::WRL::ComPtr<ID3D12CommandQueue> getCommandQueue() { return mCommandQueue; }
 		void destroyDeferred(Microsoft::WRL::ComPtr<ID3D12DeviceChild> object);
 		std::vector<Microsoft::WRL::ComPtr<ID3D12DeviceChild>>& getDestroyDeferredObjects();
 		void clear(bool clearColor, bool clearDepth, bool clearStencil) override;

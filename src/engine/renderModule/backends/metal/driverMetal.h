@@ -81,6 +81,8 @@ namespace IKIGAI::RENDER {
         // Metal specific members
         id<MTLDevice> getDevice() const { return mDevice; }
         id<MTLCommandQueue> getCommandQueue() const { return mCommandQueue; }
+        id<MTLCommandBuffer> getCurrentCommandBuffer() const { return mCurrentCommandBuffer; }
+        id<MTLRenderCommandEncoder> getCurrentEncoder() const { return mCurrentEncoder; }
 
         // Pipeline cache mechanism
         struct State {

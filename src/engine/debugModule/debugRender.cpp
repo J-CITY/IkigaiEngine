@@ -4,6 +4,7 @@
 
 
 #include <renderModule/backends/interface/driverInterface.h>
+#include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
 
 #ifdef VULKAN_BACKEND
 #include <vulkan/vulkan_core.h>
@@ -3609,24 +3610,24 @@ void DebugRender::draw(CORE_SYSTEM::Core& core) {
 
 #ifdef OPENGL_BACKEND
 	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL) {
-		ImGui_ImplOpenGL3_NewFrame();
-		ImGui_ImplGlfw_NewFrame();
-		ImGui::NewFrame();
+		if (auto* imgui = IKIGAI::IMGUI::Get()) {
+			imgui->newFrame();
+		}
 	}
 #endif
 #ifdef VULKAN_BACKEND
 	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::VULKAN) {
-		ImGui_ImplVulkan_NewFrame();
-		ImGui_ImplGlfw_NewFrame();
-		ImGui::NewFrame();
+		if (auto* imgui = IKIGAI::IMGUI::Get()) {
+			imgui->newFrame();
+		}
 	}
 #endif
 
 #ifdef DX12_BACKEND
 	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::DIRECTX12) {
-		ImGui_ImplDX12_NewFrame();
-		ImGui_ImplWin32_NewFrame();
-		ImGui::NewFrame();
+		if (auto* imgui = IKIGAI::IMGUI::Get()) {
+			imgui->newFrame();
+		}
 	}
 #endif
 
@@ -3997,23 +3998,9 @@ void DebugRender::draw(CORE_SYSTEM::Core& core) {
 
 	ImGui::Render();
 
-	//
-
-#ifdef OPENGL_BACKEND
-	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL) {
-		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	if (auto* imgui = IKIGAI::IMGUI::Get()) {
+		imgui->renderDrawData();
 	}
-#endif
-#ifdef VULKAN_BACKEND
-	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::VULKAN) {
-		//ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-	}
-#endif
-#ifdef DX12_BACKEND
-	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::DIRECTX12) {
-		
-	}
-#endif
 #if defined(OPENGL_BACKEND) || defined(VULKAN_BACKEND)
 	if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
 		GLFWwindow* backup_current_context = glfwGetCurrentContext();

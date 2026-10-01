@@ -5,6 +5,7 @@
 #include <comdef.h>
 #include <fstream>
 #include "driverDx12.h"
+#include "renderModule/backends/interface/driverInterface.h"
 #include <ranges>
 
 using Microsoft::WRL::ComPtr;
@@ -353,7 +354,10 @@ ComPtr<ID3D12Resource> d3dUtil::CreateBuffer(uint64_t size) {
 DriverDx12* d3dUtil::mDriver = nullptr;
 
 DriverDx12* d3dUtil::GetDriver() {
-	return mDriver;
+    if (mDriver) {
+        return mDriver;
+    }
+    return static_cast<DriverDx12*>(DriverInterface::Get());
 }
 
 

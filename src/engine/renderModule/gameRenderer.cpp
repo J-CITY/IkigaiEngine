@@ -23,6 +23,7 @@
 #include "skeletalModule/iAnimationPlayable.h"
 #include "utilsModule/jsonLoader.h"
 #include "utilsModule/time/time.h"
+#include <stdexcept>
 #include "windowModule/window/window.h"
 
 #ifdef OCULUS
@@ -263,7 +264,7 @@ namespace IKIGAI::RENDER {
 
 	const RenderGraphPipeline& GameRenderer::getCurrentPipeline() const {
 		if (!mRenderPipeline) {
-			throw;
+			throw std::runtime_error("Render pipeline is not ready");
 		}
 		return *mRenderPipeline;
 	}

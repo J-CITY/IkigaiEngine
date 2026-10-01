@@ -38,9 +38,7 @@ void MaterialRenderer::updateMaterialList() {
 	for (auto i = 0u; i < matNames.size(); i++) {
 		//materials[i] = RESOURCES::MaterialLoader::Create("Materials/simple.mat");
 		if (!materials[i]) {
-#ifdef OPENGL_BACKEND
 			materials[i] = RESOURCES::ServiceManager::Get<RESOURCES::MaterialLoader>().loadResource("Materials/simple.mat");
-#endif
 		}
 		materialNames[i] = matNames[i];
 	}
@@ -91,12 +89,7 @@ const MaterialRenderer::MaterialNames& MaterialRenderer::getMaterialNames() {
 void MaterialRenderer::setMaterialsByPath(std::vector<std::string> paths) {
 	int i = 0;
 	for (auto& m : paths) {
-#ifdef DX12_BACKEND
-		materials[i] = RESOURCES::MaterialLoader::Create(m);
-#endif
-#if defined(OPENGL_BACKEND) || defined(VULKAN_BACKEND)
 		materials[i] = RESOURCES::ServiceManager::Get<RESOURCES::MaterialLoader>().loadResource(m);
-#endif
 		i++;
 	}
 }

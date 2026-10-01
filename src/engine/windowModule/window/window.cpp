@@ -1,13 +1,5 @@
 #include "window.h"
 
-#ifdef VULKAN_BACKEND
-#include <volk.h>
-#include "backends/imgui_impl_vulkan.h"
-#endif
-#include "renderModule/backends/dx12/d3dUtil.h"
-#include "renderModule/backends/dx12/driverDx12.h"
-#include "renderModule/backends/vk/driverVk.h"
-
 #ifdef USE_SDL
 
 #include <set>
@@ -23,17 +15,15 @@
 
 #if defined(USE_EDITOR) || defined(USE_CHEATS)
 #include "imgui.h"
-#include "backends/imgui_impl_sdl2.h"
+#include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
+#endif
 
-#ifdef OPENGL_BACKEND
-#include "backends/imgui_impl_opengl3.h"
+#ifdef VULKAN_BACKEND
+#include <SDL_vulkan.h>
 #endif
 
 #ifdef DX12_BACKEND
-#include "backends/imgui_impl_dx12.h"
-#endif
-
-
+#include <Windows.h>
 #endif
 
 using namespace IKIGAI;
@@ -58,10 +48,13 @@ const std::map<SDL_GameControllerButton, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON>
 
 struct Window::Internal {
 	Internal() = default;
-	SDL_Window* mWindow = nullptr;
-	SDL_GLContext mContext;
+	::SDL_Window* mWindow = nullptr;
+	SDL_GLContext mContext = nullptr;
 	bool mIsFocus = true;
 	std::set<SDL_GameController*> mGamepads;
+#if defined(USE_EDITOR) || defined(USE_CHEATS)
+	std::unique_ptr<IMGUI::IImGuiBackend> mImGuiBackend;
+#endif
 
 	void addGamepad(SDL_GameController* gp) {
 		mGamepads.insert(gp);
@@ -95,24 +88,12 @@ Window::Window(const WindowSettings& p_windowSettings, bool isMain, Window* shar
 }
 
 Window::~Window() {
+	shutdownImGUI();
 #ifdef OPENGL_BACKEND
-	SDL_GL_DeleteContext(mContext->mContext);
-#if defined(USE_EDITOR) || defined(USE_CHEATS)
-	ImGui_ImplOpenGL3_Shutdown();
-#endif
-#endif
-
-#if defined(USE_EDITOR) || defined(USE_CHEATS)
-#ifdef DX12_BACKEND
-	ImGui_ImplDX12_Shutdown();
-#endif
-#ifdef VULKAN_BACKEND
-	auto driverVk = RENDER::UtilityVk::GetDriver();
-	ImGui_ImplVulkan_Shutdown();
-	vkDestroyDescriptorPool(*driverVk->mDevice, driverVk->mImguiPool, nullptr);
-#endif
-	ImGui_ImplSDL2_Shutdown();
-	ImGui::DestroyContext();
+	if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::OPENGL && mContext->mContext) {
+		SDL_GL_DeleteContext(mContext->mContext);
+		mContext->mContext = nullptr;
+	}
 #endif
 
 	if (mIsMainWindow) {
@@ -356,7 +337,9 @@ void Window::pollEvent() {
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
 #if defined(USE_EDITOR) || defined(USE_CHEATS)
-		ImGui_ImplSDL2_ProcessEvent(&event);
+		if (mContext->mImGuiBackend) {
+			mContext->mImGuiBackend->processEvent(&event);
+		}
 #endif
 		switch (event.type) {
 		case SDL_QUIT:
@@ -458,49 +441,36 @@ void Window::pollEvent() {
 			}
 		}
 	}
-	SDL_GL_MakeCurrent(mContext->mWindow, mContext->mContext);
+	if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::OPENGL) {
+		SDL_GL_MakeCurrent(mContext->mWindow, mContext->mContext);
+	}
 }
 
 void Window::draw() const {
 #if defined(USE_EDITOR) || defined(USE_CHEATS)
-#ifdef OPENGL_BACKEND
-	ImGuiIO& io = ImGui::GetIO();
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-		SDL_Window* backup_current_window = SDL_GL_GetCurrentWindow();
-		SDL_GLContext backup_current_context = SDL_GL_GetCurrentContext();
-		ImGui::UpdatePlatformWindows();
-		ImGui::RenderPlatformWindowsDefault();
-		SDL_GL_MakeCurrent(backup_current_window, backup_current_context);
+	if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::OPENGL && mContext->mImGuiBackend) {
+		mContext->mImGuiBackend->renderDrawData();
 	}
 #endif
-#endif
-#ifdef OPENGL_BACKEND
-	SDL_GL_SwapWindow(mContext->mWindow);
-#endif
+	if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::OPENGL) {
+		SDL_GL_SwapWindow(mContext->mWindow);
+	}
 }
 
 //Call before draw imgui widgets
 void Window::preUpdate() {
 #if defined(USE_EDITOR) || defined(USE_CHEATS)
-#ifdef OPENGL_BACKEND
-	ImGui_ImplOpenGL3_NewFrame();
-#endif
-#ifdef DX12_BACKEND
-	ImGui_ImplDX12_NewFrame();
-#endif
-#ifdef VULKAN_BACKEND
-	ImGui_ImplVulkan_NewFrame();
-#endif
-	ImGui_ImplSDL2_NewFrame();
-	ImGui::NewFrame();
+	if (mContext->mImGuiBackend) {
+		mContext->mImGuiBackend->newFrame();
+	}
 #endif
 }
 
-//After call all imgui widgets
 void Window::update() {
 #if defined(USE_EDITOR) || defined(USE_CHEATS)
-	ImGui::Render();
+	if (mContext->mImGuiBackend) {
+		mContext->mImGuiBackend->endFrame();
+	}
 #endif
 }
 
@@ -514,15 +484,24 @@ void Window::setCursorVisible(bool isVisible, bool isLock) const {
 }
 
 std::pair<int, int> Window::getDrawableSize() {
-	int viewportWidth;
-	int viewportHeight;
-	SDL_GL_GetDrawableSize(mContext->mWindow, &viewportWidth, &viewportHeight);
+	int viewportWidth = 0;
+	int viewportHeight = 0;
+	if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::OPENGL) {
+		SDL_GL_GetDrawableSize(mContext->mWindow, &viewportWidth, &viewportHeight);
+	} else {
+#ifdef VULKAN_BACKEND
+		if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::VULKAN) {
+			SDL_Vulkan_GetDrawableSize(mContext->mWindow, &viewportWidth, &viewportHeight);
+			return { viewportWidth, viewportHeight };
+		}
+#endif
+		SDL_GetWindowSize(mContext->mWindow, &viewportWidth, &viewportHeight);
+	}
 	return { viewportWidth , viewportHeight };
 }
 
 #ifdef VULKAN_BACKEND
 #include <SDL_vulkan.h>
-#include <renderModule/backends/vk/helpers.h>
 VkSurfaceKHR Window::createVulkanSurface(VkInstance instance) {
 	VkSurfaceKHR surface;
 	if (SDL_Vulkan_CreateSurface(mContext->mWindow, instance, &surface) == 0) {
@@ -544,120 +523,34 @@ std::vector<const char*> Window::getSDLVulkanExtentions() {
 
 void Window::initImGUI() {
 #if defined(USE_EDITOR) || defined(USE_CHEATS)
-
-#ifdef __EMSCRIPTEN__
-	// GL ES 2.0 + GLSL 100
-	const char* glsl_version = "#version 100";
-#elif defined(__APPLE__)
-	// GL 3.2 Core + GLSL 150
-	const char* glsl_version = "#version 150";
-#elif defined(__ANDROID__)
-	const char* glsl_version = "#version 100";
-#else
-	// GL 3.0 + GLSL 130
-	const char* glsl_version = "#version 130";
-#endif
-
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
-	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
-	//io.ConfigViewportsNoAutoMerge = true;
-	//io.ConfigViewportsNoTaskBarIcon = true;
-
-	// Setup Dear ImGui style
-	ImGui::StyleColorsDark();
-
-	// When viewports are enabled we tweak WindowRounding/WindowBg so platform windows can look identical to regular ones.
-	ImGuiStyle& style = ImGui::GetStyle();
-	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-		style.WindowRounding = 0.0f;
-		style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+	if (!RENDER::DriverInterface::Get()) {
+		return;
 	}
-
-	// TODO: This need init after create render
-	// Setup Platform/Renderer backends
-#ifdef OPENGL_BACKEND
-	ImGui_ImplSDL2_InitForOpenGL(mContext->mWindow, mContext->mContext);
-	ImGui_ImplOpenGL3_Init("#version 330");
+	mContext->mImGuiBackend = IMGUI::CreateImGuiBackend(mWindowSettings.renderBackend);
+	if (mContext->mImGuiBackend && mContext->mImGuiBackend->init(*this, *RENDER::DriverInterface::Get())) {
+		IMGUI::SetActive(mContext->mImGuiBackend.get());
+	}
 #endif
+}
 
-#ifdef DX12_BACKEND
-	ImGui_ImplSDL2_InitForD3D(mContext->mWindow);
-	ImGui_ImplDX12_Init(RENDER::d3dUtil::GetDriver()->getDevice().Get(), 
-		RENDER::DriverDx12::DEFAULT_FB_SIZE,
-		DXGI_FORMAT_R8G8B8A8_UNORM, RENDER::d3dUtil::GetDriver()->getDescriptorHeap().Get(),
-		RENDER::d3dUtil::GetDriver()->getDescriptorHeapCPUHandle(),
-		RENDER::d3dUtil::GetDriver()->getDescriptorHeapGPUHandle());
-	RENDER::d3dUtil::GetDriver()->getDescriptorHeapCPUHandle().Offset(1, RENDER::d3dUtil::GetDriver()->getDescriptorIncSize());
-	RENDER::d3dUtil::GetDriver()->getDescriptorHeapGPUHandle().Offset(1, RENDER::d3dUtil::GetDriver()->getDescriptorIncSize());
-#endif
-
-#ifdef VULKAN_BACKEND
-	ImGui_ImplSDL2_InitForVulkan(mContext->mWindow);
-
-	auto driverVk = RENDER::UtilityVk::GetDriver();
-
-	VkDescriptorPoolSize pool_sizes[] = {
-		{VK_DESCRIPTOR_TYPE_SAMPLER, 1000},
-		{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000},
-		{VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
-		{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000},
-		{VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000},
-		{VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000},
-		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000},
-		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000},
-		{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000},
-		{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000},
-		{VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000}
-	};
-	VkDescriptorPoolCreateInfo pool_info = {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
-		.maxSets = 1000,
-		.poolSizeCount = static_cast<uint32_t>(std::size(pool_sizes)),
-		.pPoolSizes = pool_sizes
-	};
-	
-	(vkCreateDescriptorPool(*driverVk->mDevice, &pool_info, nullptr, &driverVk->mImguiPool));
-
-	ImGui_ImplVulkan_InitInfo init_info = {};
-	init_info.Instance = *driverVk->mInstance;
-	init_info.PhysicalDevice = *driverVk->mPhysicalDevice;
-	init_info.Device = *driverVk->mDevice;
-	init_info.QueueFamily = driverVk->mQueueFamilyIndex;
-	init_info.Queue = *driverVk->mQueue;
-	init_info.DescriptorPool = driverVk->mImguiPool;
-	init_info.PipelineInfoMain.Subpass = 0;
-	init_info.MinImageCount = 3;
-	init_info.ImageCount = 3;
-	init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-	init_info.UseDynamicRendering = true;
-
-	static auto _swapchainImageFormat = VK_FORMAT_B8G8R8A8_UNORM;
-	init_info.PipelineInfoMain.PipelineRenderingCreateInfo = {.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
-	init_info.PipelineInfoMain.PipelineRenderingCreateInfo.colorAttachmentCount = 1;
-	init_info.PipelineInfoMain.PipelineRenderingCreateInfo.pColorAttachmentFormats = &_swapchainImageFormat;
-	init_info.PipelineInfoMain.PipelineRenderingCreateInfo.depthAttachmentFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
-	init_info.PipelineInfoMain.PipelineRenderingCreateInfo.stencilAttachmentFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
-
-	ImGui_ImplVulkan_LoadFunctions(VK_API_VERSION_1_3, [](const char* functionName, void* vulkanInstance) {
-		if (strcmp("vkCmdBeginRenderingKHR", functionName) == 0) {
-			return vkGetInstanceProcAddr(*(reinterpret_cast<VkInstance*>(vulkanInstance)), "vkCmdBeginRendering");
+void Window::shutdownImGUI() {
+#if defined(USE_EDITOR) || defined(USE_CHEATS)
+	if (mContext && mContext->mImGuiBackend) {
+		if (IMGUI::Get() == mContext->mImGuiBackend.get()) {
+			IMGUI::SetActive(nullptr);
 		}
-		if (strcmp("vkCmdEndRenderingKHR", functionName) == 0) {
-			return vkGetInstanceProcAddr(*(reinterpret_cast<VkInstance*>(vulkanInstance)), "vkCmdEndRendering");
-		}
-		return vkGetInstanceProcAddr(*(reinterpret_cast<VkInstance*>(vulkanInstance)), functionName);
-	}, &init_info.Instance);
-
-	ImGui_ImplVulkan_Init(&init_info);
+		mContext->mImGuiBackend->shutdown();
+		mContext->mImGuiBackend.reset();
+	}
 #endif
+}
 
-#endif
+::SDL_Window* Window::getSDLWindow() const {
+	return mContext->mWindow;
+}
+
+void* Window::getGLContext() const {
+	return mContext->mContext;
 }
 
 #ifdef METAL_BACKEND
@@ -687,51 +580,47 @@ bool shouldDisplayFullScreen() {
 
 void Window::create(Window* sharedWindow) {
 	auto displaySize = getSize();
+	const auto backend = mWindowSettings.renderBackend;
 
 #ifdef OPENGL_BACKEND
+	if (backend == RENDER::RenderSettings::Backend::OPENGL) {
 #ifdef __EMSCRIPTEN__
-	// GL ES 3.0 + GLSL 300
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 #elif defined(__APPLE__)
-	// GL 3.2 Core + GLSL 150
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG); // Always required on Mac
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
 #elif defined(__ANDROID__)
-	// GL 3.2 Core + GLSL 150
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 #else
-	// GL 3.0 + GLSL 130
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 #endif
-	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 8);
+		SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+		SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+		SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+		SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+		SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 8);
+	}
 #endif
-
 
 	SDL_WindowFlags flags = (SDL_WindowFlags)(SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_SHOWN);
-#ifdef OPENGL_BACKEND
-	flags = (SDL_WindowFlags)(flags | SDL_WINDOW_OPENGL);
-#endif
-#ifdef VULKAN_BACKEND
-	flags = (SDL_WindowFlags)(flags | SDL_WINDOW_VULKAN);
-#endif
-#ifdef METAL_BACKEND
-	flags = (SDL_WindowFlags)(flags | SDL_WINDOW_METAL);
-#endif
+	if (backend == RENDER::RenderSettings::Backend::OPENGL) {
+		flags = (SDL_WindowFlags)(flags | SDL_WINDOW_OPENGL);
+	} else if (backend == RENDER::RenderSettings::Backend::VULKAN) {
+		flags = (SDL_WindowFlags)(flags | SDL_WINDOW_VULKAN);
+	} else if (backend == RENDER::RenderSettings::Backend::METAL) {
+		flags = (SDL_WindowFlags)(flags | SDL_WINDOW_METAL);
+	}
 	SDL_Window* _window{
 		SDL_CreateWindow(mWindowSettings.title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, displaySize.x, displaySize.y,flags)
 	};
@@ -743,10 +632,12 @@ void Window::create(Window* sharedWindow) {
 	}
 
 #ifdef DX12_BACKEND
-	SDL_SysWMinfo wmInfo;
-	SDL_VERSION(&wmInfo.version);
-	SDL_GetWindowWMInfo(_window, &wmInfo);
-	mHWND = (HWND)wmInfo.info.win.window;
+	if (backend == RENDER::RenderSettings::Backend::DIRECTX12) {
+		SDL_SysWMinfo wmInfo;
+		SDL_VERSION(&wmInfo.version);
+		SDL_GetWindowWMInfo(_window, &wmInfo);
+		mHWND = (HWND)wmInfo.info.win.window;
+	}
 #endif
 
 	if (::shouldDisplayFullScreen() || mWindowSettings.isFullscreen) {
@@ -756,11 +647,13 @@ void Window::create(Window* sharedWindow) {
 	mContext->mWindow = _window;
 	mWindowID = SDL_GetWindowID(_window);
 #ifdef OPENGL_BACKEND
-	if (sharedWindow) {
-		SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
-		SDL_GL_MakeCurrent(sharedWindow->mContext->mWindow, sharedWindow->mContext->mContext);
+	if (backend == RENDER::RenderSettings::Backend::OPENGL) {
+		if (sharedWindow) {
+			SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
+			SDL_GL_MakeCurrent(sharedWindow->mContext->mWindow, sharedWindow->mContext->mContext);
+		}
+		mContext->mContext = SDL_GL_CreateContext(mContext->mWindow);
 	}
-	mContext->mContext = SDL_GL_CreateContext(mContext->mWindow);
 #endif
 #ifdef METAL_BACKEND
 	// mMetalLayer can be stored in Window::Internal if we want, or created on the fly.

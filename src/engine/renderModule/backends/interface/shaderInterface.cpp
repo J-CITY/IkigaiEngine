@@ -21,8 +21,7 @@ IKIGAI::RENDER::ShaderInterface::ConstructRealPath(const std::string &path) {
 #ifdef OPENGL_BACKEND
   if (RENDER::DriverInterface::settings.backend ==
       RENDER::RenderSettings::Backend::OPENGL) {
-    return path; // IKIGAI::UTILS::ReplaceSubstring(path, "shaders/",
-                 // "shaders/gl/");
+    return path;
   }
 #endif
 #ifdef VULKAN_BACKEND
@@ -35,6 +34,12 @@ IKIGAI::RENDER::ShaderInterface::ConstructRealPath(const std::string &path) {
   if (RENDER::DriverInterface::settings.backend ==
       RENDER::RenderSettings::Backend::DIRECTX12) {
     return IKIGAI::UTILS::ReplaceSubstring(path, "shaders/", "shaders/dx12/");
+  }
+#endif
+#ifdef METAL_BACKEND
+  if (RENDER::DriverInterface::settings.backend ==
+      RENDER::RenderSettings::Backend::METAL) {
+    return IKIGAI::UTILS::ReplaceSubstring(path, "shaders/", "shaders/metal/");
   }
 #endif
 

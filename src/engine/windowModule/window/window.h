@@ -19,6 +19,8 @@
 #include "GLFW/glfw3.h"
 #endif
 
+#include "renderModule/backends/interface/driverInterface.h"
+
 #ifdef DX12_BACKEND
 #include <d3d12.h>
 #endif
@@ -26,6 +28,9 @@
 #ifdef VULKAN_BACKEND
 #include <volk.h>
 #endif
+
+struct SDL_Window;
+
 namespace IKIGAI::WINDOW {
 	struct WindowSettings {
 		bool isFullscreen = false;
@@ -39,6 +44,7 @@ namespace IKIGAI::WINDOW {
 		std::string title;
 		MATH::Vector2u size = MATH::Vector2u(800, 600);
 		int refreshRate = 60;
+		RENDER::RenderSettings::Backend renderBackend = RENDER::RenderSettings::Backend::OPENGL;
 
 		//template<class Context>
 		//constexpr static auto serde(Context& context, WindowSettings& value) {
@@ -119,6 +125,8 @@ namespace IKIGAI::WINDOW {
 		void setCursorVisible(bool isVisible, bool isLock) const;
 
 		std::pair<int, int> getDrawableSize();
+		::SDL_Window* getSDLWindow() const;
+		void* getGLContext() const;
 
 #ifdef DX12_BACKEND
 		HWND mHWND;
@@ -136,6 +144,7 @@ namespace IKIGAI::WINDOW {
 #endif
 
 		void initImGUI();
+		void shutdownImGUI();
 	private:
 		
 		[[nodiscard]] WindowSettings& getSetting();

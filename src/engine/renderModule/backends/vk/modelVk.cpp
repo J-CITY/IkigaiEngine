@@ -21,7 +21,7 @@ const std::vector<std::string>& ModelVk::getMaterialNames() const {
 	return mMaterialNames;
 }
 
-void ModelVk::createBuffers(std::vector<Vertex> p_vertices, std::vector<uint32_t> p_indices) {
+void ModelVk::createBuffers(const std::vector<Vertex>& p_vertices, const std::vector<uint32_t>& p_indices) {
 	mVertexBuffer = std::make_unique<VertexBufferVk>(p_vertices);
 	mIndexBuffer = std::make_unique<IndexBufferVk>(p_indices);
 }

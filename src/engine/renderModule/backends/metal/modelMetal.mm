@@ -9,7 +9,11 @@ namespace IKIGAI::RENDER {
         mPath = path;
     }
 
-    void ModelMetal::createBuffers(std::vector<Vertex> p_vertices, std::vector<uint32_t> p_indices) {
+    std::shared_ptr<ModelInterface> CreateEmptyModelMetal(const std::string& path) {
+        return std::make_shared<ModelMetal>(path);
+    }
+
+    void ModelMetal::createBuffers(const std::vector<Vertex>& p_vertices, const std::vector<uint32_t>& p_indices) {
         auto& driver = static_cast<DriverMetal&>(RESOURCES::ServiceManager::Get<DriverInterface>());
         id<MTLDevice> device = driver.getDevice();
         

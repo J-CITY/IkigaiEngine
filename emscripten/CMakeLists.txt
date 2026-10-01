@@ -37,6 +37,19 @@ file(GLOB_RECURSE CPP_HEADERS ${MAIN_SOURCE_DIR}/*.hpp)
 file(GLOB_RECURSE CPP_HEADERS2 ${MAIN_SOURCE_DIR}/*.h)
 file(GLOB_RECURSE CPP_SOURCES ${MAIN_SOURCE_DIR}/*.cpp)
 
+list(FILTER CPP_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
+list(FILTER CPP_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
+list(FILTER CPP_HEADERS2 EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
+list(FILTER CPP_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
+list(FILTER CPP_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
+list(FILTER CPP_HEADERS2 EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
+list(FILTER CPP_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
+list(FILTER CPP_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
+list(FILTER CPP_HEADERS2 EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
+list(FILTER CPP_SOURCES EXCLUDE REGEX "imguiBackendVk\\.cpp$")
+list(FILTER CPP_SOURCES EXCLUDE REGEX "imguiBackendDx12\\.cpp$")
+list(FILTER CPP_SOURCES EXCLUDE REGEX "imguiBackendMetal\\.mm$")
+
 
 file(GLOB_RECURSE SOLOUD_FILES
     "../3rd/soloud/src/core/soloud_audiosource.cpp"
@@ -181,6 +194,7 @@ add_compile_definitions(USE_SDL)
 add_compile_definitions(SOL_NO_EXCEPTIONS=1)
 add_compile_definitions(USING_GLES)
 # if (backend == opengl)
+add_compile_definitions(IKIGAI_HAS_OPENGL)
 add_compile_definitions(OPENGL_BACKEND)
 add_compile_definitions(OPENGL_SIMPLE_RENDER)
 add_compile_definitions(SPINE_USE_STD_FUNCTION)

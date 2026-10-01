@@ -14,19 +14,9 @@
 #include "utilsModule/stringUtils.h"
 #include "misc/cpp/imgui_stdlib.h"
 #include "renderModule/backends/interface/textureInterface.h"
+#include "renderModule/backends/interface/driverInterface.h"
 #include "resourceModule/serviceManager.h"
 #include "utilsModule/pathGetter.h"
-
-#ifdef VULKAN_BACKEND
-#include "renderModule/backends/vk/textureVk.h"
-#endif
-#ifdef OPENGL_BACKEND
-#include "renderModule/backends/gl/textureGl.h"
-#endif
-
-#ifdef DX12_BACKEND
-#include "renderModule/backends/dx12/textureDx12.h"
-#endif
 
 
 using namespace IKIGAI::EDITOR;
@@ -101,27 +91,12 @@ std::string File::GetExtension(const std::filesystem::path& path) {
 }
 
 FileBrowserWindow::FileBrowserWindow(const std::string& path): mPath(path), mSelectedFolderPath(path), mRoot(path) {
-#ifdef OPENGL_BACKEND
-	mTextureCache["__image__"] = RENDER::TextureGl::Create("/textures/Debug/Editor/image-white.png");
-	mTextureCache["__dir__"] = RENDER::TextureGl::Create("/textures/Debug/Editor/folder-white.png");
-	mTextureCache["__file__"] = RENDER::TextureGl::Create("/textures/Debug/Editor/file-white.png");
-	mTextureCache["__font__"] = RENDER::TextureGl::Create("/textures/Debug/Editor/font-white.png");
-	mTextureCache["__object__"] = RENDER::TextureGl::Create("/textures/Debug/Editor/cube-white.png");
-#endif
-#ifdef VULKAN_BACKEND
-	mTextureCache["__image__"] = RENDER::TextureVk::Create("/textures/Debug/Editor/image-white.png");
-	mTextureCache["__dir__"] = RENDER::TextureVk::Create("/textures/Debug/Editor/folder-white.png");
-	mTextureCache["__file__"] = RENDER::TextureVk::Create("/textures/Debug/Editor/file-white.png");
-	mTextureCache["__font__"] = RENDER::TextureVk::Create("/textures/Debug/Editor/font-white.png");
-	mTextureCache["__object__"] = RENDER::TextureVk::Create("/textures/Debug/Editor/cube-white.png");
-#endif
-#ifdef DX12_BACKEND
-	mTextureCache["__image__"] = RENDER::TextureDx12::Create("/textures/Debug/Editor/image-white.png");
-	mTextureCache["__dir__"] = RENDER::TextureDx12::Create("/textures/Debug/Editor/folder-white.png");
-	mTextureCache["__file__"] = RENDER::TextureDx12::Create("/textures/Debug/Editor/file-white.png");
-	mTextureCache["__font__"] = RENDER::TextureDx12::Create("/textures/Debug/Editor/font-white.png");
-	mTextureCache["__object__"] = RENDER::TextureDx12::Create("/textures/Debug/Editor/cube-white.png");
-#endif
+	auto* driver = RENDER::DriverInterface::Get();
+	mTextureCache["__image__"] = driver->createTexture("/textures/Debug/Editor/image-white.png", true);
+	mTextureCache["__dir__"] = driver->createTexture("/textures/Debug/Editor/folder-white.png", true);
+	mTextureCache["__file__"] = driver->createTexture("/textures/Debug/Editor/file-white.png", true);
+	mTextureCache["__font__"] = driver->createTexture("/textures/Debug/Editor/font-white.png", true);
+	mTextureCache["__object__"] = driver->createTexture("/textures/Debug/Editor/cube-white.png", true);
 	initFileTree(mRoot);
 }
 
@@ -277,16 +252,7 @@ void FileBrowserWindow::drawFolder(std::string_view path)
 			imPath = entry.path().string();
 			std::string vPath = ToVirtualPath(imPath);
 			if (!mTextureCache.contains(imPath)) {
-#ifdef OPENGL_BACKEND
-				//TODO: check backend
-				mTextureCache[imPath] = RENDER::TextureGl::Create(vPath);
-#endif
-#ifdef VULKAN_BACKEND
-				mTextureCache[imPath] = RENDER::TextureVk::Create(vPath);
-#endif
-#ifdef DX12_BACKEND
-				mTextureCache[imPath] = RENDER::TextureDx12::Create(vPath);
-#endif
+				mTextureCache[imPath] = RENDER::DriverInterface::Get()->createTexture(vPath, true);
 			}
 			//imPath = "__image__";
 			break;
@@ -336,12 +302,6 @@ void FileBrowserWindow::drawFolder(std::string_view path)
 		auto pos = ImGui::GetCursorPos();
 		ImGui::SetCursorPos(ImVec2(pos.x, pos.y - mElementSize));
 		ImGui::Image((ImTextureID)mTextureCache.at(imPath)->getImguiId(), {static_cast<float>(mElementSize), static_cast<float>(mElementSize)}, ImVec2(0, 1), ImVec2(1, 0));
-//#ifdef VULKAN_BACKEND
-//				ImGui::Image((ImTextureID)textureCache.at(imPath)->descriptor_set, {static_cast<float>(elementSize), static_cast<float>(elementSize)});
-//#endif
-//#ifdef DX12_BACKEND
-//				ImGui::Image((ImTextureID)textureCache.at(imPath)->mGpuSrv.ptr, {static_cast<float>(elementSize), static_cast<float>(elementSize)});
-//#endif
 		ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + 100);
 		ImGui::Text(entry.path().filename().string().c_str());
 		ImGui::PopTextWrapPos();

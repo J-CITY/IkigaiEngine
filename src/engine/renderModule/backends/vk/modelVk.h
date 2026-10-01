@@ -25,7 +25,7 @@ namespace IKIGAI::RENDER {
 
 
 	public:
-		void createBuffers(std::vector<Vertex> p_vertices, std::vector<uint32_t> p_indices);
+		void createBuffers(const std::vector<Vertex>& p_vertices, const std::vector<uint32_t>& p_indices) override;
 		std::unique_ptr<VertexBufferVk> mVertexBuffer;
 		std::unique_ptr<IndexBufferVk> mIndexBuffer;
 	};

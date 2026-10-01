@@ -10,6 +10,7 @@
 #include "textureDx12.h"
 #include "vertexBufferDx12.h"
 #include "backends/imgui_impl_dx12.h"
+#include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
 #include "d3dx12/DirectXHelpers.h"
 #include "renderModule/backends/interface/renderEnums.h"
 #include "renderModule/backends/interface/resourceStruct.h"
@@ -516,11 +517,8 @@ Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> DriverDx12::getCommandList() 
 }
 
 void DriverDx12::submit() {
-	ImGuiIO& io = ImGui::GetIO();
-	ImGui_ImplDX12_RenderDrawData(ImGui::GetDrawData(), mCommandList.Get());
-	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-		ImGui::UpdatePlatformWindows();
-		ImGui::RenderPlatformWindowsDefault();
+	if (auto* imgui = IKIGAI::IMGUI::Get()) {
+		imgui->renderDrawData();
 	}
 
 	end();

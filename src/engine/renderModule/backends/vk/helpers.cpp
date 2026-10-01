@@ -13,7 +13,10 @@ using namespace IKIGAI::RENDER;
 
 
 DriverVk* UtilityVk::GetDriver() {
-	return mDriver;
+	if (mDriver) {
+		return mDriver;
+	}
+	return static_cast<DriverVk*>(DriverInterface::Get());
 }
 
 VmaBuffer UtilityVk::CreateBuffer(uint64_t size, vk::BufferUsageFlags usage, MemoryUsage memoryUsage)

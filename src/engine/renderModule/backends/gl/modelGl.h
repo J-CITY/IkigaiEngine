@@ -32,7 +32,7 @@ namespace IKIGAI {
 
 		public:
 			// If all meshes in one buffer
-			void createBuffers(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
+			void createBuffers(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices) override;
 			std::unique_ptr<VertexArray> vertexArray;
 			std::unique_ptr<VertexBufferGl> vertexBuffer;
 			std::unique_ptr<IndexBufferGl> indexBuffer;

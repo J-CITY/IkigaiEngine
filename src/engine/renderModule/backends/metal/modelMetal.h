@@ -18,7 +18,7 @@ namespace IKIGAI::RENDER {
         ModelMetal(const std::string& path);
         ~ModelMetal() override = default;
 
-        void createBuffers(std::vector<Vertex> p_vertices, std::vector<uint32_t> p_indices);
+        void createBuffers(const std::vector<Vertex>& p_vertices, const std::vector<uint32_t>& p_indices) override;
         
         std::unique_ptr<VertexBufferMetal> mVertexBuffer;
         std::unique_ptr<IndexBufferMetal> mIndexBuffer;

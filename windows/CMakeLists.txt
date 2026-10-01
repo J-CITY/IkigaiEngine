@@ -12,7 +12,12 @@ option(USE_SDL2     "Use SDL2 window backend" ON)
 option(USE_OPENGL   "Use OpenGL rendering backend" ON)
 option(USE_VULKAN   "Use Vulkan rendering backend" OFF)
 option(USE_DX12     "Use DX12 rendering backend" OFF)
+option(USE_METAL    "Use Metal rendering backend" OFF)
 option(USE_MIMALLOC "Use mimalloc override" OFF)
+
+if(NOT USE_OPENGL AND NOT USE_VULKAN AND NOT USE_DX12)
+    message(FATAL_ERROR "At least one render backend must be enabled (USE_OPENGL, USE_VULKAN, USE_DX12)")
+endif()
 
 # --- Directory Setup ---
 set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../3rd")
@@ -93,8 +98,8 @@ endif()
 
 if(USE_DX12)
     list(APPEND IMGUI_SOURCES 
-        "../3rd/imgui/imgui/imgui_impl_dx12.h"
-        "../3rd/imgui/imgui/imgui_impl_dx12.cpp"
+        "${IMGUI_DIR}/imgui/backends/imgui_impl_dx12.h"
+        "${IMGUI_DIR}/imgui/backends/imgui_impl_dx12.cpp"
     )
 endif()
 
@@ -145,6 +150,25 @@ endif()
 file(GLOB_RECURSE PROJECT_ABSOLUTE_HEADERS "${MAIN_SOURCE_DIR}/*.hpp" "${MAIN_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE PROJECT_ABSOLUTE_SOURCES "${MAIN_SOURCE_DIR}/*.cpp" "${MAIN_SOURCE_DIR}/*.c" "${MAIN_SOURCE_DIR}/*.cxx")
 
+if(NOT USE_OPENGL)
+    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]gl[/\\\\]")
+    list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]gl[/\\\\]")
+    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendGl\\.cpp$")
+endif()
+if(NOT USE_VULKAN)
+    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
+    list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
+    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendVk\\.cpp$")
+endif()
+if(NOT USE_DX12)
+    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
+    list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
+    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendDx12\\.cpp$")
+endif()
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
+list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendMetal\\.mm$")
+
 # Source Groups for IDE
 source_group(TREE ${MAIN_SOURCE_DIR} FILES ${PROJECT_ABSOLUTE_HEADERS} ${PROJECT_ABSOLUTE_SOURCES})
 
@@ -178,15 +202,15 @@ if(USE_SDL2)
 endif()
 
 if(USE_OPENGL)
-    target_compile_definitions(${APP_NAME} PRIVATE OPENGL_BACKEND)
+    target_compile_definitions(${APP_NAME} PRIVATE IKIGAI_HAS_OPENGL OPENGL_BACKEND)
 endif()
 
 if(USE_VULKAN)
-    target_compile_definitions(${APP_NAME} PRIVATE VULKAN_BACKEND)
+    target_compile_definitions(${APP_NAME} PRIVATE IKIGAI_HAS_VULKAN VULKAN_BACKEND)
 endif()
 
 if(USE_DX12)
-    target_compile_definitions(${APP_NAME} PRIVATE DX12_BACKEND)
+    target_compile_definitions(${APP_NAME} PRIVATE IKIGAI_HAS_DX12 DX12_BACKEND)
 endif()
 
 # Additional definitions

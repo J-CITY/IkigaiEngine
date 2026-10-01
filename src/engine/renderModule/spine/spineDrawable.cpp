@@ -1,5 +1,8 @@
 #include "spineDrawable.h"
 
+#include "utilsModule/log/loggerDefine.h"
+#include "renderModule/backends/interface/driverInterface.h"
+#ifdef OPENGL_BACKEND
 #include <fstream>
 #include <map>
 #include <coreModule/graphicsWrapper.hpp>
@@ -9,8 +12,6 @@
 #include <spine/TextureLoader.h>
 
 #include "utilsModule/format.h"
-#include "utilsModule/log/loggerDefine.h"
-#ifdef OPENGL_BACKEND
 using namespace IKIGAI;
 using namespace spine;
 using namespace IKIGAI::RENDER::SPINE;
@@ -126,6 +127,10 @@ void SpineController::setTimeScale(float scale) {
 }
 
 bool SpineController::create(const std::string& pathSkel, const std::string& pathAtlas, float scale) {
+    if (RENDER::DriverInterface::settings.backend != RENDER::RenderSettings::Backend::OPENGL) {
+        LOG_ERROR << "Spine is currently supported only with the OpenGL backend";
+        return false;
+    }
     _textureLoader = new SpineTextureLoader();
     _atlas = new spine::Atlas(pathAtlas.c_str(), _textureLoader);
     if (_atlas->getPages().size() == 0) {

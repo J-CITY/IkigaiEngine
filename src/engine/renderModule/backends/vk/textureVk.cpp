@@ -5,7 +5,6 @@
 #include <iostream>
 #include <filesystem>
 
-#include "backends/imgui_impl_vulkan.h"
 #include "utilsModule/stdLoader.h"
 #include "utilsModule/jsonLoader.h"
 #include "utilsModule/log/loggerDefine.h"
@@ -16,6 +15,7 @@
 #include <resourceModule/serviceManager.h>
 #include <resourceModule/fileSystem/fileSystem.h>
 #include <renderModule/backends/interface/atlasInterface.h>
+#include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
 
 #include <cmath>
 #include <algorithm>
@@ -297,13 +297,9 @@ void IKIGAI::RENDER::TextureVk::recreate(const TextureResource& descriptor, cons
 
 void* IKIGAI::RENDER::TextureVk::getImguiId() {
 	if (!mDescriptorSet) {
-		VkSamplerCreateInfo samplerCreateInfo = {};
-		samplerCreateInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-		samplerCreateInfo.magFilter = VK_FILTER_NEAREST;
-		samplerCreateInfo.minFilter = VK_FILTER_NEAREST;
-
-		static auto s = UtilityVk::GetDriver()->mDevice.createSampler(samplerCreateInfo);
-		mDescriptorSet = ImGui_ImplVulkan_AddTexture(*s, *mImageView, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		if (auto* imgui = IKIGAI::IMGUI::Get()) {
+			imgui->registerGpuTexture(*this);
+		}
 	}
 	setState(UtilityVk::GetDriver()->getCurrentFrame().mCommandBuffer, vk::ImageLayout::eShaderReadOnlyOptimal);
 	return (void*)mDescriptorSet;

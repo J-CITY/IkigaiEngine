@@ -7,9 +7,6 @@
 #include "physicsModule/PhysicWorld.h"
 #include "renderModule/gameRendererInterface.h"
 #include "renderModule/render.h"
-#include "renderModule/backends/gl/materialGl.h"
-#include "renderModule/backends/gl/modelGl.h"
-#include "renderModule/backends/gl/meshGl.h"
 #include "resourceModule/fileWatcher.h"
 #include "resourceModule/serviceManager.h"
 #include "resourceModule/parser/assimpParser.h"
@@ -20,7 +17,8 @@
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
-#include <renderModule/gameRenderer.h>
+#include "renderModule/gameRenderer.h"
+#include "renderModule/backends/interface/driverInterface.h"
 
 using namespace IKIGAI::CORE;
 
@@ -232,24 +230,16 @@ bool App::isRunning() const {
 }
 
 void App::preUpdate(std::chrono::duration<double> dt) {
-//	PROFILER_EVENT();
 	core.window->preUpdate();
-#ifdef VULKAN_BACKEND
-	core.editorRender->draw();
-	core.window->update();
-#endif
-
-#ifdef DX12_BACKEND
-	core.editorRender->draw();
-#endif
-
-#ifdef OPENGL_BACKEND
+#ifdef USE_EDITOR
+#ifndef OCULUS
 #ifndef __EMSCRIPTEN__
-	core.editorRender->draw();
+	if (core.editorRender) {
+		core.editorRender->draw();
+	}
 #endif
-	//core.window->update();
 #endif
-
+#endif
 }
 
 void App::update(std::chrono::duration<double> dt) {
@@ -316,18 +306,13 @@ void App::update(std::chrono::duration<double> dt) {
 	RESOURCES::ServiceManager::Get<TASK::TaskSystem>().waitSync();
 #endif
 
-#ifdef VULKAN_BACKEND
-	// Finish the frame: draw ImGui, UpdatePlatformWindows(), present and begin next frame.
-	// Must be called every frame (even without a scene), otherwise the next ImGui::NewFrame() asserts.
-	RESOURCES::ServiceManager::Get<RENDER::Renderer>().submit();
-#endif
+	if (RENDER::DriverInterface::settings.backend != RENDER::RenderSettings::Backend::OPENGL) {
+		RESOURCES::ServiceManager::Get<RENDER::Renderer>().submit();
+	}
 
 	//EDITOR
 #ifdef USE_EDITOR
 #ifndef OCULUS
-#ifndef VULKAN_BACKEND
-	//core.editorRender->draw();
-#endif
 #endif
 #endif
 

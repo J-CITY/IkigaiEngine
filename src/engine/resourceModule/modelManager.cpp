@@ -7,17 +7,6 @@
 #include "renderModule/render.h"
 #include "fileWatcher.h"
 
-#ifdef OPENGL_BACKEND
-#include <renderModule/backends/gl/modelGl.h>
-#endif
-
-#ifdef VULKAN_BACKEND
-#include <renderModule/backends/vk/modelVk.h>
-#endif
-
-#ifdef DX12_BACKEND
-#include <renderModule/backends/dx12/modelDx12.h>
-#endif
 #include "coreModule/ecs/components/transform.h"
 #include "renderModule/backends/interface/resourceStruct.h"
 #include <renderModule/backends/interface/driverInterface.h>

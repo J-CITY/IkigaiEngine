@@ -4,6 +4,7 @@
 
 #include "resourceModule/serviceManager.h"
 #include "windowModule/window/window.h"
+#include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
 #import <QuartzCore/CAMetalLayer.h>
 
 #include "bufferMetal.h"
@@ -105,6 +106,9 @@ namespace IKIGAI::RENDER {
     }
 
     void DriverMetal::end() {
+        if (auto* imgui = IKIGAI::IMGUI::Get()) {
+            imgui->renderDrawData();
+        }
         if (mCurrentEncoder) {
             [mCurrentEncoder endEncoding];
             mCurrentEncoder = nil;

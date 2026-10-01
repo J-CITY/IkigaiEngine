@@ -2,23 +2,16 @@
 
 #include <renderModule/backends/interface/meshInterface.h>
 #include <renderModule/backends/interface/modelInterface.h>
+#include <renderModule/backends/meshFactory.h>
 #include "stdLoader.h"
 #include "log/loggerDefine.h"
 #include "renderModule/vertex.h"
-
-#ifdef OPENGL_BACKEND
-#include <renderModule/backends/gl/modelGl.h>
-#include <renderModule/backends/gl/meshGl.h>
-#endif
 
 
 using namespace IKIGAI;
 
 std::shared_ptr<RENDER::ModelInterface> MeshGenerator::CreateTerrainFromHeightmap(const std::string& fileName) {
-	std::shared_ptr<RENDER::ModelInterface> model;
-#ifdef OPENGL_BACKEND
-	model = std::make_shared<RENDER::ModelGl>("");
-#endif
+	std::shared_ptr<RENDER::ModelInterface> model = RENDER::CreateEmptyModel();
 
 	const auto heightData = GetHeightDataFromImage(fileName);
 	if (heightData.size() == 0) {
@@ -75,10 +68,7 @@ std::shared_ptr<RENDER::ModelInterface> MeshGenerator::CreateTerrainFromHeightma
 		}
 	}
 
-	std::shared_ptr<RENDER::MeshInterface> mesh;
-#ifdef OPENGL_BACKEND
-	mesh = std::make_shared<RENDER::MeshGl>(vertices, indices, 0);
-#endif
+	std::shared_ptr<RENDER::MeshInterface> mesh = RENDER::CreateMesh(vertices, indices, 0);
 
 	model->getMeshes().push_back(mesh);
 	return model;
@@ -106,10 +96,7 @@ std::vector<std::vector<float>> MeshGenerator::GetHeightDataFromImage(const std:
 }
 
 std::shared_ptr<RENDER::ModelInterface> MeshGenerator::CreateSquare(unsigned rez, int width, int height) {
-	std::shared_ptr<RENDER::ModelInterface> model;
-#ifdef OPENGL_BACKEND
-	model = std::make_shared<RENDER::ModelGl>("");
-#endif
+	std::shared_ptr<RENDER::ModelInterface> model = RENDER::CreateEmptyModel();
 	auto numVertices = rez * rez;
 
 	std::vector<Vertex> vertices;
@@ -183,19 +170,13 @@ std::shared_ptr<RENDER::ModelInterface> MeshGenerator::CreateSquare(unsigned rez
 	//	}
 	//}
 
-	std::shared_ptr<RENDER::MeshInterface> mesh;
-#ifdef OPENGL_BACKEND
-	mesh = std::make_shared<RENDER::MeshGl>(vertices, indices, 0);
-#endif
+	std::shared_ptr<RENDER::MeshInterface> mesh = RENDER::CreateMesh(vertices, indices, 0);
 	model->getMeshes().push_back(mesh);
 	return model;
 }
 
 std::shared_ptr<RENDER::ModelInterface> MeshGenerator::CreateQuad() {
-	std::shared_ptr<RENDER::ModelInterface> model;
-#ifdef OPENGL_BACKEND
-	model = std::make_shared<RENDER::ModelGl>("");
-#endif
+	std::shared_ptr<RENDER::ModelInterface> model = RENDER::CreateEmptyModel();
 
 	std::vector<Vertex> vertices;
 	std::vector<unsigned> indices = {
@@ -215,10 +196,7 @@ std::shared_ptr<RENDER::ModelInterface> MeshGenerator::CreateQuad() {
 	vertices.push_back({MATH::Vector3{1.5f, 1.0f, 0.0f}, MATH::Vector2f{1.0f, 1.0f}});
 
 
-	std::shared_ptr<RENDER::MeshInterface> mesh;
-#ifdef OPENGL_BACKEND
-	mesh = std::make_shared<RENDER::MeshGl>(vertices, indices, 0);
-#endif
+	std::shared_ptr<RENDER::MeshInterface> mesh = RENDER::CreateMesh(vertices, indices, 0);
 	model->getMeshes().push_back(mesh);
 	return model;
 }
@@ -705,13 +683,10 @@ chunk::chunk(int x, int y, int z) : ax(x), ay(y), az(z) {
 
 			// If the slot is empty, create a new VBO
 			if (!chunk_slot[lru]) {
-#ifdef OPENGL_BACKEND
-				mModel = std::make_shared<RENDER::ModelGl>("");
+				mModel = RENDER::CreateEmptyModel();
 				std::vector<Vertex> v;
 				std::vector<unsigned> i;
-				mModel->getMeshes().push_back(std::make_shared<RENDER::MeshGl>(v, i, 0));
-#endif
-				//glGenBuffers(1, &vbo);
+				mModel->getMeshes().push_back(RENDER::CreateMesh(v, i, 0));
 				// Otherwise, steal it from the previous slot owner
 			} else {
 				mModel = chunk_slot[lru]->mModel;
@@ -721,12 +696,7 @@ chunk::chunk(int x, int y, int z) : ax(x), ay(y), az(z) {
 			slot = lru;
 			chunk_slot[slot] = this;
 		}
-#ifdef OPENGL_BACKEND
-		// Upload vertices
-		//TODO: fix it
-		//std::static_pointer_cast<RENDER::MeshGl>(mModel->getMeshes()[0])->mVertexBuffer->bufferData(i * sizeof(Vertex), vertex.data(), GL_STATIC_DRAW);
-		//std::static_pointer_cast<RENDER::MeshGl>(mModel->getMeshes()[0])->mVertexCount = std::static_pointer_cast<RENDER::MeshGl>(mModel->getMeshes()[0])->mVertexBuffer->getVertexCount();
-#endif
+		// Upload vertices (GL-specific bufferData path is currently disabled).
 		//glBindBuffer(GL_ARRAY_BUFFER, vbo);
 		//glBufferData(GL_ARRAY_BUFFER, i * sizeof * vertex, vertex, GL_STATIC_DRAW);
 	}

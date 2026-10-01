@@ -12,10 +12,6 @@
 #include "utilsModule/imguiHelper/imguiWidgets.h"
 #include "windowModule/window/window.h"
 
-#ifdef OPENGL_BACKEND
-#include "renderModule/gameRenderer.h"
-#endif
-
 using namespace IKIGAI::EDITOR;
 
 struct MovableChildData {

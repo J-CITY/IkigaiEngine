@@ -258,7 +258,7 @@ namespace IKIGAI::ECS2 {
 		template<typename T>
 		ComponentType getComponentTypeImpl() {
 			static ComponentType componentId = registerNewComponentId<T>();
-			std::cout << typeid(T).name() << " - " << (int)componentId << "\n";
+			//std::cout << typeid(T).name() << " - " << (int)componentId << "\n";
 			return componentId;
 		}
 

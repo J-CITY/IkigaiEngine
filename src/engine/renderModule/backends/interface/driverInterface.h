@@ -1,6 +1,7 @@
 #pragma once
 
 #include <bitset>
+#include <string>
 
 #include "../interface/shaderInterface.h"
 #include <memory>
@@ -14,6 +15,7 @@
 #include "frameBufferInterface.h"
 #include <utilsModule/memoryAlloc.h>
 #include <functional>
+#include <serdepp/attribute/default.hpp>
 
 namespace IKIGAI::RENDER {
 	class FrameBufferInterface;
@@ -94,14 +96,14 @@ namespace IKIGAI::RENDER {
 	}
 
 	struct RenderSettings {
-		enum class Backend { OPENGL, VULKAN, DIRECTX12 };
+		enum class Backend { OPENGL, VULKAN, DIRECTX12, METAL };
 		Backend backend = Backend::OPENGL;
 
 		template<class Context>
 		constexpr static auto serde(Context& context, RenderSettings& value) {
 			using namespace serde::attribute;
 			serde::serde_struct(context, value)
-				.field(&RenderSettings::backend, "backend");
+				.field(&RenderSettings::backend, "backend", default_{Backend::OPENGL});
 		}
 	};
 
@@ -224,6 +226,14 @@ namespace IKIGAI::RENDER {
 
 		virtual void draw(const MeshInterface& mesh, PrimitiveMode primitive, uint32_t instances) = 0;
 
+		virtual void renderImGui() {}
+
+		static DriverInterface* Get() { return sActive; }
+		static void SetActive(DriverInterface* driver) { sActive = driver; }
+
 		inline static RenderSettings settings;
+
+	private:
+		inline static DriverInterface* sActive = nullptr;
 	};
 } // namespace IKIGAI::RENDER

@@ -11,6 +11,7 @@
 #include <list>
 #include "fileBrowser.h"
 #include "statWindow.h"
+#include "textureWatcher.h"
 #include "IconsFontAwesome5.h"
 #include "imgui.h"
 #include "misc/cpp/imgui_stdlib.h"
@@ -21,10 +22,6 @@
 #include "utilsModule/pathGetter.h"
 #include "utilsModule/imguiHelper/ImGuiFileBrowser.h"
 #include "renderModule/backends/interface/resourceStruct.h"
-
-#ifdef VULKAN_BACKEND
-#include "backends/imgui_impl_vulkan.h"
-#endif
 
 
 using namespace IKIGAI::EDITOR;
@@ -45,6 +42,7 @@ struct EditorRender::Internal {
 		mWindows.push_back(std::make_unique<StatWindow>());
 		mWindows.push_back(std::make_unique<TimelineAnimationWindow>());
 		mWindows.push_back(std::make_unique<FileBrowserWindow>(Config::ROOT + Config::ASSETS_PATH));
+		mWindows.push_back(std::make_unique<TextureWatcherWindow>());
 
 		//RENDER::ShaderResource res;
 		//mWindows.push_back(std::make_unique<ResourceEditorWindow<RENDER::ShaderResource>>(res));

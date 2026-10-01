@@ -1,11 +1,13 @@
 #pragma once
 
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "../../objects/boundingSphere.h"
+#include "../../vertex.h"
 
 
 namespace IKIGAI
@@ -86,6 +88,8 @@ namespace IKIGAI
 			bool getUseBatching() const {
 				return mUseBatching;
 			}
+
+			virtual void createBuffers(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices) {}
 
 		protected:
 			std::vector<std::string> mMaterialNames;

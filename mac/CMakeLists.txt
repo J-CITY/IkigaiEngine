@@ -10,6 +10,10 @@ option(USE_VULKAN   "Use Vulkan rendering backend" OFF)
 option(USE_METAL    "Use Metal rendering backend" OFF)
 option(USE_MIMALLOC "Use mimalloc override" OFF)
 
+if(NOT USE_OPENGL AND NOT USE_VULKAN AND NOT USE_METAL)
+    message(FATAL_ERROR "At least one render backend must be enabled (USE_OPENGL, USE_VULKAN, USE_METAL)")
+endif()
+
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum OS X deployment version")
 
 # --- Directory Setup ---
@@ -113,6 +117,15 @@ target_include_directories(imgui PUBLIC
     "${IMGUI_DIR}/IconFont"
 )
 
+if(USE_SDL2)
+    target_include_directories(imgui PRIVATE "${THIRD_PARTY_DIR}/SDL2/include")
+endif()
+
+if(USE_VULKAN)
+    target_include_directories(imgui PRIVATE "${THIRD_PARTY_DIR}/Vulkan-Headers/include")
+    target_compile_definitions(imgui PRIVATE VK_NO_PROTOTYPES)
+endif()
+
 # 7. Spine
 file(GLOB_RECURSE SPINE_FILES "${THIRD_PARTY_DIR}/spine/spine/*.cpp" "${THIRD_PARTY_DIR}/spine/spine/*.h")
 add_library(spine STATIC ${SPINE_FILES})
@@ -166,6 +179,25 @@ endif()
 file(GLOB_RECURSE PROJECT_ABSOLUTE_HEADERS "${MAIN_SOURCE_DIR}/*.hpp" "${MAIN_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE PROJECT_ABSOLUTE_SOURCES "${MAIN_SOURCE_DIR}/*.cpp" "${MAIN_SOURCE_DIR}/*.c" "${MAIN_SOURCE_DIR}/*.cxx" "${MAIN_SOURCE_DIR}/*.mm" "${MAIN_SOURCE_DIR}/*.m")
 
+if(NOT USE_OPENGL)
+    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]gl[/\\\\]")
+    list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]gl[/\\\\]")
+    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendGl\\.cpp$")
+endif()
+if(NOT USE_VULKAN)
+    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
+    list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
+    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendVk\\.cpp$")
+endif()
+if(NOT USE_METAL)
+    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
+    list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
+    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendMetal\\.mm$")
+endif()
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
+list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendDx12\\.cpp$")
+
 # Source Groups for IDE
 source_group(TREE ${MAIN_SOURCE_DIR} FILES ${PROJECT_ABSOLUTE_HEADERS} ${PROJECT_ABSOLUTE_SOURCES})
 
@@ -193,15 +225,15 @@ if(USE_SDL2)
 endif()
 
 if(USE_OPENGL)
-    target_compile_definitions(${APP_NAME} PRIVATE OPENGL_BACKEND)
+    target_compile_definitions(${APP_NAME} PRIVATE IKIGAI_HAS_OPENGL OPENGL_BACKEND)
 endif()
 
 if(USE_VULKAN)
-    target_compile_definitions(${APP_NAME} PRIVATE VULKAN_BACKEND)
+    target_compile_definitions(${APP_NAME} PRIVATE IKIGAI_HAS_VULKAN VULKAN_BACKEND)
 endif()
 
 if(USE_METAL)
-    target_compile_definitions(${APP_NAME} PRIVATE METAL_BACKEND)
+    target_compile_definitions(${APP_NAME} PRIVATE IKIGAI_HAS_METAL METAL_BACKEND)
 endif()
 
 # Additional definitions

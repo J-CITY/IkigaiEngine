@@ -9,6 +9,7 @@
 #include <unordered_set>
 
 #include "backends/imgui_impl_vulkan.h"
+#include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
 #include "renderModule/backends/interface/storageBufferInterface.h"
 #include "utilsModule/log/loggerDefine.h"
 
@@ -1557,11 +1558,8 @@ void DriverVk::setClearColor(float r, float g, float b, float a) {
 
 
 void DriverVk::submit() {
-	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *getCurrentFrame().mCommandBuffer);
-	ImGuiIO& io = ImGui::GetIO();
-	if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-		ImGui::UpdatePlatformWindows();
-		ImGui::RenderPlatformWindowsDefault();
+	if (auto* imgui = IKIGAI::IMGUI::Get()) {
+		imgui->renderDrawData();
 	}
 	end();
 

@@ -3,6 +3,7 @@
 #include "resourceModule/serviceManager.h"
 #include "windowModule/window/window.h"
 #include "windowModule/windowManager.h"
+#include <stdexcept>
 #include <utilsModule/log/logger.h>
 #include <utilsModule/jsonLoader.h>
 
@@ -40,22 +41,7 @@
 #include "resourceModule/skeletonManager.h"
 #include "resourceModule/skeletonStateGraphManager.h"
 #include <renderModule/gameRenderer.h>
-#ifdef OPENGL_BACKEND
-#include <renderModule/backends/gl/driverGl.h>
-#endif
-
-#ifdef VULKAN_BACKEND
-#include <renderModule/backends/vk/driverVk.h>
-#endif
-
-#ifdef DX12_BACKEND
-#include <renderModule/backends/dx12/driverDx12.h>
-#endif
-#ifdef METAL_BACKEND
-namespace IKIGAI::RENDER {
-    std::unique_ptr<DriverInterface> CreateDriverMetal();
-}
-#endif
+#include "renderModule/backends/driverFactory.h"
 
 
 //namespace IKIGAI
@@ -102,25 +88,27 @@ Core:: Core(
 	RESOURCES::TextureLoader::SetAssetPaths(Config::USER_ASSETS_PATH, Config::ENGINE_ASSETS_PATH);
 	RESOURCES::ShaderLoader::SetAssetPaths(Config::USER_ASSETS_PATH, Config::ENGINE_ASSETS_PATH);
 	RESOURCES::MaterialLoader::SetAssetPaths(Config::USER_ASSETS_PATH, Config::ENGINE_ASSETS_PATH);
-	
-	//auto res = serde::serialize<nlohmann::json>(RENDER::DriverInterface::settings);
+
+	auto renderSettings = IKIGAI::UTILS::FromJson<RENDER::RenderSettings>("/Configs/render.json");
+	if (renderSettings.isErr()) {
+		LOG_ERROR << renderSettings.unwrapErr().text;
+		RENDER::DriverInterface::settings = {};
+	} else {
+		RENDER::DriverInterface::settings = renderSettings.unwrap();
+	}
+	if (!RENDER::ApplyCliRenderBackendOverride(RENDER::DriverInterface::settings)) {
+		throw std::runtime_error("Invalid --render-backend value");
+	}
+	RENDER::ValidateBackendAvailable(RENDER::DriverInterface::settings.backend);
+
 	WINDOW::WindowSettings windowSettings;
+	windowSettings.renderBackend = RENDER::DriverInterface::settings.backend;
 
 	windowManager = std::make_unique<WINDOW::WindowManager>();
 	window = windowManager->createMainWindow(windowSettings);
 
 	std::cout << "Create Window\n";
-	//auto windowSettings = IKIGAI::UTILS::loadConfigFile<WINDOW_SYSTEM::WindowSettings>("Configs/window.json");
-	//if (windowSettings.isErr()) {
-	//	LOG_ERROR(windowSettings.unwrapErr().msg);
-	//	throw;
-	//}
 	
-	auto renderSettings = IKIGAI::UTILS::FromJson<RENDER::RenderSettings>("/Configs/render.json");
-	if (renderSettings.isErr()) {
-		LOG_ERROR << renderSettings.unwrapErr().text;
-		throw std::runtime_error(renderSettings.unwrapErr().text);
-	} 
 	modelManager = std::make_unique<RESOURCES::ModelLoader>();
 	textureManager = std::make_unique<RESOURCES::TextureLoader>();
 	shaderManager = std::make_unique<RESOURCES::ShaderLoader>();
@@ -129,33 +117,9 @@ Core:: Core(
 	inputManager = std::make_unique<INPUT_SYSTEM::InputManager>(*window);
 	RESOURCES::ServiceManager::Set<WINDOW::Window>(window.get());
 
-	RENDER::DriverInterface::settings = renderSettings.unwrap();
-#ifdef OPENGL_BACKEND
-	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL) {
-		driver = std::make_unique<RENDER::DriverGl>();
-		driver->init();
-	}
-#endif
-#ifdef VULKAN_BACKEND
-	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::VULKAN) {
-		driver = std::make_unique<RENDER::DriverVk>();
-		//driver->init();
-	}
-#endif
-
-#ifdef DX12_BACKEND
-	//TODO: use file config
-	//if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::DIRECTX12) {
-		driver = std::make_unique<RENDER::DriverDx12>();
-		//driver->init();
-	//}
-#endif
-#ifdef METAL_BACKEND
-	driver = RENDER::CreateDriverMetal();
-	driver->init();
-#endif
+	driver = RENDER::CreateRenderDriver(RENDER::DriverInterface::settings.backend, *window);
 	if (!driver) {
-		throw;
+		throw std::runtime_error("Failed to create render driver");
 	}
 
 	render = std::make_unique<RENDER::Renderer>(driver.get(), std::make_unique<RENDER::ImmediateExecutor>());
@@ -313,4 +277,9 @@ Core:: Core(
 	std::cout << "Init Core";
 }
 
-Core::~Core() = default;
+Core::~Core() {
+	if (window) {
+		window->shutdownImGUI();
+	}
+	RENDER::DriverInterface::SetActive(nullptr);
+}
