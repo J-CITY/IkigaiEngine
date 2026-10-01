@@ -1,52 +1,60 @@
 #include "meshVk.h"
 
 #ifdef VULKAN_BACKEND
+#include <algorithm>
+#include <limits>
+
+#include "driverVk.h"
+#include "helpers.h"
 #include "vertexBufferVk.h"
 #include "indexBufferVk.h"
 
 using namespace IKIGAI;
 using namespace IKIGAI::RENDER;
 
-
-MeshVk::MeshVk(std::vector<Vertex> vertices, std::vector<unsigned> indices, unsigned materialIndex) :
-	mVertexCount(static_cast<unsigned>(vertices.size())),
-	mIndicesCount(static_cast<unsigned>(indices.size())),
-	mMaterialIndex(materialIndex) {
-	createBuffers(vertices, indices);
-	computeBoundingSphere(vertices);
+MeshVk::MeshVk(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, unsigned materialIndex) {
+	init(vertices, indices, materialIndex);
 }
 
-MeshVk::MeshVk(std::vector<Vertex> vertices, std::vector<unsigned> indices, size_t offset, unsigned materialIndex) :
-	mVertexCount(static_cast<unsigned>(vertices.size())),
-	mIndicesCount(static_cast<unsigned>(indices.size())),
-	mMaterialIndex(materialIndex),
-	mOffset(offset) {
-	computeBoundingSphere(vertices);
+MeshVk::MeshVk(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, size_t /*offset*/, unsigned materialIndex) {
+	init(vertices, indices, materialIndex);
 }
 
 MeshVk::~MeshVk() = default;
 
+void MeshVk::init(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, unsigned materialIndex) {
+	mVertexCount = vertices.size();
+	mIndicesCount = indices.size();
+	mMaterialIndex = materialIndex;
+	mOffset = 0;
+
+	createBuffers(vertices, indices);
+	computeBoundingSphere(vertices);
+}
+
+void MeshVk::bind() const {
+	auto* driver = UtilityVk::GetDriver();
+	if (mVertexBuffer) {
+		driver->setVertexBuffer(mVertexBuffer);
+	}
+	if (mIndexBuffer && mIndicesCount > 0) {
+		driver->setIndexBuffer(mIndexBuffer);
+	}
+}
 
 void MeshVk::unbind() const {
-	//mVertexBuffer->unbind();
-	//mIndexBuffer->unbind();
 }
 
-size_t MeshVk::getVertexCount() const {
-	return mVertexCount;
+void MeshVk::createBuffers(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices) {
+	if (!vertices.empty()) {
+		mVertexBuffer = std::make_shared<VertexBufferVk>(vertices);
+	}
+	if (!indices.empty()) {
+		mIndexBuffer = std::make_shared<IndexBufferVk>(indices);
+	}
 }
 
-size_t MeshVk::getIndexCount() const {
-	return mIndicesCount;
-}
-
-
-void MeshVk::createBuffers(std::vector<Vertex> p_vertices, std::vector<uint32_t> p_indices) {
-	mVertexBuffer = std::make_unique<VertexBufferVk>(p_vertices);
-	mIndexBuffer = std::make_unique<IndexBufferVk>(p_indices);
-}
-
-void MeshVk::computeBoundingSphere(std::vector<Vertex> vertices) {
+void MeshVk::computeBoundingSphere(const std::vector<Vertex>& vertices) {
 	mBoundingSphere.position = MATH::Vector3f::Zero;
 	mBoundingSphere.radius = 0.0f;
 
@@ -55,9 +63,10 @@ void MeshVk::computeBoundingSphere(std::vector<Vertex> vertices) {
 		float minY = std::numeric_limits<float>::max();
 		float minZ = std::numeric_limits<float>::max();
 
-		float maxX = std::numeric_limits<float>::min();
-		float maxY = std::numeric_limits<float>::min();
-		float maxZ = std::numeric_limits<float>::min();
+		// lowest(), not min(): min() is the smallest positive value and breaks all-negative meshes
+		float maxX = std::numeric_limits<float>::lowest();
+		float maxY = std::numeric_limits<float>::lowest();
+		float maxZ = std::numeric_limits<float>::lowest();
 
 		for (const auto& vertex : vertices) {
 			minX = std::min(minX, vertex.position.x);

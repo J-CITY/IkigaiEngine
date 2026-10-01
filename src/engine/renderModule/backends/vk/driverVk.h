@@ -130,6 +130,9 @@ namespace IKIGAI::RENDER {
 		//bool blend_mode_dirty = true;
 
 		std::unordered_set<uint32_t> graphics_pipeline_ignore_bindings;
+		// Name of the pipeline bound in the current command buffer (shader id + framebuffer id).
+		// Used to rebind the pipeline when shader/framebuffer changed between draws.
+		std::string mBoundPipelineName;
 		//
 		//uint32_t getBackbufferWidth();
 		//uint32_t getBackbufferHeight();
@@ -288,7 +291,8 @@ namespace IKIGAI::RENDER {
 		std::optional<Blending> mBlendMode;
 		std::optional<Depth> mDepthMode = Depth();
 		std::optional<Stencil> mStencilMode;
-		CullFace mCullFace = CullFace::BACK;
+		// Same default as the OpenGL backend (no culling): material BackfaceCulling flags are not applied by the renderer yet
+		CullFace mCullFace = CullFace::NONE;
 		TriangleOrientation mTriangleOrientation = TriangleOrientation::CW;
 
 		MATH::Vector4f mClearColor = {0.0f, 0.0f, 0.0f, 1.0f};

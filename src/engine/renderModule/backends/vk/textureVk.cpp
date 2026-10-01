@@ -8,6 +8,7 @@
 #include "backends/imgui_impl_vulkan.h"
 #include "utilsModule/stdLoader.h"
 #include "utilsModule/jsonLoader.h"
+#include "utilsModule/log/loggerDefine.h"
 #include "driverVk.h"
 
 #include <resourceModule/textureManager.h>
@@ -58,7 +59,10 @@ IKIGAI::RENDER::TextureVk::TextureVk(const TextureResource& descriptor, const st
 }
 
 void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const std::vector<void*>& data) {
-	if (descriptor.width == 0 || descriptor.height == 0) {
+	const TextureResource& desc = descriptor;
+	if (desc.width == 0 || desc.height == 0) {
+		LOG_ERROR << "Texture has zero width or height (failed to load?): "
+			<< (desc.pathTexture.empty() ? std::string("<memory>") : desc.pathTexture.front());
 		return;
 	}
 
@@ -68,10 +72,10 @@ void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const st
 		vk::ImageUsageFlagBits::eTransferSrc |
 		vk::ImageUsageFlagBits::eColorAttachment |
 		vk::ImageUsageFlagBits::eStorage;
-	if (descriptor.texType == TextureType::DEPTH) {
+	if (desc.texType == TextureType::DEPTH) {
 		usage = vk::ImageUsageFlagBits::eDepthStencilAttachment;
 	}
-	mType = descriptor.texType;
+	mType = desc.texType;
 
 	std::map<TextureType, vk::ImageViewType> ToTextureType = {
 		{TextureType::TEXTURE_2D, vk::ImageViewType::e2D},
@@ -81,13 +85,17 @@ void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const st
 		{TextureType::DEPTH, vk::ImageViewType::e2D},
 	};
 
-	const auto aspectFlag = descriptor.texType == TextureType::DEPTH ? (vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil) : vk::ImageAspectFlagBits::eColor;
+	const auto aspectFlag = desc.texType == TextureType::DEPTH ? (vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil) : vk::ImageAspectFlagBits::eColor;
 
 	std::tie(mImage, mDeviceMemory, mImageView) = UtilityVk::CreateImage(
-		descriptor.width, descriptor.height, FormatMap.at(descriptor.pixelType), usage,
-		aspectFlag, descriptor.depth, ToTextureType.at(descriptor.texType), descriptor.mipMapCount);
+		desc.width, desc.height, FormatMap.at(desc.pixelType), usage,
+		aspectFlag, desc.depth, ToTextureType.at(desc.texType), desc.mipMapCount);
 
 	mImagePtr = *mImage;
+	mPath = !desc.path.empty() ? desc.path : (!desc.pathTexture.empty() ? desc.pathTexture.front() : std::string());
+	mWidth = desc.width;
+	mHeight = desc.height;
+	mMipCount = desc.mipMapCount > 0 ? static_cast<uint32_t>(desc.mipMapCount) : 1u;
 
 	//depth
 	if (descriptor.texType == TextureType::DEPTH) {
@@ -130,19 +138,19 @@ void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const st
 	//samplerCreateInfo.anisotropyEnable = VK_TRUE;
 	samplerCreateInfo.maxAnisotropy = 1.0f;
 
+	// Sampler state comes from the texture resource (OpenGL backend does the same), not hardcoded NEAREST without mips.
+	const bool useMips = mMipCount > 1;
 	auto sampler_create_info = vk::SamplerCreateInfo()
-		.setMagFilter(vk::Filter::eNearest)
-		.setMinFilter(vk::Filter::eNearest);
-		//.setMipmapMode(vk::SamplerMipmapMode::eLinear)
-		//.setAddressModeU(vk::SamplerAddressMode::eRepeat)
-		//.setAddressModeV(vk::SamplerAddressMode::eRepeat)
-		//.setAddressModeW(vk::SamplerAddressMode::eRepeat)
-		//.setMinLod(-1000)
-		//.setMaxLod(1000)
-		//.setAnisotropyEnable(true)
-		//.setMaxAnisotropy(16.0f);
+		.setMagFilter(static_cast<vk::Filter>(ToMigMagFilter.at(descriptor.magFilter)))
+		.setMinFilter(static_cast<vk::Filter>(ToMigMagFilter.at(descriptor.minFilter)))
+		.setMipmapMode(useMips ? vk::SamplerMipmapMode::eLinear : vk::SamplerMipmapMode::eNearest)
+		.setAddressModeU(static_cast<vk::SamplerAddressMode>(ToWrapFilter.at(descriptor.wrapS)))
+		.setAddressModeV(static_cast<vk::SamplerAddressMode>(ToWrapFilter.at(descriptor.wrapT)))
+		.setAddressModeW(static_cast<vk::SamplerAddressMode>(ToWrapFilter.at(descriptor.wrapR)))
+		.setMinLod(0.0f)
+		.setMaxLod(useMips ? static_cast<float>(mMipCount) : 0.0f)
+		.setMaxAnisotropy(1.0f);
 	mSampler = UtilityVk::GetDriver()->mDevice.createSampler(sampler_create_info);
-	//mSampler = UtilityVk::GetDriver()->mDevice.createSampler(samplerCreateInfo);
 
 	mDepth = descriptor.depth;
 	mFormat = descriptor.pixelType;
@@ -262,7 +270,7 @@ void IKIGAI::RENDER::TextureVk::recreate(const TextureResource& descriptor, cons
 				textureData.push_back(IKIGAI::UTILS::STBiLoadfFromMemory(fData.data(), fData.size(), &w, &h, &c, 0));
 			} else {
 				auto* data = IKIGAI::UTILS::STBiLoadFromMemory(fData.data(), fData.size(), &w, &h, &c, 0);
-				if (c == 3) {
+				if (data && c != 4) {
 					IKIGAI::UTILS::STBiImageFree((unsigned char*)data);
 					data = IKIGAI::UTILS::STBiLoadFromMemory(fData.data(), fData.size(), &w, &h, &c, 4);
 				}
@@ -330,7 +338,7 @@ std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(con
 				if (data) textureData.push_back(data);
 			} else {
 				auto* data = IKIGAI::UTILS::STBiLoadFromMemory(fileData.data(), fileData.size(), &width, &height, &channels, 0);
-				if (channels == 3) {
+				if (data && channels != 4) {
 					UTILS::STBiImageFree((unsigned char*)data);
 					data = IKIGAI::UTILS::STBiLoadFromMemory(fileData.data(), fileData.size(), &width, &height, &channels, 4);
 					channels = 4;
@@ -386,7 +394,7 @@ std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(con
 				textureData.push_back(IKIGAI::UTILS::STBiLoadfFromMemory(fData.data(), fData.size(), &w, &h, &c, 0));
 			} else {
 				auto* data = IKIGAI::UTILS::STBiLoadFromMemory(fData.data(), fData.size(), &w, &h, &c, 0);
-				if (c == 3) {
+				if (data && c != 4) {
 					IKIGAI::UTILS::STBiImageFree((unsigned char*)data);
 					data = IKIGAI::UTILS::STBiLoadFromMemory(fData.data(), fData.size(), &w, &h, &c, 4);
 					c = 4;
@@ -451,7 +459,7 @@ std::shared_ptr<IKIGAI::RENDER::TextureAtlasVk> IKIGAI::RENDER::TextureAtlasVk::
 		const auto& path = _d.pathTexture[0];
 		int w = 0, h = 0, c = 0;
 		auto* data = IKIGAI::UTILS::STBiLoad(path.c_str(), &w, &h, &c, 0);
-		if (c == 3) {
+		if (data && c != 4) {
 			IKIGAI::UTILS::STBiImageFree((unsigned char*)data);
 			data = IKIGAI::UTILS::STBiLoad(path.c_str(), &w, &h, &c, 4); c = 4;
 		}
@@ -490,7 +498,7 @@ std::shared_ptr<IKIGAI::RENDER::TextureAtlasVk> IKIGAI::RENDER::TextureAtlasVk::
 		const auto& fData = fileData[0];
 		int w = 0, h = 0, c = 0;
 		auto* data = IKIGAI::UTILS::STBiLoadFromMemory(fData.data(), fData.size(), &w, &h, &c, 0);
-		if (c == 3) {
+		if (data && c != 4) {
 			IKIGAI::UTILS::STBiImageFree((unsigned char*)data);
 			data = IKIGAI::UTILS::STBiLoadFromMemory(fData.data(), fData.size(), &w, &h, &c, 4); c = 4;
 		}

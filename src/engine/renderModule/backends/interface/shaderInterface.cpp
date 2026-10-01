@@ -218,22 +218,20 @@ void IKIGAI::RENDER::ShaderInterface::GetReflection(
       // TODO: add int vector support
       int size = 0;
       if (descr->type_description->op == SpvOp::SpvOpTypeVector) {
-        if (descr->type_description->traits.numeric.vector.component_count ==
-            2) {
-          member.mFormat = PixelFormat::RG_FLOAT;
-          member.mSize = sizeof(float) * 2;
+        bool isInt = (descr->type_description->type_flags & SPV_REFLECT_TYPE_FLAG_INT) != 0;
+        if (descr->type_description->traits.numeric.vector.component_count == 2) {
+          member.mFormat = isInt ? PixelFormat::RG32_INT : PixelFormat::RG_FLOAT;
+          member.mSize = (isInt ? sizeof(int) : sizeof(float)) * 2;
           member.mOffset = size;
           size += member.mSize;
-        } else if (descr->type_description->traits.numeric.vector
-                       .component_count == 3) {
-          member.mFormat = PixelFormat::RGB_FLOAT;
-          member.mSize = sizeof(float) * 3;
+        } else if (descr->type_description->traits.numeric.vector.component_count == 3) {
+          member.mFormat = isInt ? PixelFormat::RGB32_INT : PixelFormat::RGB_FLOAT;
+          member.mSize = (isInt ? sizeof(int) : sizeof(float)) * 3;
           member.mOffset = size;
           size += member.mSize;
-        } else if (descr->type_description->traits.numeric.vector
-                       .component_count == 4) {
-          member.mFormat = PixelFormat::RGBA_FLOAT;
-          member.mSize = sizeof(float) * 4;
+        } else if (descr->type_description->traits.numeric.vector.component_count == 4) {
+          member.mFormat = isInt ? PixelFormat::RGBA32_INT : PixelFormat::RGBA_FLOAT;
+          member.mSize = (isInt ? sizeof(int) : sizeof(float)) * 4;
           member.mOffset = size;
           size += member.mSize;
         }
@@ -254,12 +252,12 @@ void IKIGAI::RENDER::ShaderInterface::GetReflection(
         member.mOffset = size;
         size += member.mSize;
       } else if (descr->type_description->op == SpvOp::SpvOpTypeInt) {
-        member.mFormat = PixelFormat::R_INT;
+        member.mFormat = PixelFormat::R32_INT;
         member.mSize = sizeof(int);
         member.mOffset = size;
         size += member.mSize;
       } else if (descr->type_description->op == SpvOp::SpvOpTypeBool) {
-        member.mFormat = PixelFormat::R_INT;
+        member.mFormat = PixelFormat::R32_INT;
         member.mSize = sizeof(bool);
         member.mOffset = size;
         size += member.mSize;

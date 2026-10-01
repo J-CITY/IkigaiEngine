@@ -36,7 +36,11 @@ std::tuple<vk::raii::Buffer, vk::raii::DeviceMemory> UtilityVk::CreateBuffer(uin
 	auto buffer = GetDriver()->mDevice.createBuffer(buffer_create_info);
 
 	auto memory_requirements = buffer.getMemoryRequirements();
-	auto memory_type = GetMemoryType(vk::MemoryPropertyFlagBits::eHostVisible, memory_requirements.memoryTypeBits);
+	// HostCoherent is required: staging data is written with mapMemory/memcpy without vkFlushMappedMemoryRanges
+	auto memory_type = GetMemoryType(vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, memory_requirements.memoryTypeBits);
+	if (memory_type == 0xFFFFFFFF) {
+		memory_type = GetMemoryType(vk::MemoryPropertyFlagBits::eHostVisible, memory_requirements.memoryTypeBits);
+	}
 
 	auto memory_allocate_info = vk::MemoryAllocateInfo()
 	                            .setAllocationSize(memory_requirements.size)

@@ -4,6 +4,8 @@
 //#include "Render/vk/raytracing/dw/include/macros.h"
 #ifdef VULKAN_BACKEND
 #include <SDL_vulkan.h>
+#include <string>
+#include <string_view>
 #include <unordered_set>
 
 #include "backends/imgui_impl_vulkan.h"
@@ -57,6 +59,15 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBits
 		return VK_FALSE;
 	}
 #endif
+	// Vulkan loader noise caused by third-party overlay layers installed on the machine
+	// (GOG Galaxy / FPS Monitor / duplicate RenderDoc layer). Not an application problem.
+	if (pCallbackData->pMessageIdName && std::string_view(pCallbackData->pMessageIdName) == "Loader Message" && pCallbackData->pMessage) {
+		const std::string_view msg(pCallbackData->pMessage);
+		if (msg.find("does not conform to naming standard") != std::string_view::npos ||
+			msg.find("because it is a duplicate of") != std::string_view::npos) {
+			return VK_FALSE;
+		}
+	}
 
 	std::cerr << vk::to_string(static_cast<vk::DebugUtilsMessageSeverityFlagBitsEXT>(messageSeverity)) << ": "
 		<< vk::to_string(static_cast<vk::DebugUtilsMessageTypeFlagsEXT>(messageTypes)) << ":\n";
@@ -105,6 +116,10 @@ static const std::unordered_map<PixelFormat, vk::Format> FormatMap = {
 	{PixelFormat::RG_INT, vk::Format::eR8G8Unorm},
 	{PixelFormat::RGB_INT, vk::Format::eR8G8B8Unorm},
 	{PixelFormat::RGBA_INT, vk::Format::eR8G8B8A8Unorm},
+	{PixelFormat::R32_INT, vk::Format::eR32Sint},
+	{PixelFormat::RG32_INT, vk::Format::eR32G32Sint},
+	{PixelFormat::RGB32_INT, vk::Format::eR32G32B32Sint},
+	{PixelFormat::RGBA32_INT, vk::Format::eR32G32B32A32Sint},
 	{PixelFormat::BGRA_INT, vk::Format::eB8G8R8A8Unorm},
 	{PixelFormat::DEPTH_24_UNORM_STENCIL_8_UINT, vk::Format::eD24UnormS8Uint},
 	{PixelFormat::DEPTH_32_FLOAT_STENCIL_8_UINT, vk::Format::eD32SfloatS8Uint},
@@ -199,7 +214,9 @@ void DriverVk::init() {
 
 	auto features = {
 		//	vk::ValidationFeatureEnableEXT::eBestPractices,
-		vk::ValidationFeatureEnableEXT::eDebugPrintf,
+		// DebugPrintf is disabled: shaders don't use debugPrintfEXT, and enabling it makes the validation layer
+		// emit "DebugPrintf logs to the Information severity" and several "Adding Vk...Features to pNext" warnings.
+		//	vk::ValidationFeatureEnableEXT::eDebugPrintf,
 		//	vk::ValidationFeatureEnableEXT::eGpuAssisted,
 		//	vk::ValidationFeatureEnableEXT::eGpuAssistedReserveBindingSlot,
 		vk::ValidationFeatureEnableEXT::eSynchronizationValidation
@@ -456,9 +473,13 @@ void DriverVk::end() {
 		vk::PipelineStageFlagBits::eAllCommands
 	};
 
+	// The acquire semaphore is chosen by mSemaphoreIndex in nextFrame(), NOT by the acquired image index (mFrameIndex).
+	// Waiting on frames[mFrameIndex] would wait on a semaphore that was never signaled.
+	const auto& image_acquired_semaphore = getCurrentSwapchainContext().frames.at(mSemaphoreIndex).mImageAcquiredSemaphore;
+
 	auto submit_info = vk::SubmitInfo()
 		.setWaitDstStageMask(wait_dst_stage_mask)
-		.setWaitSemaphores(*frame.mImageAcquiredSemaphore)
+		.setWaitSemaphores(*image_acquired_semaphore)
 		.setCommandBuffers(*frame.mCommandBuffer)
 		.setSignalSemaphores(*frame.mRenderCompleteSemaphore);
 
@@ -473,20 +494,48 @@ void DriverVk::setPushConstant(ShaderType stage, uint32_t offset, uint32_t size,
 }
 
 vk::raii::Pipeline DriverVk::createState(const State& pipeline_state) {
-	auto pipeline_shader_stage_create_info = {
-		vk::PipelineShaderStageCreateInfo()
-		.setStage(vk::ShaderStageFlagBits::eVertex)
-		.setModule(*pipeline_state.mShader->mVertexShaderModule)
-		.setPName("main"),
+	std::vector<vk::PipelineShaderStageCreateInfo> pipeline_shader_stage_create_info;
+	if (*pipeline_state.mShader->mVertexShaderModule) {
+		pipeline_shader_stage_create_info.push_back(vk::PipelineShaderStageCreateInfo()
+			.setStage(vk::ShaderStageFlagBits::eVertex)
+			.setModule(*pipeline_state.mShader->mVertexShaderModule)
+			.setPName("main"));
+	}
+	if (*pipeline_state.mShader->mFragmentShaderModule) {
+		pipeline_shader_stage_create_info.push_back(vk::PipelineShaderStageCreateInfo()
+			.setStage(vk::ShaderStageFlagBits::eFragment)
+			.setModule(*pipeline_state.mShader->mFragmentShaderModule)
+			.setPName("main"));
+	}
+	if (*pipeline_state.mShader->mGeometryShaderModule) {
+		pipeline_shader_stage_create_info.push_back(vk::PipelineShaderStageCreateInfo()
+			.setStage(vk::ShaderStageFlagBits::eGeometry)
+			.setModule(*pipeline_state.mShader->mGeometryShaderModule)
+			.setPName("main"));
+	}
+	if (*pipeline_state.mShader->mTessellationControlShaderModule) {
+		pipeline_shader_stage_create_info.push_back(vk::PipelineShaderStageCreateInfo()
+			.setStage(vk::ShaderStageFlagBits::eTessellationControl)
+			.setModule(*pipeline_state.mShader->mTessellationControlShaderModule)
+			.setPName("main"));
+	}
+	if (*pipeline_state.mShader->mTessellationEvaluationShaderModule) {
+		pipeline_shader_stage_create_info.push_back(vk::PipelineShaderStageCreateInfo()
+			.setStage(vk::ShaderStageFlagBits::eTessellationEvaluation)
+			.setModule(*pipeline_state.mShader->mTessellationEvaluationShaderModule)
+			.setPName("main"));
+	}
 
-		vk::PipelineShaderStageCreateInfo()
-		.setStage(vk::ShaderStageFlagBits::eFragment)
-		.setModule(*pipeline_state.mShader->mFragmentShaderModule)
-		.setPName("main")
-	};
+	auto topology = vk::PrimitiveTopology::eTriangleList;
+	if (*pipeline_state.mShader->mTessellationControlShaderModule || *pipeline_state.mShader->mTessellationEvaluationShaderModule) {
+		topology = vk::PrimitiveTopology::ePatchList;
+	}
 
 	auto pipeline_input_assembly_state_create_info = vk::PipelineInputAssemblyStateCreateInfo()
-		.setTopology(vk::PrimitiveTopology::eTriangleList);
+		.setTopology(topology);
+
+	vk::PipelineTessellationStateCreateInfo pipeline_tessellation_state_create_info = vk::PipelineTessellationStateCreateInfo()
+		.setPatchControlPoints(3); // Default to 3, but this can be dynamic via VK_EXT_extended_dynamic_state3 if needed
 
 	auto pipeline_viewport_state_create_info = vk::PipelineViewportStateCreateInfo()
 		.setViewportCount(1)
@@ -585,6 +634,10 @@ vk::raii::Pipeline DriverVk::createState(const State& pipeline_state) {
 		.setRenderPass(nullptr)
 		.setPNext(&pipeline_rendering_create_info);
 
+	if (topology == vk::PrimitiveTopology::ePatchList) {
+		graphics_pipeline_create_info.setPTessellationState(&pipeline_tessellation_state_create_info);
+	}
+
 	return mDevice.createGraphicsPipeline(nullptr, graphics_pipeline_create_info);
 }
 
@@ -597,6 +650,11 @@ void DriverVk::EnsureVertexBuffers(vk::raii::CommandBuffer& cmdlist) {
 	if (!isDirty(Dirty::VERTEX_BUFFER))
 		return;
 	clearDirty(Dirty::VERTEX_BUFFER);
+
+	if (!mVertexBuffer || !*mVertexBuffer->getBuffer()) {
+		LOG_ERROR << "DriverVk: vertex buffer is not set or empty";
+		return;
+	}
 
 	std::vector<vk::Buffer> buffers;
 	std::vector<vk::DeviceSize> offsets;
@@ -616,6 +674,11 @@ void DriverVk::EnsureIndexBuffer(vk::raii::CommandBuffer& cmdlist) {
 		return;
 	clearDirty(Dirty::INDEX_BUFFER);
 
+	if (!mIndexBuffer || !*mIndexBuffer->getBuffer()) {
+		LOG_ERROR << "DriverVk: index buffer is not set or empty";
+		return;
+	}
+
 	auto index_type = GetIndexTypeFromStride(mIndexBuffer->getStride());
 	cmdlist.bindIndexBuffer(*mIndexBuffer->getBuffer(), 0, index_type);
 }
@@ -631,9 +694,21 @@ void DriverVk::EnsureTopology(vk::raii::CommandBuffer& cmdlist) {
 		{PrimitiveMode::LINE_STRIP, vk::PrimitiveTopology::eLineStrip},
 		{PrimitiveMode::TRIANGLES, vk::PrimitiveTopology::eTriangleList},
 		{PrimitiveMode::TRIANGLE_STRIP, vk::PrimitiveTopology::eTriangleStrip},
+		{PrimitiveMode::LINES_ADJACENCY, vk::PrimitiveTopology::eLineListWithAdjacency},
+		{PrimitiveMode::LINE_STRIP_ADJACENCY, vk::PrimitiveTopology::eLineStripWithAdjacency},
+		{PrimitiveMode::TRIANGLES_ADJACENCY, vk::PrimitiveTopology::eTriangleListWithAdjacency},
+		{PrimitiveMode::TRIANGLE_STRIP_ADJACENCY, vk::PrimitiveTopology::eTriangleStripWithAdjacency},
+		{PrimitiveMode::PATCHES, vk::PrimitiveTopology::ePatchList},
 	};
 
 	auto topology = TopologyMap.at(mPrimitiveMode);
+
+	// Pipeline with tessellation is always created with ePatchList (see createState),
+	// dynamic topology must be the same class, otherwise Vulkan validation fails.
+	if (mCurrentState.mShader &&
+		(*mCurrentState.mShader->mTessellationControlShaderModule || *mCurrentState.mShader->mTessellationEvaluationShaderModule)) {
+		topology = vk::PrimitiveTopology::ePatchList;
+	}
 
 	cmdlist.setPrimitiveTopology(topology);
 }
@@ -826,50 +901,31 @@ void DriverVk::EnsureStencilMode(vk::raii::CommandBuffer& cmdlist) {
 }
 
 void DriverVk::EnsureGraphicsPipelineState(vk::raii::CommandBuffer& cmdlist) {
-	if (!isDirty(Dirty::PIPELINE))
+	// The pipeline depends on the current shader and framebuffer, which can change between draws
+	// (setShader/setFrameBuffer do not raise the dirty flag), so compare by name as well.
+	const auto name = mCurrentState.getName();
+	if (!isDirty(Dirty::PIPELINE) && name == mBoundPipelineName)
 		return;
 	clearDirty(Dirty::PIPELINE);
 
-	if (!mStates.contains(mCurrentState.getName())) {
+	if (!mStates.contains(name)) {
 		auto pipeline = createState(mCurrentState);
-		mStates.insert({mCurrentState.getName(), std::move(pipeline)});
+		mStates.insert({name, std::move(pipeline)});
 	}
 
-	const auto& pipeline = mStates.at(mCurrentState.getName());
+	const auto& pipeline = mStates.at(name);
 	cmdlist.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline);
+	mBoundPipelineName = name;
 
 	graphics_pipeline_ignore_bindings.clear();
 }
 
-const static std::unordered_map<ShaderReflection::UniformType, vk::DescriptorType> ShaderTypeMap = {
-	{ShaderReflection::UniformType::SAMPLER_2D, vk::DescriptorType::eCombinedImageSampler},
-	{ShaderReflection::UniformType::UNIFORM_BUFFER, vk::DescriptorType::eUniformBuffer},
-	//{ShaderReflection::UniformType::Type::StorageImage, vk::DescriptorType::eStorageImage},
-	//{ShaderReflection::UniformType::Type::AccelerationStructure, vk::DescriptorType::eAccelerationStructureKHR},
-	{ShaderReflection::UniformType::STORAGE_BUFFER, vk::DescriptorType::eStorageBuffer}
-};
-
 void DriverVk::EnsureGraphicsDescriptors(vk::raii::CommandBuffer& cmdlist) {
 	const auto& pipeline_layout = mCurrentState.mShader->mPipelineLayout;
 
-	std::vector<vk::DescriptorSetLayoutBinding> required_descriptor_bindings;
-
-	for (const auto& uniform : mCurrentState.mShader->getReflection().mUniforms) {
-		auto descriptor_set_layout_binding = vk::DescriptorSetLayoutBinding()
-			.setDescriptorType(ShaderTypeMap.at(uniform.mType))
-			.setDescriptorCount(1)
-			.setBinding(uniform.mBind);
-//			.setStageFlags(ShaderStageMap.at(reflection.stage));
-		vk::ShaderStageFlags stages;
-		if ((uniform.mShaderMask & (size_t)ShaderType::VERTEX)) {
-			stages |= vk::ShaderStageFlagBits::eVertex;
-		}
-		if ((uniform.mShaderMask & (size_t)ShaderType::FRAGMENT)) {
-			stages |= vk::ShaderStageFlagBits::eFragment;
-		}
-		descriptor_set_layout_binding.setStageFlags(stages);
-		required_descriptor_bindings.push_back(descriptor_set_layout_binding);
-	}
+	// Descriptor bindings are built once by ShaderVk::createPipelineLayout():
+	// push constants are excluded (they are not descriptors), all stages and sampler types are covered.
+	const auto& required_descriptor_bindings = mCurrentState.mShader->mRequiredDescriptorBindings;
 
 	//auto descriptor_set_layout_create_info = vk::DescriptorSetLayoutCreateInfo()
 	//	.setFlags(vk::DescriptorSetLayoutCreateFlagBits::ePushDescriptorKHR)
@@ -1149,6 +1205,11 @@ void DriverVk::PushDescriptorTexture(vk::raii::CommandBuffer& cmdlist, vk::Pipel
 	//}
 
 	auto texture = mTextures.at(binding);
+	if (texture->mCurrentState != vk::ImageLayout::eGeneral) {
+		// Image layout transitions (pipeline barriers) are not allowed inside a dynamic rendering scope.
+		// The render pass is reactivated at the end of EnsureGraphicsState().
+		deactivateRenderPass();
+	}
 	texture->setState(cmdlist, vk::ImageLayout::eGeneral);
 
 	const auto& sampler = texture->mSampler;
@@ -1276,6 +1337,8 @@ void DriverVk::setTexture(size_t binding, std::shared_ptr<TextureInterface> hand
 
 void DriverVk::setShader(std::shared_ptr<ShaderInterface> shader) {
 	mCurrentState.mShader = std::static_pointer_cast<ShaderVk>(shader);
+	// Topology depends on the shader (tessellation -> patch list)
+	setDirty(Dirty::PRIMITIVE_MODE);
 }
 
 void DriverVk::setVertexBuffer(const std::shared_ptr<VertexBufferInterface> buffer) {
@@ -1496,27 +1559,24 @@ std::shared_ptr<TextureInterface> DriverVk::createTextureAtlas(const TextureReso
 	return TextureAtlasVk::CreateAtlasFromResource(res, fileData, allocator, deleter);
 }
 std::shared_ptr<TextureInterface> DriverVk::createTexture(const std::string& name, const std::vector<uint8_t>& data, bool generateMipmap, UTILS::IAllocator* allocator, TextureDeleter deleter) {
-	return nullptr; // not implemented
+	// TextureLoader::CreateFromFile() goes through this overload. It used to return nullptr, so every
+	// file texture silently fell back to the default (pink) texture.
+	TextureResource res;
+	res.path = name;
+	res.useMipmap = generateMipmap;
+	res.pathTexture.push_back(name);
+	return TextureVk::Create(res, std::vector<std::vector<uint8_t>>{data}, allocator, deleter);
 }
 
 std::shared_ptr<ShaderInterface> DriverVk::createShader(const std::string& vertexPath, const std::string& fragmentPath) {
 	std::map<ShaderType, std::string> paths;
 	paths[ShaderType::VERTEX] = vertexPath;
 	paths[ShaderType::FRAGMENT] = fragmentPath;
-	return AllocateShader<ShaderVk>(nullptr, nullptr, paths);
+	return ShaderVk::CreateFromPath(paths);
 }
 
 std::shared_ptr<ShaderInterface> DriverVk::createShader(const ShaderResource& res, UTILS::IAllocator* allocator, ShaderDeleter deleter) {
-	std::map<ShaderType, std::string> paths;
-	for (const auto& [k, v] : res.paths) {
-        if (k == "Vertex" || k == "VERTEX") paths[ShaderType::VERTEX] = v;
-        else if (k == "Fragment" || k == "FRAGMENT") paths[ShaderType::FRAGMENT] = v;
-        else if (k == "Geometry" || k == "GEOMETRY") paths[ShaderType::GEOMETRY] = v;
-        else if (k == "TessellationControl" || k == "TESSELLATION_CONTROL") paths[ShaderType::TESSELLATION_CONTROL] = v;
-        else if (k == "TessellationEvaluation" || k == "TESSELLATION_EVALUATION") paths[ShaderType::TESSELLATION_EVALUATION] = v;
-        else if (k == "Compute" || k == "COMPUTE") paths[ShaderType::COMPUTE] = v;
-    }
-	return AllocateShader<ShaderVk>(allocator, deleter, paths);
+	return AllocateShader<ShaderVk>(allocator, deleter, res);
 }
 
 std::shared_ptr<ModelInterface> DriverVk::createModel(const std::string& path, UTILS::IAllocator* allocator, ModelDeleter deleter) {

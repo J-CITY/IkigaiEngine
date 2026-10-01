@@ -17,6 +17,7 @@
 #include "renderModule/backends/interface/uniformBufferInterface.h"
 
 #include "renderModule/render.h"
+#include "renderModule/backends/interface/driverInterface.h"
 #include "skeletalModule/animationOffset.h"
 #include "skeletalModule/animationTransform.h"
 #include "skeletalModule/iAnimationPlayable.h"
@@ -146,7 +147,17 @@ namespace IKIGAI::RENDER {
 
 	void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::CameraComponent& cameraComponent) {
 		uboData.View = MATH::Matrix4f::Transpose(cameraComponent.getCamera().getViewMatrix());
-		uboData.Projection = MATH::Matrix4f::Transpose(cameraComponent.getCamera().getProjectionMatrix());
+		auto projection = cameraComponent.getCamera().getProjectionMatrix();
+		if (DriverInterface::settings.backend == RenderSettings::Backend::VULKAN) {
+			// The engine builds OpenGL projections (NDC z in [-1, 1]), Vulkan clips z to [0, 1]:
+			// without this correction everything in the near half of the depth range is clipped away.
+			// Y flip is already done by the negative viewport height in DriverVk::EnsureViewport.
+			MATH::Matrix4f clipCorrection = MATH::Matrix4f::Identity;
+			clipCorrection(2, 2) = 0.5f;
+			clipCorrection(2, 3) = 0.5f;
+			projection = clipCorrection * projection;
+		}
+		uboData.Projection = MATH::Matrix4f::Transpose(projection);
 		uboData.ViewPos = cameraComponent.obj->getTransform()->getWorldPosition();
 		uboData.Time = 1.0f;
 		auto sz = mContext.window->getSize();

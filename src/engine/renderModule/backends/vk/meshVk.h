@@ -7,48 +7,31 @@
 
 #include <memory>
 #include <span>
-
-#include <memory>
-#include <span>
-#include <optional>
+#include <vector>
 
 #include "vertexBufferVk.h"
+#include "indexBufferVk.h"
 #include "../interface/meshInterface.h"
-
-namespace IKIGAI
-{
-	namespace RENDER
-	{
-		class IndexBufferVk;
-		struct BoundingSphere;
-		class IndexBuffer;
-	}
-}
 
 namespace IKIGAI::RENDER {
 	class MeshVk : public MeshInterface {
 	public:
-		MeshVk(std::vector<Vertex> p_vertices, std::vector<unsigned> indices, unsigned materialIndex);
-		MeshVk(std::vector<Vertex> vertices, std::vector<unsigned> indices, size_t offset, unsigned materialIndex);
-		virtual ~MeshVk();
-		virtual void bind() const{};
-		virtual void unbind() const;
-		virtual size_t getVertexCount() const;
-		virtual size_t getIndexCount() const;
+		MeshVk(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, unsigned materialIndex);
+		// Vulkan backend does not support batching yet: every mesh owns its buffers, so offset is not used.
+		MeshVk(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, size_t offset, unsigned materialIndex);
+		~MeshVk() override;
+
+		void bind() const override;
+		void unbind() const override;
+
+		// Counts, material index and offset are stored in MeshInterface (do not shadow them here).
+		std::shared_ptr<VertexBufferVk> mVertexBuffer;
+		std::shared_ptr<IndexBufferVk> mIndexBuffer;
+
 	private:
-		void createBuffers(std::vector<Vertex> p_vertices, std::vector<uint32_t> p_indices);
-		void computeBoundingSphere(std::vector<Vertex> vertices);
-
-	public:
-
-		const unsigned int mVertexCount = 0;
-		const unsigned int mIndicesCount = 0;
-		const unsigned int mMaterialIndex = 0;
-		
-		std::unique_ptr<VertexBufferVk> mVertexBuffer;
-		std::unique_ptr<IndexBufferVk> mIndexBuffer;
-
-		std::optional<size_t> mOffset = std::nullopt;
+		void init(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, unsigned materialIndex);
+		void createBuffers(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices);
+		void computeBoundingSphere(const std::vector<Vertex>& vertices);
 	};
 }
 #endif

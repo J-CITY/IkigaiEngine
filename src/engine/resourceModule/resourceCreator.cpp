@@ -14,7 +14,7 @@
 
 IKIGAI::RESOURCES::ResourcePtr<IKIGAI::RENDER::TextureInterface> IKIGAI::RESOURCES::ResourceCreatorOpengl::createFromFile(const std::string& filepath, bool generateMipmap)
 {
-	return RENDER::TextureGl::Create(IKIGAI::UTILS::GetRealPath(filepath), generateMipmap);
+	return RENDER::TextureGl::Create(filepath, generateMipmap);
 }
 
 IKIGAI::RESOURCES::ResourcePtr<IKIGAI::RENDER::TextureInterface> IKIGAI::RESOURCES::ResourceCreatorOpengl::createFromMemory(const std::string& name, const std::vector<uint8_t>& data, bool generateMipmap) {
@@ -33,7 +33,7 @@ IKIGAI::RESOURCES::ResourcePtr<IKIGAI::RENDER::TextureInterface> IKIGAI::RESOURC
 
 IKIGAI::RESOURCES::ResourcePtr<IKIGAI::RENDER::TextureInterface> IKIGAI::RESOURCES::ResourceCreatorVulkan::createFromFile(const std::string& filepath, bool generateMipmap) {
 	//TODO
-	return RENDER::TextureVk::Create(IKIGAI::UTILS::GetRealPath(filepath));
+	return RENDER::TextureVk::Create(filepath);
 }
 
 IKIGAI::RESOURCES::ResourcePtr<IKIGAI::RENDER::TextureInterface> IKIGAI::RESOURCES::ResourceCreatorVulkan::createFromMemory(const std::string& name, const std::vector<uint8_t>& data, bool generateMipmap) {
@@ -51,8 +51,7 @@ IKIGAI::RESOURCES::ResourcePtr<IKIGAI::RENDER::TextureInterface> IKIGAI::RESOURC
 #ifdef DX12_BACKEND
 
 IKIGAI::RESOURCES::ResourcePtr<IKIGAI::RENDER::TextureInterface> IKIGAI::RESOURCES::ResourceCreatorDx12::createFromFile(const std::string& filepath, bool generateMipmap) {
-	//TODO
-	return RENDER::TextureDx12::Create(IKIGAI::UTILS::GetRealPath(filepath));
+	return RENDER::TextureDx12::Create(filepath);
 }
 
 IKIGAI::RESOURCES::ResourcePtr<IKIGAI::RENDER::TextureInterface> IKIGAI::RESOURCES::ResourceCreatorDx12::createFromMemory(const std::string& name, const std::vector<uint8_t>& data, bool generateMipmap) {

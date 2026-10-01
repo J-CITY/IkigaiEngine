@@ -27,16 +27,29 @@ namespace IKIGAI::RENDER {
 		vk::raii::PipelineLayout mPipelineLayout = nullptr;
 		vk::raii::ShaderModule mVertexShaderModule = nullptr;
 		vk::raii::ShaderModule mFragmentShaderModule = nullptr;
+		vk::raii::ShaderModule mGeometryShaderModule = nullptr;
+		vk::raii::ShaderModule mTessellationControlShaderModule = nullptr;
+		vk::raii::ShaderModule mTessellationEvaluationShaderModule = nullptr;
+		vk::raii::ShaderModule mComputeShaderModule = nullptr;
 		std::vector<vk::DescriptorSetLayoutBinding> mRequiredDescriptorBindings;
 
-		ShaderVk(std::map<ShaderType, std::string> shaderCode);
+		static std::shared_ptr<ShaderVk> CreateFromSource(const std::map<ShaderType, std::string>& source);
+		static std::shared_ptr<ShaderVk> CreateFromPath(const std::map<ShaderType, std::string>& paths);
+		static std::shared_ptr<ShaderVk> Create(const ShaderResource& resource);
 
-		void _getReflection(std::string path, ShaderType type);
+		ShaderVk() = default;
+		ShaderVk(const ShaderResource& res);
+		~ShaderVk() override;
+
 		std::tuple<vk::raii::PipelineLayout, vk::raii::DescriptorSetLayout, std::vector<vk::DescriptorSetLayoutBinding>> createPipelineLayout();
-		static std::shared_ptr<ShaderVk> CreateFromPath(std::map<ShaderType, std::string> path);
+
 		void bind() override{};
 		void unbind() override{};
-		void recompile(const ShaderResource& res) override {}
+		void recompile(const ShaderResource& res) override;
+
+	private:
+		void create(const ShaderResource& res);
+		void clear() const;
 	};
 }
 #endif

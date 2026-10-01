@@ -6,6 +6,7 @@
 #include "editorModule/EditorRender.h"
 #include "physicsModule/PhysicWorld.h"
 #include "renderModule/gameRendererInterface.h"
+#include "renderModule/render.h"
 #include "renderModule/backends/gl/materialGl.h"
 #include "renderModule/backends/gl/modelGl.h"
 #include "renderModule/backends/gl/meshGl.h"
@@ -313,6 +314,12 @@ void App::update(std::chrono::duration<double> dt) {
 	}
 #ifndef __EMSCRIPTEN__
 	RESOURCES::ServiceManager::Get<TASK::TaskSystem>().waitSync();
+#endif
+
+#ifdef VULKAN_BACKEND
+	// Finish the frame: draw ImGui, UpdatePlatformWindows(), present and begin next frame.
+	// Must be called every frame (even without a scene), otherwise the next ImGui::NewFrame() asserts.
+	RESOURCES::ServiceManager::Get<RENDER::Renderer>().submit();
 #endif
 
 	//EDITOR

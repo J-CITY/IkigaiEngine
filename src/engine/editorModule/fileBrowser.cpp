@@ -3,8 +3,11 @@
 #include "editorRender.h"
 
 #ifdef USE_EDITOR
+#include <algorithm>
+#include <filesystem>
 #include <functional>
 
+#include "coreModule/config.h"
 #include "IconsFontAwesome5.h"
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -27,6 +30,28 @@
 
 
 using namespace IKIGAI::EDITOR;
+
+namespace {
+// Converts a real path inside engine/user assets to a virtual FileSystem path ("/textures/...").
+std::string ToVirtualPath(const std::string& realPath) {
+	auto normalize = [](const std::string& p) {
+		auto s = std::filesystem::path(p).lexically_normal().string();
+		std::replace(s.begin(), s.end(), '\\', '/');
+		return s;
+	};
+
+	const auto path = normalize(realPath);
+	for (const auto& root : {normalize(IKIGAI::Config::ROOT + IKIGAI::Config::ENGINE_ASSETS_PATH),
+	                         normalize(IKIGAI::Config::ROOT + IKIGAI::Config::USER_ASSETS_PATH)}) {
+		if (path.starts_with(root)) {
+			auto rel = path.substr(root.length());
+			if (!rel.empty() && rel.front() == '/') rel.erase(0, 1);
+			return "/" + rel;
+		}
+	}
+	return realPath;
+}
+} // namespace
 
 File::File(std::filesystem::path path): path(path) {
 	type = File::GetFileType(path);
@@ -77,25 +102,25 @@ std::string File::GetExtension(const std::filesystem::path& path) {
 
 FileBrowserWindow::FileBrowserWindow(const std::string& path): mPath(path), mSelectedFolderPath(path), mRoot(path) {
 #ifdef OPENGL_BACKEND
-	mTextureCache["__image__"] = RENDER::TextureGl::Create(UTILS::GetRealPath("textures/debug/editor/image-white.png"));
-	mTextureCache["__dir__"] = RENDER::TextureGl::Create(UTILS::GetRealPath("textures/debug/editor/folder-white.png"));
-	mTextureCache["__file__"] = RENDER::TextureGl::Create(UTILS::GetRealPath("textures/debug/editor/file-white.png"));
-	mTextureCache["__font__"] = RENDER::TextureGl::Create(UTILS::GetRealPath("textures/debug/editor/font-white.png"));
-	mTextureCache["__object__"] = RENDER::TextureGl::Create(UTILS::GetRealPath("textures/debug/editor/cube-white.png"));
+	mTextureCache["__image__"] = RENDER::TextureGl::Create("/textures/Debug/Editor/image-white.png");
+	mTextureCache["__dir__"] = RENDER::TextureGl::Create("/textures/Debug/Editor/folder-white.png");
+	mTextureCache["__file__"] = RENDER::TextureGl::Create("/textures/Debug/Editor/file-white.png");
+	mTextureCache["__font__"] = RENDER::TextureGl::Create("/textures/Debug/Editor/font-white.png");
+	mTextureCache["__object__"] = RENDER::TextureGl::Create("/textures/Debug/Editor/cube-white.png");
 #endif
 #ifdef VULKAN_BACKEND
-	mTextureCache["__image__"] = RENDER::TextureVk::Create(UTILS::GetRealPath("textures/debug/editor/image-white.png"));
-	mTextureCache["__dir__"] = RENDER::TextureVk::Create(UTILS::GetRealPath("textures/debug/editor/folder-white.png"));
-	mTextureCache["__file__"] = RENDER::TextureVk::Create(UTILS::GetRealPath("textures/debug/editor/file-white.png"));
-	mTextureCache["__font__"] = RENDER::TextureVk::Create(UTILS::GetRealPath("textures/debug/editor/font-white.png"));
-	mTextureCache["__object__"] = RENDER::TextureVk::Create(UTILS::GetRealPath("textures/debug/editor/cube-white.png"));
+	mTextureCache["__image__"] = RENDER::TextureVk::Create("/textures/Debug/Editor/image-white.png");
+	mTextureCache["__dir__"] = RENDER::TextureVk::Create("/textures/Debug/Editor/folder-white.png");
+	mTextureCache["__file__"] = RENDER::TextureVk::Create("/textures/Debug/Editor/file-white.png");
+	mTextureCache["__font__"] = RENDER::TextureVk::Create("/textures/Debug/Editor/font-white.png");
+	mTextureCache["__object__"] = RENDER::TextureVk::Create("/textures/Debug/Editor/cube-white.png");
 #endif
 #ifdef DX12_BACKEND
-	mTextureCache["__image__"] = RENDER::TextureDx12::Create(UTILS::GetRealPath("textures/debug/editor/image-white.png"));
-	mTextureCache["__dir__"] = RENDER::TextureDx12::Create(UTILS::GetRealPath("textures/debug/editor/folder-white.png"));
-	mTextureCache["__file__"] = RENDER::TextureDx12::Create(UTILS::GetRealPath("textures/debug/editor/file-white.png"));
-	mTextureCache["__font__"] = RENDER::TextureDx12::Create(UTILS::GetRealPath("textures/debug/editor/font-white.png"));
-	mTextureCache["__object__"] = RENDER::TextureDx12::Create(UTILS::GetRealPath("textures/debug/editor/cube-white.png"));
+	mTextureCache["__image__"] = RENDER::TextureDx12::Create("/textures/Debug/Editor/image-white.png");
+	mTextureCache["__dir__"] = RENDER::TextureDx12::Create("/textures/Debug/Editor/folder-white.png");
+	mTextureCache["__file__"] = RENDER::TextureDx12::Create("/textures/Debug/Editor/file-white.png");
+	mTextureCache["__font__"] = RENDER::TextureDx12::Create("/textures/Debug/Editor/font-white.png");
+	mTextureCache["__object__"] = RENDER::TextureDx12::Create("/textures/Debug/Editor/cube-white.png");
 #endif
 	initFileTree(mRoot);
 }
@@ -250,16 +275,17 @@ void FileBrowserWindow::drawFolder(std::string_view path)
 		case File::FileType::DIR: imPath = "__dir__";  break;
 		case File::FileType::IMAGE: {
 			imPath = entry.path().string();
+			std::string vPath = ToVirtualPath(imPath);
 			if (!mTextureCache.contains(imPath)) {
 #ifdef OPENGL_BACKEND
 				//TODO: check backend
-				mTextureCache[imPath] = RENDER::TextureGl::Create(imPath);
+				mTextureCache[imPath] = RENDER::TextureGl::Create(vPath);
 #endif
 #ifdef VULKAN_BACKEND
-				mTextureCache[imPath] = RENDER::TextureVk::Create(imPath);
+				mTextureCache[imPath] = RENDER::TextureVk::Create(vPath);
 #endif
 #ifdef DX12_BACKEND
-				mTextureCache[imPath] = RENDER::TextureDx12::Create(imPath);
+				mTextureCache[imPath] = RENDER::TextureDx12::Create(vPath);
 #endif
 			}
 			//imPath = "__image__";

@@ -64,7 +64,7 @@ void ScriptInterpreter::destroyLuaContext() {
 }
 
 void ScriptInterpreter::consider(UTILS::WeakPtr<IKIGAI::ECS::ScriptComponent> s) {
-	if (s->getName().empty()) {
+	if (s->getScriptName().empty()) {
 		return;
 	}
 	if (luaState) {
@@ -88,7 +88,7 @@ void ScriptInterpreter::unconsider(UTILS::WeakPtr<IKIGAI::ECS::ScriptComponent> 
 	}
 	scripts.erase(std::remove_if(scripts.begin(), scripts.end(), [p_toUnconsider](const UTILS::WeakPtr<IKIGAI::ECS::ScriptComponent> s) {
 		return p_toUnconsider == s;
-	}));
+	}), scripts.end());
 
 	refreshAll();
 }

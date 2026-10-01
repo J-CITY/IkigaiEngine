@@ -8,6 +8,7 @@
 #include "utilsModule/pathGetter.h"
 #include "utilsModule/stdLoader.h"
 #include "utilsModule/assertion.h"
+#include "utilsModule/log/loggerDefine.h"
 
 //#include "coreModule/ecs/components/transform.h"
 
@@ -17,7 +18,8 @@
 #include <coreModule/graphicsWrapper.hpp>
 //#include <coreModule/resourceManager/textureManager.h>
 #include <renderModule/backends/interface/resourceStruct.h>
-
+#include <resourceModule/serviceManager.h>
+#include <resourceModule/fileSystem/fileSystem.h>
 using namespace IKIGAI;
 using namespace IKIGAI::RENDER;
 
@@ -305,17 +307,35 @@ std::shared_ptr<TextureGl> TextureGl::Create(const TextureResource &descriptor, 
 		IKIGAI::UTILS::STBiSetFlipVerticallyOnLoad(true);
 		for (const auto &path : _descriptor.pathTexture) {
 			int width = 0, height = 0, channels = 0;
+			auto file = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RESOURCES::FileSystem>().getFile(path, IKIGAI::RESOURCES::FileMode::READ);
+			if (!file) {
+				LOG_ERROR << "Failed to open texture: " << path;
+				continue;
+			}
+			auto fileData = file->read();
+			bool loaded = false;
+
 			if (_descriptor.isFloat) {
-				auto *data = IKIGAI::UTILS::STBiLoadf(path.c_str(), &width, &height, &channels, 0);
-				textureData.push_back(data);
+				auto *data = IKIGAI::UTILS::STBiLoadfFromMemory(fileData.data(), fileData.size(), &width, &height, &channels, 0);
+				if (data) {
+					textureData.push_back(data);
+					loaded = true;
+				}
 			}
 			else {
-				auto *data = IKIGAI::UTILS::STBiLoad(path.c_str(), &width, &height, &channels, 0);
+				auto *data = IKIGAI::UTILS::STBiLoadFromMemory(fileData.data(), fileData.size(), &width, &height, &channels, 0);
 				//if (channels == 3) { // because dx12 dose not support RGB8
 				//	UTILS::STBiImageFree((unsigned char *)data);
-				//	data = IKIGAI::UTILS::STBiLoad(UTILS::GetRealPath(path).c_str(), &width, &height, &channels, 4);
+				//	data = IKIGAI::UTILS::STBiLoadFromMemory(fileData.data(), fileData.size(), &width, &height, &channels, 4);
 				//}
-				textureData.push_back(data);
+				if (data) {
+					textureData.push_back(data);
+					loaded = true;
+				}
+			}
+			if (!loaded) {
+				LOG_ERROR << "Failed to decode texture: " << path;
+				continue;
 			}
 			_descriptor.width = width;
 			_descriptor.height = height;

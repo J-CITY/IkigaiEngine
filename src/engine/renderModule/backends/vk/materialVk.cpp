@@ -157,8 +157,14 @@ void MaterialVk::fillUniforms(std::shared_ptr<TextureInterface> defaultTexture, 
 		case ShaderReflection::UniformType::SAMPLER_CUBE:
 		case ShaderReflection::UniformType::SAMPLER_3D:
 		case ShaderReflection::UniformType::SAMPLER_2D_ARRAY: {
+			std::shared_ptr<TextureInterface> tex = nullptr;
 			if (mUniforms.contains(uniform.mName)) {
-				auto tex = std::get<std::shared_ptr<TextureInterface>>(mUniforms[uniform.mName]);
+				tex = std::get<std::shared_ptr<TextureInterface>>(mUniforms[uniform.mName]);
+			}
+			if (!tex && defaultTexture) {
+				tex = defaultTexture;
+			}
+			if (tex) {
 				renderer.setTexture(uniform.mBind, tex);
 			}
 		} break;

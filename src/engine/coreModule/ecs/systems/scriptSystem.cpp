@@ -123,10 +123,13 @@ bool IKIGAI::ECS::ScriptSystem::registerToLuaContext(ScriptComponent& component,
 	using namespace IKIGAI::SCRIPTING;
 
 	auto& object = component.getTable();
-	auto result = p_luaState.safe_script_file(p_scriptFolder + component.getName() + ".lua", &sol::script_pass_on_error);
+	// getName() is ComponentBase::getName() -> always "ScriptComponent"; the script file name is stored in getScriptName()
+	const auto& scriptName = component.getScriptName();
+	const auto scriptPath = p_scriptFolder + scriptName + ".lua";
+	auto result = p_luaState.safe_script_file(scriptPath, &sol::script_pass_on_error);
 	if (!result.valid()) {
 		sol::error err = result;
-		LOG_ERROR << (err.what());
+		LOG_ERROR << "Lua script '" << scriptPath << "': " << err.what();
 		return false;
 	}
 	if (result.return_count() == 1 && result[0].is<sol::table>()) {
@@ -134,7 +137,7 @@ bool IKIGAI::ECS::ScriptSystem::registerToLuaContext(ScriptComponent& component,
 		object["owner"] = component.obj.getPtr();
 		return true;
 	}
-	LOG_ERROR << ("'" + component.getName() + ".lua' missing return expression");
+	LOG_ERROR << ("'" + scriptName + ".lua' missing return expression");
 	return false;
 }
 
