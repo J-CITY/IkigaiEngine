@@ -6,8 +6,7 @@
 #include "renderModule/backends/interface/storageBufferInterface.h"
 namespace IKIGAI::RENDER {
 	class StorageBufferVk : public StorageBufferInterface {
-		vk::raii::Buffer mBuffer = nullptr;
-		vk::raii::DeviceMemory mDeviceMemory = nullptr;
+		VmaBuffer mBuffer;
 	public:
 		StorageBufferVk(void* data, size_t size, size_t stride);
 		~StorageBufferVk() override;
@@ -24,7 +23,7 @@ namespace IKIGAI::RENDER {
 
 		void unbind() override;
 
-		const vk::raii::Buffer& getBuffer() const { return mBuffer; }
+		const VmaBuffer& getBuffer() const { return mBuffer; }
 	};
 }
 #endif

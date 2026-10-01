@@ -87,7 +87,7 @@ void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const st
 
 	const auto aspectFlag = desc.texType == TextureType::DEPTH ? (vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil) : vk::ImageAspectFlagBits::eColor;
 
-	std::tie(mImage, mDeviceMemory, mImageView) = UtilityVk::CreateImage(
+	std::tie(mImage, mImageView) = UtilityVk::CreateImage(
 		desc.width, desc.height, FormatMap.at(desc.pixelType), usage,
 		aspectFlag, desc.depth, ToTextureType.at(desc.texType), desc.mipMapCount);
 
@@ -246,14 +246,12 @@ IKIGAI::RENDER::TextureVk::TextureVk(uint32_t width, uint32_t height, vk::Format
 }
 
 IKIGAI::RENDER::TextureVk::~TextureVk() {
-	UtilityVk::GetDriver()->destroyDeferred(std::move(mImage));
-	UtilityVk::GetDriver()->destroyDeferred(std::move(mDeviceMemory));
+	if (mImage) UtilityVk::GetDriver()->destroyDeferred(std::move(mImage));
 }
 
 void IKIGAI::RENDER::TextureVk::recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) {
 	// Освобождаем старые VK-ресурсы (отложенно)
-	UtilityVk::GetDriver()->destroyDeferred(std::move(mImage));
-	UtilityVk::GetDriver()->destroyDeferred(std::move(mDeviceMemory));
+	if (mImage) UtilityVk::GetDriver()->destroyDeferred(std::move(mImage));
 	mImageView = nullptr;
 	mSampler = nullptr;
 	mDescriptorSet = nullptr;
@@ -563,16 +561,14 @@ void IKIGAI::RENDER::TextureVk::setData(uint32_t width, uint32_t height, PixelFo
 	auto channel_size = GetFormatChannelSize(format);
 	auto size = width * height * channels * channel_size;
 
-	auto [upload_buffer, upload_buffer_memory] = UtilityVk::CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc);
+	auto upload_buffer = UtilityVk::CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc, UtilityVk::MemoryUsage::Staging);
 
 	setState(UtilityVk::GetDriver()->getCurrentFrame().mCommandBuffer, vk::ImageLayout::eTransferDstOptimal);
 
 	int i = 0;
 	//std::vector<vk::BufferImageCopy> regions;
 	for (auto& memory : data) {
-		auto ptr = upload_buffer_memory.mapMemory(0, size);
-		memcpy(ptr, memory, size);
-		upload_buffer_memory.unmapMemory();
+		upload_buffer.upload(memory, size);
 
 		auto image_subresource_layers = vk::ImageSubresourceLayers()
 			.setAspectMask(vk::ImageAspectFlagBits::eColor)
@@ -594,7 +590,6 @@ void IKIGAI::RENDER::TextureVk::setData(uint32_t width, uint32_t height, PixelFo
 	//	vk::ImageLayout::eTransferDstOptimal, regions);
 
 	UtilityVk::GetDriver()->destroyDeferred(std::move(upload_buffer));
-	UtilityVk::GetDriver()->destroyDeferred(std::move(upload_buffer_memory));
 }
 
 void IKIGAI::RENDER::TextureVk::generateMips() {

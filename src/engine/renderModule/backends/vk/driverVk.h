@@ -3,6 +3,7 @@
 #include <memory>
 #include <memory>
 #include <unordered_set>
+#include <variant>
 
 #include "indexBufferVk.h"
 #include "shaderVk.h"
@@ -14,6 +15,7 @@
 #ifdef VULKAN_BACKEND
 #include <volk.h>
 #include <queue>
+#include "vmaVk.h"
 #include "swapChainHandler.h"
 #include <assimp/scene.h>
 #include "../interface/driverInterface.h"
@@ -37,6 +39,7 @@ namespace IKIGAI::RENDER {
 		vk::raii::PhysicalDevice mPhysicalDevice = nullptr;
 		vk::raii::Queue mQueue = nullptr;
 		vk::raii::Device mDevice = nullptr;
+		VmaAllocator mAllocator = nullptr;
 		uint32_t mQueueFamilyIndex = -1;
 		vk::SurfaceFormatKHR mSurfaceFormat;
 		
@@ -45,9 +48,20 @@ namespace IKIGAI::RENDER {
 		constexpr static vk::Format DefaultDepthStencilFormat = vk::Format::eD32SfloatS8Uint;
 
 		bool working = false;
+		bool mShuttingDown = false;
 
 		bool render_pass_active = false;
+
+		using VulkanObject = std::variant<
+			VmaBuffer,
+			VmaImage,
+			vk::raii::Pipeline,
+			vk::raii::AccelerationStructureKHR
+		>;
+
 		struct Frame {
+			// Declared first so it is destroyed last (after framebuffer textures that may queue into it).
+			std::vector<VulkanObject> destroyDeferred;
 			vk::raii::Fence fence = nullptr;
 			std::shared_ptr<FrameBufferVk> mFrameBuffer;
 			vk::raii::Semaphore mImageAcquiredSemaphore = nullptr;
@@ -174,21 +188,13 @@ namespace IKIGAI::RENDER {
 		void activateRenderPass();
 		void deactivateRenderPass();
 
-		using VulkanObject = std::variant<
-			vk::raii::Buffer,
-			vk::raii::Image,
-			vk::raii::DeviceMemory,
-			vk::raii::Pipeline,
-			vk::raii::AccelerationStructureKHR
-		>;
-		std::vector<VulkanObject> mDestroyDeferred{};
 		void destroyDeferred(VulkanObject&& object);
 		std::vector<VulkanObject>& getDestroyDeferredObjects();
 		void EnsureMemoryState(const vk::raii::CommandBuffer& cmdbuf, vk::PipelineStageFlags2 stage);
 		void PushDescriptorBuffer(vk::raii::CommandBuffer& cmdlist, vk::PipelineBindPoint pipeline_bind_point,
 		                          const vk::raii::PipelineLayout& pipeline_layout, uint32_t binding,
 		                          vk::DescriptorType type,
-		                          const vk::raii::Buffer& buffer);
+		                          vk::Buffer buffer);
 		void PushDescriptorTexture(vk::raii::CommandBuffer& cmdlist, vk::PipelineBindPoint pipeline_bind_point,
 		                           const vk::raii::PipelineLayout& pipeline_layout, uint32_t binding);
 		void PushDescriptorUniformBuffer(vk::raii::CommandBuffer& cmdlist, vk::PipelineBindPoint pipeline_bind_point,

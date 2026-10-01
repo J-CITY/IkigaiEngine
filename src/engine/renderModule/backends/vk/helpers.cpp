@@ -16,41 +16,30 @@ DriverVk* UtilityVk::GetDriver() {
 	return mDriver;
 }
 
-uint32_t UtilityVk::GetMemoryType(vk::MemoryPropertyFlags properties, uint32_t type_bits) {
-	auto prop = mDriver->mPhysicalDevice.getMemoryProperties();
-
-	for (uint32_t i = 0; i < prop.memoryTypeCount; i++)
-		if ((prop.memoryTypes[i].propertyFlags & properties) == properties && type_bits & (1 << i))
-			return i;
-
-	return 0xFFFFFFFF; // Unable to find memoryType
-}
-
-std::tuple<vk::raii::Buffer, vk::raii::DeviceMemory> UtilityVk::CreateBuffer(uint64_t size, vk::BufferUsageFlags usage)
+VmaBuffer UtilityVk::CreateBuffer(uint64_t size, vk::BufferUsageFlags usage, MemoryUsage memoryUsage)
 {
 	auto buffer_create_info = vk::BufferCreateInfo()
 	                          .setSize(size)
 	                          .setUsage(usage)
 	                          .setSharingMode(vk::SharingMode::eExclusive);
+	VkBufferCreateInfo vkBufferInfo = buffer_create_info;
 
-	auto buffer = GetDriver()->mDevice.createBuffer(buffer_create_info);
-
-	auto memory_requirements = buffer.getMemoryRequirements();
-	// HostCoherent is required: staging data is written with mapMemory/memcpy without vkFlushMappedMemoryRanges
-	auto memory_type = GetMemoryType(vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, memory_requirements.memoryTypeBits);
-	if (memory_type == 0xFFFFFFFF) {
-		memory_type = GetMemoryType(vk::MemoryPropertyFlagBits::eHostVisible, memory_requirements.memoryTypeBits);
+	VmaAllocationCreateInfo allocInfo{};
+	if (memoryUsage == MemoryUsage::Staging) {
+		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+		allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+	} else {
+		allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 	}
 
-	auto memory_allocate_info = vk::MemoryAllocateInfo()
-	                            .setAllocationSize(memory_requirements.size)
-	                            .setMemoryTypeIndex(memory_type);
+	VkBuffer buffer = VK_NULL_HANDLE;
+	VmaAllocation allocation = nullptr;
+	const VkResult result = vmaCreateBuffer(GetDriver()->mAllocator, &vkBufferInfo, &allocInfo, &buffer, &allocation, nullptr);
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error("vmaCreateBuffer failed");
+	}
 
-	auto device_memory = GetDriver()->mDevice.allocateMemory(memory_allocate_info);
-
-	buffer.bindMemory(*device_memory, 0);
-
-	return {std::move(buffer), std::move(device_memory)};
+	return VmaBuffer(GetDriver()->mAllocator, buffer, allocation);
 }
 
 vk::raii::ImageView UtilityVk::CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspect_flags, size_t layers, vk::ImageViewType type, uint32_t mip_levels ) {
@@ -68,7 +57,7 @@ vk::raii::ImageView UtilityVk::CreateImageView(vk::Image image, vk::Format forma
 	return GetDriver()->mDevice.createImageView(image_view_create_info);
 }
 
-std::tuple<vk::raii::Image, vk::raii::DeviceMemory, vk::raii::ImageView> UtilityVk::CreateImage(uint32_t width,
+std::tuple<VmaImage, vk::raii::ImageView> UtilityVk::CreateImage(uint32_t width,
 	uint32_t height, vk::Format format, vk::ImageUsageFlags usage, vk::ImageAspectFlags aspect_flags, size_t layers, vk::ImageViewType type,
 	uint32_t mip_levels)
 {
@@ -83,23 +72,22 @@ std::tuple<vk::raii::Image, vk::raii::DeviceMemory, vk::raii::ImageView> Utility
 	                         .setUsage(usage)
 	                         .setSharingMode(vk::SharingMode::eExclusive)
 	                         .setInitialLayout(vk::ImageLayout::eUndefined);
+	VkImageCreateInfo vkImageInfo = image_create_info;
 
-	auto image = GetDriver()->mDevice.createImage(image_create_info);
+	VmaAllocationCreateInfo allocInfo{};
+	allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
-	auto memory_requirements = image.getMemoryRequirements();
-	auto memory_type = GetMemoryType(vk::MemoryPropertyFlagBits::eDeviceLocal, memory_requirements.memoryTypeBits);
+	VkImage image = VK_NULL_HANDLE;
+	VmaAllocation allocation = nullptr;
+	const VkResult result = vmaCreateImage(GetDriver()->mAllocator, &vkImageInfo, &allocInfo, &image, &allocation, nullptr);
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error("vmaCreateImage failed");
+	}
 
-	auto memory_allocate_info = vk::MemoryAllocateInfo()
-	                            .setAllocationSize(memory_requirements.size)
-	                            .setMemoryTypeIndex(memory_type);
+	VmaImage vmaImage(GetDriver()->mAllocator, image, allocation);
+	auto image_view = CreateImageView(*vmaImage, format, aspect_flags, layers, type, mip_levels);
 
-	auto device_memory = GetDriver()->mDevice.allocateMemory(memory_allocate_info);
-
-	image.bindMemory(*device_memory, 0);
-
-	auto image_view = CreateImageView(*image, format, aspect_flags, layers, type, mip_levels);
-
-	return {std::move(image), std::move(device_memory), std::move(image_view)};
+	return {std::move(vmaImage), std::move(image_view)};
 }
 
 void UtilityVk::SetMemoryBarrier(const vk::raii::CommandBuffer& cmdbuf, vk::PipelineStageFlags2 src_stage, vk::PipelineStageFlags2 dst_stage) {

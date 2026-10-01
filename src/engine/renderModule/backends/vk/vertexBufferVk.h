@@ -2,13 +2,12 @@
 
 #ifdef VULKAN_BACKEND
 #include <vector>
-#include <vulkan/vulkan_raii.hpp>
+#include "vmaVk.h"
 #include "../interface/vertexBufferInterface.h"
 
 namespace IKIGAI::RENDER {
 	class VertexBufferVk : public VertexBufferInterface {
-		vk::raii::Buffer mBuffer = nullptr;
-		vk::raii::DeviceMemory mDeviceMemory = nullptr;
+		VmaBuffer mBuffer;
 	public:
 		VertexBufferVk(void* data, size_t size, size_t stride);
 
@@ -25,7 +24,7 @@ namespace IKIGAI::RENDER {
 
 		void unbind() override;
 
-		vk::raii::Buffer& getBuffer() {
+		VmaBuffer& getBuffer() {
 			return mBuffer;
 		}
 	};

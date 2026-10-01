@@ -1,14 +1,13 @@
 #pragma once
 #ifdef VULKAN_BACKEND
 #include <vector>
-#include <vulkan/vulkan_raii.hpp>
+#include "vmaVk.h"
 #include "../interface/indexBufferInterface.h"
 namespace IKIGAI::RENDER {
 	class ShaderInterface;
 
 	class IndexBufferVk : public IndexBufferInterface {
-		vk::raii::Buffer mBuffer = nullptr;
-		vk::raii::DeviceMemory mDeviceMemory = nullptr;
+		VmaBuffer mBuffer;
 	public:
 		IndexBufferVk(void* data, size_t size, size_t stride);
 		~IndexBufferVk() override;
@@ -24,7 +23,7 @@ namespace IKIGAI::RENDER {
 
 		void unbind() override;
 
-		vk::raii::Buffer& getBuffer() {
+		VmaBuffer& getBuffer() {
 			return mBuffer;
 		}
 	};

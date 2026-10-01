@@ -3,18 +3,24 @@
 #ifdef VULKAN_BACKEND
 #include <vector>
 #include <functional>
+#include <tuple>
 #include <vulkan/vulkan_raii.hpp>
+#include "vmaVk.h"
 
 namespace IKIGAI::RENDER {
 	class DriverVk;
 
 	struct UtilityVk {
+		enum class MemoryUsage {
+			GpuOnly,
+			Staging
+		};
+
 		inline static DriverVk* mDriver = nullptr;
 		static DriverVk* GetDriver();
-		static uint32_t GetMemoryType(vk::MemoryPropertyFlags properties, uint32_t type_bits);
-		static std::tuple<vk::raii::Buffer, vk::raii::DeviceMemory> CreateBuffer(uint64_t size, vk::BufferUsageFlags usage);
+		static VmaBuffer CreateBuffer(uint64_t size, vk::BufferUsageFlags usage, MemoryUsage memoryUsage = MemoryUsage::GpuOnly);
 		static vk::raii::ImageView CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspect_flags, size_t layers, vk::ImageViewType type, uint32_t mip_levels = 1);
-		static std::tuple<vk::raii::Image, vk::raii::DeviceMemory, vk::raii::ImageView> CreateImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageUsageFlags usage, vk::ImageAspectFlags aspect_flags, size_t layers, vk::ImageViewType type, uint32_t mip_levels = 1);
+		static std::tuple<VmaImage, vk::raii::ImageView> CreateImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageUsageFlags usage, vk::ImageAspectFlags aspect_flags, size_t layers, vk::ImageViewType type, uint32_t mip_levels = 1);
 
 		static void SetMemoryBarrier(const vk::raii::CommandBuffer& cmdbuf, vk::PipelineStageFlags2 src_stage, vk::PipelineStageFlags2 dst_stage);
 		static void SetImageMemoryBarrier(const vk::raii::CommandBuffer& cmdbuf, vk::Image image,

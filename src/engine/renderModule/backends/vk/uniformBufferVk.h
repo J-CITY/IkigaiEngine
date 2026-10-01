@@ -6,10 +6,9 @@
 namespace IKIGAI::RENDER {
 	class UniformBufferVk : public UniformBufferInterface {
 	public:
-		vk::raii::Buffer mBuffer = nullptr;
-		vk::raii::DeviceMemory mDeviceMemory = nullptr;
+		VmaBuffer mBuffer;
 	public:
-		const vk::raii::Buffer& getBuffer() const { return mBuffer; }
+		const VmaBuffer& getBuffer() const { return mBuffer; }
 
 		UniformBufferVk(void* data, size_t size);
 		~UniformBufferVk() override;

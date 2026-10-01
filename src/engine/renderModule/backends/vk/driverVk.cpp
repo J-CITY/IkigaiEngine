@@ -142,11 +142,40 @@ DriverVk::DriverVk() {
 }
 
 DriverVk::~DriverVk() {
-	DriverVk::end();
+	if (working) {
+		DriverVk::end();
+	}
+	if (*mDevice) {
+		mDevice.waitIdle();
+	}
 	wait();
 
-	//delete gContext;
-	//gContext = nullptr;
+	mShuttingDown = true;
+	mVertexBuffer.reset();
+	mIndexBuffer.reset();
+	mUniformBuffers.clear();
+	mStorageBuffers.clear();
+	mTextures.clear();
+	mStates.clear();
+	for (auto& [_, ctx] : mSwapchains) {
+		for (auto& frame : ctx.frames) {
+			frame.destroyDeferred.clear();
+		}
+	}
+	mSwapchains.clear();
+
+#if defined(DEBUG) || defined(_DEBUG)
+	if (mAllocator) {
+		VmaTotalStatistics stats{};
+		vmaCalculateStatistics(mAllocator, &stats);
+		LOG_INFO << "VMA shutdown: allocations=" << stats.total.statistics.allocationCount
+			<< " bytes=" << stats.total.statistics.allocationBytes;
+	}
+#endif
+	if (mAllocator) {
+		vmaDestroyAllocator(mAllocator);
+		mAllocator = nullptr;
+	}
 }
 
 void DriverVk::init() {
@@ -305,6 +334,31 @@ void DriverVk::init() {
 
 	mDevice = mPhysicalDevice.createDevice(deviceInfo);
 	volkLoadDevice(*mDevice);
+
+	{
+		VmaVulkanFunctions vulkanFunctions{};
+		vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+		vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+
+		VmaAllocatorCreateInfo allocatorCreateInfo{};
+		allocatorCreateInfo.physicalDevice = *mPhysicalDevice;
+		allocatorCreateInfo.device = *mDevice;
+		allocatorCreateInfo.instance = *mInstance;
+		allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_3;
+		allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
+
+		const VkResult allocatorResult = vmaCreateAllocator(&allocatorCreateInfo, &mAllocator);
+		if (allocatorResult != VK_SUCCESS) {
+			throw std::runtime_error("vmaCreateAllocator failed");
+		}
+
+#if defined(DEBUG) || defined(_DEBUG)
+		VmaTotalStatistics stats{};
+		vmaCalculateStatistics(mAllocator, &stats);
+		LOG_INFO << "VMA init: allocations=" << stats.total.statistics.allocationCount
+			<< " bytes=" << stats.total.statistics.allocationBytes;
+#endif
+	}
 
 	mQueue = mDevice.getQueue(mQueueFamilyIndex, 0);
 
@@ -971,11 +1025,14 @@ void DriverVk::EnsureGraphicsState(bool draw_indexed) {
 }
 
 void DriverVk::wait() {
-	const auto& fence = getCurrentFrame().fence;
-	auto wait_result = mDevice.waitForFences({*fence}, true, UINT64_MAX);
-	int a = 0;
-	//TODO: clear previous frame objects
-	//mDestroyDeferred.clear();
+	auto it = mSwapchains.find(mCurrentWindowID);
+	if (it == mSwapchains.end() || it->second.frames.empty() || mFrameIndex >= it->second.frames.size()) {
+		return;
+	}
+	auto& frame = it->second.frames.at(mFrameIndex);
+	auto wait_result = mDevice.waitForFences({*frame.fence}, true, UINT64_MAX);
+	(void)wait_result;
+	frame.destroyDeferred.clear();
 }
 
 void DriverVk::createSwapchain(unsigned int windowID, uint32_t width, uint32_t height) {
@@ -1164,11 +1221,18 @@ void DriverVk::deactivateRenderPass() {
 }
 
 void DriverVk::destroyDeferred(VulkanObject&& object) {
-	mDestroyDeferred.push_back(std::move(object));
+	if (mShuttingDown) {
+		return;
+	}
+	auto it = mSwapchains.find(mCurrentWindowID);
+	if (it == mSwapchains.end() || it->second.frames.empty() || mFrameIndex >= it->second.frames.size()) {
+		return;
+	}
+	it->second.frames[mFrameIndex].destroyDeferred.push_back(std::move(object));
 }
 
 std::vector<DriverVk::VulkanObject>& DriverVk::getDestroyDeferredObjects() {
-	return mDestroyDeferred;
+	return getCurrentFrame().destroyDeferred;
 }
 
 void DriverVk::EnsureMemoryState(const vk::raii::CommandBuffer& cmdbuf, vk::PipelineStageFlags2 stage) {
@@ -1182,9 +1246,9 @@ void DriverVk::EnsureMemoryState(const vk::raii::CommandBuffer& cmdbuf, vk::Pipe
 
 void DriverVk::PushDescriptorBuffer(vk::raii::CommandBuffer& cmdlist, vk::PipelineBindPoint pipeline_bind_point,
 	const vk::raii::PipelineLayout& pipeline_layout, uint32_t binding, vk::DescriptorType type,
-	const vk::raii::Buffer& buffer) {
+	vk::Buffer buffer) {
 	auto descriptor_buffer_info = vk::DescriptorBufferInfo()
-		.setBuffer(*buffer)
+		.setBuffer(buffer)
 		.setRange(VK_WHOLE_SIZE);
 
 	auto write_descriptor_set = vk::WriteDescriptorSet()
@@ -1234,7 +1298,7 @@ void DriverVk::PushDescriptorUniformBuffer(vk::raii::CommandBuffer& cmdlist, vk:
 	auto buffer = mUniformBuffers.at(binding);
 
 	PushDescriptorBuffer(cmdlist, pipeline_bind_point, pipeline_layout, binding,
-		vk::DescriptorType::eUniformBuffer, buffer->getBuffer());
+		vk::DescriptorType::eUniformBuffer, *buffer->getBuffer());
 }
 
 void DriverVk::PushDescriptorStorageImage(vk::raii::CommandBuffer& cmdlist, vk::PipelineBindPoint pipeline_bind_point,
@@ -1261,7 +1325,7 @@ void DriverVk::PushDescriptorStorageBuffer(vk::raii::CommandBuffer& cmdlist, vk:
 	auto buffer = mStorageBuffers.at(binding);
 
 	PushDescriptorBuffer(cmdlist, pipeline_bind_point, pipeline_layout, binding,
-		vk::DescriptorType::eStorageBuffer, buffer->getBuffer());
+		vk::DescriptorType::eStorageBuffer, *buffer->getBuffer());
 }
 
 void DriverVk::PushDescriptors(vk::raii::CommandBuffer& cmdlist, vk::PipelineBindPoint pipeline_bind_point,

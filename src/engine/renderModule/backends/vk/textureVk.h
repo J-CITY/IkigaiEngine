@@ -10,12 +10,12 @@
 #include "../interface/driverInterface.h"
 #include "../interface/atlasInterface.h"
 #include "utilsModule/memoryAlloc.h"
+#include "vmaVk.h"
 
 namespace IKIGAI::RENDER {
 	class TextureVk : public TextureInterface {
 	public:
-		vk::raii::Image mImage = nullptr;
-		vk::raii::DeviceMemory mDeviceMemory = nullptr;
+		VmaImage mImage;
 		vk::Image mImagePtr;
 		vk::raii::ImageView mImageView = nullptr;
 		size_t mDepth = 0;
