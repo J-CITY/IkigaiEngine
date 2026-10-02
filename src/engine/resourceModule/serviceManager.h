@@ -27,6 +27,7 @@ namespace IKIGAI::WINDOW {
 
 namespace IKIGAI::INPUT_SYSTEM {
 	class InputManager;
+	class InputActions;
 }
 
 namespace IKIGAI {

@@ -430,6 +430,10 @@ void main() {
     }
 }
 
+#ifdef USE_SDL
+#include <SDL3/SDL_main.h>
+#endif
+
 int main(int argc, char* argv[]) {
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];

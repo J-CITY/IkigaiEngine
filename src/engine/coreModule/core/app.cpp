@@ -14,6 +14,9 @@
 #include "taskModule/taskSystem.h"
 #include "utilsModule/time/time.h"
 #include "windowModule/window/window.h"
+#include "windowModule/inputManager/inputActions.h"
+#include "windowModule/inputManager/inputManager.h"
+#include "ecsModule/world.h"
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
@@ -274,6 +277,14 @@ void App::update(std::chrono::duration<double> dt) {
 		core.physicsManger->runPhysics(duration);
 	}
 	
+#ifdef USE_SDL
+	if (RESOURCES::ServiceManager::Check<INPUT_SYSTEM::InputActions>() && RESOURCES::ServiceManager::Check<ECS2::World>()) {
+		auto& actions = RESOURCES::ServiceManager::Get<INPUT_SYSTEM::InputActions>();
+		actions.prepareMaps(RESOURCES::ServiceManager::Get<ECS2::World>());
+		actions.resolve(dt);
+	}
+#endif
+
 	if (core.sceneManager->hasCurrentScene()) {
 		//PROFILER_EVENT();
 		auto& currentScene = core.sceneManager->getCurrentScene();
@@ -341,6 +352,11 @@ void App::postUpdate(std::chrono::duration<double> dt) {
 //#endif
 //	core.debugRender->postDraw();
 	core.window->draw();
+#ifdef USE_SDL
+	if (RESOURCES::ServiceManager::Check<INPUT_SYSTEM::InputManager>()) {
+		RESOURCES::ServiceManager::Get<INPUT_SYSTEM::InputManager>().endFrame();
+	}
+#endif
 }
 
 IKIGAI::UTILS::Ref<Core> App::getCore() {

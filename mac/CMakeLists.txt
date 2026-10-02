@@ -4,7 +4,7 @@ set(APP_NAME "IkigaiEngine")
 project(${APP_NAME} LANGUAGES C CXX)
 
 # --- Configuration Options ---
-option(USE_SDL2     "Use SDL2 window backend" ON)
+option(USE_SDL      "Use SDL window backend" ON)
 option(USE_OPENGL   "Use OpenGL rendering backend" ON)
 option(USE_VULKAN   "Use Vulkan rendering backend" OFF)
 option(USE_METAL    "Use Metal rendering backend" OFF)
@@ -82,10 +82,10 @@ file(GLOB IMGUI_SOURCES
     "${IMGUI_DIR}/imgui/ImZoomSlider.h"
 )
 
-if(USE_SDL2)
+if(USE_SDL)
     list(APPEND IMGUI_SOURCES 
-        "${IMGUI_DIR}/imgui/backends/imgui_impl_sdl2.cpp" 
-        "${IMGUI_DIR}/imgui/backends/imgui_impl_sdl2.h"
+        "${IMGUI_DIR}/imgui/backends/imgui_impl_sdl3.cpp" 
+        "${IMGUI_DIR}/imgui/backends/imgui_impl_sdl3.h"
     )
 endif()
 
@@ -117,8 +117,8 @@ target_include_directories(imgui PUBLIC
     "${IMGUI_DIR}/IconFont"
 )
 
-if(USE_SDL2)
-    target_include_directories(imgui PRIVATE "${THIRD_PARTY_DIR}/SDL2/include")
+if(USE_SDL)
+    target_include_directories(imgui PRIVATE "${THIRD_PARTY_DIR}/SDL3/include")
 endif()
 
 if(USE_VULKAN)
@@ -143,35 +143,27 @@ target_include_directories(lua PUBLIC "${THIRD_PARTY_DIR}/lua")
 add_library(volk STATIC "${THIRD_PARTY_DIR}/volk/volk.c" "${THIRD_PARTY_DIR}/volk/volk.h")
 target_include_directories(volk PUBLIC "${THIRD_PARTY_DIR}/Vulkan-Headers/include")
 
-# 10. SDL2
-if(USE_SDL2)
+# 10. SDL3
+if(USE_SDL)
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
     set(SDL_STATIC ON CACHE BOOL "" FORCE)
     set(SDL_TEST OFF CACHE BOOL "" FORCE)
-    add_subdirectory(${THIRD_PARTY_DIR}/SDL2 ./3rd/SDL2/build)
+    set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+    set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${THIRD_PARTY_DIR}/SDL3 ./3rd/SDL3/build)
 endif()
 
-# 10. SoLoud
-# On Windows there is a precompiled soloud_static_x64_d.lib, for macOS we build from source.
+# 11. SoLoud (miniaudio, no SDL)
 file(GLOB_RECURSE SOLOUD_SOURCES 
     "${THIRD_PARTY_DIR}/soloud/src/audiosource/*.cpp"
     "${THIRD_PARTY_DIR}/soloud/src/audiosource/*.c"
     "${THIRD_PARTY_DIR}/soloud/src/core/*.cpp"
     "${THIRD_PARTY_DIR}/soloud/src/filter/*.cpp"
 )
-if(USE_SDL2)
-    list(APPEND SOLOUD_SOURCES "${THIRD_PARTY_DIR}/soloud/src/backend/sdl/soloud_sdl2.cpp" "${THIRD_PARTY_DIR}/soloud/src/backend/sdl/soloud_sdl2_dll.c")
-else()
-    list(APPEND SOLOUD_SOURCES "${THIRD_PARTY_DIR}/soloud/src/backend/coreaudio/soloud_coreaudio.cpp")
-endif()
-
+list(APPEND SOLOUD_SOURCES "${THIRD_PARTY_DIR}/soloud/src/backend/miniaudio/soloud_miniaudio.cpp")
 add_library(soloud STATIC ${SOLOUD_SOURCES})
 target_include_directories(soloud PUBLIC "${THIRD_PARTY_DIR}/soloud/include")
-if(USE_SDL2)
-    target_compile_definitions(soloud PUBLIC WITH_SDL2)
-else()
-    target_compile_definitions(soloud PUBLIC WITH_COREAUDIO)
-endif()
+target_compile_definitions(soloud PUBLIC WITH_MINIAUDIO)
 
 # --- Main Application ---
 
@@ -220,7 +212,7 @@ target_compile_options(${APP_NAME} PRIVATE -Wall -Wextra)
 # Definitions
 target_compile_definitions(${APP_NAME} PRIVATE SOL_EXCEPTIONS_SAFE_PROPAGATION=1)
 
-if(USE_SDL2)
+if(USE_SDL)
     target_compile_definitions(${APP_NAME} PRIVATE USE_SDL)
 endif()
 
@@ -276,11 +268,13 @@ set(LIBS_TO_LINK
     soloud
 )
 
-if(USE_SDL2)
-    target_link_libraries(${APP_NAME} PRIVATE SDL2::SDL2main SDL2::SDL2-static)
-    target_include_directories(imgui PRIVATE "${THIRD_PARTY_DIR}/SDL2/include")
-    target_include_directories(soloud PRIVATE "${THIRD_PARTY_DIR}/SDL2/include")
-    target_include_directories(${APP_NAME} PRIVATE "${THIRD_PARTY_DIR}/SDL2/include")
+if(USE_SDL)
+    if(TARGET SDL3::SDL3main)
+        target_link_libraries(${APP_NAME} PRIVATE SDL3::SDL3main)
+    endif()
+    target_link_libraries(${APP_NAME} PRIVATE SDL3::SDL3-static)
+    target_include_directories(imgui PRIVATE "${THIRD_PARTY_DIR}/SDL3/include")
+    target_include_directories(${APP_NAME} PRIVATE "${THIRD_PARTY_DIR}/SDL3/include")
 endif()
 
 if(USE_OPENGL)

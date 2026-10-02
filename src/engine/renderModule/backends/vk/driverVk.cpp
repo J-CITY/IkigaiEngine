@@ -3,7 +3,6 @@
 #include "driverVk.h"
 //#include "Render/vk/raytracing/dw/include/macros.h"
 #ifdef VULKAN_BACKEND
-#include <SDL_vulkan.h>
 #include <string>
 #include <string_view>
 #include <unordered_set>

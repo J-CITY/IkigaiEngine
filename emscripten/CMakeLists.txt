@@ -2,16 +2,15 @@ cmake_minimum_required(VERSION 3.7)
 
 project(cross_test)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20 -fexceptions -O2 -s EXPORTED_FUNCTIONS=\"['_malloc','_main']\" -s EXPORTED_RUNTIME_METHODS=\"['ccall', 'cwrap']\"  -s USE_SDL=2 -D WITH_MINIAUDIO -s FULL_ES3=1 -s USE_WEBGL2=1 -s WASM=1 -s MIN_WEBGL_VERSION=2 -s GL_SUPPORT_AUTOMATIC_ENABLE_EXTENSIONS=1 -s OFFSCREEN_FRAMEBUFFER=1 -s STACK_SIZE=8MB -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=64MB -s ASSERTIONS -s USE_FREETYPE=1")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20 -fexceptions -O2 -s EXPORTED_FUNCTIONS=\"['_malloc','_main']\" -s EXPORTED_RUNTIME_METHODS=\"['ccall', 'cwrap']\"  -s USE_SDL=3 -D WITH_MINIAUDIO -s FULL_ES3=1 -s USE_WEBGL2=1 -s WASM=1 -s MIN_WEBGL_VERSION=2 -s GL_SUPPORT_AUTOMATIC_ENABLE_EXTENSIONS=1 -s OFFSCREEN_FRAMEBUFFER=1 -s STACK_SIZE=8MB -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=64MB -s ASSERTIONS -s USE_FREETYPE=1")
 
 set(THIRD_PARTY_DIR "../3rd")
 set(MAIN_SOURCE_DIR "../src")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/out)
 
-include_directories(${THIRD_PARTY_DIR}/SDL2/include)
+include_directories(${THIRD_PARTY_DIR}/SDL3/include)
 include_directories(${THIRD_PARTY_DIR}/glm)
 include_directories(${THIRD_PARTY_DIR}/tiny-obj-loader)
-include_directories(${THIRD_PARTY_DIR}/SDL2_image)
 include_directories(${THIRD_PARTY_DIR}/serdepp/include)
 include_directories(${THIRD_PARTY_DIR}/magic_enum/include)
 include_directories(${THIRD_PARTY_DIR}/magic_enum/include/magic_enum)
@@ -104,9 +103,9 @@ file(GLOB_RECURSE IMGUI_FILES
      #GLFW
      #"../3rd/imgui/imgui/imgui_impl_glfw.cpp"
      #"../3rd/imgui/imgui/imgui_impl_glfw.h"
-     #SDL2
-     "../3rd/imgui/imgui/imgui_impl_sdl2.h"
-     "../3rd/imgui/imgui/imgui_impl_sdl2.cpp"
+     #SDL3
+     "../3rd/imgui/imgui/backends/imgui_impl_sdl3.h"
+     "../3rd/imgui/imgui/backends/imgui_impl_sdl3.cpp"
 
      #OPENGL
      "../3rd/imgui/imgui/imgui_impl_opengl3.h"
@@ -227,5 +226,5 @@ set_target_properties(
     cross_test
     PROPERTIES
     LINK_FLAGS
-    "-O2 -s EXPORTED_FUNCTIONS=\"['_malloc','_main']\" -s EXPORTED_RUNTIME_METHODS=\"['ccall', 'cwrap']\"  -s USE_SDL=2 -s USE_SDL_IMAGE=2 -D WITH_MINIAUDIO -s SDL2_IMAGE_FORMATS=\"['png']\" -s FULL_ES3=1 -s USE_WEBGL2=1 -s WASM=1 -s MIN_WEBGL_VERSION=2 -s GL_SUPPORT_AUTOMATIC_ENABLE_EXTENSIONS=1 -s OFFSCREEN_FRAMEBUFFER=1 -s STACK_SIZE=8MB -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=64MB -s ASSERTIONS  -s USE_FREETYPE=1 --preload-file ../../assetses@/assets"
+    "-O2 -s EXPORTED_FUNCTIONS=\"['_malloc','_main']\" -s EXPORTED_RUNTIME_METHODS=\"['ccall', 'cwrap']\"  -s USE_SDL=3 -D WITH_MINIAUDIO -s FULL_ES3=1 -s USE_WEBGL2=1 -s WASM=1 -s MIN_WEBGL_VERSION=2 -s GL_SUPPORT_AUTOMATIC_ENABLE_EXTENSIONS=1 -s OFFSCREEN_FRAMEBUFFER=1 -s STACK_SIZE=8MB -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=64MB -s ASSERTIONS  -s USE_FREETYPE=1 --preload-file ../../assetses@/assets"
 )

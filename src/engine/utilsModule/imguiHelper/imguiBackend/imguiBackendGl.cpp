@@ -1,9 +1,9 @@
 #ifdef OPENGL_BACKEND
 #include "imguiBackend.h"
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #include "windowModule/window/window.h"
 #include "renderModule/backends/interface/textureInterface.h"
-#include "backends/imgui_impl_sdl2.h"
+#include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_opengl3.h"
 #include "imgui.h"
 
@@ -16,7 +16,7 @@ namespace {
 	public:
 		bool init(IKIGAI::WINDOW::Window& window, IKIGAI::RENDER::DriverInterface&) override {
 			IKIGAI::IMGUI::ConfigureImGuiContext();
-			if (!ImGui_ImplSDL2_InitForOpenGL(window.getSDLWindow(), window.getGLContext())) {
+			if (!ImGui_ImplSDL3_InitForOpenGL(window.getSDLWindow(), window.getGLContext())) {
 				return false;
 			}
 #ifdef __EMSCRIPTEN__
@@ -33,13 +33,13 @@ namespace {
 
 		void shutdown() override {
 			ImGui_ImplOpenGL3_Shutdown();
-			ImGui_ImplSDL2_Shutdown();
+			ImGui_ImplSDL3_Shutdown();
 			ImGui::DestroyContext();
 		}
 
 		void newFrame() override {
 			ImGui_ImplOpenGL3_NewFrame();
-			ImGui_ImplSDL2_NewFrame();
+			ImGui_ImplSDL3_NewFrame();
 			ImGui::NewFrame();
 		}
 
@@ -68,7 +68,7 @@ namespace {
 		}
 
 		void processEvent(const void* sdlEvent) override {
-			ImGui_ImplSDL2_ProcessEvent(static_cast<const SDL_Event*>(sdlEvent));
+			ImGui_ImplSDL3_ProcessEvent(static_cast<const SDL_Event*>(sdlEvent));
 		}
 	};
 }

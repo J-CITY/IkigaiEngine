@@ -30,6 +30,7 @@ namespace IKIGAI::EDITOR {
 			SHADER_RES,
 			AUDIO_RES,
 			MODEL_RES,
+			INPUT_RES,
 		};
 		FileType type;
 		std::filesystem::path path;
@@ -49,6 +50,7 @@ namespace IKIGAI::EDITOR {
 		inline static std::set<std::string> shaderResExt = {".shader"};
 		inline static std::set<std::string> audioResExt = {".sound"};
 		inline static std::set<std::string> modelResExt = {".model"};
+		inline static std::set<std::string> inputResExt = {".input"};
 	public:
 		static FileType GetFileType(const std::filesystem::path& path);
 		static std::string GetExtension(const std::filesystem::path& path);

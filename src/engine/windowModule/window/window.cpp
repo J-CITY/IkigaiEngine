@@ -3,8 +3,7 @@
 #ifdef USE_SDL
 
 #include <set>
-#include <SDL.h>
-#include <SDL_syswm.h>
+#include <SDL3/SDL.h>
 #include "utilsModule/log/loggerDefine.h"
 
 #include "coreModule/platform.hpp"
@@ -19,7 +18,10 @@
 #endif
 
 #ifdef VULKAN_BACKEND
-#include <SDL_vulkan.h>
+#include <SDL3/SDL_vulkan.h>
+#endif
+#ifdef METAL_BACKEND
+#include <SDL3/SDL_metal.h>
 #endif
 
 #ifdef DX12_BACKEND
@@ -29,21 +31,21 @@
 using namespace IKIGAI;
 using namespace IKIGAI::WINDOW;
 
-const std::map<SDL_GameControllerButton, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON> ToGamepadButton = {
-	{SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_A, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_a},
-	{SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_B, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_b},
-	{SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_X, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_x},
-	{SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_Y, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_y},
-	{SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_LEFTSTICK, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_leftStick},
-	{SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_RIGHTSTICK, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_rightStick},
-	{SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_BACK, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_back},
-	{SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_START, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_start},
-	{SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_LEFTSHOULDER, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_lb},
-	{SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_RIGHTSHOULDER, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_rb},
-	{SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_DPAD_UP, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::dpad_up},
-	{SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_DPAD_DOWN, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::dpad_down},
-	{SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_DPAD_LEFT, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::dpad_left},
-	{SDL_GameControllerButton::SDL_CONTROLLER_BUTTON_DPAD_RIGHT, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::dpad_right},
+const std::map<SDL_GamepadButton, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON> ToGamepadButton = {
+	{SDL_GAMEPAD_BUTTON_SOUTH, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_a},
+	{SDL_GAMEPAD_BUTTON_EAST, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_b},
+	{SDL_GAMEPAD_BUTTON_WEST, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_x},
+	{SDL_GAMEPAD_BUTTON_NORTH, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_y},
+	{SDL_GAMEPAD_BUTTON_LEFT_STICK, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_leftStick},
+	{SDL_GAMEPAD_BUTTON_RIGHT_STICK, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_rightStick},
+	{SDL_GAMEPAD_BUTTON_BACK, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_back},
+	{SDL_GAMEPAD_BUTTON_START, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_start},
+	{SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_lb},
+	{SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::btn_rb},
+	{SDL_GAMEPAD_BUTTON_DPAD_UP, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::dpad_up},
+	{SDL_GAMEPAD_BUTTON_DPAD_DOWN, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::dpad_down},
+	{SDL_GAMEPAD_BUTTON_DPAD_LEFT, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::dpad_left},
+	{SDL_GAMEPAD_BUTTON_DPAD_RIGHT, IKIGAI::INPUT::Gamepad::GAMEPAD_BUTTON::dpad_right},
 };
 
 struct Window::Internal {
@@ -51,37 +53,42 @@ struct Window::Internal {
 	::SDL_Window* mWindow = nullptr;
 	SDL_GLContext mContext = nullptr;
 	bool mIsFocus = true;
-	std::set<SDL_GameController*> mGamepads;
+	std::set<SDL_Gamepad*> mGamepads;
 #if defined(USE_EDITOR) || defined(USE_CHEATS)
 	std::unique_ptr<IMGUI::IImGuiBackend> mImGuiBackend;
 #endif
 
-	void addGamepad(SDL_GameController* gp) {
+	void addGamepad(SDL_Gamepad* gp) {
 		mGamepads.insert(gp);
 	}
-	void removeGamepad(SDL_GameController* gp) {
+	void removeGamepad(SDL_Gamepad* gp) {
 		mGamepads.erase(gp);
 	}
 };
 
-std::vector<SDL_GameController*> findController() {
-	std::vector<SDL_GameController*> res;
-	for (int i = 0; i < SDL_NumJoysticks(); i++) {
-		if (SDL_IsGameController(i)) {
-			res.push_back(SDL_GameControllerOpen(i));
+std::vector<SDL_Gamepad*> findController() {
+	std::vector<SDL_Gamepad*> res;
+	int count = 0;
+	SDL_JoystickID* ids = SDL_GetGamepads(&count);
+	if (ids) {
+		for (int i = 0; i < count; ++i) {
+			if (SDL_Gamepad* gp = SDL_OpenGamepad(ids[i])) {
+				res.push_back(gp);
+			}
 		}
+		SDL_free(ids);
 	}
 	return res;
 }
 
 Window::Window(const WindowSettings& p_windowSettings, bool isMain, Window* sharedWindow) : mWindowSettings(p_windowSettings), mContext(std::make_unique<Internal>()), mIsMainWindow(isMain) {
-	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_GAMECONTROLLER);
+	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_GAMEPAD);
 	create(sharedWindow);
 
 	const auto gamepads = findController();
 	for (auto gp : gamepads) {
-		int id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gp));
-		std::string name = SDL_GameControllerName(gp);
+		int id = static_cast<int>(SDL_GetGamepadID(gp));
+		std::string name = SDL_GetGamepadName(gp) ? SDL_GetGamepadName(gp) : "";
 		gamepadAddEvent.run(INPUT::Gamepad(id, name));
 	}
 
@@ -91,7 +98,7 @@ Window::~Window() {
 	shutdownImGUI();
 #ifdef OPENGL_BACKEND
 	if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::OPENGL && mContext->mContext) {
-		SDL_GL_DeleteContext(mContext->mContext);
+		SDL_GL_DestroyContext(mContext->mContext);
 		mContext->mContext = nullptr;
 	}
 #endif
@@ -114,7 +121,11 @@ bool Window::getIsMainWindow() const {
 
 MATH::Vector2i Window::getMousePos() const {
 	MATH::Vector2i res;
-	SDL_GetMouseState(&res.x, &res.y);
+	float x = 0.0f;
+	float y = 0.0f;
+	SDL_GetMouseState(&x, &y);
+	res.x = static_cast<int>(x);
+	res.y = static_cast<int>(y);
 	return res;
 }
 
@@ -160,10 +171,11 @@ MATH::Vector2u Window::getSize() const
 	case Platform::IOS:
 	case Platform::ANDROIDOS: {
 		// For mobile platforms we will fetch the full screen size.
-		SDL_DisplayMode displayMode;
-		SDL_GetDesktopDisplayMode(0, &displayMode);
-		displayWidth = static_cast<uint32_t>(displayMode.w);
-		displayHeight = static_cast<uint32_t>(displayMode.h);
+		const SDL_DisplayMode* displayMode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
+		if (displayMode) {
+			displayWidth = static_cast<uint32_t>(displayMode->w);
+			displayHeight = static_cast<uint32_t>(displayMode->h);
+		}
 		break;
 	}
 	default: {
@@ -326,7 +338,7 @@ void Window::show() const {
 }
 
 void Window::focus() const {
-	SDL_SetWindowInputFocus(mContext->mWindow);
+	SDL_RaiseWindow(mContext->mWindow);
 }
 
 bool Window::hasFocus() const {
@@ -342,80 +354,82 @@ void Window::pollEvent() {
 		}
 #endif
 		switch (event.type) {
-		case SDL_QUIT:
+		case SDL_EVENT_QUIT:
 			mIsClose = false;
 			break;
-		case SDL_KEYDOWN:
-			keyPressedEvent.run(event.key.keysym.scancode);
+		case SDL_EVENT_KEY_DOWN:
+			keyPressedEvent.run(event.key.scancode);
 			break;
-		case SDL_KEYUP:
-			keyReleasedEvent.run(event.key.keysym.scancode);
+		case SDL_EVENT_KEY_UP:
+			keyReleasedEvent.run(event.key.scancode);
 			break;
-		case SDL_MOUSEBUTTONUP:
+		case SDL_EVENT_MOUSE_BUTTON_UP:
 			mouseButtonPressedEvent.run(event.button.button);
 			break;
-		case SDL_MOUSEBUTTONDOWN:
+		case SDL_EVENT_MOUSE_BUTTON_DOWN:
 			mouseButtonReleasedEvent.run(event.button.button);
 			break;
-		case SDL_MOUSEMOTION:
-
+		case SDL_EVENT_MOUSE_MOTION:
+			mouseMovedEvent.run(event.motion.xrel, event.motion.yrel);
 			break;
-		//GAMEPAD
-		case SDL_CONTROLLERDEVICEADDED: {
-			auto gp = SDL_GameControllerOpen(event.cdevice.which);
+		case SDL_EVENT_GAMEPAD_ADDED: {
+			auto gp = SDL_OpenGamepad(event.gdevice.which);
+			if (!gp) {
+				break;
+			}
 			mContext->addGamepad(gp);
-			int id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gp));
-			std::string name = SDL_GameControllerName(gp);
+			int id = static_cast<int>(SDL_GetGamepadID(gp));
+			std::string name = SDL_GetGamepadName(gp) ? SDL_GetGamepadName(gp) : "";
 			gamepadAddEvent.run(INPUT::Gamepad(id, name));
 			break;
 		}
-		case SDL_CONTROLLERDEVICEREMOVED: {
+		case SDL_EVENT_GAMEPAD_REMOVED: {
 			for (auto gp : mContext->mGamepads) {
-				if (gp && event.cdevice.which == SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gp))) {
-					SDL_GameControllerClose(gp);
+				if (gp && event.gdevice.which == SDL_GetGamepadID(gp)) {
+					SDL_CloseGamepad(gp);
 					mContext->removeGamepad(gp);
-					gamepadRemoveEvent.run(event.cdevice.which);
+					gamepadRemoveEvent.run(static_cast<int>(event.gdevice.which));
+					break;
 				}
 			}
 			break;
 		}
-		case SDL_CONTROLLERBUTTONDOWN: {
+		case SDL_EVENT_GAMEPAD_BUTTON_DOWN: {
 			for (auto gp : mContext->mGamepads) {
-				int id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gp));
-				if (gp && event.cdevice.which == id) {
-					gamepadButtonPressedEvent.run(id, ToGamepadButton.at(static_cast<SDL_GameControllerButton>(event.cbutton.button)));
+				int id = static_cast<int>(SDL_GetGamepadID(gp));
+				if (gp && event.gbutton.which == SDL_GetGamepadID(gp)) {
+					gamepadButtonPressedEvent.run(id, ToGamepadButton.at(static_cast<SDL_GamepadButton>(event.gbutton.button)));
 				}
 			}
 			break;
 		}
-		case SDL_CONTROLLERBUTTONUP: {
+		case SDL_EVENT_GAMEPAD_BUTTON_UP: {
 			for (auto gp : mContext->mGamepads) {
-				int id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gp));
-				if (gp && event.cdevice.which == id) {
-					gamepadButtonReleasedEvent.run(id, ToGamepadButton.at(static_cast<SDL_GameControllerButton>(event.cbutton.button)));
+				int id = static_cast<int>(SDL_GetGamepadID(gp));
+				if (gp && event.gbutton.which == SDL_GetGamepadID(gp)) {
+					gamepadButtonReleasedEvent.run(id, ToGamepadButton.at(static_cast<SDL_GamepadButton>(event.gbutton.button)));
 				}
 			}
 			break;
 		}
-		case SDL_WINDOWEVENT_FOCUS_GAINED:
+		case SDL_EVENT_WINDOW_FOCUS_GAINED:
 			mContext->mIsFocus = true;
 			break;
-		case SDL_WINDOWEVENT_FOCUS_LOST:
+		case SDL_EVENT_WINDOW_FOCUS_LOST:
 			mContext->mIsFocus = false;
 			break;
 		default:
 			break;
 		}
 
-		//GAMEPAD
 		for (auto gp : mContext->mGamepads) {
 			if (gp) {
-				const int id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(gp));
+				const int id = static_cast<int>(SDL_GetGamepadID(gp));
 
 				static float lxstick = 0.0f;
 				static float lystick = 0.0f;
-				float x = (float)SDL_GameControllerGetAxis(gp, SDL_GameControllerAxis::SDL_CONTROLLER_AXIS_LEFTX) / (float)INT16_MAX;
-				float y = (float)SDL_GameControllerGetAxis(gp, SDL_GameControllerAxis::SDL_CONTROLLER_AXIS_LEFTY) / (float)INT16_MAX;
+				float x = (float)SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTX) / (float)INT16_MAX;
+				float y = (float)SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTY) / (float)INT16_MAX;
 				if (!MATH::CMP(lxstick, x)) gamepadAxisEvent.run(id, INPUT::Gamepad::GAMEPAD_AXIS::leftStick_X, x);
 				if (!MATH::CMP(lystick, y)) gamepadAxisEvent.run(id, INPUT::Gamepad::GAMEPAD_AXIS::leftStick_Y, y);
 				lxstick = x;
@@ -423,21 +437,21 @@ void Window::pollEvent() {
 
 				static float rxstick = 0.0f;
 				static float rystick = 0.0f;
-				x = (float)SDL_GameControllerGetAxis(gp, SDL_GameControllerAxis::SDL_CONTROLLER_AXIS_RIGHTX) / (float)INT16_MAX;
-				y = (float)SDL_GameControllerGetAxis(gp, SDL_GameControllerAxis::SDL_CONTROLLER_AXIS_RIGHTY) / (float)INT16_MAX;
+				x = (float)SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTX) / (float)INT16_MAX;
+				y = (float)SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTY) / (float)INT16_MAX;
 				if (!MATH::CMP(rxstick, x)) gamepadAxisEvent.run(id, INPUT::Gamepad::GAMEPAD_AXIS::rightStick_X, x);
 				if (!MATH::CMP(rystick, y)) gamepadAxisEvent.run(id, INPUT::Gamepad::GAMEPAD_AXIS::rightStick_Y, y);
-				lxstick = x;
-				lystick = y;
+				rxstick = x;
+				rystick = y;
 
 				static float rtrigger = 0.0f;
 				static float ltrigger = 0.0f;
-				x = (float)SDL_GameControllerGetAxis(gp,SDL_GameControllerAxis::SDL_CONTROLLER_AXIS_TRIGGERLEFT) / (float)INT16_MAX;
-				y = (float)SDL_GameControllerGetAxis(gp, SDL_GameControllerAxis::SDL_CONTROLLER_AXIS_TRIGGERRIGHT) / (float)INT16_MAX;
-				if (!MATH::CMP(rtrigger, x)) gamepadTriggerEvent.run(id, INPUT::Gamepad::GAMEPAD_TRIGGER::leftTrigger, x);
-				if (!MATH::CMP(ltrigger, y)) gamepadTriggerEvent.run(id, INPUT::Gamepad::GAMEPAD_TRIGGER::rightTrigger, y);
-				rtrigger = x;
-				ltrigger = y;
+				x = (float)SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) / (float)INT16_MAX;
+				y = (float)SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) / (float)INT16_MAX;
+				if (!MATH::CMP(ltrigger, x)) gamepadTriggerEvent.run(id, INPUT::Gamepad::GAMEPAD_TRIGGER::leftTrigger, x);
+				if (!MATH::CMP(rtrigger, y)) gamepadTriggerEvent.run(id, INPUT::Gamepad::GAMEPAD_TRIGGER::rightTrigger, y);
+				ltrigger = x;
+				rtrigger = y;
 			}
 		}
 	}
@@ -479,32 +493,25 @@ bool Window::isClosed() const {
 }
 
 void Window::setCursorVisible(bool isVisible, bool isLock) const {
-	SDL_ShowCursor(isVisible ? SDL_ENABLE : SDL_DISABLE);
-	SDL_SetRelativeMouseMode(isLock ? SDL_TRUE : SDL_FALSE);
+	if (isVisible) {
+		SDL_ShowCursor();
+	} else {
+		SDL_HideCursor();
+	}
+	SDL_SetWindowRelativeMouseMode(mContext->mWindow, isLock);
 }
 
 std::pair<int, int> Window::getDrawableSize() {
 	int viewportWidth = 0;
 	int viewportHeight = 0;
-	if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::OPENGL) {
-		SDL_GL_GetDrawableSize(mContext->mWindow, &viewportWidth, &viewportHeight);
-	} else {
-#ifdef VULKAN_BACKEND
-		if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::VULKAN) {
-			SDL_Vulkan_GetDrawableSize(mContext->mWindow, &viewportWidth, &viewportHeight);
-			return { viewportWidth, viewportHeight };
-		}
-#endif
-		SDL_GetWindowSize(mContext->mWindow, &viewportWidth, &viewportHeight);
-	}
+	SDL_GetWindowSizeInPixels(mContext->mWindow, &viewportWidth, &viewportHeight);
 	return { viewportWidth , viewportHeight };
 }
 
 #ifdef VULKAN_BACKEND
-#include <SDL_vulkan.h>
 VkSurfaceKHR Window::createVulkanSurface(VkInstance instance) {
-	VkSurfaceKHR surface;
-	if (SDL_Vulkan_CreateSurface(mContext->mWindow, instance, &surface) == 0) {
+	VkSurfaceKHR surface = VK_NULL_HANDLE;
+	if (!SDL_Vulkan_CreateSurface(mContext->mWindow, instance, nullptr, &surface)) {
 		printf("Failed to create Vulkan surface.\n");
 		throw;
 	}
@@ -513,10 +520,11 @@ VkSurfaceKHR Window::createVulkanSurface(VkInstance instance) {
 
 std::vector<const char*> Window::getSDLVulkanExtentions() {
 	std::vector<const char*> extensions;
-	uint32_t extensions_count = 0;
-	SDL_Vulkan_GetInstanceExtensions(mContext->mWindow, &extensions_count, nullptr);
-	extensions.resize(extensions_count);
-	SDL_Vulkan_GetInstanceExtensions(mContext->mWindow, &extensions_count, extensions.data());
+	Uint32 extensions_count = 0;
+	const char* const* names = SDL_Vulkan_GetInstanceExtensions(&extensions_count);
+	if (names) {
+		extensions.assign(names, names + extensions_count);
+	}
 	return extensions;
 }
 #endif
@@ -613,36 +621,36 @@ void Window::create(Window* sharedWindow) {
 	}
 #endif
 
-	SDL_WindowFlags flags = (SDL_WindowFlags)(SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_SHOWN);
+	SDL_WindowFlags flags = static_cast<SDL_WindowFlags>(SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
 	if (backend == RENDER::RenderSettings::Backend::OPENGL) {
-		flags = (SDL_WindowFlags)(flags | SDL_WINDOW_OPENGL);
+		flags = static_cast<SDL_WindowFlags>(flags | SDL_WINDOW_OPENGL);
 	} else if (backend == RENDER::RenderSettings::Backend::VULKAN) {
-		flags = (SDL_WindowFlags)(flags | SDL_WINDOW_VULKAN);
+		flags = static_cast<SDL_WindowFlags>(flags | SDL_WINDOW_VULKAN);
 	} else if (backend == RENDER::RenderSettings::Backend::METAL) {
-		flags = (SDL_WindowFlags)(flags | SDL_WINDOW_METAL);
+		flags = static_cast<SDL_WindowFlags>(flags | SDL_WINDOW_METAL);
 	}
 	SDL_Window* _window{
-		SDL_CreateWindow(mWindowSettings.title.c_str(), SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, displaySize.x, displaySize.y,flags)
+		SDL_CreateWindow(mWindowSettings.title.c_str(), static_cast<int>(displaySize.x), static_cast<int>(displaySize.y), flags)
 	};
 
 	if (_window == nullptr) {
 		//TODO:
 		//printf("Error: SDL_CreateWindow(): %s\n", SDL_GetError());
 		//return -1;
+	} else {
+		SDL_SetWindowPosition(_window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 	}
 
 #ifdef DX12_BACKEND
-	if (backend == RENDER::RenderSettings::Backend::DIRECTX12) {
-		SDL_SysWMinfo wmInfo;
-		SDL_VERSION(&wmInfo.version);
-		SDL_GetWindowWMInfo(_window, &wmInfo);
-		mHWND = (HWND)wmInfo.info.win.window;
+	if (backend == RENDER::RenderSettings::Backend::DIRECTX12 && _window) {
+		SDL_PropertiesID props = SDL_GetWindowProperties(_window);
+		mHWND = static_cast<HWND>(SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
 	}
 #endif
 
 	if (::shouldDisplayFullScreen() || mWindowSettings.isFullscreen) {
 		mWindowSettings.isFullscreen = true;
-		SDL_SetWindowFullscreen(_window, SDL_TRUE);
+		SDL_SetWindowFullscreen(_window, true);
 	}
 	mContext->mWindow = _window;
 	mWindowID = SDL_GetWindowID(_window);

@@ -1,11 +1,12 @@
 #ifdef VULKAN_BACKEND
 #include "imguiBackend.h"
+#include <SDL3/SDL.h>
 #include <cstring>
 #include "windowModule/window/window.h"
 #include "renderModule/backends/vk/driverVk.h"
 #include "renderModule/backends/vk/textureVk.h"
 #include "renderModule/backends/vk/helpers.h"
-#include "backends/imgui_impl_sdl2.h"
+#include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_vulkan.h"
 #include "imgui.h"
 
@@ -18,7 +19,7 @@ namespace {
 	public:
 		bool init(IKIGAI::WINDOW::Window& window, IKIGAI::RENDER::DriverInterface& driver) override {
 			IKIGAI::IMGUI::ConfigureImGuiContext();
-			if (!ImGui_ImplSDL2_InitForVulkan(window.getSDLWindow())) {
+			if (!ImGui_ImplSDL3_InitForVulkan(window.getSDLWindow())) {
 				return false;
 			}
 
@@ -86,13 +87,13 @@ namespace {
 				vkDestroyDescriptorPool(*driverVk->mDevice, driverVk->mImguiPool, nullptr);
 				driverVk->mImguiPool = VK_NULL_HANDLE;
 			}
-			ImGui_ImplSDL2_Shutdown();
+			ImGui_ImplSDL3_Shutdown();
 			ImGui::DestroyContext();
 		}
 
 		void newFrame() override {
 			ImGui_ImplVulkan_NewFrame();
-			ImGui_ImplSDL2_NewFrame();
+			ImGui_ImplSDL3_NewFrame();
 			ImGui::NewFrame();
 		}
 
@@ -129,7 +130,7 @@ namespace {
 		void invalidateDeviceObjects() override {}
 
 		void processEvent(const void* sdlEvent) override {
-			ImGui_ImplSDL2_ProcessEvent(static_cast<const SDL_Event*>(sdlEvent));
+			ImGui_ImplSDL3_ProcessEvent(static_cast<const SDL_Event*>(sdlEvent));
 		}
 	};
 }

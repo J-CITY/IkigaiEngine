@@ -3,7 +3,7 @@
 #include "windowModule/window/window.h"
 #include "renderModule/backends/metal/driverMetal.h"
 #include "renderModule/backends/interface/textureInterface.h"
-#include "backends/imgui_impl_sdl2.h"
+#include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_metal.h"
 #include "imgui.h"
 
@@ -16,7 +16,7 @@ namespace {
 	public:
 		bool init(IKIGAI::WINDOW::Window& window, IKIGAI::RENDER::DriverInterface& driver) override {
 			IKIGAI::IMGUI::ConfigureImGuiContext();
-			if (!ImGui_ImplSDL2_InitForMetal(window.getSDLWindow())) {
+			if (!ImGui_ImplSDL3_InitForMetal(window.getSDLWindow())) {
 				return false;
 			}
 			auto* driverMetal = static_cast<IKIGAI::RENDER::DriverMetal*>(&driver);
@@ -29,7 +29,7 @@ namespace {
 
 		void shutdown() override {
 			ImGui_ImplMetal_Shutdown();
-			ImGui_ImplSDL2_Shutdown();
+			ImGui_ImplSDL3_Shutdown();
 			ImGui::DestroyContext();
 			mPassDescriptor = nil;
 			mDevice = nil;
@@ -37,7 +37,7 @@ namespace {
 
 		void newFrame() override {
 			ImGui_ImplMetal_NewFrame(mPassDescriptor);
-			ImGui_ImplSDL2_NewFrame();
+			ImGui_ImplSDL3_NewFrame();
 			ImGui::NewFrame();
 		}
 
@@ -67,7 +67,7 @@ namespace {
 		}
 
 		void processEvent(const void* sdlEvent) override {
-			ImGui_ImplSDL2_ProcessEvent(static_cast<const SDL_Event*>(sdlEvent));
+			ImGui_ImplSDL3_ProcessEvent(static_cast<const SDL_Event*>(sdlEvent));
 		}
 
 	private:

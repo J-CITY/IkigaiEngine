@@ -20,8 +20,9 @@ const vfspp::EntryInfo& SdlFile::GetEntryInfo() const {
 }
 
 uint64_t SdlFile::Size() const {
-    if (m_rwops) {
-        return static_cast<uint64_t>(SDL_RWsize(m_rwops));
+    if (m_io) {
+        const Sint64 size = SDL_GetIOSize(m_io);
+        return size > 0 ? static_cast<uint64_t>(size) : 0;
     }
     return 0;
 }
@@ -52,61 +53,62 @@ bool SdlFile::Open(FileMode mode) {
     if (IsOpened()) {
         Close();
     }
-    m_rwops = SDL_RWFromFile(m_fileInfo.NativePath().c_str(), getSdlMode(mode).c_str());
-    return m_rwops != nullptr;
+    m_io = SDL_IOFromFile(m_fileInfo.NativePath().c_str(), getSdlMode(mode).c_str());
+    return m_io != nullptr;
 }
 
 void SdlFile::Close() {
-    if (m_rwops) {
-        SDL_RWclose(m_rwops);
-        m_rwops = nullptr;
+    if (m_io) {
+        SDL_CloseIO(m_io);
+        m_io = nullptr;
     }
 }
 
 bool SdlFile::IsOpened() const {
-    return m_rwops != nullptr;
+    return m_io != nullptr;
 }
 
 uint64_t SdlFile::Seek(uint64_t offset, Origin origin) {
-    if (!m_rwops) return 0;
+    if (!m_io) return 0;
     
-    int whence = RW_SEEK_SET;
+    SDL_IOWhence whence = SDL_IO_SEEK_SET;
     if (origin == Origin::Begin) {
-        whence = RW_SEEK_SET;
+        whence = SDL_IO_SEEK_SET;
     } else if (origin == Origin::Set) {
-        whence = RW_SEEK_CUR;
+        whence = SDL_IO_SEEK_CUR;
     } else if (origin == Origin::End) {
-        whence = RW_SEEK_END;
+        whence = SDL_IO_SEEK_END;
     }
 
-    SDL_RWseek(m_rwops, static_cast<Sint64>(offset), whence);
+    SDL_SeekIO(m_io, static_cast<Sint64>(offset), whence);
     return Tell();
 }
 
 uint64_t SdlFile::Tell() const {
-    if (!m_rwops) return 0;
-    return static_cast<uint64_t>(SDL_RWtell(m_rwops));
+    if (!m_io) return 0;
+    const Sint64 pos = SDL_TellIO(m_io);
+    return pos > 0 ? static_cast<uint64_t>(pos) : 0;
 }
 
 uint64_t SdlFile::Read(std::span<uint8_t> buffer) {
-    if (!m_rwops || buffer.empty()) return 0;
-    return static_cast<uint64_t>(SDL_RWread(m_rwops, buffer.data(), 1, buffer.size_bytes()));
+    if (!m_io || buffer.empty()) return 0;
+    return static_cast<uint64_t>(SDL_ReadIO(m_io, buffer.data(), buffer.size_bytes()));
 }
 
 uint64_t SdlFile::Read(std::vector<uint8_t>& buffer, uint64_t size) {
     buffer.resize(size);
-    if (!m_rwops || size == 0) return 0;
-    return static_cast<uint64_t>(SDL_RWread(m_rwops, buffer.data(), 1, size));
+    if (!m_io || size == 0) return 0;
+    return static_cast<uint64_t>(SDL_ReadIO(m_io, buffer.data(), static_cast<size_t>(size)));
 }
 
 uint64_t SdlFile::Write(std::span<const uint8_t> buffer) {
-    if (!m_rwops || buffer.empty()) return 0;
-    return static_cast<uint64_t>(SDL_RWwrite(m_rwops, buffer.data(), 1, buffer.size_bytes()));
+    if (!m_io || buffer.empty()) return 0;
+    return static_cast<uint64_t>(SDL_WriteIO(m_io, buffer.data(), buffer.size_bytes()));
 }
 
 uint64_t SdlFile::Write(const std::vector<uint8_t>& buffer) {
-    if (!m_rwops || buffer.empty()) return 0;
-    return static_cast<uint64_t>(SDL_RWwrite(m_rwops, buffer.data(), 1, buffer.size()));
+    if (!m_io || buffer.empty()) return 0;
+    return static_cast<uint64_t>(SDL_WriteIO(m_io, buffer.data(), buffer.size()));
 }
 
 
@@ -176,9 +178,9 @@ void SdlFileSystem::CloseFile(vfspp::IFilePtr file) {
 vfspp::IFilePtr SdlFileSystem::CreateFile(const std::string& virtualPath) {
     if (IsReadOnly()) return nullptr;
     auto entry = GetEntryInfo(virtualPath).value();
-    SDL_RWops* rw = SDL_RWFromFile(entry.NativePath().c_str(), "wb");
-    if (rw) {
-        SDL_RWclose(rw);
+    SDL_IOStream* io = SDL_IOFromFile(entry.NativePath().c_str(), "wb");
+    if (io) {
+        SDL_CloseIO(io);
         return OpenFile(virtualPath, vfspp::IFile::FileMode::ReadWrite);
     }
     return nullptr;
@@ -231,9 +233,9 @@ bool SdlFileSystem::IsFileExists(const std::string& virtualPath) const {
     }
 
     // Fallback для SDL-специфичных путей
-    SDL_RWops* rwOps = SDL_RWFromFile(entry.NativePath().c_str(), "rb");
-    if (rwOps) {
-        SDL_RWclose(rwOps);
+    SDL_IOStream* io = SDL_IOFromFile(entry.NativePath().c_str(), "rb");
+    if (io) {
+        SDL_CloseIO(io);
         return true;
     }
     return false;

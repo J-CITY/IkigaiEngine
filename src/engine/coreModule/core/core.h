@@ -1,6 +1,6 @@
 #pragma once
 #ifdef USE_SDL
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #endif
 #include <memory>
 #ifdef USE_EDITOR
@@ -94,6 +94,7 @@ namespace IKIGAI
 	namespace INPUT_SYSTEM
 	{
 		class InputManager;
+		class InputActions;
 	}
 }
 
@@ -144,6 +145,7 @@ namespace IKIGAI {
 			std::shared_ptr<WINDOW::Window> window;
 			std::unique_ptr<UTILS::LOGG::Logger> mLogger;
 			std::unique_ptr<INPUT_SYSTEM::InputManager>   inputManager;
+			std::unique_ptr<INPUT_SYSTEM::InputActions>   inputActions;
 			std::unique_ptr<RENDER::DriverInterface>         driver;
 			std::unique_ptr<SCRIPTING::ScriptInterpreter> scriptInterpreter;
 			std::unique_ptr<RENDER::Renderer> render;

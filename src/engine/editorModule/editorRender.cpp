@@ -22,6 +22,7 @@
 #include "utilsModule/pathGetter.h"
 #include "utilsModule/imguiHelper/ImGuiFileBrowser.h"
 #include "renderModule/backends/interface/resourceStruct.h"
+#include "windowModule/inputManager/inputActions.h"
 
 
 using namespace IKIGAI::EDITOR;
@@ -150,6 +151,16 @@ void EditorRender::draw() {
 			}
 			auto data = res.unwrap();
 			mData->mResWindows.push_back(std::make_unique<ResourceEditorWindow<RENDER::ModelResource>>(GlobalState.mResPath, data)); break;
+		}
+		case File::FileType::INPUT_RES:
+		{
+			auto res = UTILS::FromJson<INPUT_SYSTEM::InputConfig>(GlobalState.mResPath);
+			if (res.isErr()) {
+				LOG_ERROR << "Cant open: " << GlobalState.mResType;
+				break;
+			}
+			auto data = res.unwrap();
+			mData->mResWindows.push_back(std::make_unique<ResourceEditorWindow<INPUT_SYSTEM::InputConfig>>(GlobalState.mResPath, data)); break;
 		}
 		default:;
 		}

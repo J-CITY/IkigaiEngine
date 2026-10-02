@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../window/window.h"
+#include <unordered_set>
 #include <utilsModule/event.h>
 
 namespace IKIGAI::INPUT_SYSTEM {
@@ -339,14 +340,23 @@ namespace IKIGAI::INPUT_SYSTEM {
 
 		[[nodiscard]] bool isKeyPressed(EKey p_key) const;
 		[[nodiscard]] bool isKeyReleased(EKey p_key) const;
+		[[nodiscard]] bool wasKeyPressedThisFrame(EKey p_key) const;
+		[[nodiscard]] bool wasKeyReleasedThisFrame(EKey p_key) const;
 		[[nodiscard]] bool isMouseButtonPressed(EMouseButton p_button) const;
 		[[nodiscard]] bool isMouseButtonReleased(EMouseButton p_button) const ;
+		[[nodiscard]] bool wasMouseButtonPressedThisFrame(EMouseButton p_button) const;
+		[[nodiscard]] bool wasMouseButtonReleasedThisFrame(EMouseButton p_button) const;
 		[[nodiscard]] bool isButtonPressed(int id, INPUT::Gamepad::GAMEPAD_BUTTON btn) const;
+		[[nodiscard]] bool wasButtonPressedThisFrame(int id, INPUT::Gamepad::GAMEPAD_BUTTON btn) const;
+		[[nodiscard]] bool wasButtonReleasedThisFrame(int id, INPUT::Gamepad::GAMEPAD_BUTTON btn) const;
 		[[nodiscard]] float getAxisPosition(int id, INPUT::Gamepad::GAMEPAD_AXIS axis) const;
 		[[nodiscard]] float getTriggerValue(int id, INPUT::Gamepad::GAMEPAD_TRIGGER tgr) const;
 		[[nodiscard]] bool isGamepadExist(int id) const;
 		[[nodiscard]] MATH::Vector2i getMousePosition() const;
+		[[nodiscard]] MATH::Vector2f getMouseDelta() const;
+		[[nodiscard]] const INPUT::Gamepad* getFirstGamepad() const;
 		void clearEvents();
+		void endFrame();
 
 		const INPUT::Gamepad* getGamepad(int id) const;
 	private:
@@ -354,6 +364,7 @@ namespace IKIGAI::INPUT_SYSTEM {
 		void onKeyReleased(int val);
 		void onMouseButtonPressed(int val);
 		void onMouseButtonReleased(int val);
+		void onMouseMoved(float dx, float dy);
 		void onGamepadButtonPressed(int id, INPUT::Gamepad::GAMEPAD_BUTTON key);
 		void onGamepadButtonReleased(int id, INPUT::Gamepad::GAMEPAD_BUTTON key);
 		void onGamepadAxis(int id, INPUT::Gamepad::GAMEPAD_AXIS key, float val);
@@ -369,6 +380,7 @@ namespace IKIGAI::INPUT_SYSTEM {
 		EVENT::Event<>::ID mKeyReleasedListener = EVENT::Event<>::ID(0);
 		EVENT::Event<>::ID mMouseButtonPressedListener = EVENT::Event<>::ID(0);
 		EVENT::Event<>::ID mMouseButtonReleasedListener = EVENT::Event<>::ID(0);
+		EVENT::Event<>::ID mMouseMovedListener = EVENT::Event<>::ID(0);
 
 		EVENT::Event<>::ID mGamepadButtonPressedListener = EVENT::Event<>::ID(0);
 		EVENT::Event<>::ID mGamepadButtonReleasedListener = EVENT::Event<>::ID(0);
@@ -381,6 +393,13 @@ namespace IKIGAI::INPUT_SYSTEM {
 		
 		std::unordered_map<EKey, EKeyState> mKeyEvents;
 		std::unordered_map<EMouseButton, EMouseButtonState>	mMouseButtonEvents;
+		std::unordered_set<EKey> mKeysPressedThisFrame;
+		std::unordered_set<EKey> mKeysReleasedThisFrame;
+		std::unordered_set<EMouseButton> mMousePressedThisFrame;
+		std::unordered_set<EMouseButton> mMouseReleasedThisFrame;
+		std::unordered_set<uint64_t> mGamepadPressedThisFrame;
+		std::unordered_set<uint64_t> mGamepadReleasedThisFrame;
+		MATH::Vector2f mMouseDelta;
 		std::vector<INPUT::Gamepad> mGamepads;
 	};
 }

@@ -81,6 +81,9 @@ File::FileType File::GetFileType(const std::filesystem::path& path) {
 	if (modelResExt.contains(ext)) {
 		return FileType::MODEL_RES;
 	}
+	if (inputResExt.contains(ext)) {
+		return FileType::INPUT_RES;
+	}
 	return FileType::TEXT;
 }
 
@@ -294,7 +297,7 @@ void FileBrowserWindow::drawFolder(std::string_view path)
 				mHistory.push(mSelectedFolderPath);
 				newPath = entry.path().string();
 			}	//editMaterial = RESOURCES::ServiceManager::Get<RESOURCES::MaterialLoader>().loadResource(entry.path().string());
-			else if (extType == File::FileType::MATERIAL || extType == File::FileType::TEXTURE_RES || extType == File::FileType::SHADER_RES || extType == File::FileType::AUDIO_RES || extType == File::FileType::MODEL_RES) {
+			else if (extType == File::FileType::MATERIAL || extType == File::FileType::TEXTURE_RES || extType == File::FileType::SHADER_RES || extType == File::FileType::AUDIO_RES || extType == File::FileType::MODEL_RES || extType == File::FileType::INPUT_RES) {
 				EditorRender::GlobalState.mResPath = entry.path().string();
 				EditorRender::GlobalState.mResType = extType;
 			}

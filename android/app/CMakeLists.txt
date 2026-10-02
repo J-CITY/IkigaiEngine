@@ -24,16 +24,9 @@ set(SDL_SO_DIR "${CMAKE_SOURCE_DIR}/../sdl/build/intermediates/ndkBuild/${BUILD_
 #        IMPORTED
 #)
 
-# This is the main SDL library target, we will name it 'sdl2'.
+# This is the main SDL library target, we will name it 'sdl3'.
 add_library(
-        sdl2
-        SHARED
-        IMPORTED
-)
-
-# This is the SDL2 image library
-add_library(
-        sdl2_image
+        sdl3
         SHARED
         IMPORTED
 )
@@ -58,17 +51,10 @@ find_library(android-lib android)
 #)
 
 set_target_properties(
-        sdl2
+        sdl3
         PROPERTIES
         IMPORTED_LOCATION
-        ${SDL_SO_DIR}/libSDL2.so
-)
-
-set_target_properties(
-        sdl2_image
-        PROPERTIES
-        IMPORTED_LOCATION
-        ${SDL_SO_DIR}/libSDL2_image.so
+        ${SDL_SO_DIR}/libSDL3.so
 )
 
 set_target_properties(
@@ -79,10 +65,9 @@ set_target_properties(
 )
 
 # We will tell our build system where to look for third party header files.
-include_directories(${THIRD_PARTY_DIR}/SDL/include)
+include_directories(${THIRD_PARTY_DIR}/SDL3/include)
 include_directories(${THIRD_PARTY_DIR}/glm)
 include_directories(${THIRD_PARTY_DIR}/tiny-obj-loader)
-include_directories(${THIRD_PARTY_DIR}/SDL2_image)
 include_directories(${THIRD_PARTY_DIR}/serdepp/include)
 include_directories(${THIRD_PARTY_DIR}/magic_enum/include)
 include_directories(${THIRD_PARTY_DIR}/magic_enum/include/magic_enum)
@@ -155,9 +140,9 @@ file(GLOB_RECURSE IMGUI_FILES
         #GLFW
         #"../3rd/imgui/imgui/imgui_impl_glfw.cpp"
         #"../3rd/imgui/imgui/imgui_impl_glfw.h"
-        #SDL2
-        "../../3rd/imgui/imgui/imgui_impl_sdl2.h"
-        "../../3rd/imgui/imgui/imgui_impl_sdl2.cpp"
+        #SDL3
+        "../../3rd/imgui/imgui/backends/imgui_impl_sdl3.h"
+        "../../3rd/imgui/imgui/backends/imgui_impl_sdl3.cpp"
         #OPENGL
         "../../3rd/imgui/imgui/imgui_impl_opengl3.h"
         "../../3rd/imgui/imgui/imgui_impl_opengl3.cpp"
@@ -262,8 +247,7 @@ add_compile_definitions(OPENGL_BACKEND)
 # Finally, we need to link all the libraries we want to use in our project together, remembering that the 'a-simple-triangle' library is in fact our own C++ code. Note also we are including the 'GLESv2' library for OpenGL ES2 support, though we don't need to define it ourselves with the 'add_library' commands.
 target_link_libraries(
         cross_test
-        sdl2
-        sdl2_image
+        sdl3
         assimp
         ${log-lib}
         ${android-lib}

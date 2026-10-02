@@ -2,7 +2,7 @@
 
 #include <vfspp/IFile.h>
 #include <vfspp/IFileSystem.h>
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 namespace IKIGAI::RESOURCES {
 
@@ -28,7 +28,7 @@ namespace IKIGAI::RESOURCES {
         std::string getSdlMode(FileMode mode) const;
 
         vfspp::EntryInfo m_fileInfo;
-        SDL_RWops* m_rwops = nullptr;
+        SDL_IOStream* m_io = nullptr;
     };
 
     class SdlFileSystem : public vfspp::IFileSystem {

@@ -21,6 +21,7 @@
 #include <taskModule/taskSystem.h>
 #include <utilsModule/pathGetter.h>
 #include "windowModule/inputManager/inputManager.h"
+#include "windowModule/inputManager/inputActions.h"
 #include <sceneModule/sceneManager.h>
 #include "../ecs/systems/audioSystem.h"
 #include "../ecs/systems/scriptSystem.h"
@@ -115,6 +116,8 @@ Core:: Core(
 	materialManager = std::make_unique<RESOURCES::MaterialLoader>();
 	sceneManager = std::make_unique<SCENE_SYSTEM::SceneManager>(Config::ENGINE_ASSETS_PATH);
 	inputManager = std::make_unique<INPUT_SYSTEM::InputManager>(*window);
+	inputActions = std::make_unique<INPUT_SYSTEM::InputActions>(*inputManager);
+	inputActions->load(INPUT_SYSTEM::DefaultInputResourcePath);
 	RESOURCES::ServiceManager::Set<WINDOW::Window>(window.get());
 
 	driver = RENDER::CreateRenderDriver(RENDER::DriverInterface::settings.backend, *window);
@@ -235,6 +238,7 @@ Core:: Core(
 	RESOURCES::ServiceManager::Set<RESOURCES::ShaderLoader>(shaderManager.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::MaterialLoader>(materialManager.get());
 	RESOURCES::ServiceManager::Set<INPUT_SYSTEM::InputManager>(inputManager.get());
+	RESOURCES::ServiceManager::Set<INPUT_SYSTEM::InputActions>(inputActions.get());
 	RESOURCES::ServiceManager::Set<SCENE_SYSTEM::SceneManager>(sceneManager.get());
 	RESOURCES::ServiceManager::Set<AUDIO::AudioManager>(audioManager.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::AudioSourceLoader>(audioSourceLoader.get());

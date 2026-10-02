@@ -12,7 +12,23 @@
 #include <serdepp/adaptor/reflection.hpp>
 
 namespace IKIGAI::EDITOR {
-	template<class T, typename std::enable_if<!std::is_enum<T>::value>::type* = nullptr>
+	template<class T, class = void>
+	struct has_get_members : std::false_type {};
+
+	template<class T>
+	struct has_get_members<T, std::void_t<decltype(T::GetMembers())>> : std::true_type {};
+
+	template<class T>
+	struct is_vector_of_get_members : std::false_type {};
+
+	template<class T, class A>
+	struct is_vector_of_get_members<std::vector<T, A>> : has_get_members<T> {};
+
+	template<class T, typename std::enable_if<
+		!std::is_enum<T>::value &&
+		!has_get_members<T>::value &&
+		!is_vector_of_get_members<T>::value
+	>::type* = nullptr>
 	inline bool drawMember(const std::string& name, T& data) {
 		LOG_INFO << "Not support: " << name;
 		return false;
@@ -232,25 +248,71 @@ namespace IKIGAI::EDITOR {
 
 	template<class R, int N>
 	struct MemberDrawer {
-		void run(R& res) {
-			auto members = R::GetMembers();
+		void run(R& res);
+	};
 
-			auto& m = std::get<N>(members);
-			auto& name = m.getName();
-			auto data = m.get(res);
-			if (drawMember(name, data)) {
-				m.set(res, data);
+	template<class T>
+	inline void drawReflectedObject(const std::string& name, T& data) {
+		if (ImGui::TreeNode(name.c_str())) {
+			auto members = T::GetMembers();
+			MemberDrawer<T, static_cast<int>(std::tuple_size<decltype(members)>::value) - 1>().run(data);
+			ImGui::TreePop();
+		}
+	}
+
+	template<class T>
+	inline void drawReflectedVector(const std::string& name, std::vector<T>& data) {
+		ImGui::Text("%s", name.c_str());
+		ImGui::PushID(name.c_str());
+		int delItem = -1;
+		int i = 0;
+		for (auto& e : data) {
+			ImGui::PushID(i);
+			if (ImGui::TreeNode("item", "[%d]", i)) {
+				auto members = T::GetMembers();
+				MemberDrawer<T, static_cast<int>(std::tuple_size<decltype(members)>::value) - 1>().run(e);
+				ImGui::TreePop();
 			}
+			ImGui::SameLine();
+			if (ImGui::Button("X")) {
+				delItem = i;
+			}
+			ImGui::PopID();
+			++i;
+		}
+		if (delItem >= 0) {
+			data.erase(data.begin() + delItem);
+		}
+		if (ImGui::Button("Add")) {
+			data.push_back(T{});
+		}
+		ImGui::PopID();
+	}
 
+	template<class R, int N>
+	void MemberDrawer<R, N>::run(R& res) {
+		auto members = R::GetMembers();
+
+		auto& m = std::get<N>(members);
+		auto& name = m.getName();
+		auto data = m.get(res);
+		using DataT = std::decay_t<decltype(data)>;
+		if constexpr (is_vector_of_get_members<DataT>::value) {
+			drawReflectedVector(name, data);
+			m.set(res, data);
+		}
+		else if constexpr (has_get_members<DataT>::value) {
+			drawReflectedObject(name, data);
+			m.set(res, data);
+		}
+		else if (drawMember(name, data)) {
+			m.set(res, data);
+		}
+
+		if constexpr (N > 0) {
 			MemberDrawer<R, N - 1>().run(res);
 		}
-	};
-
-	template<class R>
-	struct MemberDrawer<R, 0> {
-		void run(R& res) {
-		}
-	};
+	}
 
 	template<class T>
 	class ResourceEditorWindow : public EditorWindow {

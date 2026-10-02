@@ -72,6 +72,7 @@ namespace IKIGAI::WINDOW {
 		EVENT::Event<int> keyReleasedEvent;
 		EVENT::Event<int> mouseButtonPressedEvent;
 		EVENT::Event<int> mouseButtonReleasedEvent;
+		EVENT::Event<float, float> mouseMovedEvent;
 
 		EVENT::Event<int, INPUT::Gamepad::GAMEPAD_BUTTON> gamepadButtonPressedEvent;
 		EVENT::Event<int, INPUT::Gamepad::GAMEPAD_BUTTON> gamepadButtonReleasedEvent;

@@ -1,11 +1,11 @@
 #ifdef DX12_BACKEND
 #include "imguiBackend.h"
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #include "windowModule/window/window.h"
 #include "renderModule/backends/dx12/driverDx12.h"
 #include "renderModule/backends/dx12/d3dUtil.h"
 #include "renderModule/backends/interface/textureInterface.h"
-#include "backends/imgui_impl_sdl2.h"
+#include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_dx12.h"
 #include "imgui.h"
 
@@ -18,7 +18,7 @@ namespace {
 	public:
 		bool init(IKIGAI::WINDOW::Window& window, IKIGAI::RENDER::DriverInterface& driver) override {
 			IKIGAI::IMGUI::ConfigureImGuiContext();
-			if (!ImGui_ImplSDL2_InitForD3D(window.getSDLWindow())) {
+			if (!ImGui_ImplSDL3_InitForD3D(window.getSDLWindow())) {
 				return false;
 			}
 
@@ -37,13 +37,13 @@ namespace {
 
 		void shutdown() override {
 			ImGui_ImplDX12_Shutdown();
-			ImGui_ImplSDL2_Shutdown();
+			ImGui_ImplSDL3_Shutdown();
 			ImGui::DestroyContext();
 		}
 
 		void newFrame() override {
 			ImGui_ImplDX12_NewFrame();
-			ImGui_ImplSDL2_NewFrame();
+			ImGui_ImplSDL3_NewFrame();
 			ImGui::NewFrame();
 		}
 
@@ -73,7 +73,7 @@ namespace {
 		}
 
 		void processEvent(const void* sdlEvent) override {
-			ImGui_ImplSDL2_ProcessEvent(static_cast<const SDL_Event*>(sdlEvent));
+			ImGui_ImplSDL3_ProcessEvent(static_cast<const SDL_Event*>(sdlEvent));
 		}
 	};
 }

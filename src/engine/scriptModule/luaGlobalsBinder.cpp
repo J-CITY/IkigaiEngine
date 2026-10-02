@@ -7,6 +7,7 @@
 #include <resourceModule/modelManager.h>
 #include <resourceModule/materialManager.h>
 #include <windowModule/inputManager/inputManager.h>
+#include <windowModule/inputManager/inputActions.h>
 #include <resourceModule/ServiceManager.h>
 
 #include "utilsModule/log/loggerDefine.h"
@@ -207,6 +208,25 @@ void LuaGlobalsBinder::BindGlobals(sol::state & p_luaState) {
 	{
 		auto mousePos = IKIGAI::RESOURCES::ServiceManager::Get<InputManager>().getMousePosition();
 		return Vector2f(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y));
+	};
+
+	p_luaState["Inputs"]["IsPressed"] = [](const std::string& action) {
+		return IKIGAI::RESOURCES::ServiceManager::Get<InputActions>().isPressed(action);
+	};
+	p_luaState["Inputs"]["WasPressedThisFrame"] = [](const std::string& action) {
+		return IKIGAI::RESOURCES::ServiceManager::Get<InputActions>().wasPressedThisFrame(action);
+	};
+	p_luaState["Inputs"]["WasReleasedThisFrame"] = [](const std::string& action) {
+		return IKIGAI::RESOURCES::ServiceManager::Get<InputActions>().wasReleasedThisFrame(action);
+	};
+	p_luaState["Inputs"]["ReadValue"] = [](sol::this_state state, const std::string& action) -> sol::object {
+		auto& actions = IKIGAI::RESOURCES::ServiceManager::Get<InputActions>();
+		sol::state_view lua(state);
+		const auto value2 = actions.readValue2(action);
+		if (value2.x != 0.0f || value2.y != 0.0f) {
+			return sol::make_object(lua, value2);
+		}
+		return sol::make_object(lua, actions.readValue(action));
 	};
 
 	p_luaState["Scenes"]["GetCurrentScene"] = []() -> Scene& { return IKIGAI::RESOURCES::ServiceManager::Get<SceneManager>().getCurrentScene(); };
