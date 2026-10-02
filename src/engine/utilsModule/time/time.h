@@ -80,5 +80,8 @@ namespace IKIGAI::TIME {
 		std::chrono::steady_clock::time_point start;
 		double scale = 1.0;
 		std::chrono::duration<double> dt{};
+#ifdef __EMSCRIPTEN__
+		double mLastMs = -1.0;
+#endif
 	};
 }

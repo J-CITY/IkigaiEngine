@@ -50,7 +50,7 @@ void IKIGAI::EDITOR::MaterialWindow::draw() {
 	//	//popupStates["create_new_material"] = true;
 	// }
 
-	ImGui::Text("Name:", material->getPath());
+	ImGui::Text("Name: %s", material->getPath().c_str());
 
 	static bool isMatSettingsOpen = true;
 	if (ImGui::CollapsingHeader("Material settings", &isMatSettingsOpen, ImGuiTreeNodeFlags_DefaultOpen)) {

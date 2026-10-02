@@ -7,6 +7,7 @@
 
 #include "renderModule/backends/interface/reflectionStructs.h"
 #include "renderModule/backends/interface/shaderInterface.h"
+#include "renderModule/backends/interface/resourceStruct.h"
 
 namespace IKIGAI::RENDER {
 class ShaderDx12 : public ShaderInterface {
@@ -16,27 +17,27 @@ public:
   }
 
   ShaderDx12(std::map<ShaderType, std::string> shaderCode);
+  explicit ShaderDx12(const ShaderResource& res);
 
+  static std::shared_ptr<ShaderDx12> Create(const ShaderResource& res);
   static std::shared_ptr<ShaderDx12>
   CreateFromPath(std::map<ShaderType, std::string> path);
-  // private:
+
   ShaderDx12();
 
   void bind() override {};
   void unbind() override {};
-  void recompile(const ShaderResource &res) override {}
-
-  // std::unordered_map<uint32_t, ShaderReflection::Descriptor>
-  // mRequiredDescriptorBindings; std::unordered_map<ShaderStage,
-  // std::unordered_map<uint32_t/*set*/,
-  // std::unordered_set<uint32_t>/*bindings*/>> mRequiredDescriptorSets;
-  // std::unordered_map<uint32_t, uint32_t> mBindingToRootIndexMap;
+  void recompile(const ShaderResource &res) override;
 
   std::map<ShaderType, Microsoft::WRL::ComPtr<ID3DBlob>> mBlobs;
   Microsoft::WRL::ComPtr<ID3D12RootSignature> mRootSignature;
   int mPushConstantRootIndex = -1;
+  uint32_t mPushConstantDwords = 0;
 
   void buildRootSignature();
+
+private:
+  void create(const ShaderResource& res);
 };
 } // namespace IKIGAI::RENDER
 #endif

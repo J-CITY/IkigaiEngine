@@ -78,10 +78,13 @@ namespace IKIGAI {
 			FRIEND_SINGLETON_SERVICE(AudioManagerAL)
 
 			std::unique_ptr<SoLoud::Soloud> audioEngine;
+			bool mReady = false;
 
 			std::unordered_map<std::string, SoLoud::Wav> sounds;
 			std::unordered_map<std::string, SoLoud::WavStream> musics;
 			AudioManagerAL();
+
+			bool isReady() const { return mReady && audioEngine; }
 
 		public:
 			~AudioManagerAL() override;

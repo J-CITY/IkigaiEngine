@@ -5,10 +5,10 @@
 #include <set>
 #include <SDL3/SDL.h>
 #include "utilsModule/log/loggerDefine.h"
-
 #include "coreModule/platform.hpp"
 #include "windowModule/inputManager/inputManager.h"
 #ifdef __EMSCRIPTEN__
+#include <iostream>
 #include <emscripten.h>
 #endif
 
@@ -358,6 +358,16 @@ void Window::pollEvent() {
 			mIsClose = false;
 			break;
 		case SDL_EVENT_KEY_DOWN:
+#ifdef __EMSCRIPTEN__
+			{
+				static int keyLogs = 8;
+				if (keyLogs > 0) {
+					--keyLogs;
+					std::cout << "[web] key down scancode=" << static_cast<int>(event.key.scancode) << std::endl;
+					std::cout.flush();
+				}
+			}
+#endif
 			keyPressedEvent.run(event.key.scancode);
 			break;
 		case SDL_EVENT_KEY_UP:

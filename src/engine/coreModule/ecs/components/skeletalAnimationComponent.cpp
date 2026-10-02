@@ -6,6 +6,9 @@
 #include "resourceModule/skeletonStateGraphManager.h"
 #include "skeletalModule/animationInstance.h"
 #include "skeletalModule/skeletalStateGraph.h"
+#ifdef __EMSCRIPTEN__
+#include <iostream>
+#endif
 
 namespace IKIGAI::ECS {
 	SkeletalAnimationComponent::SkeletalAnimationComponent(UTILS::Ref<ECS::Object> obj) : ComponentBase(obj) {
@@ -23,6 +26,12 @@ namespace IKIGAI::ECS {
 	SkeletalAnimationComponent::~SkeletalAnimationComponent() = default;
 
 	void SkeletalAnimationComponent::onUpdate(std::chrono::duration<double> dt) {
+		if (!mPlayable && !mGraphPath.empty()) {
+			auto skelComp = obj->getComponent<SkeletalComponent>();
+			if (skelComp && skelComp->getSkeleton()) {
+				setAnimation(mGraphPath);
+			}
+		}
 		if (mPlayable) {
 			mPlayable->update(static_cast<float>(dt.count()));
 		}
@@ -37,13 +46,24 @@ namespace IKIGAI::ECS {
 		if (!path.empty()) {
 			//TODO: res calculate file or resource
 			auto res = RESOURCES::ServiceManager::Get<RESOURCES::SkeletonAnimationLoader>().loadResource(path);
+#ifdef __EMSCRIPTEN__
+			std::cout << "[web] skeletal anim load " << path << " res=" << (res ? "ok" : "null") << std::endl;
+			std::cout.flush();
+#endif
 			if (res) {
 				auto skelComp = obj->getComponent<SkeletalComponent>();
 				std::shared_ptr<SKELETON::Skeleton> skeleton = nullptr;
 				if (skelComp && skelComp->getSkeleton()) {
 					skeleton = skelComp->getSkeleton();
 				}
-
+#ifdef __EMSCRIPTEN__
+				std::cout << "[web] skeletal skeleton=" << (skeleton ? "ok" : "null") << std::endl;
+				std::cout.flush();
+#endif
+				if (!skeleton) {
+					mPlayable = nullptr;
+					return;
+				}
 				mPlayable = std::make_shared<SKELETON::AnimSample>(skeleton, res);
 			}
 		} else {

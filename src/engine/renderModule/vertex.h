@@ -16,7 +16,8 @@ namespace IKIGAI {
 		MATH::Vector3f bitangent;
 
 		//bone indexes which will influence this vertex
-#if defined(USING_GLES) || defined(OPENGL_SIMPLE_RENDER)
+		// WebGL2 has integer attribs (shader uses ivec4). GLES2 stored IDs as float.
+#if (defined(USING_GLES) || defined(OPENGL_SIMPLE_RENDER)) && !defined(__EMSCRIPTEN__)
 		std::array<float, 4> m_BoneIDs = {-1, -1, -1, -1};
 #else
 		std::array<int, 4> m_BoneIDs = {-1, -1, -1, -1};

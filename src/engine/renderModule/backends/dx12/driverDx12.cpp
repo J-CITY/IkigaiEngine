@@ -1,6 +1,8 @@
 #include "driverDx12.h"
 
 #include "renderModule/backends/interface/meshInterface.h"
+#include <algorithm>
+#include <cstring>
 
 #ifdef DX12_BACKEND
 #include "frameBufferDx12.h"
@@ -9,6 +11,7 @@
 #include "shaderDx12.h"
 #include "textureDx12.h"
 #include "vertexBufferDx12.h"
+#include "uniformBufferDx12.h"
 #include "backends/imgui_impl_dx12.h"
 #include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
 #include "d3dx12/DirectXHelpers.h"
@@ -17,10 +20,10 @@
 #include "resourceModule/serviceManager.h"
 #include "resourceModule/modelManager.h"
 #include "resourceModule/materialManager.h"
+#include "utilsModule/log/loggerDefine.h"
 #include "modelDx12.h"
 #include "materialDx12.h"
 #include "windowModule/window/window.h"
-#include "../../gameRendererDx12.h"
 #include <dxgi1_6.h>
 #pragma comment(lib, "dxgi")
 
@@ -37,10 +40,10 @@ const static std::map<PrimitiveMode, D3D_PRIMITIVE_TOPOLOGY> TopologyMap = {
 	{PrimitiveMode::LINE_STRIP_ADJACENCY, D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ},
 	{PrimitiveMode::TRIANGLES_ADJACENCY, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ},
 	{PrimitiveMode::TRIANGLE_STRIP_ADJACENCY, D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ},
+	{PrimitiveMode::PATCHES, D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST},
 	//Not support
 	//{PrimitiveMode::LINE_LOOP, }
 	//{PrimitiveMode::TRIANGLE_FAN, }
-	//{PrimitiveMode::PATCHES, }
 };
 
 const static std::map<CullFace, D3D12_CULL_MODE> CullMap = {
@@ -143,58 +146,34 @@ std::string DriverDx12::State::getId() const {
 	return res;
 }
 
-std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> DriverDx12::GetStaticSamplers() {
-	const CD3DX12_STATIC_SAMPLER_DESC pointWrap(
-		0, // shaderRegister
-		D3D12_FILTER_MIN_MAG_MIP_POINT, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP); // addressW
-
-	const CD3DX12_STATIC_SAMPLER_DESC pointClamp(
-		1, // shaderRegister
-		D3D12_FILTER_MIN_MAG_MIP_POINT, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP); // addressW
-
-	const CD3DX12_STATIC_SAMPLER_DESC linearWrap(
-		2, // shaderRegister
-		D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP); // addressW
-
-	const CD3DX12_STATIC_SAMPLER_DESC linearClamp(
-		3, // shaderRegister
-		D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP); // addressW
-
-	const CD3DX12_STATIC_SAMPLER_DESC anisotropicWrap(
-		4, // shaderRegister
-		D3D12_FILTER_ANISOTROPIC, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressW
-		0.0f,                             // mipLODBias
-		8);                               // maxAnisotropy
-
-	const CD3DX12_STATIC_SAMPLER_DESC anisotropicClamp(
-		5, // shaderRegister
-		D3D12_FILTER_ANISOTROPIC, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressW
-		0.0f,                              // mipLODBias
-		8);                                // maxAnisotropy
-
-	return {
-		pointWrap, pointClamp,
-		linearWrap, linearClamp,
-		anisotropicWrap, anisotropicClamp
+std::vector<CD3DX12_STATIC_SAMPLER_DESC> DriverDx12::GetStaticSamplers() {
+	auto make = [](UINT shaderRegister, D3D12_FILTER filter, D3D12_TEXTURE_ADDRESS_MODE address, UINT maxAnisotropy = 1) {
+		return CD3DX12_STATIC_SAMPLER_DESC(
+			shaderRegister,
+			filter,
+			address,
+			address,
+			address,
+			0.0f,
+			maxAnisotropy,
+			D3D12_COMPARISON_FUNC_LESS_EQUAL,
+			D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
+			0.0f,
+			0.0f);
 	};
+
+	std::vector<CD3DX12_STATIC_SAMPLER_DESC> samplers = {
+		make(0, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_WRAP),
+		make(1, D3D12_FILTER_MIN_MAG_MIP_POINT, D3D12_TEXTURE_ADDRESS_MODE_CLAMP),
+		make(2, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP),
+		make(3, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP),
+		make(4, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_WRAP, 8),
+		make(5, D3D12_FILTER_ANISOTROPIC, D3D12_TEXTURE_ADDRESS_MODE_CLAMP, 8),
+	};
+	for (UINT shaderRegister = 6; shaderRegister < 16; ++shaderRegister) {
+		samplers.push_back(make(shaderRegister, D3D12_FILTER_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_WRAP));
+	}
+	return samplers;
 }
 
 DriverDx12::DriverDx12() {
@@ -205,6 +184,7 @@ DriverDx12::DriverDx12() {
 DriverDx12::~DriverDx12() {
 	DriverDx12::end();
 	wait();
+	mAllocator.Reset();
 }
 
 PixelFormat DriverDx12::getFrameBufferFormat() const {
@@ -228,17 +208,23 @@ void DriverDx12::init() {
 
 	ThrowIfFailed(CreateDXGIFactory1(IID_PPV_ARGS(&mDxgiFactory)));
 
-	// Try to create hardware device.
-	HRESULT hardwareResult = D3D12CreateDevice(nullptr, D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(mDevice.GetAddressOf()));
-
-	// Fallback to WARP device.
-	if (FAILED(hardwareResult)) {
-		Microsoft::WRL::ComPtr<IDXGIAdapter> pWarpAdapter;
-		//TODO: auto gpu_preference = _adapter == Adapter::HighPerformance ? DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE : DXGI_GPU_PREFERENCE_MINIMUM_POWER;
-		auto gpu_preference = DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
-		ThrowIfFailed(mDxgiFactory->EnumAdapterByGpuPreference(0, gpu_preference, IID_PPV_ARGS(&pWarpAdapter)));
-		ThrowIfFailed(D3D12CreateDevice(pWarpAdapter.Get(), D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(&mDevice)));
+	Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
+	constexpr auto gpuPreference = DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE;
+	HRESULT hardwareResult = E_FAIL;
+	if (SUCCEEDED(mDxgiFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(&adapter)))) {
+		hardwareResult = D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(mDevice.GetAddressOf()));
 	}
+
+	if (FAILED(hardwareResult)) {
+		ThrowIfFailed(mDxgiFactory->EnumAdapterByGpuPreference(0, gpuPreference, IID_PPV_ARGS(&adapter)));
+		ThrowIfFailed(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_12_1, IID_PPV_ARGS(&mDevice)));
+	}
+
+	D3D12MA::ALLOCATOR_DESC allocatorDesc{};
+	allocatorDesc.pDevice = mDevice.Get();
+	allocatorDesc.pAdapter = adapter.Get();
+	allocatorDesc.Flags = static_cast<D3D12MA::ALLOCATOR_FLAGS>(D3D12MA_RECOMMENDED_ALLOCATOR_FLAGS);
+	ThrowIfFailed(D3D12MA::CreateAllocator(&allocatorDesc, mAllocator.GetAddressOf()));
 
 
 #if defined(DEBUG) || defined(_DEBUG) 
@@ -262,6 +248,9 @@ void DriverDx12::init() {
 
 	createCommandList();
 	createDescriptorHeaps();
+	auto& win = RESOURCES::ServiceManager::Get<WINDOW::Window>();
+	mWidth = win.getSize().x;
+	mHeight = win.getSize().y;
 	mCurrentWindowID = win.getId();
 	SwapchainContextDx12 ctx;
 	mSwapchains[mCurrentWindowID] = std::move(ctx);
@@ -298,15 +287,42 @@ void DriverDx12::init() {
 }
 
 void DriverDx12::createDescriptorHeaps() {
+	constexpr UINT engineDescriptors = 1000;
+	constexpr UINT imguiDescriptors = 64;
 	D3D12_DESCRIPTOR_HEAP_DESC descriptor {
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-		.NumDescriptors = 1000,
+		.NumDescriptors = engineDescriptors + imguiDescriptors,
 		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 	};
 	mDevice->CreateDescriptorHeap(&descriptor, IID_PPV_ARGS(&mDescriptorHeap));
 	mDescriptorIncSize = mDevice->GetDescriptorHandleIncrementSize(descriptor.Type);
 	mDescriptorHeapCPUHandle = mDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	mDescriptorHeapGPUHandle = mDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+
+	mImGuiFreeSrv.clear();
+	mImGuiFreeSrv.reserve(imguiDescriptors);
+	for (UINT index = engineDescriptors + imguiDescriptors; index > engineDescriptors; --index) {
+		mImGuiFreeSrv.push_back(index - 1);
+	}
+}
+
+void DriverDx12::allocImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE* outCpu, D3D12_GPU_DESCRIPTOR_HANDLE* outGpu) {
+	assert(outCpu && outGpu);
+	assert(!mImGuiFreeSrv.empty());
+	const UINT index = mImGuiFreeSrv.back();
+	mImGuiFreeSrv.pop_back();
+	D3D12_CPU_DESCRIPTOR_HANDLE cpu = mDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	D3D12_GPU_DESCRIPTOR_HANDLE gpu = mDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+	cpu.ptr += static_cast<SIZE_T>(index) * mDescriptorIncSize;
+	gpu.ptr += static_cast<UINT64>(index) * mDescriptorIncSize;
+	*outCpu = cpu;
+	*outGpu = gpu;
+}
+
+void DriverDx12::freeImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIPTOR_HANDLE) {
+	const D3D12_CPU_DESCRIPTOR_HANDLE start = mDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	const UINT index = static_cast<UINT>((cpu.ptr - start.ptr) / mDescriptorIncSize);
+	mImGuiFreeSrv.push_back(index);
 }
 
 void DriverDx12::createCommandList() {
@@ -322,14 +338,44 @@ void DriverDx12::createCommandList() {
 
 void DriverDx12::setVertexBuffer(std::shared_ptr<VertexBufferInterface> buffer) {
 	mVertexBuffer = std::static_pointer_cast<VertexBufferDx12>(buffer);
+	setDirty(Dirty::VERTEX_BUFFER);
 }
 
 void DriverDx12::setIndexBuffer(std::shared_ptr<IndexBufferInterface> buffer) {
 	mIndexBuffer = std::static_pointer_cast<IndexBufferDx12>(buffer);
+	setDirty(Dirty::INDEX_BUFFER);
 }
 
 void DriverDx12::setShader(std::shared_ptr<ShaderInterface> shader) {
 	mCurrentState.mShader = std::static_pointer_cast<ShaderDx12>(shader);
+	mPendingPushConstants.clear();
+}
+
+void DriverDx12::flushPushConstants(bool compute) {
+	auto shader = mCurrentState.mShader;
+	if (!shader || shader->mPushConstantRootIndex < 0 || shader->mPushConstantDwords == 0 || !mCommandList) {
+		mPendingPushConstants.clear();
+		return;
+	}
+	const auto rootIndex = static_cast<UINT>(shader->mPushConstantRootIndex);
+	for (const auto& write : mPendingPushConstants) {
+		if (write.values.empty() || write.offsetDwords >= shader->mPushConstantDwords) {
+			continue;
+		}
+		const auto count = static_cast<UINT>(std::min<size_t>(write.values.size(), shader->mPushConstantDwords - write.offsetDwords));
+		if (compute) {
+			mCommandList->SetComputeRoot32BitConstants(rootIndex, count, write.values.data(), write.offsetDwords);
+		} else {
+			mCommandList->SetGraphicsRoot32BitConstants(rootIndex, count, write.values.data(), write.offsetDwords);
+		}
+	}
+	mPendingPushConstants.clear();
+}
+
+void DriverDx12::resize(size_t width, size_t height) {
+	mWidth = static_cast<unsigned>(width);
+	mHeight = static_cast<unsigned>(height);
+	onResize();
 }
 
 void DriverDx12::onResize() {
@@ -381,11 +427,11 @@ void DriverDx12::resetScissor() {
 	setDirty(Dirty::SCISSOR);
 }
 
-void DriverDx12::setBlend(const Blending& param) {
+void DriverDx12::setBlending(const Blending& param) {
 	mCurrentState.mBlend = param;
 }
 
-void DriverDx12::resetBlend() {
+void DriverDx12::resetBlending() {
 	mCurrentState.mBlend = std::nullopt;
 }
 
@@ -409,8 +455,7 @@ void DriverDx12::setCull(CullFace param) {
 	mCurrentState.mCullFace = param;
 }
 
-//TODO:
-void DriverDx12::set4xMsaaState(bool value) {
+void DriverDx12::setMSAA(bool value) {
 	if (m4xMsaaState != value) {
 		m4xMsaaState = value;
 
@@ -421,14 +466,20 @@ void DriverDx12::set4xMsaaState(bool value) {
 }
 
 void DriverDx12::setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) {
-	if (mCurrentState.mShader && mCurrentState.mShader->mPushConstantRootIndex != -1) {
-		mCommandList->SetGraphicsRoot32BitConstants(
-			mCurrentState.mShader->mPushConstantRootIndex,
-			size / 4,
-			data,
-			offset / 4
-		);
+	if (!mCurrentState.mShader || mCurrentState.mShader->mPushConstantRootIndex < 0 || !data || size < 4) {
+		return;
 	}
+	const auto dwordOffset = offset / 4;
+	const auto dwordCount = size / 4;
+	if (dwordCount == 0 || dwordOffset >= mCurrentState.mShader->mPushConstantDwords) {
+		return;
+	}
+	PendingPushConstant write;
+	write.offsetDwords = dwordOffset;
+	write.values.resize(dwordCount);
+	std::memcpy(write.values.data(), data, dwordCount * sizeof(uint32_t));
+	mPendingPushConstants.push_back(std::move(write));
+	(void)stage;
 }
 
 bool DriverDx12::get4xMsaaState() const {
@@ -634,12 +685,17 @@ void DriverDx12::destroyDeferred(Microsoft::WRL::ComPtr<ID3D12DeviceChild> objec
 	mDestroyDeffered.push_back(object);
 }
 
+void DriverDx12::destroyDeferred(Dx12Resource object) {
+	mDestroyDeferredResources.push_back(std::move(object));
+}
+
 std::vector<Microsoft::WRL::ComPtr<ID3D12DeviceChild>>& DriverDx12::getDestroyDeferredObjects() {
 	return mDestroyDeffered;
 }
 
 void DriverDx12::clearForDestroy() {
 	mDestroyDeffered.clear();
+	mDestroyDeferredResources.clear();
 }
 
 std::shared_ptr<TextureInterface> DriverDx12::createTexture(const std::string& path, bool generateMipmap, UTILS::IAllocator* allocator, TextureDeleter deleter) {
@@ -658,7 +714,11 @@ std::shared_ptr<TextureInterface> DriverDx12::createTextureAtlas(const TextureRe
 	return TextureAtlasDx12::CreateAtlasFromResource(res, fileData, allocator, deleter);
 }
 std::shared_ptr<TextureInterface> DriverDx12::createTexture(const std::string& name, const std::vector<uint8_t>& data, bool generateMipmap, UTILS::IAllocator* allocator, TextureDeleter deleter) {
-	return nullptr; // not implemented
+	TextureResource res;
+	res.path = name;
+	res.useMipmap = generateMipmap;
+	res.pathTexture.push_back(name);
+	return TextureDx12::Create(res, std::vector<std::vector<uint8_t>>{data}, allocator, deleter);
 }
 
 void DriverDx12::wait() {
@@ -818,7 +878,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DriverDx12::createNewState(const Sta
 		{RasterizationMode::FILL, D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE}
 	};
 
-	auto topology = TopologyTypeMap.at(state.mRasterization);
+	D3D12_PRIMITIVE_TOPOLOGY_TYPE topology = TopologyTypeMap.at(state.mRasterization);
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> input_elements;
 
@@ -830,18 +890,32 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DriverDx12::createNewState(const Sta
 		{PixelFormat::RGBA_FLOAT, DXGI_FORMAT_R32G32B32A32_FLOAT},
 		{PixelFormat::R_INT, DXGI_FORMAT_R8_UNORM},
 		{PixelFormat::RG_INT, DXGI_FORMAT_R8G8_UNORM},
-		//{ Format::RGB_INT, DXGI_FORMAT_R8G8B8_UNORM }, // Not Support
+		{PixelFormat::RGB_INT, DXGI_FORMAT_R8G8B8A8_UNORM},
 		{PixelFormat::RGBA_INT, DXGI_FORMAT_R8G8B8A8_UNORM},
-		{PixelFormat::RGBA_INT, DXGI_FORMAT_R8G8B8A8_UNORM},
+		{PixelFormat::R32_INT, DXGI_FORMAT_R32_SINT},
+		{PixelFormat::RG32_INT, DXGI_FORMAT_R32G32_SINT},
+		{PixelFormat::RGB32_INT, DXGI_FORMAT_R32G32B32_SINT},
+		{PixelFormat::RGBA32_INT, DXGI_FORMAT_R32G32B32A32_SINT},
+		{PixelFormat::BGRA_INT, DXGI_FORMAT_B8G8R8A8_UNORM},
 		{PixelFormat::DEPTH_24_UNORM_STENCIL_8_UINT, DXGI_FORMAT_D24_UNORM_S8_UINT},
+		{PixelFormat::DEPTH32_FLOAT, DXGI_FORMAT_D32_FLOAT},
+		{PixelFormat::DEPTH32_FLOAT_S8X24_UINT, DXGI_FORMAT_D32_FLOAT_S8X24_UINT},
+		{PixelFormat::DEPTH_32_FLOAT_STENCIL_8_UINT, DXGI_FORMAT_D32_FLOAT_S8X24_UINT},
 	};
 	for (size_t i = 0; i < state.mShader->getReflection().mInputParams.size(); i++) {
 		const auto& input = state.mShader->getReflection().mInputParams.at(i);
+		if (input.mSize == 0 || input.mName.rfind("gl_", 0) == 0 || input.mLocation > 15) {
+			continue;
+		}
+		const auto format = FormatMap.find(input.mFormat);
+		if (format == FormatMap.end()) {
+			continue;
+		}
 
 		input_elements.push_back(D3D12_INPUT_ELEMENT_DESC{
 			.SemanticName = "TEXCOORD",
-			.SemanticIndex = (UINT)input.mIndex,
-			.Format = FormatMap.at(input.mFormat),
+			.SemanticIndex = (UINT)input.mLocation,
+			.Format = format->second,
 			.InputSlot = 0,
 			.AlignedByteOffset = (UINT)input.mOffset,
 			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, // TODO: InputRateMap.at(input_layout.rate),
@@ -851,9 +925,46 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DriverDx12::createNewState(const Sta
 
 	std::shared_ptr<FrameBufferDx12> fb = mCurrentState.mFrameBuffer ? mCurrentState.mFrameBuffer : getDefaultFrameBuffer();
 
+	auto shaderBlob = [&](ShaderType type) -> ID3DBlob* {
+		const auto it = state.mShader->mBlobs.find(type);
+		if (it == state.mShader->mBlobs.end()) {
+			return nullptr;
+		}
+		return it->second.Get();
+	};
+
+	if (ID3DBlob* compute = shaderBlob(ShaderType::COMPUTE); compute && !shaderBlob(ShaderType::VERTEX) && !shaderBlob(ShaderType::FRAGMENT)) {
+		D3D12_COMPUTE_PIPELINE_STATE_DESC computeDescriptor = {};
+		computeDescriptor.pRootSignature = state.mShader->getRootSignature().Get();
+		computeDescriptor.CS = CD3DX12_SHADER_BYTECODE(compute);
+		computeDescriptor.NodeMask = 1;
+		computeDescriptor.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+		Microsoft::WRL::ComPtr<ID3D12PipelineState> computeState;
+		ThrowIfFailed(mDevice->CreateComputePipelineState(&computeDescriptor, IID_PPV_ARGS(&computeState)));
+		return computeState;
+	}
+
+	const bool tessellation = shaderBlob(ShaderType::TESSELLATION_CONTROL) || shaderBlob(ShaderType::TESSELLATION_EVALUATION);
+	if (tessellation) {
+		topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
+	}
+
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDescriptor = {};
-	psoDescriptor.VS = CD3DX12_SHADER_BYTECODE(state.mShader->mBlobs[ShaderType::VERTEX].Get());
-	psoDescriptor.PS = CD3DX12_SHADER_BYTECODE(state.mShader->mBlobs[ShaderType::FRAGMENT].Get());
+	if (ID3DBlob* vs = shaderBlob(ShaderType::VERTEX)) {
+		psoDescriptor.VS = CD3DX12_SHADER_BYTECODE(vs);
+	}
+	if (ID3DBlob* ps = shaderBlob(ShaderType::FRAGMENT)) {
+		psoDescriptor.PS = CD3DX12_SHADER_BYTECODE(ps);
+	}
+	if (ID3DBlob* gs = shaderBlob(ShaderType::GEOMETRY)) {
+		psoDescriptor.GS = CD3DX12_SHADER_BYTECODE(gs);
+	}
+	if (ID3DBlob* hs = shaderBlob(ShaderType::TESSELLATION_CONTROL)) {
+		psoDescriptor.HS = CD3DX12_SHADER_BYTECODE(hs);
+	}
+	if (ID3DBlob* ds = shaderBlob(ShaderType::TESSELLATION_EVALUATION)) {
+		psoDescriptor.DS = CD3DX12_SHADER_BYTECODE(ds);
+	}
 	psoDescriptor.InputLayout = {input_elements.data(), (UINT)input_elements.size()};
 	psoDescriptor.NodeMask = 1;
 	psoDescriptor.PrimitiveTopologyType = topology;
@@ -874,7 +985,37 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DriverDx12::createNewState(const Sta
 	psoDescriptor.BlendState = blendDescriptor;
 
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> result;
-	mDevice->CreateGraphicsPipelineState(&psoDescriptor, IID_PPV_ARGS(&result));
+	Microsoft::WRL::ComPtr<ID3D12InfoQueue> infoQueue;
+	mDevice.As(&infoQueue);
+	if (infoQueue) {
+		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, FALSE);
+		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, FALSE);
+	}
+	const HRESULT psoHr = mDevice->CreateGraphicsPipelineState(&psoDescriptor, IID_PPV_ARGS(&result));
+	if (FAILED(psoHr)) {
+		std::string message = "CreateGraphicsPipelineState failed";
+		if (infoQueue) {
+			const UINT64 count = infoQueue->GetNumStoredMessages();
+			for (UINT64 i = 0; i < count; ++i) {
+				SIZE_T length = 0;
+				if (FAILED(infoQueue->GetMessage(i, nullptr, &length))) {
+					continue;
+				}
+				std::vector<std::byte> storage(length);
+				auto* msg = reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+				if (SUCCEEDED(infoQueue->GetMessage(i, msg, &length)) && msg->pDescription) {
+					message += "\n";
+					message += msg->pDescription;
+				}
+			}
+			infoQueue->ClearStoredMessages();
+		}
+		LOG_ERROR << message;
+	}
+	if (infoQueue) {
+		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+		infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
+	}
 
 	return result;
 }
@@ -887,6 +1028,9 @@ void DriverDx12::applyState() {
 		auto pipeline_state = createNewState(mCurrentState);
 		mStates[mCurrentState.getId()] = pipeline_state;
 	}
+
+	const bool isCompute = shader->mBlobs.contains(ShaderType::COMPUTE) && shader->mBlobs.at(ShaderType::COMPUTE) &&
+		!shader->mBlobs.contains(ShaderType::VERTEX);
 
 	std::shared_ptr<FrameBufferDx12> fb;
 
@@ -911,16 +1055,22 @@ void DriverDx12::applyState() {
 
 	auto dsv_descriptor = fb->getDepthHeap()->GetCPUDescriptorHandleForHeapStart();
 
-	mCommandList->OMSetRenderTargets((UINT)rtv_descriptors.size(), rtv_descriptors.data(),
-		FALSE, &dsv_descriptor);
+	if (!isCompute) {
+		mCommandList->OMSetRenderTargets((UINT)rtv_descriptors.size(), rtv_descriptors.data(),
+			FALSE, &dsv_descriptor);
+	}
 
 	const auto state = mStates.at(mCurrentState.getId()).Get();
 	mCommandList->SetPipelineState(state);
-	mCommandList->SetGraphicsRootSignature(shader->getRootSignature().Get());
+	if (isCompute) {
+		mCommandList->SetComputeRootSignature(shader->getRootSignature().Get());
+	} else {
+		mCommandList->SetGraphicsRootSignature(shader->getRootSignature().Get());
+	}
 	mCommandList->SetDescriptorHeaps(1, mDescriptorHeap.GetAddressOf());
 
 	for (const auto& uniform : shader->getReflection().mUniforms) {
-		const auto rootId = uniform.mRootId;
+		const auto rootId = static_cast<UINT>(uniform.mRootId);
 		const auto binding = uniform.mBind;
 		
 		if (uniform.mType == ShaderReflection::UniformType::SAMPLER_2D ||
@@ -928,24 +1078,53 @@ void DriverDx12::applyState() {
 			uniform.mType == ShaderReflection::UniformType::SAMPLER_3D || 
 			uniform.mType == ShaderReflection::UniformType::SAMPLER_2D_ARRAY) {
 			const auto& texture = mTextures.at(binding);
-			texture->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-			mCommandList->SetGraphicsRootDescriptorTable(rootId, texture->getGpuDescriptorHandle());
+			texture->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+			if (isCompute) {
+				mCommandList->SetComputeRootDescriptorTable(rootId, texture->getGpuDescriptorHandle());
+			} else {
+				mCommandList->SetGraphicsRootDescriptorTable(rootId, texture->getGpuDescriptorHandle());
+			}
 		}
 		else if (uniform.mType == ShaderReflection::UniformType::UNIFORM_BUFFER) {
 			auto ubo = mUniformBuffers.at(binding);
-			mCommandList->SetGraphicsRootConstantBufferView(rootId, ubo->getBuffer()->GetGPUVirtualAddress());
+			const auto address = ubo->getBuffer()->GetGPUVirtualAddress();
+			if (isCompute) {
+				mCommandList->SetComputeRootConstantBufferView(rootId, address);
+			} else {
+				mCommandList->SetGraphicsRootConstantBufferView(rootId, address);
+			}
 		}
 		else if (uniform.mType == ShaderReflection::UniformType::STORAGE_BUFFER) {
 			auto ssbo = mStorageBuffers.at(binding);
-			mCommandList->SetGraphicsRootShaderResourceView(rootId, ssbo->getBuffer()->GetGPUVirtualAddress());
-			//mCommandList->SetGraphicsRootUnorderedAccessView(rootId, ssbo->getBuffer()->GetGPUVirtualAddress());
+			const auto& ssboResource = ssbo->getBuffer();
+			if (!ssboResource) {
+				continue;
+			}
+			ssbo->transition(mCommandList.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+			const auto uav = ssbo->getUAVHandler();
+			if (uav.ptr == 0) {
+				continue;
+			}
+			if (isCompute) {
+				mCommandList->SetComputeRootDescriptorTable(rootId, uav);
+			} else {
+				mCommandList->SetGraphicsRootDescriptorTable(rootId, uav);
+			}
+		}
+		else if (uniform.mType == ShaderReflection::UniformType::PUSH_CONSTANT) {
+			continue;
 		}
 		else {
 			assert(false);
 		}
 	}
 
-	if (isDirty(Dirty::PRIMITIVE_MODE)) {
+	flushPushConstants(isCompute);
+
+	if (shader->mBlobs.contains(ShaderType::TESSELLATION_CONTROL) && shader->mBlobs.at(ShaderType::TESSELLATION_CONTROL)) {
+		mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST);
+		clearDirty(Dirty::PRIMITIVE_MODE);
+	} else if (isDirty(Dirty::PRIMITIVE_MODE)) {
 		clearDirty(Dirty::PRIMITIVE_MODE);
 		mCommandList->IASetPrimitiveTopology(TopologyMap.at(mPrimitiveMode));
 	}
@@ -995,14 +1174,16 @@ void DriverDx12::applyState() {
 }
 
 std::shared_ptr<ShaderInterface> DriverDx12::createShader(const std::string& vertexPath, const std::string& fragmentPath) {
-	ShaderResource res;
-	res.vertexPath = vertexPath;
-	res.fragmentPath = fragmentPath;
-	return AllocateShader<ShaderDx12>(nullptr, nullptr, res);
+	std::map<ShaderType, std::string> paths;
+	paths[ShaderType::VERTEX] = vertexPath;
+	paths[ShaderType::FRAGMENT] = fragmentPath;
+	return ShaderDx12::CreateFromPath(std::move(paths));
 }
 
 std::shared_ptr<ShaderInterface> DriverDx12::createShader(const ShaderResource& res, UTILS::IAllocator* allocator, ShaderDeleter deleter) {
-	return AllocateShader<ShaderDx12>(allocator, deleter, res);
+	(void)allocator;
+	(void)deleter;
+	return ShaderDx12::Create(res);
 }
 
 std::shared_ptr<ModelInterface> DriverDx12::createModel(const std::string& path, UTILS::IAllocator* allocator, ModelDeleter deleter) {
@@ -1031,5 +1212,13 @@ std::shared_ptr<StorageBufferInterface> DriverDx12::createStorageBuffer(const vo
 
 std::shared_ptr<FrameBufferInterface> DriverDx12::createFrameBuffer(const std::vector<std::shared_ptr<TextureInterface>>& textures, std::shared_ptr<TextureInterface> depth) {
 	return std::make_shared<FrameBufferDx12>(textures, depth);
+}
+
+void DriverDx12::setFrameBuffer(std::shared_ptr<FrameBufferInterface> frameBuffer) {
+	mCurrentState.mFrameBuffer = std::static_pointer_cast<FrameBufferDx12>(frameBuffer);
+}
+
+void DriverDx12::resetFrameBuffer() {
+	mCurrentState.mFrameBuffer = nullptr;
 }
 #endif

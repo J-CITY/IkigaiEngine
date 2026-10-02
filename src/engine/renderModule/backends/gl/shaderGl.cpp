@@ -166,6 +166,10 @@ void IKIGAI::RENDER::ShaderGl::clear() const {
 void IKIGAI::RENDER::ShaderGl::create(const ShaderResource &res) {
   mPath = res.path;
   mShaderPaths = res.getPaths();
+#ifdef __EMSCRIPTEN__
+  std::cout << "[web] ShaderGl::create " << mPath << std::endl;
+  std::cout.flush();
+#endif
 
   // TODO: add to resources
   std::vector<std::string> defines;
@@ -173,12 +177,35 @@ void IKIGAI::RENDER::ShaderGl::create(const ShaderResource &res) {
   // SPIRV compilation
   if (!res.spirvSources.empty()) {
     for (auto &[type, spirv] : res.spirvSources) {
+#ifdef __EMSCRIPTEN__
+      std::cout << "[web] GetReflection begin stage=" << static_cast<int>(type)
+                << std::endl;
+      std::cout.flush();
+#endif
       GetReflection(mReflection, spirv, type);
+#ifdef __EMSCRIPTEN__
+      std::cout << "[web] GetReflection ok stage=" << static_cast<int>(type)
+                << std::endl;
+      std::cout.flush();
+#endif
     }
   } else {
     for (auto &[type, source] : res.sources) {
       res.spirvSources[type] = CompileGlslToSpirv(type, source, defines);
+#ifdef __EMSCRIPTEN__
+      std::cout << "[web] CompileGlslToSpirv ok stage=" << static_cast<int>(type)
+                << std::endl;
+      std::cout.flush();
+      std::cout << "[web] GetReflection begin stage=" << static_cast<int>(type)
+                << std::endl;
+      std::cout.flush();
+#endif
       GetReflection(mReflection, res.spirvSources[type], type);
+#ifdef __EMSCRIPTEN__
+      std::cout << "[web] GetReflection ok stage=" << static_cast<int>(type)
+                << std::endl;
+      std::cout.flush();
+#endif
     }
   }
 
@@ -217,39 +244,65 @@ void IKIGAI::RENDER::ShaderGl::create(const ShaderResource &res) {
     sources[type] =
         CompileSpirvToGlsl(source, es, version, enable_420pack_extension,
                            force_flattened_io_blocks);
+#ifdef __EMSCRIPTEN__
+    std::cout << "[web] CompileSpirvToGlsl ok stage=" << static_cast<int>(type)
+              << std::endl;
+    std::cout.flush();
+#endif
   }
 
+#ifdef __EMSCRIPTEN__
+  std::cout << "[web] ShaderGl::compile begin " << mPath << std::endl;
+  std::cout.flush();
+#endif
   compile(sources);
+#ifdef __EMSCRIPTEN__
+  std::cout << "[web] ShaderGl::compile done " << mPath << " id=" << mId
+            << std::endl;
+  std::cout.flush();
+#endif
 
   bool need_fix_uniform = (es && version <= 300) ||
                           (!es && version < 420 && !enable_420pack_extension);
 
-  // TODO:
-  // if (need_fix_uniform) {
-  //	for (const auto& reflection : {mVertRefl, mFragRefl}) {
-  //		for (const auto& [binding, descriptor] :
-  // reflection.descriptor_bindings) { 			if (descriptor.type !=
-  // ShaderReflection::Descriptor::Type::UniformBuffer)
-  // continue;
-  //
-  //			auto block_index = glGetUniformBlockIndex(mId,
-  // descriptor.type_name.c_str()); glUniformBlockBinding(mId, block_index,
-  // binding);
-  //		}
-  //	}
-  //}
-  // if (need_fix_uniform) {
-  //	for (const auto& reflection : {mVertRefl, mFragRefl}) {
-  //		for (const auto& [binding, descriptor] :
-  // reflection.descriptor_bindings) { 			if (descriptor.type !=
-  // ShaderReflection::Descriptor::Type::CombinedImageSampler)
-  // continue;
-  //
-  //			auto location = glGetUniformLocation(mId,
-  // descriptor.name.c_str()); 			glUniform1i(location, binding);
-  //		}
-  //	}
-  //}
+#ifdef GL_UNIFORM_BUFFER
+  if (need_fix_uniform) {
+    const auto program = static_cast<GLuint>(mId);
+    glUseProgram(program);
+    for (const auto &uniform : mReflection.mUniforms) {
+      if (uniform.mType != ShaderReflection::UniformType::UNIFORM_BUFFER &&
+          uniform.mType != ShaderReflection::UniformType::STORAGE_BUFFER) {
+        continue;
+      }
+      auto blockIndex =
+          glGetUniformBlockIndex(program, uniform.mName.c_str());
+      if (blockIndex == GL_INVALID_INDEX) {
+        GLint blockCount = 0;
+        glGetProgramiv(program, GL_ACTIVE_UNIFORM_BLOCKS, &blockCount);
+        const auto wanted = UTILS::ToLower(uniform.mName);
+        for (GLint i = 0; i < blockCount; ++i) {
+          GLchar name[256];
+          GLsizei length = 0;
+          glGetActiveUniformBlockName(program, static_cast<GLuint>(i), 256,
+                                      &length, name);
+          if (UTILS::ToLower(name) == wanted) {
+            blockIndex = static_cast<GLuint>(i);
+            break;
+          }
+        }
+      }
+      if (blockIndex != GL_INVALID_INDEX) {
+        glUniformBlockBinding(program, blockIndex,
+                              static_cast<GLuint>(uniform.mBind));
+      }
+    }
+    glUseProgram(0);
+  }
+#endif
+#ifdef __EMSCRIPTEN__
+  std::cout << "[web] ShaderGl::create done " << mPath << " id=" << mId << std::endl;
+  std::cout.flush();
+#endif
 }
 
 void IKIGAI::RENDER::ShaderGl::compile(

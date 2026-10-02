@@ -1,4 +1,5 @@
 #include "shaderInterface.h"
+#include <cstdint>
 #include <utilsModule/stringUtils.h>
 
 #include "SPIRV/GlslangToSpv.h"
@@ -486,10 +487,62 @@ IKIGAI::RENDER::CompileSpirvToHlsl(const std::vector<uint32_t> &spirv,
   return compiler.compile();
 }
 
+namespace {
+// GLSL ES 3.00 (WebGL2) has no SSBOs or std430. Cap unsized SSBO arrays so
+// they can be emitted as std140 UBO members. Keep in sync with RENDER::MAX_LIGHTS.
+constexpr uint32_t kEsSsboRuntimeArraySize = 64;
+
+class EsCompilerGLSL : public spirv_cross::CompilerGLSL {
+public:
+  explicit EsCompilerGLSL(std::vector<uint32_t> spirv)
+      : CompilerGLSL(std::move(spirv)) {}
+
+  void RemapStorageBuffersForEs300() {
+    auto resources = get_shader_resources();
+
+    auto setBlockName = [this](const spirv_cross::Resource &resource) {
+      auto name = get_name(resource.id);
+      if (name.empty()) {
+        name = resource.name;
+      }
+      if (!name.empty()) {
+        set_name(resource.base_type_id, name);
+      }
+    };
+
+    for (const auto &resource : resources.storage_buffers) {
+      auto &var = get<spirv_cross::SPIRVariable>(resource.id);
+      var.storage = spv::StorageClassUniform;
+
+      auto &type = get<spirv_cross::SPIRType>(resource.base_type_id);
+      unset_decoration(type.self, spv::DecorationBufferBlock);
+      set_decoration(type.self, spv::DecorationBlock);
+      setBlockName(resource);
+
+      for (auto memberTypeId : type.member_types) {
+        auto &memberType = get<spirv_cross::SPIRType>(memberTypeId);
+        for (size_t i = 0; i < memberType.array.size(); ++i) {
+          if (memberType.array[i] == 0) {
+            memberType.array[i] = kEsSsboRuntimeArraySize;
+            if (i < memberType.array_size_literal.size()) {
+              memberType.array_size_literal[i] = true;
+            }
+          }
+        }
+      }
+    }
+
+    for (const auto &resource : resources.uniform_buffers) {
+      setBlockName(resource);
+    }
+  }
+};
+} // namespace
+
 std::string IKIGAI::RENDER::CompileSpirvToGlsl(
     const std::vector<uint32_t> &spirv, bool es, uint32_t version,
     bool enable_420pack_extension, bool force_flattened_io_blocks) {
-  auto compiler = spirv_cross::CompilerGLSL(spirv);
+  auto compiler = EsCompilerGLSL(spirv);
 
   spirv_cross::CompilerGLSL::Options options;
   options.es = es;
@@ -516,6 +569,11 @@ std::string IKIGAI::RENDER::CompileSpirvToGlsl(
         compiler.set_name(output.id, "varying");
       }
     }
+  }
+
+  // WebGL2 / GLSL ES 3.00: SSBO + std430 are invalid; emit std140 UBOs instead.
+  if (es && version < 310) {
+    compiler.RemapStorageBuffersForEs300();
   }
 
   return compiler.compile();

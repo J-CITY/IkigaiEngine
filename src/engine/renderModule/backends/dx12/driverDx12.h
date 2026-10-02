@@ -11,6 +11,7 @@
 #include "renderModule/backends/interface/textureInterface.h"
 #include <array>
 #include <d3d12.h>
+#include <vector>
 #include <wrl/client.h>
 #include "../interface/driverInterface.h"
 
@@ -51,7 +52,7 @@ namespace IKIGAI::RENDER {
 		static constexpr DXGI_FORMAT DefaultTextureColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 		static constexpr DXGI_FORMAT DefaultDepthFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
-		static std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GetStaticSamplers();
+		static std::vector<CD3DX12_STATIC_SAMPLER_DESC> GetStaticSamplers();
 
 		DriverDx12();
 		~DriverDx12() override;
@@ -64,8 +65,8 @@ namespace IKIGAI::RENDER {
 		void resetViewport() override;
 		void setScissor(const Scissor& param) override;
 		void resetScissor() override;
-		void setBlend(const Blending& param) override;
-		void resetBlend() override;
+		void setBlending(const Blending& param) override;
+		void resetBlending() override;
 		void setDepth(const Depth& param) override;
 		void resetDepth() override;
 		void setStencil(const Stencil& param) override;
@@ -83,13 +84,16 @@ namespace IKIGAI::RENDER {
 
 		void draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) override;
 		void drawIndexed(uint32_t index_count, uint32_t index_offset, uint32_t instance_count) override;
-		void draw(const MeshInterface& mesh, PrimitiveMode primitive, uint32_t instances);
+		void draw(const MeshInterface& mesh, PrimitiveMode primitive, uint32_t instances) override;
 
+		void resize(size_t width, size_t height) override;
 		void submit() override;
 		Microsoft::WRL::ComPtr<ID3D12Device> getDevice();
+		D3D12MA::Allocator* getAllocator() const { return mAllocator.Get(); }
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> getCommandList();
 		Microsoft::WRL::ComPtr<ID3D12CommandQueue> getCommandQueue() { return mCommandQueue; }
 		void destroyDeferred(Microsoft::WRL::ComPtr<ID3D12DeviceChild> object);
+		void destroyDeferred(Dx12Resource object);
 		std::vector<Microsoft::WRL::ComPtr<ID3D12DeviceChild>>& getDestroyDeferredObjects();
 		void clear(bool clearColor, bool clearDepth, bool clearStencil) override;
 		std::shared_ptr<FrameBufferDx12>& getDefaultFrameBuffer() { return mSwapchains[mCurrentWindowID].mDefaultFb[mFrameId]; }
@@ -114,12 +118,12 @@ namespace IKIGAI::RENDER {
 		void setUniformBuffer(const std::string& bind, std::shared_ptr<UniformBufferInterface> data) override;
 		void setStorageBuffer(const std::string& bind, std::shared_ptr<StorageBufferInterface> data) override;
 
-		std::shared_ptr<TextureInterface> createTexture(const std::string& path, bool generateMipmap = true, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr) override;
-		std::shared_ptr<TextureInterface> createTextureAtlas(const std::string& path, bool generateMipmap = true, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr) override;
-		std::shared_ptr<TextureInterface> createTexture(const TextureResource& res, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr) override;
-		std::shared_ptr<TextureInterface> createTexture(const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr) override;
-		std::shared_ptr<TextureInterface> createTextureAtlas(const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr) override;
-		std::shared_ptr<TextureInterface> createTexture(const std::string& name, const std::vector<uint8_t>& data, bool generateMipmap, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr) override;
+		std::shared_ptr<TextureInterface> createTexture(const std::string& path, bool generateMipmap = true, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) override;
+		std::shared_ptr<TextureInterface> createTextureAtlas(const std::string& path, bool generateMipmap = true, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) override;
+		std::shared_ptr<TextureInterface> createTexture(const TextureResource& res, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) override;
+		std::shared_ptr<TextureInterface> createTexture(const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) override;
+		std::shared_ptr<TextureInterface> createTextureAtlas(const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) override;
+		std::shared_ptr<TextureInterface> createTexture(const std::string& name, const std::vector<uint8_t>& data, bool generateMipmap, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) override;
 
 		std::shared_ptr<ShaderInterface> createShader(const std::string& vertexPath, const std::string& fragmentPath) override;
 		std::shared_ptr<ShaderInterface> createShader(const ShaderResource& res, UTILS::IAllocator* allocator = nullptr, ShaderDeleter deleter = nullptr) override;
@@ -131,6 +135,9 @@ namespace IKIGAI::RENDER {
 		std::shared_ptr<UniformBufferInterface> createUniformBuffer(const void* data, size_t size) override;
 		std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void* data, size_t size, size_t stride) override;
 		std::shared_ptr<FrameBufferInterface> createFrameBuffer(const std::vector<std::shared_ptr<TextureInterface>>& textures, std::shared_ptr<TextureInterface> depth) override;
+
+		void setFrameBuffer(std::shared_ptr<FrameBufferInterface> frameBuffer) override;
+		void resetFrameBuffer() override;
 
 		CD3DX12_CPU_DESCRIPTOR_HANDLE& getDescriptorHeapCPUHandle() {
 			return mDescriptorHeapCPUHandle;
@@ -144,6 +151,8 @@ namespace IKIGAI::RENDER {
 		unsigned getDescriptorIncSize() {
 			return mDescriptorIncSize;
 		}
+		void allocImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE* outCpu, D3D12_GPU_DESCRIPTOR_HANDLE* outGpu);
+		void freeImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIPTOR_HANDLE gpu);
 	private:
 		void begin() override;
 		void end() override;
@@ -156,8 +165,10 @@ namespace IKIGAI::RENDER {
 		CD3DX12_CPU_DESCRIPTOR_HANDLE mDescriptorHeapCPUHandle{};
 		CD3DX12_GPU_DESCRIPTOR_HANDLE mDescriptorHeapGPUHandle{};
 		unsigned int mDescriptorIncSize = 0;
+		std::vector<UINT> mImGuiFreeSrv;
 
 		std::vector<Microsoft::WRL::ComPtr<ID3D12DeviceChild>> mDestroyDeffered{};
+		std::vector<Dx12Resource> mDestroyDeferredResources{};
 
 		struct SwapchainContextDx12 {
 			Microsoft::WRL::ComPtr<IDXGISwapChain3> mSwapChain;
@@ -173,7 +184,15 @@ namespace IKIGAI::RENDER {
 		std::map<size_t, std::shared_ptr<UniformBufferDx12>> mUniformBuffers{};
 		std::map<size_t, std::shared_ptr<StorageBufferDx12>> mStorageBuffers{};
 
+		struct PendingPushConstant {
+			uint32_t offsetDwords = 0;
+			std::vector<uint32_t> values;
+		};
+		std::vector<PendingPushConstant> mPendingPushConstants;
+		void flushPushConstants(bool compute);
+
 		Microsoft::WRL::ComPtr<ID3D12Device> mDevice;
+		Microsoft::WRL::ComPtr<D3D12MA::Allocator> mAllocator;
 
 		Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> mCommandList;
 
@@ -198,6 +217,8 @@ namespace IKIGAI::RENDER {
 
 		unsigned m4xMsaaQuality = 0;
 		bool m4xMsaaState = true;
+		unsigned mWidth = 0;
+		unsigned mHeight = 0;
 
 		void init() override;
 		void createCommandList();
@@ -214,10 +235,6 @@ namespace IKIGAI::RENDER {
 
 		FrameInfo mFrameInfo;
 	public:
-		void setViewport(const ShaderInterface& shader, float x, float y, float w, float h) override{};
-		void setScissor(const ShaderInterface& shader, int x, int y, unsigned w, unsigned h) override{};
-		void drawIndexed(std::shared_ptr<ShaderInterface> shader, size_t indexCount) override{};
-		void draw(std::shared_ptr<ShaderInterface> shader, size_t vertexCount) override{};
 		void cleanup() override{};
 	};
 

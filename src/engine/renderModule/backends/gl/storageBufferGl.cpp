@@ -2,36 +2,55 @@
 #ifdef OPENGL_BACKEND
 #include <coreModule/graphicsWrapper.hpp>
 
+namespace {
+GLenum StorageBufferTarget() {
+#if defined(USING_GLES)
+#ifdef GL_UNIFORM_BUFFER
+	return GL_UNIFORM_BUFFER;
+#else
+	return 0;
+#endif
+#else
+	return GL_SHADER_STORAGE_BUFFER;
+#endif
+}
+}
 
 IKIGAI::RENDER::StorageBufferGl::StorageBufferGl(const void* data, size_t sz, size_t stride) : StorageBufferInterface(sz, stride) {
-#ifndef USING_GLES
+	const auto target = StorageBufferTarget();
+	if (!target) {
+		return;
+	}
 	glGenBuffers(1, &mId);
-	if (data) {
+	if (mSizeByte > 0 || data) {
 		StorageBufferGl::setData(data, sz, stride);
 	}
-#endif
 }
 
 IKIGAI::RENDER::StorageBufferGl::~StorageBufferGl() {
-#ifndef USING_GLES
-	glDeleteBuffers(1, &mId);
-#endif
+	if (mId) {
+		glDeleteBuffers(1, &mId);
+	}
 }
 
 void IKIGAI::RENDER::StorageBufferGl::setData(const void* data, size_t sz, size_t stride) {
-#ifndef USING_GLES
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mId);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sz * stride, data, GL_DYNAMIC_DRAW);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-#endif
+	const auto target = StorageBufferTarget();
+	if (!target || !mId) {
+		return;
+	}
+	glBindBuffer(target, mId);
+	glBufferData(target, static_cast<GLsizeiptr>(sz * stride), data, GL_DYNAMIC_DRAW);
+	glBindBuffer(target, 0);
 }
 
 void IKIGAI::RENDER::StorageBufferGl::setSubData(const void* data, size_t sz, size_t offset) {
-#ifndef USING_GLES
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mId);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, offset, sz, data);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-#endif
+	const auto target = StorageBufferTarget();
+	if (!target || !mId) {
+		return;
+	}
+	glBindBuffer(target, mId);
+	glBufferSubData(target, static_cast<GLintptr>(offset), static_cast<GLsizeiptr>(sz), data);
+	glBindBuffer(target, 0);
 }
 
 IKIGAI::RENDER::StorageBufferGl::Id IKIGAI::RENDER::StorageBufferGl::getId() const {

@@ -26,7 +26,6 @@
 #ifdef DX12_BACKEND
 #include <renderModule/backends/dx12/textureDx12.h>
 #include <renderModule/backends/dx12/driverDx12.h>
-#include "renderModule/gameRendererDx12.h"
 #include <../../3rd/imgui/imgui/imgui_impl_dx12.h>
 #include <../../3rd/imgui/imgui/imgui_impl_win32.h>
 #endif
@@ -1848,7 +1847,7 @@ void DebugRender::drawMaterialWidget(RENDER::MaterialGl* material) {
 		popupStates["create_new_material"] = true;
 	}
 
-	ImGui::Text("Name:", material->mPath);
+	ImGui::Text("Name: %s", material->mPath.c_str());
 
 	static bool isMatSettingsOpen = true;
 	if (ImGui::CollapsingHeader("Material settings", &isMatSettingsOpen, ImGuiTreeNodeFlags_DefaultOpen)) {

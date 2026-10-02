@@ -4,8 +4,34 @@
 #include <resourceModule/serviceManager.h>
 #include <taskModule/taskSystem.h>
 #include <future>
+#ifdef __EMSCRIPTEN__
+#include <iostream>
+#endif
 
 namespace IKIGAI::ECS2 {
+
+	bool UseTaskSystem() {
+#ifdef __EMSCRIPTEN__
+		return false;
+#else
+		if (!IKIGAI::RESOURCES::ServiceManager::Check<IKIGAI::TASK::TaskSystem>()) {
+			return false;
+		}
+		return IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::TASK::TaskSystem>().isReady();
+#endif
+	}
+
+	void WebEcsLog(const char* msg) {
+#ifdef __EMSCRIPTEN__
+		static int remaining = 24;
+		if (remaining > 0) {
+			--remaining;
+			std::cout << "[web] ecs " << msg << std::endl;
+			std::cout.flush();
+		}
+#endif
+		(void)msg;
+	}
 
 	void SystemManager::rebuildBatches() {
 		mBatches.clear();
@@ -52,7 +78,7 @@ namespace IKIGAI::ECS2 {
 	// Template helper for running phases with batching and multithreading
 	template<typename PhaseFunc>
 	void runPhaseImpl(std::vector<SystemManager::Batch>& batches, World& world, PhaseFunc&& phaseFunc) {
-		if (IKIGAI::RESOURCES::ServiceManager::Check<IKIGAI::TASK::TaskSystem>()) {
+		if (UseTaskSystem()) {
 			auto& ts = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::TASK::TaskSystem>();
 			
 			for (auto& batch : batches) {
@@ -117,7 +143,7 @@ namespace IKIGAI::ECS2 {
 	// Template helper for update phases (with dt and CommandBuffer)
 	template<typename PhaseFunc>
 	void runUpdatePhaseImpl(std::vector<SystemManager::Batch>& batches, World& world, std::chrono::duration<double> dt, PhaseFunc&& phaseFunc) {
-		if (IKIGAI::RESOURCES::ServiceManager::Check<IKIGAI::TASK::TaskSystem>()) {
+		if (UseTaskSystem()) {
 			auto& ts = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::TASK::TaskSystem>();
 			
 			for (auto& batch : batches) {
@@ -155,6 +181,7 @@ namespace IKIGAI::ECS2 {
 			CommandBuffer cb;
 			for (auto& batch : batches) {
 				for (auto& sys : batch.systems) {
+					WebEcsLog(sys->mName.c_str());
 					phaseFunc(sys.get(), world, cb, dt);
 				}
 			}
@@ -202,7 +229,7 @@ namespace IKIGAI::ECS2 {
 			rebuildBatches();
 		}
 
-		if (IKIGAI::RESOURCES::ServiceManager::Check<IKIGAI::TASK::TaskSystem>()) {
+		if (UseTaskSystem()) {
 			auto& ts = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::TASK::TaskSystem>();
 			
 			for (auto& batch : mBatches) {

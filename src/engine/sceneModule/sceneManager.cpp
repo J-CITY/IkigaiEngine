@@ -6,6 +6,7 @@
 #include <coreModule/ecs/object.h>
 
 #include "utilsModule/log/loggerDefine.h"
+#include <iostream>
 
 using namespace IKIGAI;
 using namespace IKIGAI::SCENE_SYSTEM;
@@ -20,8 +21,16 @@ SceneManager::~SceneManager() {
 
 void SceneManager::update() {
 	if (m_delayedLoadCall) {
+#ifdef __EMSCRIPTEN__
+		std::cout << "[web] SceneManager delayed load" << std::endl;
+		std::cout.flush();
+#endif
 		m_delayedLoadCall();
 		m_delayedLoadCall = 0;
+#ifdef __EMSCRIPTEN__
+		std::cout << "[web] SceneManager delayed load done" << std::endl;
+		std::cout.flush();
+#endif
 	}
 }
 
@@ -103,6 +112,10 @@ void saveComponent(UTILS::WeakPtr<ECS::ComponentBase> component, nlohmann::json&
 }
 
 void SceneManager::loadFromFile(const std::string& sceneFilePath) {
+#ifdef __EMSCRIPTEN__
+	std::cout << "[web] SceneManager::loadFromFile " << sceneFilePath << std::endl;
+	std::cout.flush();
+#endif
 	unloadCurrentScene();
 
 	m_currentScene = std::make_unique<Scene>();
@@ -137,6 +150,10 @@ void SceneManager::loadFromFile(const std::string& sceneFilePath) {
 	}
 
 	m_currentScene->postLoad();
+#ifdef __EMSCRIPTEN__
+	std::cout << "[web] SceneManager::loadFromFile done" << std::endl;
+	std::cout.flush();
+#endif
 }
 
 void SceneManager::saveToFile() {

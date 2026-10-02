@@ -1,13 +1,16 @@
 - Win
-1. Подготовка окружения (скачивание зависимостей и сабмодулей):
-python utils/setup_env.py
+1. Подготовка окружения (скачивание зависимостей и сабмодулей).
+   run_vs.py вызывает setup_env.py сам, если окружение ещё не готово:
+python run_vs.py -c vs22 -a x64 -g opengl -t Release
+# или
+python run_vs.py -c vs22 -a x64 -g vulkan -t Debug
+# или
+python run_vs.py -c vs22 -a x64 -g dx12 --build
 
-2. Генерация проекта Visual Studio:
-python run_vs.py -c vs22 -a x64 -g opengl  # Для OpenGL
-# или
-python run_vs.py -c vs22 -a x64 -g vulkan  # Для Vulkan
-# или
-python run_vs.py -c vs22 -a x64 -g dx12    # Для DirectX 12
+Лог cmake/сборки пишется в run_vs.log (переопределить: --log path)
+
+Ручной вызов:
+python utils/setup_env.py
 
 --------------------------------------------------------------
 - Android
@@ -45,24 +48,20 @@ cmake --build .
 
 ---------------------------------------------------------------
 - Emscripten
-emcmake cmake . -B build -G Ninja
-cmake --build build
+Нужны Python 3, Git, CMake и Ninja. Emscripten SDK 6.0.10 ставится из submodule 3rd/emsdk
+при первом запуске (версия в emscripten/emsdk.version).
 
-Run local server
-python -m http.server 8000
+python run_vs.py -p web -t Release --build
+python run_vs.py -p web --run
 
-- Emscripten Assimp
-Download Assimp Release 5.0.1 (https://github.com/assimp/assimp/releases/tag/v5.0.1)
-Run the following commands after installing Emscripten (https://emscripten.org/docs/getting_started/downloads.html):
-cd assimp-5.0.1
-emcmake cmake -DCMAKE_BUILD_TYPE=Release . 
-emmake make
-cd ..
-Link the static libraries in your CMake project:
-include_directories("${PROJECT_SOURCE_DIR}/assimp-5.0.1/include")
-link_libraries("${PROJECT_SOURCE_DIR}/assimp-5.0.1/lib/libassimp.a")
-link_libraries("${PROJECT_SOURCE_DIR}/assimp-5.0.1/lib/libIrrXML.a")
-link_libraries("${PROJECT_SOURCE_DIR}/assimp-5.0.1/lib/libzlib.a")
+# или напрямую из SDK:
+3rd\emsdk\upstream\emscripten\emrun.exe emscripten\out\IkigaiEngine.html
+
+# или
+python -m http.server 8000 --directory emscripten/out
+# открыть http://localhost:8000/IkigaiEngine.html
+
+file:// не загрузит .wasm в большинстве браузеров.
 
 
 

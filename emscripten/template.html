@@ -7,6 +7,7 @@
                 display:block;
                 border: 0px none;
                 background-color: #333333;
+                outline: none;
             }
 
             textarea.emscripten {
@@ -30,8 +31,8 @@
 
     <body>
         <div class="content">
-            <canvas class="emscripten" id="canvas" width="600", height="360" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
-            <textarea class="emscripten" id="output" rows="8"></textarea>
+            <canvas class="emscripten" id="canvas" width="1280" height="720" oncontextmenu="event.preventDefault()" tabindex="0"></canvas>
+            <textarea class="emscripten" id="output" rows="8" readonly tabindex="-1"></textarea>
         </div>
 
         <script type='text/javascript'>
@@ -62,10 +63,13 @@
                     console.error(text);
                 },
                 canvas: (function () {
-                    return document.getElementById('canvas');
+                    var canvas = document.getElementById('canvas');
+                    canvas.addEventListener('click', function () { canvas.focus(); });
+                    window.addEventListener('load', function () { canvas.focus(); });
+                    return canvas;
                 })()
             };
         </script>
-        <script async type="text/javascript" src="cross_test.js"></script>
+        {{{ SCRIPT }}}
     </body>
 </html>

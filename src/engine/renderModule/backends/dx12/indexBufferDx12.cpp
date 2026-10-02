@@ -13,6 +13,7 @@ IKIGAI::RENDER::IndexBufferDx12::IndexBufferDx12(void* data, size_t sz, size_t s
 		DirectX::TransitionResource(cmdlist, mBuffer.Get(), mState,
 			D3D12_RESOURCE_STATE_INDEX_BUFFER);
 	});
+	mState = D3D12_RESOURCE_STATE_INDEX_BUFFER;
 	IndexBufferDx12::setData(data, sz, stride);
 }
 
@@ -37,7 +38,7 @@ void IKIGAI::RENDER::IndexBufferDx12::setData(const void* data, size_t sz, size_
 		mBuffer = d3dUtil::CreateBuffer(mSizeByte);
 	}
 
-	auto buffer = d3dUtil::CreateBuffer(sz * stride);
+	auto buffer = d3dUtil::CreateBuffer(sz * stride, D3D12_HEAP_TYPE_UPLOAD);
 	void* mapBuffer = nullptr;
 	buffer->Map(0, nullptr, &mapBuffer);
 	memcpy(mapBuffer, data, sz * stride);
@@ -50,7 +51,7 @@ void IKIGAI::RENDER::IndexBufferDx12::setData(const void* data, size_t sz, size_
 	d3dUtil::GetDriver()->destroyDeferred(buffer);
 }
 
-const Microsoft::WRL::ComPtr<ID3D12Resource>& IKIGAI::RENDER::IndexBufferDx12::getBuffer() const {
+const IKIGAI::RENDER::Dx12Resource& IKIGAI::RENDER::IndexBufferDx12::getBuffer() const {
 	return mBuffer;
 }
 #endif

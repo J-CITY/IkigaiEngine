@@ -1,8 +1,12 @@
-import urllib.request
-import zipfile
 import os
 import shutil
-import subprocess
+import sys
+import zipfile
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.insert(0, script_dir)
+from http_download import download_file
 
 def download_and_extract_glew():
     glew_version = "2.3.1"
@@ -18,7 +22,7 @@ def download_and_extract_glew():
                 return
 
     print(f"Downloading GLEW {glew_version}...")
-    urllib.request.urlretrieve(url, zip_path)
+    download_file(url, zip_path)
 
     print("Extracting GLEW...")
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:

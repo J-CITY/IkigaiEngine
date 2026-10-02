@@ -191,8 +191,15 @@ list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendMetal\\.mm$")
 # Source Groups for IDE
 source_group(TREE ${MAIN_SOURCE_DIR} FILES ${PROJECT_ABSOLUTE_HEADERS} ${PROJECT_ABSOLUTE_SOURCES})
 
+set(ENGINE_WIN_SUBSYSTEM "windows" CACHE STRING "Windows executable subsystem: windows or console")
+
 if(WIN32)
-    set(EXECUTABLE_FLAG WIN32) 
+    set(EXECUTABLE_FLAG "")
+    if(ENGINE_WIN_SUBSYSTEM STREQUAL "windows")
+        set(EXECUTABLE_FLAG WIN32)
+    elseif(NOT ENGINE_WIN_SUBSYSTEM STREQUAL "console")
+        message(FATAL_ERROR "ENGINE_WIN_SUBSYSTEM must be 'windows' or 'console'")
+    endif()
 endif()
 
 add_executable(${APP_NAME} ${EXECUTABLE_FLAG}
@@ -286,6 +293,7 @@ endif()
 if(USE_DX12)
     target_link_libraries(${APP_NAME} PRIVATE d3d12.lib d3dcompiler.lib dxcompiler.lib)
     target_sources(${APP_NAME} PRIVATE "${THIRD_PARTY_DIR}/D3D12MA/src/D3D12MemAlloc.cpp")
+    target_include_directories(${APP_NAME} PRIVATE "${THIRD_PARTY_DIR}/D3D12MA/include")
 endif()
 
 if(USE_SDL)

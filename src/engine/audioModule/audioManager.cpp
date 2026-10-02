@@ -1,21 +1,37 @@
 #include "audioManager.h"
 
 #include "resourceModule/fileSystem/fileSystem.h"
+#ifdef __EMSCRIPTEN__
+#include <iostream>
+#endif
 
 IKIGAI::AUDIO::AudioManagerAL::AudioManagerAL() {
 	audioEngine = std::make_unique<SoLoud::Soloud>();
-	audioEngine->init();
+	const auto res = audioEngine->init();
+	mReady = (res == SoLoud::SO_NO_ERROR);
+#ifdef __EMSCRIPTEN__
+	std::cout << "[web] SoLoud init result=" << res << " ready=" << mReady << std::endl;
+	std::cout.flush();
+#endif
 }
 
 IKIGAI::AUDIO::AudioManagerAL::~AudioManagerAL() {
-	audioEngine->deinit();
+	if (mReady && audioEngine) {
+		audioEngine->deinit();
+	}
 }
 
 unsigned IKIGAI::AUDIO::AudioManagerAL::playBus(SoLoud::Bus& bus) {
+	if (!isReady()) {
+		return 0;
+	}
 	return audioEngine->play(bus);
 }
 
 void IKIGAI::AUDIO::AudioManagerAL::addSource(SoundResource& source) {
+	if (!isReady()) {
+		return;
+	}
 	if (source.data.type == SoundType::SOUND) {
 		if (!sounds.contains(source.data.pathSoundSource)) {
 			sounds[source.data.pathSoundSource] = SoLoud::Wav();
@@ -92,15 +108,16 @@ void IKIGAI::AUDIO::AudioManagerAL::set3dSoundSpeedSpeed(float speed) {
 }
 
 void IKIGAI::AUDIO::AudioManagerAL::setListenerPos(MATH::Vector3f pos, MATH::Vector3f dir) {
+	if (!isReady()) {
+		return;
+	}
 	audioEngine->set3dListenerPosition(-pos.x, pos.y, pos.z);
 	audioEngine->set3dListenerAt(dir.x, dir.y, dir.z);
 	audioEngine->update3dAudio();
 }
 
 void IKIGAI::AUDIO::AudioManagerAL::setSourcePos(SoundResource& source, MATH::Vector3f pos) {
-	if (!source.id) {
-		//problem
-
+	if (!isReady() || !source.id) {
 		return;
 	}
 	audioEngine->set3dSourcePosition(source.id.value(), pos.x, pos.y, pos.z);

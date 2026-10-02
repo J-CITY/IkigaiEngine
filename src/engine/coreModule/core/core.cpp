@@ -128,7 +128,7 @@ Core:: Core(
 	render = std::make_unique<RENDER::Renderer>(driver.get(), std::make_unique<RENDER::ImmediateExecutor>());
 
 	std::cout << "Create driver\n";
-	scriptInterpreter = std::make_unique<SCRIPTING::ScriptInterpreter>(Config::ROOT + Config::USER_ASSETS_PATH + "scripts\\");
+	scriptInterpreter = std::make_unique<SCRIPTING::ScriptInterpreter>(Config::ROOT + Config::USER_ASSETS_PATH + "scripts/");
 	audioManager = std::make_unique<AUDIO::AudioManager>();
 	audioSourceLoader = std::make_unique<RESOURCES::AudioSourceLoader>();
 	physicsManger = std::make_unique<PHYSICS::PhysicWorld>(256);
@@ -242,7 +242,9 @@ Core:: Core(
 	RESOURCES::ServiceManager::Set<SCENE_SYSTEM::SceneManager>(sceneManager.get());
 	RESOURCES::ServiceManager::Set<AUDIO::AudioManager>(audioManager.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::AudioSourceLoader>(audioSourceLoader.get());
+#ifndef __EMSCRIPTEN__
 	RESOURCES::ServiceManager::Set<TASK::TaskSystem>(taskManger.get());
+#endif
 	RESOURCES::ServiceManager::Set<EVENT::EventBroadcaster>(eventBroadcaster.get());
 	RESOURCES::ServiceManager::Set<RENDER::Renderer>(render.get());
 

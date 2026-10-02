@@ -17,6 +17,7 @@
 #include "renderModule/backends/interface/uniformBufferInterface.h"
 
 #include "renderModule/render.h"
+#include "renderModule/light.h"
 #include "renderModule/backends/interface/driverInterface.h"
 #include "skeletalModule/animationOffset.h"
 #include "skeletalModule/animationTransform.h"
@@ -25,6 +26,7 @@
 #include "utilsModule/time/time.h"
 #include <stdexcept>
 #include "windowModule/window/window.h"
+#include <iostream>
 
 #ifdef OCULUS
 #include "util_matrix.h"
@@ -46,7 +48,11 @@ namespace IKIGAI::RENDER {
 		//mEmptyMaterial->setShader(render->createShader(shaderRes));
 		//mEmptyMaterial->set("u_Diffuse", MATH::Vector4(1.f, 0.f, 1.f, 1.f));
 
+#ifdef USING_GLES
+		mLightSSBO = render->createStorageBuffer(nullptr, MAX_LIGHTS, sizeof(LightOGL));
+#else
 		mLightSSBO = render->createStorageBuffer(nullptr, 0, 0);
+#endif
 		mEmptyTexture = render->createTexture("/textures/empty.png");
 
 		mEngineUbo = render->createUniformBuffer<EngineUBO>({});
@@ -63,14 +69,22 @@ namespace IKIGAI::RENDER {
 		setPipeline(std::make_unique<RenderGraphPipeline>(desc, *render));
 	}
 
+#ifdef __EMSCRIPTEN__
+	int gRendererLogFrames = 8;
+#define WEB_LOG(msg) do { if (gRendererLogFrames > 0) { std::cout << "[web] " << msg << std::endl; std::cout.flush(); } } while (0)
+#else
+#define WEB_LOG(msg) do {} while (0)
+#endif
+
 	void GameRenderer::renderScene() {
+		WEB_LOG("GameRenderer::renderScene");
 		auto& scene = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::SCENE_SYSTEM::SceneManager>().getCurrentScene();
 		auto& render = mContext.render;
 
 		auto camera = scene.findMainCamera();
 
 		if (auto mainCameraComponent = mContext.sceneManager->getCurrentScene().findMainCamera()) {
-			// TODO: not use screen size
+			WEB_LOG("GameRenderer camera found");
 			auto sz = mContext.window->getSize();
 			auto winWidth = sz.x;
 			auto winHeight = sz.y;
@@ -85,13 +99,21 @@ namespace IKIGAI::RENDER {
 			//mDriver->applyStateMask(glState);
 		}
 		else {
+			WEB_LOG("GameRenderer no camera, clear red");
 			render->setClearColor(1.0f, 0.0f, 0.0f, 1.0f);
 			render->clear(true, true, false);
 		}
 		mFrameCount++;
+		WEB_LOG("GameRenderer::renderScene done");
+#ifdef __EMSCRIPTEN__
+		if (gRendererLogFrames > 0) {
+			--gRendererLogFrames;
+		}
+#endif
 	}
 
 	void GameRenderer::drawDrawable(const Drawable& drawable) {
+		WEB_LOG("drawDrawable");
 		if (drawable.material->hasShader() && drawable.material->getGPUInstances() > 0) {
 			auto& render = mContext.render;
 
@@ -105,10 +127,19 @@ namespace IKIGAI::RENDER {
 			render->setPushConstant(IKIGAI::RENDER::ShaderType::VERTEX, 0, sizeof(MATH::Matrix4f), &drawable.world);
 
 			BonesUBO data;
-			if (drawable.skeleton && drawable.animationPlayable) {
+			if (drawable.skeleton && drawable.animationPlayable &&
+				drawable.mAnimLocalTransform && drawable.mAnimGlobalTransform && drawable.mAnimOffset) {
+#ifdef __EMSCRIPTEN__
+				static bool loggedSkin = false;
+				if (!loggedSkin) {
+					loggedSkin = true;
+					std::cout << "[web] skinning pose joints=" << drawable.skeleton->getNumJolts()
+						<< std::endl;
+					std::cout.flush();
+				}
+#endif
 				data.use = 1;
 				{
-					drawable.animationPlayable->update(0.0016f);
 					auto final_pose = drawable.animationPlayable->getPose();
 					auto* local_transforms = drawable.mAnimLocalTransform->generateTransforms(final_pose);
 					auto* global_transforms = drawable.mAnimGlobalTransform->generateTransforms(local_transforms);
@@ -119,13 +150,27 @@ namespace IKIGAI::RENDER {
 					}
 				}
 			}
+#ifdef __EMSCRIPTEN__
+			else if (drawable.skeleton || drawable.animationPlayable) {
+				static bool loggedNoSkin = false;
+				if (!loggedNoSkin) {
+					loggedNoSkin = true;
+					std::cout << "[web] no skinning skeleton=" << (drawable.skeleton ? "ok" : "null")
+						<< " playable=" << (drawable.animationPlayable ? "ok" : "null") << std::endl;
+					std::cout.flush();
+				}
+			}
+#endif
 			mBoneUbo->setData(data);
 
 			//std::static_pointer_cast<ShaderGl>(drawable.material->getShader())->setMat4("engine_Model.Projection", MATH::Matrix4f::Transpose(uboData.Projection));
 			//std::static_pointer_cast<ShaderGl>(drawable.material->getShader())->setMat4("engine_Model.View", MATH::Matrix4f::Transpose(uboData.View));
 			render->setUniformBuffer("engine_UBO", mEngineUbo);
+			WEB_LOG("bound engine_UBO");
 			render->setUniformBuffer("engine_Bones", mBoneUbo);
+			WEB_LOG("bound engine_Bones");
 			render->setStorageBuffer("engine_Lights", mLightSSBO);
+			WEB_LOG("bound engine_Lights");
 
 			//glBindBufferBase(GL_UNIFORM_BUFFER, 0, std::static_pointer_cast<UniformBufferGl>(mEngineUbo)->getId());
 
@@ -139,6 +184,7 @@ namespace IKIGAI::RENDER {
 			//drawable.mesh->unbind();
 
 			render->draw(drawable.mesh, PrimitiveMode::TRIANGLES, drawable.material->getGPUInstances());
+			WEB_LOG("draw done");
 
 
 			//std::static_pointer_cast<ShaderGl>(drawable.material->getShader())->unbind();
@@ -252,13 +298,31 @@ namespace IKIGAI::RENDER {
 		}
 	}
 
+	namespace {
+#ifdef USING_GLES
+		void PadLightsForEsUbo(std::vector<LightOGL>& lights) {
+			if (lights.size() > MAX_LIGHTS) {
+				lights.resize(MAX_LIGHTS);
+			} else {
+				lights.resize(MAX_LIGHTS, LightOGL::Inactive());
+			}
+		}
+#endif
+	}
+
 	void GameRenderer::updateLights(SCENE_SYSTEM::Scene& scene) {
 		auto lightMatrices = scene.findLightData();
+#ifdef USING_GLES
+		PadLightsForEsUbo(lightMatrices);
+#endif
 		mLightSSBO->setData(lightMatrices);
 	}
 
 	void GameRenderer::updateLightsInFrustum(SCENE_SYSTEM::Scene& scene, const Frustum& frustum) {
 		auto lightMatrices = scene.findLightDataInFrustum(frustum);
+#ifdef USING_GLES
+		PadLightsForEsUbo(lightMatrices);
+#endif
 		mLightSSBO->setData(lightMatrices);
 	}
 

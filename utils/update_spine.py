@@ -1,9 +1,13 @@
 import os
 import shutil
-import urllib.request
-import zipfile
-import tempfile
 import sys
+import tempfile
+import zipfile
+
+script_dir = os.path.dirname(os.path.abspath(__file__))
+if script_dir not in sys.path:
+    sys.path.insert(0, script_dir)
+from http_download import download_file
 
 def update_spine():
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -24,11 +28,8 @@ def update_spine():
         zip_path = os.path.join(temp_dir, "spine.zip")
         
         try:
-            # Download with a timeout to prevent hanging
-            req = urllib.request.Request(zip_url, headers={'User-Agent': 'Mozilla/5.0'})
-            with urllib.request.urlopen(req, timeout=30) as response, open(zip_path, 'wb') as out_file:
-                shutil.copyfileobj(response, out_file)
-        except Exception as e:
+            download_file(zip_url, zip_path, timeout=120)
+        except RuntimeError as e:
             print(f"Failed to download: {e}")
             sys.exit(1)
             

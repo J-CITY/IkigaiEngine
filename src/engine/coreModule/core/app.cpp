@@ -1,6 +1,7 @@
 #include "app.h"
 
 #include <iostream>
+#include <stdexcept>
 
 #include "coreModule/ecs/componentManager.h"
 #include "editorModule/EditorRender.h"
@@ -31,10 +32,31 @@ using namespace IKIGAI::CORE;
 
 namespace
 {
-#ifdef EMSCRIPTEN
+	int gWebLogFrames = 8;
+
+	void WebLog(const char* msg)
+	{
+#ifdef __EMSCRIPTEN__
+		if (gWebLogFrames <= 0) {
+			return;
+		}
+		std::cout << "[web] " << msg << std::endl;
+		std::cout.flush();
+#endif
+	}
+
+#ifdef __EMSCRIPTEN__
 	void emscriptenMainLoop(IKIGAI::CORE::App* application)
 	{
-		application->runMainLoop();
+		try {
+			application->runMainLoop();
+		} catch (const std::exception& e) {
+			std::cout << "[web] EXCEPTION in main loop: " << e.what() << std::endl;
+			std::cout.flush();
+		} catch (...) {
+			std::cout << "[web] UNKNOWN EXCEPTION in main loop" << std::endl;
+			std::cout.flush();
+		}
 	}
 #endif
 } // namespace
@@ -57,16 +79,15 @@ App::App(
 App::~App() = default;
 
 void App::run() {
-
 #ifdef __EMSCRIPTEN__
+	std::cout << "[web] App::run, starting main loop" << std::endl;
+	std::cout.flush();
 	emscripten_set_main_loop_arg((em_arg_callback_func)::emscriptenMainLoop, this, 0, 1);
 #else
 	while (runMainLoop()) {
 
 	}
 #endif
-	
-	
 }
 
 //#include "../../../core/assets.hpp"
@@ -106,7 +127,22 @@ void App::run() {
 //std::shared_ptr<IKIGAI::RENDER::TextureGl> tex;
 
 bool App::runMainLoop() {
+	static int webFrame = 0;
+	const int frame = webFrame++;
+#ifdef __EMSCRIPTEN__
+	auto step = [frame](const char* name) {
+		if (frame < 8) {
+			std::cout << "[web] frame " << frame << " " << name << std::endl;
+			std::cout.flush();
+		}
+	};
+#else
+	auto step = [](const char*) {};
+#endif
+
+	step("enter");
 	if (!isRunning()) {
+		step("not running");
 		return false;
 	}
 	static bool init = false;
@@ -177,6 +213,7 @@ bool App::runMainLoop() {
 
 
 	//std::cout << model->getMeshes()[0]->getIndexCount() << std::endl;
+	step("pollEvent");
 	core.window->pollEvent();
 	/*
 	glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
@@ -220,11 +257,19 @@ bool App::runMainLoop() {
 
 
 	//profiler.Update(TIME::Timer::GetInstance().getDeltaTime().count());
+	step("preUpdate");
 	preUpdate(TIME::Timer::GetInstance().getDeltaTime());
+	step("update");
 	update(TIME::Timer::GetInstance().getDeltaTime());
+	step("postUpdate");
 	postUpdate(TIME::Timer::GetInstance().getDeltaTime());
 	TIME::Timer::GetInstance().update();
-	//profiler.UpdateEnd();
+	step("done");
+#ifdef __EMSCRIPTEN__
+	if (gWebLogFrames > 0) {
+		--gWebLogFrames;
+	}
+#endif
 	return true;
 }
 
@@ -236,11 +281,9 @@ void App::preUpdate(std::chrono::duration<double> dt) {
 	core.window->preUpdate();
 #ifdef USE_EDITOR
 #ifndef OCULUS
-#ifndef __EMSCRIPTEN__
 	if (core.editorRender) {
 		core.editorRender->draw();
 	}
-#endif
 #endif
 #endif
 }
@@ -271,11 +314,13 @@ void App::update(std::chrono::duration<double> dt) {
 	RESOURCES::FileWatcher::getInstance()->applyUpdate();
 #endif
 
+	WebLog("physics start");
 	core.physicsManger->startFrame();
 	auto duration = static_cast<float>(TIME::Timer::GetInstance().getDeltaTime().count());
 	if (duration > 0.0f) {
 		core.physicsManger->runPhysics(duration);
 	}
+	WebLog("physics done");
 	
 #ifdef USE_SDL
 	if (RESOURCES::ServiceManager::Check<INPUT_SYSTEM::InputActions>() && RESOURCES::ServiceManager::Check<ECS2::World>()) {
@@ -286,32 +331,33 @@ void App::update(std::chrono::duration<double> dt) {
 #endif
 
 	if (core.sceneManager->hasCurrentScene()) {
-		//PROFILER_EVENT();
+		WebLog("scene update");
 		auto& currentScene = core.sceneManager->getCurrentScene();
+		WebLog("scene fixedUpdate");
 		currentScene.fixedUpdate(dt);
+		WebLog("scene fixedUpdate done");
 
 		auto& world = RESOURCES::ServiceManager::Get<ECS2::World>();
 		auto systemManager = world.getSystemManager();
+		WebLog("ecs runFixedUpdate");
 		systemManager->runFixedUpdate(dt);
+		WebLog("ecs runFixedUpdate done");
+		WebLog("ecs runUpdate");
 		systemManager->runUpdate(dt);
+		WebLog("ecs runUpdate done");
+		WebLog("scene object update");
+		currentScene.update(dt);
+		WebLog("scene object update done");
+		WebLog("ecs runLateUpdate");
 		systemManager->runLateUpdate(dt);
-		//for (auto& system : ECS::ComponentManager::GetInstance().getSystemManager().getSystems()) {
-		//	system.second->onFixedUpdate(dt);
-		//}
-		//currentScene.update(dt);
-		//for (auto& system : ECS::ComponentManager::GetInstance().getSystemManager().getSystems()) {
-		//	system.second->onUpdate(dt);
-		//}
-		//currentScene.lateUpdate(dt);
-		//for (auto& system : ECS::ComponentManager::GetInstance().getSystemManager().getSystems()) {
-		//	system.second->onLateUpdate(dt);
-		//}
+		WebLog("ecs runLateUpdate done");
 #ifndef OCULUS
+		WebLog("window update");
 		core.window->update();
+		WebLog("renderScene");
 		core.renderer->renderScene();
+		WebLog("renderScene done");
 #endif
-		//core.renderer->setClearColor(1.0f, 0.0f, 0.0f);
-		//core.renderer->clear(true, true, false);
 	}
 #ifndef __EMSCRIPTEN__
 	RESOURCES::ServiceManager::Get<TASK::TaskSystem>().waitSync();
@@ -341,7 +387,9 @@ void App::update(std::chrono::duration<double> dt) {
 
 
 
+	WebLog("sceneManager update");
 	core.sceneManager->update();
+	WebLog("sceneManager update done");
 }
 
 void App::postUpdate(std::chrono::duration<double> dt) {
@@ -351,7 +399,9 @@ void App::postUpdate(std::chrono::duration<double> dt) {
 //	core.debugRender->draw(core);
 //#endif
 //	core.debugRender->postDraw();
+	WebLog("window draw");
 	core.window->draw();
+	WebLog("window draw done");
 #ifdef USE_SDL
 	if (RESOURCES::ServiceManager::Check<INPUT_SYSTEM::InputManager>()) {
 		RESOURCES::ServiceManager::Get<INPUT_SYSTEM::InputManager>().endFrame();

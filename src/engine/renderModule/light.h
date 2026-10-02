@@ -17,6 +17,10 @@ namespace IKIGAI
 namespace IKIGAI {
 	namespace RENDER {
 		
+		// WebGL2 UBOs cannot hold unsized arrays; keep in sync with
+		// kEsSsboRuntimeArraySize in shaderInterface.cpp.
+		inline constexpr size_t MAX_LIGHTS = 64;
+
 		struct LightOGL {
 			float pos[3];
 			float cutoff;
@@ -28,10 +32,15 @@ namespace IKIGAI {
 			float linear;
 			float quadratic;
 			float intensity;
-#ifdef OPENGL_BACKEND
 			float radius;
 			float padding[3];
-#endif
+
+			// generateOGLStruct stores Type as (int)type - 1, so NONE is -1.
+			static LightOGL Inactive() {
+				LightOGL light{};
+				light.type = -1;
+				return light;
+			}
 		};
 		
 		struct Light {

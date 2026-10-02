@@ -1,234 +1,265 @@
-cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.20)
 
-project(cross_test)
+set(APP_NAME "IkigaiEngine")
+project(${APP_NAME} LANGUAGES C CXX)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++20 -fexceptions -O2 -s EXPORTED_FUNCTIONS=\"['_malloc','_main']\" -s EXPORTED_RUNTIME_METHODS=\"['ccall', 'cwrap']\"  -s USE_SDL=3 -D WITH_MINIAUDIO -s FULL_ES3=1 -s USE_WEBGL2=1 -s WASM=1 -s MIN_WEBGL_VERSION=2 -s GL_SUPPORT_AUTOMATIC_ENABLE_EXTENSIONS=1 -s OFFSCREEN_FRAMEBUFFER=1 -s STACK_SIZE=8MB -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=64MB -s ASSERTIONS -s USE_FREETYPE=1")
+if(NOT EMSCRIPTEN)
+    message(FATAL_ERROR "This CMake project must be configured with emcmake for the Emscripten toolchain")
+endif()
 
-set(THIRD_PARTY_DIR "../3rd")
-set(MAIN_SOURCE_DIR "../src")
+# --- Configuration Options ---
+option(USE_SDL      "Use SDL window backend" ON)
+option(USE_OPENGL   "Use OpenGL rendering backend" ON)
+option(USE_VULKAN   "Use Vulkan rendering backend" OFF)
+option(USE_DX12     "Use DX12 rendering backend" OFF)
+option(USE_METAL    "Use Metal rendering backend" OFF)
+option(USE_MIMALLOC "Use mimalloc override" OFF)
+
+set(USE_VULKAN OFF CACHE BOOL "Vulkan is not supported on Emscripten" FORCE)
+set(USE_DX12 OFF CACHE BOOL "DX12 is not supported on Emscripten" FORCE)
+set(USE_METAL OFF CACHE BOOL "Metal is not supported on Emscripten" FORCE)
+
+if(NOT USE_OPENGL)
+    message(FATAL_ERROR "Emscripten build requires USE_OPENGL=ON")
+endif()
+
+# --- Directory Setup ---
+set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../3rd")
+set(MAIN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../src")
+
 set(ENGINE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/out" CACHE PATH "Directory for the built executable")
 if(NOT IS_ABSOLUTE "${ENGINE_RUNTIME_OUTPUT_DIRECTORY}")
     get_filename_component(ENGINE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${ENGINE_RUNTIME_OUTPUT_DIRECTORY}" ABSOLUTE)
 endif()
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${ENGINE_RUNTIME_OUTPUT_DIRECTORY}")
+set(CMAKE_EXECUTABLE_SUFFIX ".html")
 
-include_directories(${THIRD_PARTY_DIR}/SDL3/include)
-include_directories(${THIRD_PARTY_DIR}/glm)
-include_directories(${THIRD_PARTY_DIR}/tiny-obj-loader)
-include_directories(${THIRD_PARTY_DIR}/serdepp/include)
-include_directories(${THIRD_PARTY_DIR}/magic_enum/include)
-include_directories(${THIRD_PARTY_DIR}/magic_enum/include/magic_enum)
-include_directories(${THIRD_PARTY_DIR}/nameof/include)
-include_directories(${THIRD_PARTY_DIR}/json/single_include)
-include_directories(${THIRD_PARTY_DIR}/vfspp/include)
-include_directories(${THIRD_PARTY_DIR}/vfspp/vendor/miniz-cpp)
+# --- Dependencies ---
 
-include_directories(${THIRD_PARTY_DIR}/assimp/include)
-include_directories(./include) #assimp config
-include_directories(${THIRD_PARTY_DIR}/soloud/include)
-include_directories(${THIRD_PARTY_DIR}/sol/include)
-include_directories(${THIRD_PARTY_DIR}/lua)
-include_directories(${THIRD_PARTY_DIR}/freetype/include)
-include_directories(${THIRD_PARTY_DIR}/spine)
-include_directories(${THIRD_PARTY_DIR}/imgui/imgui)
-include_directories(${THIRD_PARTY_DIR}/stb)
+# 1. Assimp (trim unused importers to keep wasm smaller)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
+set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_SAMPLES OFF CACHE BOOL "" FORCE)
+set(ASSIMP_NO_EXPORT ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_FBX_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_OBJ_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_GLTF_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_COLLADA_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_STL_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_PLY_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_DRACO OFF CACHE BOOL "" FORCE)
+add_subdirectory(${THIRD_PARTY_DIR}/assimp ./3rd/assimp/build-emscripten)
 
-# global engine include
-include_directories(${MAIN_SOURCE_DIR}/engine)
+# 2. Freetype is provided by the Emscripten port (-sUSE_FREETYPE=1)
 
-file(GLOB_RECURSE CPP_HEADERS ${MAIN_SOURCE_DIR}/*.hpp)
-file(GLOB_RECURSE CPP_HEADERS2 ${MAIN_SOURCE_DIR}/*.h)
-file(GLOB_RECURSE CPP_SOURCES ${MAIN_SOURCE_DIR}/*.cpp)
+# 3. GLSLang
+set(ENABLE_HLSL OFF CACHE BOOL "" FORCE)
+set(SKIP_GLSLANG_INSTALL ON CACHE BOOL "" FORCE)
+set(ENABLE_CTEST OFF CACHE BOOL "" FORCE)
+set(ENABLE_GLSLANG_BINARIES OFF CACHE BOOL "" FORCE)
+set(ENABLE_SPVREMAPPER OFF CACHE BOOL "" FORCE)
+set(ENABLE_OPT OFF CACHE BOOL "" FORCE)
+set(ENABLE_GLSLANG_JS OFF CACHE BOOL "" FORCE)
+set(BUILD_EXTERNAL OFF CACHE BOOL "" FORCE)
+add_subdirectory(${THIRD_PARTY_DIR}/glslang ./3rd/glslang/build)
 
-list(FILTER CPP_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
-list(FILTER CPP_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
-list(FILTER CPP_HEADERS2 EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
-list(FILTER CPP_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
-list(FILTER CPP_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
-list(FILTER CPP_HEADERS2 EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
-list(FILTER CPP_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
-list(FILTER CPP_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
-list(FILTER CPP_HEADERS2 EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
-list(FILTER CPP_SOURCES EXCLUDE REGEX "imguiBackendVk\\.cpp$")
-list(FILTER CPP_SOURCES EXCLUDE REGEX "imguiBackendDx12\\.cpp$")
-list(FILTER CPP_SOURCES EXCLUDE REGEX "imguiBackendMetal\\.mm$")
+# 4. SPIRV-Cross
+set(SPIRV_CROSS_SKIP_INSTALL ON CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_CLI OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_C_API OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_CPP OFF CACHE BOOL "" FORCE)
+set(SPIRV_CROSS_ENABLE_UTIL OFF CACHE BOOL "" FORCE)
+add_subdirectory(${THIRD_PARTY_DIR}/SPIRV-Cross ./3rd/SPIRV-Cross/build)
 
-
-file(GLOB_RECURSE SOLOUD_FILES
-    "../3rd/soloud/src/core/soloud_audiosource.cpp"
-    "../3rd/soloud/src/core/soloud_bus.cpp"
-    "../3rd/soloud/src/core/soloud_core_3d.cpp"
-    "../3rd/soloud/src/core/soloud_core_basicops.cpp"
-    "../3rd/soloud/src/core/soloud_core_faderops.cpp"
-    "../3rd/soloud/src/core/soloud_core_filterops.cpp"
-    "../3rd/soloud/src/core/soloud_core_getters.cpp"
-    "../3rd/soloud/src/core/soloud_core_setters.cpp"
-    "../3rd/soloud/src/core/soloud_core_voicegroup.cpp"
-    "../3rd/soloud/src/core/soloud_core_voiceops.cpp"
-    "../3rd/soloud/src/core/soloud_fader.cpp"
-    "../3rd/soloud/src/core/soloud_fft_lut.cpp"
-    "../3rd/soloud/src/core/soloud_fft.cpp"
-    "../3rd/soloud/src/core/soloud_file.cpp"
-    "../3rd/soloud/src/core/soloud_filter.cpp"
-    "../3rd/soloud/src/core/soloud_misc.cpp"
-    "../3rd/soloud/src/core/soloud_queue.cpp"
-    "../3rd/soloud/src/core/soloud_thread.cpp"
-    "../3rd/soloud/src/core/soloud.cpp"
-    "../3rd/soloud/src/audiosource/wav/dr_impl.cpp"
-    "../3rd/soloud/src/audiosource/wav/soloud_wav.cpp"
-    "../3rd/soloud/src/audiosource/wav/soloud_wavstream.cpp"
-    "../3rd/soloud/src/audiosource/wav/stb_vorbis.c"
-    #"../3rd/soloud/src/backend/opensles/soloud_opensles.cpp"
-    #"../3rd/soloud/src/backend/sdl_static/soloud_sdl_static.cpp"
-    "../3rd/soloud/src/backend/miniaudio/soloud_miniaudio.cpp"
-    "../3rd/soloud/src/filter/soloud_bassboostfilter.cpp"
-    "../3rd/soloud/src/filter/soloud_biquadresonantfilter.cpp"
-    "../3rd/soloud/src/filter/soloud_dcremovalfilter.cpp"
-    "../3rd/soloud/src/filter/soloud_duckfilter.cpp"
-    "../3rd/soloud/src/filter/soloud_echofilter.cpp"
-    "../3rd/soloud/src/filter/soloud_eqfilter.cpp"
-    "../3rd/soloud/src/filter/soloud_fftfilter.cpp"
-    "../3rd/soloud/src/filter/soloud_flangerfilter.cpp"
-    "../3rd/soloud/src/filter/soloud_freeverbfilter.cpp"
-    "../3rd/soloud/src/filter/soloud_lofifilter.cpp"
-    "../3rd/soloud/src/filter/soloud_robotizefilter.cpp"
-    "../3rd/soloud/src/filter/soloud_waveshaperfilter.cpp"
+# 5. SPIRV-Reflect
+file(GLOB SPIRV_REFLECT_SRC
+    "${THIRD_PARTY_DIR}/SPIRV-Reflect/spirv_reflect.cpp"
+    "${THIRD_PARTY_DIR}/SPIRV-Reflect/spirv_reflect.h"
 )
-add_library(soloud SHARED ${SOLOUD_FILES})
+add_library(spirv-reflect STATIC ${SPIRV_REFLECT_SRC})
+target_include_directories(spirv-reflect PUBLIC "${THIRD_PARTY_DIR}/SPIRV-Reflect")
+set_property(TARGET spirv-reflect PROPERTY FOLDER "3rd/SPIRV-Reflect")
 
-
-
-file(GLOB_RECURSE IMGUI_FILES
-     "../3rd/imgui/imgui/imconfig.h"
-     "../3rd/imgui/imgui/imgui.cpp"
-     "../3rd/imgui/imgui/imgui.h"
-     "../3rd/imgui/imgui/imgui_draw.cpp"
-
-     #GLFW
-     #"../3rd/imgui/imgui/imgui_impl_glfw.cpp"
-     #"../3rd/imgui/imgui/imgui_impl_glfw.h"
-     #SDL3
-     "../3rd/imgui/imgui/backends/imgui_impl_sdl3.h"
-     "../3rd/imgui/imgui/backends/imgui_impl_sdl3.cpp"
-
-     #OPENGL
-     "../3rd/imgui/imgui/imgui_impl_opengl3.h"
-     "../3rd/imgui/imgui/imgui_impl_opengl3.cpp"
-     "../3rd/imgui/imgui/imgui_impl_opengl3_loader.h"
-     #VULKAN
-     # "3rd/imgui/imgui/imgui_impl_vulkan.h"
-     # "3rd/imgui/imgui/imgui_impl_vulkan.cpp"
-     # DX12
-     #"3rd/imgui/imgui/imgui_impl_dx12.h"
-     #"3rd/imgui/imgui/imgui_impl_dx12.cpp"
-     #"3rd/imgui/imgui/imgui_impl_win32.h"
-     #"3rd/imgui/imgui/imgui_impl_win32.cpp"
-
-     "../3rd/imgui/imgui/imgui_internal.h"
-     "../3rd/imgui/imgui/imgui_tables.cpp"
-     "../3rd/imgui/imgui/imgui_widgets.cpp"
-     "../3rd/imgui/imgui/imstb_rectpack.h"
-     "../3rd/imgui/imgui/imstb_rectpack.h"
-     "../3rd/imgui/imgui/imstb_textedit.h"
-     "../3rd/imgui/imgui/imstb_truetype.h"
-     "../3rd/imgui/imgui/misc/cpp/imgui_stdlib.h"
-     "../3rd/imgui/imgui/misc/cpp/imgui_stdlib.cpp"
-
-     "../3rd/imgui/IconFont/IconsFontAwesome5.h"
-     "../3rd/imgui/imgui/GraphEditor.h"
-     "../3rd/imgui/imgui/GraphEditor.cpp"
-     "../3rd/imgui/imgui/ImCurveEdit.h"
-     "../3rd/imgui/imgui/ImCurveEdit.cpp"
-     "../3rd/imgui/imgui/ImGradient.h"
-     "../3rd/imgui/imgui/ImGradient.cpp"
-     # "src/3rd/imgui/imgui/ImGuizmo.h"
-     # "src/3rd/imgui/imgui/ImGuizmo.cpp"
-     # "src/3rd/imgui/imgui/ImSequencer.h"
-     # "src/3rd/imgui/imgui/ImSequencer.cpp"
-     "../3rd/imgui/imgui/ImZoomSlider.h"
+# 6. ImGUI
+set(IMGUI_DIR "${THIRD_PARTY_DIR}/imgui")
+file(GLOB IMGUI_SOURCES
+    "${IMGUI_DIR}/imgui/*.cpp"
+    "${IMGUI_DIR}/imgui/*.h"
+    "${IMGUI_DIR}/imgui/misc/cpp/*.cpp"
+    "${IMGUI_DIR}/imgui/misc/cpp/*.h"
+    "${IMGUI_DIR}/IconFont/*.h"
+    "${IMGUI_DIR}/imgui/GraphEditor.cpp" "${IMGUI_DIR}/imgui/GraphEditor.h"
+    "${IMGUI_DIR}/imgui/ImCurveEdit.cpp" "${IMGUI_DIR}/imgui/ImCurveEdit.h"
+    "${IMGUI_DIR}/imgui/ImGradient.cpp" "${IMGUI_DIR}/imgui/ImGradient.h"
+    "${IMGUI_DIR}/imgui/ImZoomSlider.h"
 )
 
-file(GLOB_RECURSE SPINE_FILES
-     "../3rd/spine/spine/*.h"
-     "../3rd/spine/spine/*.cpp"
+if(USE_SDL)
+    list(APPEND IMGUI_SOURCES
+        "${IMGUI_DIR}/imgui/backends/imgui_impl_sdl3.cpp"
+        "${IMGUI_DIR}/imgui/backends/imgui_impl_sdl3.h"
+    )
+endif()
+
+if(USE_OPENGL)
+    list(APPEND IMGUI_SOURCES
+        "${IMGUI_DIR}/imgui/backends/imgui_impl_opengl3.cpp"
+        "${IMGUI_DIR}/imgui/backends/imgui_impl_opengl3.h"
+        "${IMGUI_DIR}/imgui/backends/imgui_impl_opengl3_loader.h"
+    )
+endif()
+
+add_library(imgui STATIC ${IMGUI_SOURCES})
+target_include_directories(imgui PUBLIC
+    "${IMGUI_DIR}/imgui"
+    "${IMGUI_DIR}/IconFont"
 )
 
-file(GLOB_RECURSE LUA_FILES
-     "../3rd/lua/lapi.c"
-     "../3rd/lua/lcode.c"
-     "../3rd/lua/lctype.c"
-     "../3rd/lua/ldebug.c"
-     "../3rd/lua/ldo.c"
-     "../3rd/lua/ldump.c"
-     "../3rd/lua/lfunc.c"
-     "../3rd/lua/lgc.c"
-     "../3rd/lua/llex.c"
-     "../3rd/lua/lmem.c"
-     "../3rd/lua/lobject.c"
-     "../3rd/lua/lopcodes.c"
-     "../3rd/lua/lparser.c"
-     "../3rd/lua/lstate.c"
-     "../3rd/lua/lstring.c"
-     "../3rd/lua/ltable.c"
-     "../3rd/lua/ltm.c"
-     "../3rd/lua/lundump.c"
-     "../3rd/lua/lvm.c"
-     "../3rd/lua/lzio.c"
-     "../3rd/lua/lauxlib.c"
-     "../3rd/lua/lbaselib.c"
-     "../3rd/lua/lcorolib.c"
-     "../3rd/lua/ldblib.c"
-     "../3rd/lua/liolib.c"
-     "../3rd/lua/lmathlib.c"
-     "../3rd/lua/loadlib.c"
-     "../3rd/lua/loslib.c"
-     "../3rd/lua/lstrlib.c"
-     "../3rd/lua/ltablib.c"
-     "../3rd/lua/lutf8lib.c"
-     "../3rd/lua/linit.c"
+# 7. Spine
+file(GLOB_RECURSE SPINE_FILES "${THIRD_PARTY_DIR}/spine/spine/*.cpp" "${THIRD_PARTY_DIR}/spine/spine/*.h")
+add_library(spine STATIC ${SPINE_FILES})
+target_include_directories(spine PUBLIC "${THIRD_PARTY_DIR}/spine")
+target_compile_definitions(spine PUBLIC SPINE_USE_STD_FUNCTION)
+
+# 8. Lua
+file(GLOB_RECURSE LUA_FILES "${THIRD_PARTY_DIR}/lua/*.c")
+list(FILTER LUA_FILES EXCLUDE REGEX "lua\\.c$")
+list(FILTER LUA_FILES EXCLUDE REGEX "luac\\.c$")
+add_library(lua STATIC ${LUA_FILES})
+target_include_directories(lua PUBLIC "${THIRD_PARTY_DIR}/lua")
+
+# 9. SDL3 is provided by the Emscripten port (-sUSE_SDL=3)
+
+# 10. SoLoud (miniaudio, no SDL)
+file(GLOB_RECURSE SOLOUD_SOURCES
+    "${THIRD_PARTY_DIR}/soloud/src/audiosource/*.cpp"
+    "${THIRD_PARTY_DIR}/soloud/src/audiosource/*.c"
+    "${THIRD_PARTY_DIR}/soloud/src/core/*.cpp"
+    "${THIRD_PARTY_DIR}/soloud/src/filter/*.cpp"
 )
-add_library(lua SHARED ${LUA_FILES})
-add_library(imgui SHARED ${IMGUI_FILES})
+list(APPEND SOLOUD_SOURCES "${THIRD_PARTY_DIR}/soloud/src/backend/miniaudio/soloud_miniaudio.cpp")
+add_library(soloud STATIC ${SOLOUD_SOURCES})
+target_include_directories(soloud PUBLIC "${THIRD_PARTY_DIR}/soloud/include")
+target_compile_definitions(soloud PUBLIC WITH_MINIAUDIO)
+target_compile_definitions(soloud PRIVATE NOMINMAX)
 
+# --- Main Application ---
 
-# DEFINES
-add_compile_definitions(NOMINMAX)
-add_compile_definitions(USE_SDL)
-add_compile_definitions(SOL_NO_EXCEPTIONS=1)
-add_compile_definitions(USING_GLES)
-# if (backend == opengl)
-add_compile_definitions(IKIGAI_HAS_OPENGL)
-add_compile_definitions(OPENGL_BACKEND)
-add_compile_definitions(OPENGL_SIMPLE_RENDER)
-add_compile_definitions(SPINE_USE_STD_FUNCTION)
+file(GLOB_RECURSE PROJECT_ABSOLUTE_HEADERS "${MAIN_SOURCE_DIR}/*.hpp" "${MAIN_SOURCE_DIR}/*.h")
+file(GLOB_RECURSE PROJECT_ABSOLUTE_SOURCES "${MAIN_SOURCE_DIR}/*.cpp" "${MAIN_SOURCE_DIR}/*.c" "${MAIN_SOURCE_DIR}/*.cxx")
 
-add_executable(
-    cross_test
-    ${CPP_HEADERS}
-    ${CPP_HEADERS2}
-    ${CPP_SOURCES}
-    ${SPINE_FILES}
+if(NOT USE_OPENGL)
+    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]gl[/\\\\]")
+    list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]gl[/\\\\]")
+    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendGl\\.cpp$")
+endif()
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
+list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendVk\\.cpp$")
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
+list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendDx12\\.cpp$")
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
+list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendMetal\\.mm$")
+
+add_executable(${APP_NAME}
+    ${PROJECT_ABSOLUTE_HEADERS}
+    ${PROJECT_ABSOLUTE_SOURCES}
 )
 
-target_link_libraries(cross_test ${CMAKE_CURRENT_SOURCE_DIR}/lib/libassimp.a)
-target_link_libraries(cross_test ${CMAKE_CURRENT_SOURCE_DIR}/lib/libzlibstatic.a)
-target_link_libraries(cross_test soloud)
-target_link_libraries(cross_test lua)
-target_link_libraries(cross_test imgui)
-
-list(APPEND PLATFORM_OPTIONS
-    "-pthread"
+add_custom_command(
+    TARGET ${APP_NAME} PRE_BUILD
+    COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/../utils/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
+    COMMENT "Running IkigaiHeaderTool to generate reflection headers..."
 )
 
-target_compile_options(
-    cross_test
-    PUBLIC 
-    ${PLATFORM_OPTIONS}
+set_target_properties(${APP_NAME} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
+
+target_compile_definitions(${APP_NAME} PRIVATE NOMINMAX)
+target_compile_definitions(${APP_NAME} PRIVATE SOL_NO_EXCEPTIONS=1)
+target_compile_definitions(${APP_NAME} PRIVATE $<$<CONFIG:Debug>:SOL_ALL_SAFETIES_ON=1>)
+target_compile_definitions(${APP_NAME} PRIVATE EMSCRIPTEN __EMSCRIPTEN__ USING_GLES OPENGL_SIMPLE_RENDER)
+
+if(USE_SDL)
+    target_compile_definitions(${APP_NAME} PRIVATE USE_SDL)
+endif()
+
+if(USE_OPENGL)
+    target_compile_definitions(${APP_NAME} PRIVATE IKIGAI_HAS_OPENGL OPENGL_BACKEND)
+endif()
+
+target_compile_definitions(${APP_NAME} PRIVATE USE_EDITOR USE_CHEATS)
+
+target_include_directories(${APP_NAME} PRIVATE
+    ${MAIN_SOURCE_DIR}/engine
+    ${THIRD_PARTY_DIR}/glm
+    ${THIRD_PARTY_DIR}/serdepp/include
+    ${THIRD_PARTY_DIR}/magic_enum/include
+    ${THIRD_PARTY_DIR}/magic_enum/include/magic_enum
+    ${THIRD_PARTY_DIR}/nameof/include
+    ${THIRD_PARTY_DIR}/json/single_include
+    ${THIRD_PARTY_DIR}/soloud/include
+    ${THIRD_PARTY_DIR}/fmt/include
+    ${THIRD_PARTY_DIR}/vfspp/include
+    ${THIRD_PARTY_DIR}/vfspp/vendor/miniz-cpp
+    ${THIRD_PARTY_DIR}/sol/include
+    ${THIRD_PARTY_DIR}/stb
 )
 
-set_target_properties(
-    cross_test
-    PROPERTIES
-    LINK_FLAGS
-    "-O2 -s EXPORTED_FUNCTIONS=\"['_malloc','_main']\" -s EXPORTED_RUNTIME_METHODS=\"['ccall', 'cwrap']\"  -s USE_SDL=3 -D WITH_MINIAUDIO -s FULL_ES3=1 -s USE_WEBGL2=1 -s WASM=1 -s MIN_WEBGL_VERSION=2 -s GL_SUPPORT_AUTOMATIC_ENABLE_EXTENSIONS=1 -s OFFSCREEN_FRAMEBUFFER=1 -s STACK_SIZE=8MB -s ALLOW_MEMORY_GROWTH=1 -s INITIAL_MEMORY=64MB -s ASSERTIONS  -s USE_FREETYPE=1 --preload-file ../../assetses@/assets"
+set(LIBS_TO_LINK
+    imgui
+    spine
+    lua
+    assimp
+    soloud
+    SPIRV
+    glslang
+    spirv-cross-core
+    spirv-cross-glsl
+    spirv-cross-hlsl
+    spirv-cross-msl
+    spirv-cross-reflect
+    spirv-reflect
 )
+
+target_link_libraries(${APP_NAME} PRIVATE ${LIBS_TO_LINK})
+
+# --- Emscripten compile / link ---
+set(ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../assets")
+set(EMSCRIPTEN_PORT_OPTIONS
+    "SHELL:-sUSE_SDL=3"
+    "SHELL:-sUSE_FREETYPE=1"
+)
+set(EMSCRIPTEN_COMPILE_OPTIONS
+    -fexceptions
+    ${EMSCRIPTEN_PORT_OPTIONS}
+)
+set(EMSCRIPTEN_LINK_OPTIONS
+    -fexceptions
+    ${EMSCRIPTEN_PORT_OPTIONS}
+    "SHELL:-sWASM=1"
+    "SHELL:-sUSE_WEBGL2=1"
+    "SHELL:-sMIN_WEBGL_VERSION=2"
+    "SHELL:-sFULL_ES3=1"
+    "SHELL:-sOFFSCREEN_FRAMEBUFFER=1"
+    "SHELL:-sALLOW_MEMORY_GROWTH=1"
+    "SHELL:-sINITIAL_MEMORY=64MB"
+    "SHELL:-sSTACK_SIZE=8MB"
+    "SHELL:-sEXPORTED_FUNCTIONS=_main,_malloc,_free"
+    "SHELL:-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPF32,HEAPU8,wasmMemory"
+    "SHELL:--preload-file ${ASSETS_DIR}@/assets"
+    "SHELL:--shell-file ${CMAKE_CURRENT_SOURCE_DIR}/template.html"
+    $<$<CONFIG:Debug>:SHELL:-sASSERTIONS=1>
+    $<$<CONFIG:Release>:-O2>
+)
+
+target_compile_options(imgui PRIVATE ${EMSCRIPTEN_COMPILE_OPTIONS})
+target_compile_options(${APP_NAME} PRIVATE ${EMSCRIPTEN_COMPILE_OPTIONS})
+target_link_options(${APP_NAME} PRIVATE ${EMSCRIPTEN_LINK_OPTIONS})

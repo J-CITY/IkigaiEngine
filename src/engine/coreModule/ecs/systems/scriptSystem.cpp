@@ -1,5 +1,10 @@
 #include "scriptSystem.h"
+#include <algorithm>
 #include <sceneModule/sceneManager.h>
+#include <utilsModule/pathGetter.h>
+#ifdef __EMSCRIPTEN__
+#include <iostream>
+#endif
 
 IKIGAI::ECS::ScriptSystem::ScriptSystem() {
 	mName = "ScriptSystem";
@@ -125,19 +130,40 @@ bool IKIGAI::ECS::ScriptSystem::registerToLuaContext(ScriptComponent& component,
 	auto& object = component.getTable();
 	// getName() is ComponentBase::getName() -> always "ScriptComponent"; the script file name is stored in getScriptName()
 	const auto& scriptName = component.getScriptName();
-	const auto scriptPath = p_scriptFolder + scriptName + ".lua";
+	auto requestedPath = p_scriptFolder + scriptName + ".lua";
+	std::replace(requestedPath.begin(), requestedPath.end(), '\\', '/');
+	auto scriptPath = UTILS::GetRealPath(requestedPath);
+	if (scriptPath.empty()) {
+		scriptPath = requestedPath;
+	}
+#ifdef __EMSCRIPTEN__
+	std::cout << "[web] lua load '" << scriptName << "' path=" << scriptPath << std::endl;
+	std::cout.flush();
+#endif
 	auto result = p_luaState.safe_script_file(scriptPath, &sol::script_pass_on_error);
 	if (!result.valid()) {
 		sol::error err = result;
 		LOG_ERROR << "Lua script '" << scriptPath << "': " << err.what();
+#ifdef __EMSCRIPTEN__
+		std::cout << "[web] lua load FAILED " << scriptPath << " " << err.what() << std::endl;
+		std::cout.flush();
+#endif
 		return false;
 	}
 	if (result.return_count() == 1 && result[0].is<sol::table>()) {
 		object = result[0];
 		object["owner"] = component.obj.getPtr();
+#ifdef __EMSCRIPTEN__
+		std::cout << "[web] lua load ok " << scriptName << std::endl;
+		std::cout.flush();
+#endif
 		return true;
 	}
 	LOG_ERROR << ("'" + scriptName + ".lua' missing return expression");
+#ifdef __EMSCRIPTEN__
+	std::cout << "[web] lua missing return " << scriptName << std::endl;
+	std::cout.flush();
+#endif
 	return false;
 }
 

@@ -9,9 +9,9 @@
 
 namespace IKIGAI::SKELETON {
 	struct Keyframe {
-		MATH::Vector3f translation;
-		MATH::QuaternionF rotation;
-		MATH::Vector3f scale;
+		MATH::Vector3f translation = {0.0f, 0.0f, 0.0f};
+		MATH::QuaternionF rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+		MATH::Vector3f scale = {1.0f, 1.0f, 1.0f};
 	};
 
 	struct TranslationKey {

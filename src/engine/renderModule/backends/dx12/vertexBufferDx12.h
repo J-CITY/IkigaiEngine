@@ -3,13 +3,13 @@
 #include <memory>
 #include <d3d12.h>
 #include <vector>
-#include <wrl/client.h>
+#include "d3dUtil.h"
 #include "../interface/vertexBufferInterface.h"
 
 namespace IKIGAI::RENDER {
 	class VertexBufferDx12 : public VertexBufferInterface, public std::enable_shared_from_this<VertexBufferDx12> {
 	private:
-		Microsoft::WRL::ComPtr<ID3D12Resource> mBuffer;
+		Dx12Resource mBuffer;
 		D3D12_RESOURCE_STATES mState;
 	
 		VertexBufferDx12(void *data, size_t sz, size_t stride);
@@ -21,7 +21,7 @@ namespace IKIGAI::RENDER {
 		void unbind() override;
 		void setData(const void* data, size_t sz, size_t stride) override;
 
-		const Microsoft::WRL::ComPtr<ID3D12Resource>& getBuffer() const;
+		const Dx12Resource& getBuffer() const;
 	};
 }
 #endif

@@ -1,4 +1,7 @@
 #include "time.h"
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 using namespace IKIGAI::TIME;
 
@@ -47,9 +50,30 @@ Timer& Timer::GetInstance() {
 
 void Timer::init() {
 	start = std::chrono::steady_clock::now();
+#ifdef __EMSCRIPTEN__
+	dt = std::chrono::duration<double>(1.0 / 60.0);
+#endif
 }
 
 void Timer::update() {
+#ifdef __EMSCRIPTEN__
+	const double nowMs = emscripten_get_now();
+	if (mLastMs < 0.0) {
+		mLastMs = nowMs;
+		dt = std::chrono::duration<double>(1.0 / 60.0);
+		return;
+	}
+	double delta = (nowMs - mLastMs) / 1000.0;
+	mLastMs = nowMs;
+	if (delta < 0.0) {
+		delta = 0.0;
+	}
+	if (delta > 0.1) {
+		delta = 0.1;
+	}
+	dt = std::chrono::duration<double>(delta);
+#else
 	dt = timerGenerator.h_.promise().value_;
 	timerGenerator.h_();
+#endif
 }

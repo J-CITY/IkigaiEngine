@@ -1,4 +1,8 @@
 #include "animationInstance.h"
+#include <cmath>
+#ifdef __EMSCRIPTEN__
+#include <iostream>
+#endif
 
 namespace IKIGAI::SKELETON {
 	AnimSample::AnimSample(std::shared_ptr<Skeleton> skeleton, std::shared_ptr<Animation> animation) : mSkeleton(skeleton), mAnimation(animation), mPlaybackRate(1.0f), mGlobalTime(0.0) {
@@ -8,16 +12,46 @@ namespace IKIGAI::SKELETON {
 	AnimSample::~AnimSample() = default;
 
 	void AnimSample::update(float dt) {
+		if (!mSkeleton || !mAnimation) {
+			return;
+		}
+
 		mGlobalTime += (dt * mPlaybackRate); // dt is Delta Time in seconds.
 
 		float ticksPerSecond = (float)(mAnimation->ticksPerSecond != 0.0 ? mAnimation->ticksPerSecond : 25.0f);
-		float timeInTicks = ticksPerSecond * mGlobalTime;
-		mLocalTime = fmod(timeInTicks, mAnimation->durationInTicks);
-		mLocalTimeNormalized = static_cast<float>(mLocalTime) / static_cast<float>(mAnimation->durationInTicks);
+		double durationInTicks = mAnimation->durationInTicks;
+		if (durationInTicks <= 0.0) {
+			durationInTicks = 1.0;
+		}
+		float timeInTicks = ticksPerSecond * static_cast<float>(mGlobalTime);
+		mLocalTime = fmod(static_cast<double>(timeInTicks), durationInTicks);
+		if (mLocalTime < 0.0) {
+			mLocalTime += durationInTicks;
+		}
+		mLocalTimeNormalized = static_cast<float>(mLocalTime / durationInTicks);
+#ifdef __EMSCRIPTEN__
+		static int poseLogs = 0;
+		if (poseLogs < 8) {
+			++poseLogs;
+			std::cout << "[web] AnimSample dt=" << dt
+				<< " global=" << mGlobalTime
+				<< " localTicks=" << mLocalTime
+				<< " durationTicks=" << mAnimation->durationInTicks
+				<< " tps=" << mAnimation->ticksPerSecond
+				<< " channels=" << mAnimation->channels.size()
+				<< " joints=" << mSkeleton->getNumJolts()
+				<< std::endl;
+			std::cout.flush();
+		}
+#endif
 
 		mPose.numKeyframes = mSkeleton->getNumJolts();
+		const uint32_t channelCount = static_cast<uint32_t>(mAnimation->channels.size());
 
 		for (int i = 0; i < mSkeleton->getNumJolts(); i++) {
+			if (static_cast<uint32_t>(i) >= channelCount) {
+				continue;
+			}
 			const AnimationChannel& channel = mAnimation->channels[i];
 
 			Keyframe result;
@@ -44,7 +78,7 @@ namespace IKIGAI::SKELETON {
 			// Calculate interpolated rotation
 			{
 				if (channel.rotationKeyframes.size() == 0) {
-					result.rotation = MATH::QuaternionF();
+					result.rotation = MATH::QuaternionF::Identity;
 				} else {
 					const uint32_t idx1 = findRotationKey(channel.rotationKeyframes, mLocalTime);
 					const uint32_t idx2 = idx1 + 1;

@@ -12,6 +12,7 @@
 #include "resourceModule/shaderManager.h"
 #include "resourceModule/textureManager.h"
 #include "resourceModule/fileSystem/fileSystem.h"
+#include <algorithm>
 
 //TODO: add dirty flag for update buffers
 
@@ -154,6 +155,9 @@ void MaterialDx12::generateUniformsData() {
 }
 
 void MaterialDx12::fillUniforms(std::shared_ptr<TextureInterface> defaultTexture, bool useTextures) {
+	if (!mShader) {
+		return;
+	}
 	auto& shaderInfo = mShader->getReflection();
 	auto driver = d3dUtil::GetDriver();
 	for (const auto& uniform : shaderInfo.mUniforms) {
@@ -162,23 +166,59 @@ void MaterialDx12::fillUniforms(std::shared_ptr<TextureInterface> defaultTexture
 		case ShaderReflection::UniformType::SAMPLER_CUBE:
 		case ShaderReflection::UniformType::SAMPLER_3D:
 		case ShaderReflection::UniformType::SAMPLER_2D_ARRAY: {
-			driver->setTexture(uniform.mBind, std::get<std::shared_ptr<TextureInterface>>(mUniforms[uniform.mName]));
+			if (!useTextures) {
+				break;
+			}
+			std::shared_ptr<TextureInterface> tex;
+			if (mUniforms.contains(uniform.mName)) {
+				if (const auto* stored = std::get_if<std::shared_ptr<TextureInterface>>(&mUniforms.at(uniform.mName))) {
+					tex = *stored;
+				}
+			}
+			if (!tex) {
+				tex = defaultTexture;
+			}
+			if (tex) {
+				driver->setTexture(uniform.mBind, tex);
+			}
 		} break;
 		case ShaderReflection::UniformType::UNIFORM_BUFFER: {
-			//TODO: support array
+			// Engine buffers (engine_UBO, engine_Bones) are bound by the renderer after bind().
+			if (!mUniformBuffers.contains(uniform.mName)) {
+				break;
+			}
+			auto buffer = mUniformBuffers.at(uniform.mName);
+			if (!buffer) {
+				break;
+			}
 			if (!mExternalBuffers.contains(uniform.mName)) {
-				std::vector<std::byte> bufferData(uniform.mSize);
+				size_t bytes = uniform.mSize;
 				for (const auto& member : uniform.mMembers) {
-					if (mUniforms.contains(uniform.mName + member.mName)) {
+					if (member.mOffset < 0 || member.mSize < 0) {
+						continue;
+					}
+					bytes = std::max(bytes, static_cast<size_t>(member.mOffset) + static_cast<size_t>(member.mSize));
+				}
+				if (bytes > 0) {
+					std::vector<std::byte> bufferData(bytes);
+					for (const auto& member : uniform.mMembers) {
+						const auto key = uniform.mName + member.mName;
+						if (!mUniforms.contains(key) || member.mOffset < 0 || member.mSize <= 0) {
+							continue;
+						}
 						std::visit([&](auto& arg) {
 							using T = std::decay_t<decltype(arg)>;
-							memcpy((void*)(bufferData.data() + member.mOffset), &arg, sizeof(T));
-						}, mUniforms[uniform.mName + member.mName]);
+							const size_t copySize = std::min(sizeof(T), static_cast<size_t>(member.mSize));
+							if (static_cast<size_t>(member.mOffset) + copySize > bufferData.size()) {
+								return;
+							}
+							memcpy(bufferData.data() + member.mOffset, &arg, copySize);
+						}, mUniforms.at(key));
 					}
+					buffer->setData(bufferData.data(), bufferData.size());
 				}
-				mUniformBuffers[uniform.mName]->setData(bufferData.data(), bufferData.size());
 			}
-			driver->setUniformBuffer(uniform.mBind, mUniformBuffers[uniform.mName]);
+			driver->setUniformBuffer(uniform.mBind, buffer);
 		} break;
 		case ShaderReflection::UniformType::STORAGE_BUFFER: {
 			//TODO: material now support only set ssbo external

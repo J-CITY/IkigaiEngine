@@ -26,6 +26,7 @@ namespace IKIGAI {
 			bool terminate();
 
 			TaskSystemStatus getStatus();
+			bool isReady() const { return static_cast<bool>(mThreadPoolExecutor); }
 
 			void waitSync();
 

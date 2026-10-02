@@ -21,7 +21,7 @@ IKIGAI::RENDER::VertexBufferDx12::~VertexBufferDx12() {
 	d3dUtil::GetDriver()->destroyDeferred(mBuffer);
 }
 
-const Microsoft::WRL::ComPtr<ID3D12Resource>& IKIGAI::RENDER::VertexBufferDx12::getBuffer() const {
+const IKIGAI::RENDER::Dx12Resource& IKIGAI::RENDER::VertexBufferDx12::getBuffer() const {
 	return mBuffer;
 }
 
@@ -42,7 +42,7 @@ void IKIGAI::RENDER::VertexBufferDx12::setData(const void* data, size_t sz, size
 		mBuffer = d3dUtil::CreateBuffer(mSizeByte);
 	}
 
-	auto buffer = d3dUtil::CreateBuffer(sz * stride);
+	auto buffer = d3dUtil::CreateBuffer(sz * stride, D3D12_HEAP_TYPE_UPLOAD);
 	void* mapBuffer = nullptr;
 	buffer->Map(0, nullptr, &mapBuffer);
 	memcpy(mapBuffer, data, sz * stride);

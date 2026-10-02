@@ -23,16 +23,21 @@ namespace {
 			}
 
 			auto* driverDx12 = static_cast<IKIGAI::RENDER::DriverDx12*>(&driver);
-			const bool ok = ImGui_ImplDX12_Init(
-				driverDx12->getDevice().Get(),
-				IKIGAI::RENDER::DriverDx12::DEFAULT_FB_SIZE,
-				DXGI_FORMAT_R8G8B8A8_UNORM,
-				driverDx12->getDescriptorHeap().Get(),
-				driverDx12->getDescriptorHeapCPUHandle(),
-				driverDx12->getDescriptorHeapGPUHandle());
-			driverDx12->getDescriptorHeapCPUHandle().Offset(1, driverDx12->getDescriptorIncSize());
-			driverDx12->getDescriptorHeapGPUHandle().Offset(1, driverDx12->getDescriptorIncSize());
-			return ok;
+			ImGui_ImplDX12_InitInfo info;
+			info.Device = driverDx12->getDevice().Get();
+			info.CommandQueue = driverDx12->getCommandQueue().Get();
+			info.NumFramesInFlight = IKIGAI::RENDER::DriverDx12::DEFAULT_FB_SIZE;
+			info.RTVFormat = IKIGAI::RENDER::DriverDx12::DefaultTextureColorFormat;
+			info.DSVFormat = IKIGAI::RENDER::DriverDx12::DefaultDepthFormat;
+			info.SrvDescriptorHeap = driverDx12->getDescriptorHeap().Get();
+			info.UserData = driverDx12;
+			info.SrvDescriptorAllocFn = [](ImGui_ImplDX12_InitInfo* initInfo, D3D12_CPU_DESCRIPTOR_HANDLE* outCpu, D3D12_GPU_DESCRIPTOR_HANDLE* outGpu) {
+				static_cast<IKIGAI::RENDER::DriverDx12*>(initInfo->UserData)->allocImGuiSrv(outCpu, outGpu);
+			};
+			info.SrvDescriptorFreeFn = [](ImGui_ImplDX12_InitInfo* initInfo, D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIPTOR_HANDLE gpu) {
+				static_cast<IKIGAI::RENDER::DriverDx12*>(initInfo->UserData)->freeImGuiSrv(cpu, gpu);
+			};
+			return ImGui_ImplDX12_Init(&info);
 		}
 
 		void shutdown() override {

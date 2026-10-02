@@ -24,7 +24,17 @@ DxException::DxException(HRESULT hr, const std::wstring& functionName, const std
 std::wstring DxException::ToString() const {
     // Get the string description of the error code.
     _com_error err(ErrorCode);
-    std::wstring msg = err.ErrorMessage();
+    std::wstring msg;
+#ifdef UNICODE
+    msg = err.ErrorMessage();
+#else
+    const char* ansi = err.ErrorMessage();
+    const int wlen = MultiByteToWideChar(CP_ACP, 0, ansi, -1, nullptr, 0);
+    if (wlen > 0) {
+        msg.resize(static_cast<size_t>(wlen - 1));
+        MultiByteToWideChar(CP_ACP, 0, ansi, -1, msg.data(), wlen);
+    }
+#endif
 
     return FunctionName + L" failed in " + Filename + L"; line " + std::to_wstring(LineNumber) + L"; error: " + msg;
 }
@@ -157,13 +167,14 @@ ComPtr<ID3DBlob> d3dUtil::CompileShader(ShaderReflection& reflection, const std:
             D3D12_SIGNATURE_PARAMETER_DESC signatureParameterDesc{};
             shaderReflection->GetInputParameterDesc(parameterIndex, &signatureParameterDesc);
             const auto format = MaskToFormat(signatureParameterDesc.ComponentType, signatureParameterDesc.Mask);
-        	reflection.mInputParams.push_back({
-                signatureParameterDesc.SemanticName,
-                signatureParameterDesc.SemanticIndex,
-                format,
-                offset,
-                FormatToSize[format],
-            });
+            ShaderReflection::InputParam input;
+            input.mName = signatureParameterDesc.SemanticName;
+            input.mIndex = signatureParameterDesc.SemanticIndex;
+            input.mLocation = signatureParameterDesc.Register;
+            input.mFormat = format;
+            input.mOffset = offset;
+            input.mSize = FormatToSize[format];
+        	reflection.mInputParams.push_back(input);
             offset += FormatToSize[format];
         }
     }
@@ -316,6 +327,56 @@ ComPtr<ID3DBlob> d3dUtil::CompileShader(ShaderReflection& reflection, const std:
 	return compiledShaderBlob;
 }
 
+ComPtr<ID3DBlob> d3dUtil::CompileShaderFromHlsl(const std::string& hlslSource, const std::wstring& entrypoint, const std::wstring& target) {
+    if (!utils) {
+        ThrowIfFailed(::DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&utils)));
+        ThrowIfFailed(::DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&compiler)));
+        ThrowIfFailed(utils->CreateDefaultIncludeHandler(&includeHandler));
+    }
+
+    std::vector<LPCWSTR> compilationArguments = {
+        L"-HV",
+        L"2021",
+        L"-E",
+        entrypoint.data(),
+        L"-T",
+        target.c_str(),
+        DXC_ARG_PACK_MATRIX_ROW_MAJOR,
+        DXC_ARG_WARNINGS_ARE_ERRORS,
+        DXC_ARG_ALL_RESOURCES_BOUND,
+    };
+
+#if defined(DEBUG) || defined(_DEBUG)
+    compilationArguments.push_back(DXC_ARG_DEBUG);
+    compilationArguments.push_back(DXC_ARG_SKIP_OPTIMIZATIONS);
+#endif
+
+    const DxcBuffer sourceBuffer = {
+        .Ptr = hlslSource.data(),
+        .Size = hlslSource.size(),
+        .Encoding = DXC_CP_UTF8,
+    };
+
+    ComPtr<IDxcResult> compiledShaderBuffer{};
+    const HRESULT hr = compiler->Compile(&sourceBuffer, compilationArguments.data(),
+        static_cast<uint32_t>(compilationArguments.size()), includeHandler.Get(),
+        IID_PPV_ARGS(&compiledShaderBuffer));
+    if (FAILED(hr)) {
+        ThrowIfFailed(hr);
+    }
+
+    ComPtr<IDxcBlobUtf8> errors{};
+    ThrowIfFailed(compiledShaderBuffer->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&errors), nullptr));
+    if (errors && errors->GetStringLength() > 0) {
+        const LPCSTR errorMessage = errors->GetStringPointer();
+        std::wcout << errorMessage << std::endl;
+    }
+
+    ComPtr<ID3DBlob> compiledShaderBlob{nullptr};
+    ThrowIfFailed(compiledShaderBuffer->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&compiledShaderBlob), nullptr));
+    return compiledShaderBlob;
+}
+
 void d3dUtil::OneTimeSubmit(std::function<void(ID3D12GraphicsCommandList*)> func) {
     D3D12_COMMAND_QUEUE_DESC queue_desc = {};
     queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
@@ -339,16 +400,30 @@ void d3dUtil::OneTimeSubmit(std::function<void(ID3D12GraphicsCommandList*)> func
     GetDriver()->endCommandList(cmd_queue.Get(), cmd_list.Get(), true);
 }
 
-ComPtr<ID3D12Resource> d3dUtil::CreateBuffer(uint64_t size) {
-    ComPtr<ID3D12Resource> result;
+Dx12Resource d3dUtil::CreateBuffer(uint64_t size, D3D12_HEAP_TYPE heapType) {
+    const auto desc = CD3DX12_RESOURCE_DESC::Buffer(size);
+    const D3D12_RESOURCE_STATES initialState = (heapType == D3D12_HEAP_TYPE_UPLOAD)
+        ? D3D12_RESOURCE_STATE_GENERIC_READ
+        : D3D12_RESOURCE_STATE_COMMON;
+    return CreateResource(desc, heapType, initialState);
+}
 
-    auto prop = CD3DX12_HEAP_PROPERTIES(D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE, D3D12_MEMORY_POOL_L0);
-    auto desc = CD3DX12_RESOURCE_DESC::Buffer(size);
+Dx12Resource d3dUtil::CreateResource(const D3D12_RESOURCE_DESC& desc, D3D12_HEAP_TYPE heapType,
+    D3D12_RESOURCE_STATES initialState, const D3D12_CLEAR_VALUE* clearValue, D3D12MA::ALLOCATION_FLAGS flags) {
+    D3D12MA::ALLOCATION_DESC allocDesc{};
+    allocDesc.HeapType = heapType;
+    allocDesc.Flags = flags;
 
-    GetDriver()->getDevice()->CreateCommittedResource(&prop, D3D12_HEAP_FLAG_NONE, &desc,
-        D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(result.GetAddressOf()));
-
-    return result;
+    Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+    Microsoft::WRL::ComPtr<D3D12MA::Allocation> allocation;
+    ThrowIfFailed(GetDriver()->getAllocator()->CreateResource(
+        &allocDesc,
+        &desc,
+        initialState,
+        clearValue,
+        allocation.GetAddressOf(),
+        IID_PPV_ARGS(&resource)));
+    return Dx12Resource(std::move(resource), std::move(allocation));
 }
 
 DriverDx12* d3dUtil::mDriver = nullptr;

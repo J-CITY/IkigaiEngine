@@ -20,7 +20,7 @@ namespace {
 				return false;
 			}
 #ifdef __EMSCRIPTEN__
-			const char* glslVersion = "#version 100";
+			const char* glslVersion = "#version 300 es";
 #elif defined(__APPLE__)
 			const char* glslVersion = "#version 150";
 #elif defined(__ANDROID__)

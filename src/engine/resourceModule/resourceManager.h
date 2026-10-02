@@ -170,6 +170,12 @@ namespace IKIGAI {
 			}
 
 			virtual void addFileWatchSubscribe(const std::string& mainPath, const std::unordered_set<std::string>& watchPaths, std::weak_ptr<ResourceT> weakRes) {
+#ifdef __EMSCRIPTEN__
+				(void)mainPath;
+				(void)watchPaths;
+				(void)weakRes;
+				return;
+#endif
 				auto fwCb = [this, mainPath, watchPaths, weakRes](RESOURCES::FileWatcher::FileStatus status) {
 					if (status == RESOURCES::FileWatcher::FileStatus::MODIFIED) {
 						if (weakRes.lock()) {
