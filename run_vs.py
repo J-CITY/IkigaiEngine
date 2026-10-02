@@ -1,9 +1,16 @@
+import os
 import subprocess
 import argparse
 
 
+def resolve_runtime_output(arg, platform_dir):
+    path = arg if arg else 'out'
+    if not os.path.isabs(path):
+        path = os.path.join(platform_dir, path)
+    return os.path.abspath(path)
+
+
 def create_assets_link(build_dir):
-    import os
     import platform
     
     assets_src = os.path.abspath('./assets')
@@ -32,14 +39,16 @@ def main():
     parser.add_argument('-p', type=str, default="win", help='Platform: win, uwp, linux , macos, android, ios, web, switch (default: win)')
     parser.add_argument('-e', type=bool, default=True, help='Edittor mode (default: True)')
     parser.add_argument('-g', type=str, default="opengl", choices=['opengl', 'vulkan', 'dx12'], help='Graphics API (default: opengl)')
-    parser.add_argument('-b', type=str, default=None, help='Build directory path')
+    parser.add_argument('-b', type=str, default=None, help='CMake generate directory (default: <platform>/build)')
+    parser.add_argument('-o', type=str, default=None, help='Runtime output directory for the executable (default: <platform>/out)')
     args = parser.parse_args()
 
     platform_arg = args.p.lower()
 
     if platform_arg == 'win':
         build_dir = args.b if args.b else './windows/build'
-        command = ['cmake', './windows', f'-B{build_dir}']
+        output_dir = resolve_runtime_output(args.o, './windows')
+        command = ['cmake', './windows', f'-B{build_dir}', f'-DENGINE_RUNTIME_OUTPUT_DIRECTORY={output_dir}']
         if (args.c == 'vs22'):
             command.extend(['-G', 'Visual Studio 17 2022', '-T', 'host=x64'])
         elif (args.c == 'vs19'):
@@ -54,21 +63,25 @@ def main():
         
         subprocess.run(command)
         create_assets_link(build_dir)
+        create_assets_link(output_dir)
 
     elif platform_arg == 'mac':
         build_dir = args.b if args.b else './mac/build'
-        command = ['cmake', './mac', f'-B{build_dir}']
+        output_dir = resolve_runtime_output(args.o, './mac')
+        command = ['cmake', './mac', f'-B{build_dir}', f'-DENGINE_RUNTIME_OUTPUT_DIRECTORY={output_dir}']
         command.append('-DUSE_OPENGL=' + ('ON' if args.g == 'opengl' else 'OFF'))
         command.append('-DUSE_VULKAN=' + ('ON' if args.g == 'vulkan' else 'OFF'))
         subprocess.run(command)
         create_assets_link(build_dir)
+        create_assets_link(output_dir)
 
     elif platform_arg == 'web':
-        import os
         build_dir = args.b if args.b else './emscripten/build'
-        command = ['emcmake', 'cmake', './emscripten', f'-B{build_dir}']
+        output_dir = resolve_runtime_output(args.o, './emscripten')
+        command = ['emcmake', 'cmake', './emscripten', f'-B{build_dir}', f'-DENGINE_RUNTIME_OUTPUT_DIRECTORY={output_dir}']
         subprocess.run(command, shell=(os.name == 'nt'))
         create_assets_link(build_dir)
+        create_assets_link(output_dir)
 
     elif platform_arg == 'android':
         build_dir = args.b if args.b else './android/build'
