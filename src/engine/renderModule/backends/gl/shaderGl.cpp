@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 // #include <coreModule/resourceManager/textureManager.h>
 #include "../interface/reflectionStructs.h"
 #include "spirv_reflect.h"
@@ -191,7 +192,16 @@ void IKIGAI::RENDER::ShaderGl::create(const ShaderResource &res) {
     }
   } else {
     for (auto &[type, source] : res.sources) {
-      res.spirvSources[type] = CompileGlslToSpirv(type, source, defines);
+      if (source.empty()) {
+        IKIGAI_COUT("Shader source is empty: " << mPath << " stage " << static_cast<int>(type));
+        continue;
+      }
+      try {
+        res.spirvSources[type] = CompileGlslToSpirv(type, source, defines);
+      } catch (const std::exception& e) {
+        IKIGAI_COUT("Shader compile failed: " << mPath << " " << e.what());
+        continue;
+      }
 #ifdef __EMSCRIPTEN__
       std::cout << "[web] CompileGlslToSpirv ok stage=" << static_cast<int>(type)
                 << std::endl;
@@ -219,9 +229,6 @@ void IKIGAI::RENDER::ShaderGl::create(const ShaderResource &res) {
   version = 300;
   enable_420pack_extension = false;
   force_flattened_io_blocks = false;
-  // TODO: android can be 320
-  // TODO: since 310 we have uniform(std140, binding = 1), 300 have
-  // uniform(std140)
 #elif defined(WINDOWS)
   es = false;
   version = 450;
@@ -237,6 +244,19 @@ void IKIGAI::RENDER::ShaderGl::create(const ShaderResource &res) {
   version = 300;
   enable_420pack_extension = false;
   force_flattened_io_blocks = false;
+#elif defined(__ANDROID__)
+  es = true;
+#if IKIGAI_GLES_VERSION >= 320
+  version = 320;
+#elif IKIGAI_GLES_VERSION >= 310
+  version = 310;
+#else
+  version = 300;
+#endif
+  enable_420pack_extension = false;
+  // GLES links struct varyings by name. Vert uses Out, frag uses fs_in, so Mali
+  // rejects the program. Flatten after renaming both sides to "varying", same as WebGL2.
+  force_flattened_io_blocks = true;
 #endif
 
   std::map<ShaderType, std::string> sources;
@@ -255,6 +275,10 @@ void IKIGAI::RENDER::ShaderGl::create(const ShaderResource &res) {
   std::cout << "[web] ShaderGl::compile begin " << mPath << std::endl;
   std::cout.flush();
 #endif
+  IKIGAI_COUT("Shader cross-compile path=" << mPath
+            << " stages=" << sources.size()
+            << " es=" << es << " version=" << version
+            << " flat=" << force_flattened_io_blocks);
   compile(sources);
 #ifdef __EMSCRIPTEN__
   std::cout << "[web] ShaderGl::compile done " << mPath << " id=" << mId
@@ -327,6 +351,10 @@ void IKIGAI::RENDER::ShaderGl::compile(
   }
   glLinkProgram(static_cast<unsigned>(mId));
   CheckCompileErrors(static_cast<unsigned>(mId), "PROGRAM");
+  GLint linked = 0;
+  glGetProgramiv(static_cast<unsigned>(mId), GL_LINK_STATUS, &linked);
+  IKIGAI_COUT("Shader link path=" << mPath << " program=" << mId
+            << " stages=" << shaderIds.size() << " ok=" << linked);
   for (auto &[type, id] : shaderIds) {
     glDeleteShader(id);
   }
@@ -521,19 +549,13 @@ void IKIGAI::RENDER::ShaderGl::CheckCompileErrors(GLuint shader,
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if (!success) {
       glGetShaderInfoLog(shader, 1024, NULL, infoLog);
-      std::cout << "ERROR::SHADER_COMPILATION_ERROR of type: " << type << "\n"
-                << infoLog
-                << "\n --------------------------------------------------- -- "
-                << std::endl;
+      IKIGAI_COUT("Shader compilation failed (" << type << "): " << infoLog);
     }
   } else {
     glGetProgramiv(shader, GL_LINK_STATUS, &success);
     if (!success) {
       glGetProgramInfoLog(shader, 1024, NULL, infoLog);
-      std::cout << "ERROR::PROGRAM_LINKING_ERROR of type: " << type << "\n"
-                << infoLog
-                << "\n --------------------------------------------------- -- "
-                << std::endl;
+      IKIGAI_COUT("Shader link failed: " << infoLog);
     }
   }
 }

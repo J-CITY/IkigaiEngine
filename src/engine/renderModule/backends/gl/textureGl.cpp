@@ -46,23 +46,23 @@ void TextureGl::create(const TextureResource &descriptor, const std::vector<void
 	auto getInternalFormat = [](int nrComponents, bool isFloat) {
 		GLenum format = GL_RGBA;
 		if (nrComponents == 1)
-//#ifndef USING_GLES
+#ifdef USING_GLES
+			format = isFloat ? GL_R16F : GL_R8;
+#else
 			format = isFloat ? GL_R16F : GL_RED;
-//#else
-//			format = GL_ALPHA;
-//#endif
+#endif
 		else if (nrComponents == 3)
-//#ifndef USING_GLES
+#ifdef USING_GLES
+			format = isFloat ? GL_RGB16F : GL_RGB8;
+#else
 			format = isFloat ? GL_RGB16F : GL_RGB;
-//#else
-//			format = GL_RGB;
-//#endif
+#endif
 		else if (nrComponents == 4)
-//#ifndef USING_GLES
+#ifdef USING_GLES
+			format = isFloat ? GL_RGBA16F : GL_RGBA8;
+#else
 			format = isFloat ? GL_RGBA16F : GL_RGBA;
-//#else
-//			format = GL_RGBA;
-//#endif
+#endif
 		return format;
 	};
 
@@ -169,10 +169,10 @@ void TextureGl::create(const TextureResource &descriptor, const std::vector<void
 	auto createTexture = [](TextureType type, int internalFormat, int format, int width, int height, int depth, bool isFloat, const std::vector<void *> &datas) {
 		switch (type) {
 		case TextureType::TEXTURE_2D: {
-			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 			glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, (isFloat ? GL_FLOAT : GL_UNSIGNED_BYTE), datas[0]);
 		}
 		return;
@@ -205,6 +205,10 @@ void TextureGl::create(const TextureResource &descriptor, const std::vector<void
 	glGenTextures(1, &texId);
 	glBindTexture(getType(descriptor.texType), texId);
 	if (!descriptor.pathTexture.empty()) {
+		if (data.empty() || data[0] == nullptr) {
+			LOG_ERROR << "Texture has no pixel data";
+			return;
+		}
 		UTILS::STBiSetFlipVerticallyOnLoad(true);
 		int width = descriptor.width, height = descriptor.height, nrComponents = descriptor.channels;
 		createTexture(descriptor.texType, getInternalFormat(nrComponents, descriptor.isFloat), 

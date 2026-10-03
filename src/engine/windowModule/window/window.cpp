@@ -170,7 +170,16 @@ MATH::Vector2u Window::getSize() const
 	switch (GetCurrentPlatform()) {
 	case Platform::IOS:
 	case Platform::ANDROIDOS: {
-		// For mobile platforms we will fetch the full screen size.
+		if (mContext && mContext->mWindow) {
+			int w = 0;
+			int h = 0;
+			SDL_GetWindowSize(mContext->mWindow, &w, &h);
+			if (w > 0 && h > 0) {
+				displayWidth = static_cast<uint32_t>(w);
+				displayHeight = static_cast<uint32_t>(h);
+				break;
+			}
+		}
 		const SDL_DisplayMode* displayMode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
 		if (displayMode) {
 			displayWidth = static_cast<uint32_t>(displayMode->w);
@@ -615,8 +624,19 @@ void Window::create(Window* sharedWindow) {
 #elif defined(__ANDROID__)
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+#ifndef IKIGAI_GLES_VERSION
+#define IKIGAI_GLES_VERSION 320
+#endif
+#if IKIGAI_GLES_VERSION >= 320
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+#elif IKIGAI_GLES_VERSION >= 310
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+#else
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#endif
 #else
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
@@ -671,6 +691,9 @@ void Window::create(Window* sharedWindow) {
 			SDL_GL_MakeCurrent(sharedWindow->mContext->mWindow, sharedWindow->mContext->mContext);
 		}
 		mContext->mContext = SDL_GL_CreateContext(mContext->mWindow);
+		if (mContext->mContext) {
+			SDL_GL_MakeCurrent(mContext->mWindow, mContext->mContext);
+		}
 	}
 #endif
 #ifdef METAL_BACKEND

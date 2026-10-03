@@ -12,9 +12,21 @@
 #else
 #include <OpenGL/gl3.h>
 #endif
-#elif __ANDROID__
-#include <GLES2/gl2.h>
+#elif defined(__ANDROID__)
+#ifndef IKIGAI_GLES_VERSION
+#define IKIGAI_GLES_VERSION 320
+#endif
+#if IKIGAI_GLES_VERSION >= 320
+#include <GLES3/gl32.h>
+#elif IKIGAI_GLES_VERSION >= 310
+#include <GLES3/gl31.h>
+#else
+#include <GLES3/gl3.h>
+#endif
 #define USING_GLES
+#if IKIGAI_GLES_VERSION >= 310
+#define IKIGAI_GLES_HAS_SSBO 1
+#endif
 #elif WIN32
 
 #ifdef OPENGL_BACKEND

@@ -4,6 +4,20 @@
 #include "utilsModule/exeptions.h"
 #include <filesystem>
 
+namespace {
+std::string NormalizeVirtualPath(std::string path) {
+	for (char& ch : path) {
+		if (ch == '\\') {
+			ch = '/';
+		}
+	}
+	if (path.empty() || path.front() != '/') {
+		path.insert(path.begin(), '/');
+	}
+	return path;
+}
+}
+
 namespace IKIGAI::RESOURCES {
 	class FileSystemInternal {
 	public:
@@ -22,7 +36,7 @@ IKIGAI::RESOURCES::File::File(std::unique_ptr<FileInternal> internal): mInternal
 }
 
 bool IKIGAI::RESOURCES::File::isValid() const {
-	return mInternal->mFile != nullptr;
+	return mInternal->mFile != nullptr && mInternal->mFile->IsOpened();
 }
 
 std::string IKIGAI::RESOURCES::File::getFileExtension() const {
@@ -135,53 +149,65 @@ void IKIGAI::RESOURCES::FileSystem::addSdlFileSystem(const std::string& path, co
 }
 
 bool IKIGAI::RESOURCES::FileSystem::isValid(const std::string& path) const {
-	auto entry = mInternal->mVFS->GetEntry(path);
+	auto entry = mInternal->mVFS->GetEntry(NormalizeVirtualPath(path));
 	return entry.has_value();
 }
 
 bool IKIGAI::RESOURCES::FileSystem::isFileExist(const std::string& path) const {
-	return mInternal->mVFS->IsFileExists(path);
+	return mInternal->mVFS->IsFileExists(NormalizeVirtualPath(path));
 }
 
 std::string IKIGAI::RESOURCES::FileSystem::getFileExtension(const std::string& path) const {
-	auto entry = mInternal->mVFS->GetEntry(path);
+	auto entry = mInternal->mVFS->GetEntry(NormalizeVirtualPath(path));
 	return entry ? entry->Extension() : "";
 }
 
 std::string IKIGAI::RESOURCES::FileSystem::getFileName(const std::string& path) const {
-	auto entry = mInternal->mVFS->GetEntry(path);
+	auto entry = mInternal->mVFS->GetEntry(NormalizeVirtualPath(path));
 	return entry ? entry->Filename() : "";
 }
 
 std::optional<std::string> IKIGAI::RESOURCES::FileSystem::getAbsolutePath(const std::string& path) const {
-	auto entry = mInternal->mVFS->GetEntry(path);
+	auto entry = mInternal->mVFS->GetEntry(NormalizeVirtualPath(path));
 	if (entry) return entry->NativePath();
     return std::nullopt;
 }
 
 bool IKIGAI::RESOURCES::FileSystem::isDir(const std::string& path) const {
-	auto entry = mInternal->mVFS->GetEntry(path);
-	return entry ? entry->IsDirectory() : false;
+	return mInternal->mVFS->IsDirectoryExists(NormalizeVirtualPath(path));
 }
 
 IKIGAI::RESOURCES::FileSystem::FileTime IKIGAI::RESOURCES::FileSystem::lastWriteTime(const std::string& path) {
 	auto pathOpt = getAbsolutePath(path);
 	if (!pathOpt) {
-		throw UTILS::EXEPTIONS::WrongPath(path.c_str());
+		return {};
 	}
-	return std::filesystem::last_write_time(*pathOpt);
+	std::error_code ec;
+	const auto time = std::filesystem::last_write_time(*pathOpt, ec);
+	if (ec) {
+		return {};
+	}
+	return time;
 }
 
 uintmax_t IKIGAI::RESOURCES::FileSystem::fileSize(const std::string& path) {
 	auto pathOpt = getAbsolutePath(path);
-	if (!pathOpt) {
-		throw UTILS::EXEPTIONS::WrongPath(path.c_str());
+	if (pathOpt) {
+		std::error_code ec;
+		const auto size = std::filesystem::file_size(*pathOpt, ec);
+		if (!ec) {
+			return size;
+		}
 	}
-	return std::filesystem::file_size(*pathOpt);
+	auto file = getFile(path, FileMode::READ);
+	if (file && file->isValid()) {
+		return file->getSize();
+	}
+	return 0;
 }
 
 std::shared_ptr<IKIGAI::RESOURCES::File> IKIGAI::RESOURCES::FileSystem::getFile(const std::string& path, FileMode mode) {
-	vfspp::IFilePtr file = mInternal->mVFS->OpenFile(path, static_cast<vfspp::IFile::FileMode>(mode));
+	vfspp::IFilePtr file = mInternal->mVFS->OpenFile(NormalizeVirtualPath(path), static_cast<vfspp::IFile::FileMode>(mode));
 	return std::make_shared<File>(std::make_unique<FileInternal>(file));
 }
 
@@ -189,4 +215,18 @@ std::optional<std::string> IKIGAI::RESOURCES::FileSystem::getFilePath(const std:
     auto entry = mInternal->mVFS->GetEntry(path);
     if (entry) return entry->VirtualPath();
 	return std::nullopt;
+}
+
+std::vector<IKIGAI::RESOURCES::FileSystem::DirectoryEntry> IKIGAI::RESOURCES::FileSystem::listDirectory(const std::string& path) const {
+	std::vector<DirectoryEntry> result;
+	const auto entries = mInternal->mVFS->ListAllEntries(NormalizeVirtualPath(path), false, false);
+	result.reserve(entries.size());
+	for (const auto& entry : entries) {
+		DirectoryEntry item;
+		item.path = entry.VirtualPath();
+		item.name = entry.Filename();
+		item.isDirectory = entry.IsDirectory();
+		result.push_back(std::move(item));
+	}
+	return result;
 }

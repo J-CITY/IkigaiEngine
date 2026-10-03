@@ -81,8 +81,14 @@ Core:: Core(
 	fileSystem = std::make_unique<RESOURCES::FileSystem>();
 	RESOURCES::ServiceManager::Set<RESOURCES::FileSystem>(fileSystem.get());
 	//fileSystem->addNativeFileSystem(".", "/");
+#ifdef __ANDROID__
+	// APK assets root is the repo assets/ folder. SDL_IOFromFile reads engine/ and game/.
+	fileSystem->addSdlFileSystem("engine", "/");
+	fileSystem->addSdlFileSystem("game", "/");
+#else
 	fileSystem->addNativeFileSystem(Config::ENGINE_ASSETS_PATH, "/");
 	fileSystem->addNativeFileSystem(Config::USER_ASSETS_PATH, "/");
+#endif
 
 
 	RESOURCES::ModelLoader::SetAssetPaths(Config::USER_ASSETS_PATH, Config::ENGINE_ASSETS_PATH);

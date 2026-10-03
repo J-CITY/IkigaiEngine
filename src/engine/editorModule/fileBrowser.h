@@ -39,7 +39,7 @@ namespace IKIGAI::EDITOR {
 		std::list<File> files;
 
 		int uid = 0;
-		File(std::filesystem::path path);
+		File(std::filesystem::path path, bool isDirectory = false);
 
 	private:
 		inline static std::set<std::string> imageExt = {".png", ".jpg", ".jpeg", ".tga", ".dds"};

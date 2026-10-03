@@ -16,6 +16,7 @@
 #include "renderModule/backends/interface/textureInterface.h"
 #include "renderModule/backends/interface/driverInterface.h"
 #include "resourceModule/serviceManager.h"
+#include "resourceModule/fileSystem/fileSystem.h"
 #include "utilsModule/pathGetter.h"
 
 
@@ -43,9 +44,14 @@ std::string ToVirtualPath(const std::string& realPath) {
 }
 } // namespace
 
-File::File(std::filesystem::path path): path(path) {
-	type = File::GetFileType(path);
-	ext = GetExtension(path);
+File::File(std::filesystem::path path, bool isDirectory): path(path) {
+	if (isDirectory) {
+		type = FileType::DIR;
+		ext = "dir";
+	} else {
+		type = File::GetFileType(path);
+		ext = GetExtension(path);
+	}
 	file = path.filename();
 
 	//TODO: use gen id
@@ -176,9 +182,10 @@ void FileBrowserWindow::draw() {
 
 void FileBrowserWindow::initFileTree(File& fileTree) {
 	fileTree.files.clear();
-	if (std::filesystem::is_directory(fileTree.path)) {
-		for (const auto& entry : std::filesystem::directory_iterator(fileTree.path)) {
-			fileTree.files.emplace_back(entry);
+	auto& fs = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RESOURCES::FileSystem>();
+	for (const auto& entry : fs.listDirectory(fileTree.path.generic_string())) {
+		fileTree.files.emplace_back(entry.path, entry.isDirectory);
+		if (entry.isDirectory) {
 			initFileTree(fileTree.files.back());
 		}
 	}
@@ -236,23 +243,26 @@ void FileBrowserWindow::drawFolder(std::string_view path)
 	//ImGui::Columns(static_cast<int>(col1Size / elementSize));
 	int i = 0;
 	int uid = 0;
-	for (const auto& entry : std::filesystem::directory_iterator(path)) {
+	auto& fs = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RESOURCES::FileSystem>();
+	const auto folderEntries = fs.listDirectory(std::string(path));
+	for (const auto& entry : folderEntries) {
+		const std::filesystem::path entryPath(entry.path);
 		uid++;
 		if (!searchInFolder.empty()) {
-			if (UTILS::ToLower(entry.path().filename().string())
+			if (UTILS::ToLower(entry.name)
 				.find(UTILS::ToLower(searchInFolder)) == std::string::npos) {
 				continue;
 			}
 		}
 		ImGui::PushID(("folder_item_" + std::to_string(i)).c_str());
-		bool isDirectory = std::filesystem::is_directory(entry);
-		auto extType = File::GetFileType(entry);
+		bool isDirectory = entry.isDirectory;
+		auto extType = isDirectory ? File::FileType::DIR : File::GetFileType(entryPath);
 		ImGui::BeginGroup();
 		std::string imPath;
 		switch (extType) {
 		case File::FileType::DIR: imPath = "__dir__";  break;
 		case File::FileType::IMAGE: {
-			imPath = entry.path().string();
+			imPath = entry.path;
 			std::string vPath = ToVirtualPath(imPath);
 			if (!mTextureCache.contains(imPath)) {
 				mTextureCache[imPath] = RENDER::DriverInterface::Get()->createTexture(vPath, true);
@@ -295,10 +305,10 @@ void FileBrowserWindow::drawFolder(std::string_view path)
 		if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
 			if (isDirectory) {
 				mHistory.push(mSelectedFolderPath);
-				newPath = entry.path().string();
+				newPath = entry.path;
 			}	//editMaterial = RESOURCES::ServiceManager::Get<RESOURCES::MaterialLoader>().loadResource(entry.path().string());
 			else if (extType == File::FileType::MATERIAL || extType == File::FileType::TEXTURE_RES || extType == File::FileType::SHADER_RES || extType == File::FileType::AUDIO_RES || extType == File::FileType::MODEL_RES || extType == File::FileType::INPUT_RES) {
-				EditorRender::GlobalState.mResPath = entry.path().string();
+				EditorRender::GlobalState.mResPath = entry.path;
 				EditorRender::GlobalState.mResType = extType;
 			}
 		}
@@ -306,7 +316,7 @@ void FileBrowserWindow::drawFolder(std::string_view path)
 		ImGui::SetCursorPos(ImVec2(pos.x, pos.y - mElementSize));
 		ImGui::Image((ImTextureID)mTextureCache.at(imPath)->getImguiId(), {static_cast<float>(mElementSize), static_cast<float>(mElementSize)}, ImVec2(0, 1), ImVec2(1, 0));
 		ImGui::PushTextWrapPos(ImGui::GetCursorPos().x + 100);
-		ImGui::Text(entry.path().filename().string().c_str());
+		ImGui::Text(entry.name.c_str());
 		ImGui::PopTextWrapPos();
 
 		ImGui::EndGroup();
@@ -327,18 +337,15 @@ void FileBrowserWindow::drawFolder(std::string_view path)
 void FileBrowserWindow::drawItem(File& file) {
 	ImGui::PushID(("fileTree_" + std::to_string(file.uid)).c_str());
 	ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_Selected;
-	auto path = file.path.string();
-	bool isDirectory = std::filesystem::is_directory(path);
+	auto path = file.path.generic_string();
+	bool isDirectory = file.type == File::FileType::DIR;
 	if (!isDirectory) {
 		nodeFlags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
 	} else {
 		nodeFlags |= ImGuiTreeNodeFlags_None;
 	}
-	std::string _path = std::string(path.begin(), path.end());
-	if (path.back() == '\\' || path.back() == '/') {
-		_path = std::filesystem::path(path).parent_path().string();
-	}
-	const auto name = std::filesystem::path(_path).filename().string();
+	const auto fileName = std::filesystem::path(path).filename().string();
+	const std::string name = fileName.empty() ? "assets" : fileName;
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {0.0f, 0.0f});
 	bool inSearch = mSearchedFileTreeIds.contains(file.uid);
 	if (inSearch) {
@@ -389,7 +396,7 @@ void FileBrowserWindow::drawItem(File& file) {
 
 	if (isDirectory && ImGui::IsItemClicked()) {
 		mHistory.push(mSelectedFolderPath);
-		mSelectedFolderPath = _path;
+		mSelectedFolderPath = path.empty() ? "/" : path;
 	}
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {0.0f, 0.0f});
 	ImGui::InvisibleButton("__NODE_ORDER_SET__", {-1, 5});

@@ -1,4 +1,6 @@
 #pragma once
+#include <cstddef>
+#include <climits>
 #include <functional>
 
 namespace IKIGAI {
@@ -15,9 +17,11 @@ namespace IKIGAI {
 			return static_cast<int>(mId);
 		}
 
+#if SIZE_MAX != UINT_MAX
 		explicit operator size_t() const noexcept {
 			return static_cast<size_t>(mId);
 		}
+#endif
 
 		bool operator<(const Id& b) const noexcept {
 			return mId < b.mId;

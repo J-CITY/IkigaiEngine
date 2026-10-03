@@ -5,7 +5,6 @@
 #include <serdepp/serializer.hpp>
 #include <nlohmann/json.hpp>
 #include <serdepp/adaptor/nlohmann_json.hpp>
-#include "pathGetter.h"
 #include "result.h"
 #include "resourceModule/serviceManager.h"
 #include "resourceModule/fileSystem/fileSystem.h"
@@ -31,7 +30,7 @@ namespace IKIGAI::UTILS {
 	static Result<std::string, JsonError> ReadFileIntoString(const std::string& path) {
 		auto& fs = IKIGAI::RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>();
 		auto file = fs.getFile(path);
-		if (!file) {
+		if (!file || !file->isValid()) {
 			return Err(JsonError(JsonError::Kind::FILE_NOT_EXIST, "Can not open file: " + path));
 		}
 		return Ok(file->readStr());
@@ -117,7 +116,7 @@ namespace IKIGAI::UTILS {
 	Result<T, JsonError> FromJson(const std::string& path) {
 		auto& fs = IKIGAI::RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>();
 		auto file = fs.getFile(path);
-		if (!file) {
+		if (!file || !file->isValid()) {
 			return Err(JsonError(JsonError::Kind::FILE_NOT_EXIST, "Can not open file: " + path));
 		}
 		return FromJsonStr<T>(file->readStr());

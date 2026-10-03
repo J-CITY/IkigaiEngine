@@ -588,12 +588,10 @@ void IKIGAI::RENDER::DriverGl::applyState() {
     }
     for (auto& [bind, storage] : mStorageBuffers)
     {
-#if defined(USING_GLES)
-#ifdef GL_UNIFORM_BUFFER
-    	glBindBufferBase(GL_UNIFORM_BUFFER, bind, storage->getId());
-#endif
-#else
+#if defined(IKIGAI_GLES_HAS_SSBO) || !defined(USING_GLES)
     	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, bind, storage->getId());
+#elif defined(GL_UNIFORM_BUFFER)
+    	glBindBufferBase(GL_UNIFORM_BUFFER, bind, storage->getId());
 #endif
     }
 }

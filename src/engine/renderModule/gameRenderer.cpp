@@ -1,6 +1,6 @@
 #include "gameRenderer.h"
 
-
+#include <coreModule/graphicsWrapper.hpp>
 #include "backends/interface/frameBufferInterface.h"
 #include "coreModule/core/core.h"
 #include "resourceModule/serviceManager.h"
@@ -23,6 +23,7 @@
 #include "skeletalModule/animationTransform.h"
 #include "skeletalModule/iAnimationPlayable.h"
 #include "utilsModule/jsonLoader.h"
+#include "utilsModule/log/loggerDefine.h"
 #include "utilsModule/time/time.h"
 #include <stdexcept>
 #include "windowModule/window/window.h"
@@ -48,7 +49,7 @@ namespace IKIGAI::RENDER {
 		//mEmptyMaterial->setShader(render->createShader(shaderRes));
 		//mEmptyMaterial->set("u_Diffuse", MATH::Vector4(1.f, 0.f, 1.f, 1.f));
 
-#ifdef USING_GLES
+#if defined(USING_GLES) && !defined(IKIGAI_GLES_HAS_SSBO)
 		mLightSSBO = render->createStorageBuffer(nullptr, MAX_LIGHTS, sizeof(LightOGL));
 #else
 		mLightSSBO = render->createStorageBuffer(nullptr, 0, 0);
@@ -88,6 +89,9 @@ namespace IKIGAI::RENDER {
 			auto sz = mContext.window->getSize();
 			auto winWidth = sz.x;
 			auto winHeight = sz.y;
+			if (winWidth > 0 && winHeight > 0) {
+				render->getDriver()->resize(winWidth, winHeight);
+			}
 
 			const auto& transform = mainCameraComponent->obj->getTransform();
 			const auto& cameraPosition = transform->getWorldPosition();
@@ -114,6 +118,16 @@ namespace IKIGAI::RENDER {
 
 	void GameRenderer::drawDrawable(const Drawable& drawable) {
 		WEB_LOG("drawDrawable");
+		static int drawLogs = 8;
+		static int skipLogs = 4;
+		const bool canDraw = drawable.material && drawable.material->hasShader() && drawable.material->getGPUInstances() > 0 && drawable.mesh;
+		if (skipLogs > 0 && !canDraw) {
+			--skipLogs;
+			IKIGAI_COUT("draw skip material=" << (drawable.material ? 1 : 0)
+				<< " shader=" << (drawable.material && drawable.material->hasShader() ? 1 : 0)
+				<< " instances=" << (drawable.material ? drawable.material->getGPUInstances() : 0)
+				<< " mesh=" << (drawable.mesh ? 1 : 0));
+		}
 		if (drawable.material->hasShader() && drawable.material->getGPUInstances() > 0) {
 			auto& render = mContext.render;
 
@@ -185,6 +199,15 @@ namespace IKIGAI::RENDER {
 
 			render->draw(drawable.mesh, PrimitiveMode::TRIANGLES, drawable.material->getGPUInstances());
 			WEB_LOG("draw done");
+			if (drawLogs > 0) {
+				--drawLogs;
+				const auto err = glGetError();
+				IKIGAI_COUT("draw indices=" << (drawable.mesh ? drawable.mesh->getIndexCount() : 0)
+					<< " verts=" << (drawable.mesh ? drawable.mesh->getVertexCount() : 0)
+					<< " instances=" << drawable.material->getGPUInstances()
+					<< " skin=" << (data.use == 1 ? 1 : 0)
+					<< " glError=" << static_cast<unsigned>(err));
+			}
 
 
 			//std::static_pointer_cast<ShaderGl>(drawable.material->getShader())->unbind();
@@ -223,6 +246,32 @@ namespace IKIGAI::RENDER {
 		const auto& cameraPosition = cameraComponent.obj->getTransform()->getWorldPosition();
 		auto chunks = scene.findDrawables(cameraPosition, cameraComponent.getCamera(), nullptr, mEmptyMaterial);
 
+		static int sceneLogs = 4;
+		if (sceneLogs > 0) {
+			--sceneLogs;
+			size_t opaque = 0;
+			size_t transparent = 0;
+			for (const auto& chunk : chunks) {
+				opaque += chunk.opaqueDrawablesForward.size();
+				transparent += chunk.transparentDrawablesForward.size();
+			}
+			const auto windowSize = mContext.window->getSize();
+			GLint viewport[4] = {};
+			glGetIntegerv(GL_VIEWPORT, viewport);
+			const auto scissor = glIsEnabled(GL_SCISSOR_TEST);
+			GLint scissorBox[4] = {};
+			if (scissor) {
+				glGetIntegerv(GL_SCISSOR_BOX, scissorBox);
+			}
+			IKIGAI_COUT("renderScene chunks=" << chunks.size()
+				<< " opaque=" << opaque
+				<< " transparent=" << transparent
+				<< " cam=" << cameraPosition.x << "," << cameraPosition.y << "," << cameraPosition.z
+				<< " window=" << windowSize.x << "x" << windowSize.y
+				<< " viewport=" << viewport[2] << "x" << viewport[3]
+				<< " scissor=" << (scissor ? 1 : 0)
+				<< " scissorBox=" << scissorBox[2] << "x" << scissorBox[3]);
+		}
 
 		auto runStage = [&](std::unique_ptr<PipelineStage>& stage) {
 			auto& render = RESOURCES::ServiceManager::Get<RENDER::Renderer>();
@@ -299,7 +348,7 @@ namespace IKIGAI::RENDER {
 	}
 
 	namespace {
-#ifdef USING_GLES
+#if defined(USING_GLES) && !defined(IKIGAI_GLES_HAS_SSBO)
 		void PadLightsForEsUbo(std::vector<LightOGL>& lights) {
 			if (lights.size() > MAX_LIGHTS) {
 				lights.resize(MAX_LIGHTS);
@@ -312,7 +361,7 @@ namespace IKIGAI::RENDER {
 
 	void GameRenderer::updateLights(SCENE_SYSTEM::Scene& scene) {
 		auto lightMatrices = scene.findLightData();
-#ifdef USING_GLES
+#if defined(USING_GLES) && !defined(IKIGAI_GLES_HAS_SSBO)
 		PadLightsForEsUbo(lightMatrices);
 #endif
 		mLightSSBO->setData(lightMatrices);
@@ -320,7 +369,7 @@ namespace IKIGAI::RENDER {
 
 	void GameRenderer::updateLightsInFrustum(SCENE_SYSTEM::Scene& scene, const Frustum& frustum) {
 		auto lightMatrices = scene.findLightDataInFrustum(frustum);
-#ifdef USING_GLES
+#if defined(USING_GLES) && !defined(IKIGAI_GLES_HAS_SSBO)
 		PadLightsForEsUbo(lightMatrices);
 #endif
 		mLightSSBO->setData(lightMatrices);

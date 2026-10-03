@@ -18,9 +18,10 @@
 #include "menuBar.h"
 #include "coreModule/config.h"
 #include "resourceModule/serviceManager.h"
+#include "resourceModule/fileSystem/fileSystem.h"
 #include "sceneModule/sceneManager.h"
-#include "utilsModule/pathGetter.h"
 #include "utilsModule/imguiHelper/ImGuiFileBrowser.h"
+#include <cstring>
 #include "renderModule/backends/interface/resourceStruct.h"
 #include "windowModule/inputManager/inputActions.h"
 
@@ -42,7 +43,7 @@ struct EditorRender::Internal {
 		mWindows.push_back(std::make_unique<TreeWindow>());
 		mWindows.push_back(std::make_unique<StatWindow>());
 		mWindows.push_back(std::make_unique<TimelineAnimationWindow>());
-		mWindows.push_back(std::make_unique<FileBrowserWindow>(Config::ROOT + Config::ASSETS_PATH));
+		mWindows.push_back(std::make_unique<FileBrowserWindow>("/"));
 		mWindows.push_back(std::make_unique<TextureWatcherWindow>());
 
 		//RENDER::ShaderResource res;
@@ -73,7 +74,22 @@ EditorRender::EditorRender() {
 	icons_config.MergeMode = true;
 	icons_config.PixelSnapH = true;
 	icons_config.GlyphMinAdvanceX = iconFontSize;
-	io.Fonts->AddFontFromFileTTF(UTILS::GetRealPath(std::string("fonts/") + FONT_ICON_FILE_NAME_FAS).c_str(), iconFontSize, &icons_config, icons_ranges);
+
+	const std::string fontPath = std::string("/fonts/") + FONT_ICON_FILE_NAME_FAS;
+	auto& fs = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RESOURCES::FileSystem>();
+	auto fontFile = fs.getFile(fontPath, IKIGAI::RESOURCES::FileMode::READ);
+	if (!fontFile || !fontFile->isValid()) {
+		LOG_ERROR << "Icon font not found: " << fontPath;
+	} else {
+		auto bytes = fontFile->read();
+		if (bytes.empty()) {
+			LOG_ERROR << "Icon font is empty: " << fontPath;
+		} else {
+			void* fontData = IM_ALLOC(bytes.size());
+			std::memcpy(fontData, bytes.data(), bytes.size());
+			io.Fonts->AddFontFromMemoryTTF(fontData, static_cast<int>(bytes.size()), iconFontSize, &icons_config, icons_ranges);
+		}
+	}
 
 	//ImGui_ImplVulkan_CreateFontsTexture();
 	//#ifdef VULKAN_BACKEND

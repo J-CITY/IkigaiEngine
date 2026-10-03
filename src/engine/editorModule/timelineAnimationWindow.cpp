@@ -1446,12 +1446,12 @@ void IKIGAI::EDITOR::TimelineAnimationWindow::draw() {
 
 				auto jsonStr = res.unwrap();
 				//write
-				auto path = UTILS::GetRealPath("animations/") + name + ".trackanim";
-				std::ofstream f(path);
-				if (f.is_open()) {
-					f << jsonStr << std::endl;
-				}
-				f.close();
+				//auto path = UTILS::GetRealPath("animations/") + name + ".trackanim";
+				//std::ofstream f(path);
+				//if (f.is_open()) {
+				//	f << jsonStr << std::endl;
+				//}
+				//f.close();
 
 				ImGui::CloseCurrentPopup();
 			}

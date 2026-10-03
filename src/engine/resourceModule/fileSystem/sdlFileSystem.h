@@ -58,6 +58,8 @@ namespace IKIGAI::RESOURCES {
         std::optional<vfspp::EntryInfo> GetEntryInfo(const std::string& virtualPath) const override;
 
     private:
+        void collectEntries();
+
         std::string m_aliasPath;
         std::string m_basePath;
         bool m_isInitialized = false;

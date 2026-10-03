@@ -1,7 +1,14 @@
 #include "sdlFileSystem.h"
 #include <algorithm>
+#include <functional>
 #include <vector>
 #include <filesystem>
+#ifdef __ANDROID__
+#include <jni.h>
+#include <android/asset_manager.h>
+#include <android/asset_manager_jni.h>
+#include <SDL3/SDL.h>
+#endif
 
 namespace IKIGAI::RESOURCES {
 
@@ -124,7 +131,95 @@ SdlFileSystem::~SdlFileSystem() {
 
 bool SdlFileSystem::Initialize() {
     m_isInitialized = true;
+    m_fileList.clear();
+    collectEntries();
     return true;
+}
+
+void SdlFileSystem::collectEntries() {
+#ifdef __ANDROID__
+    auto* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
+    auto activity = static_cast<jobject>(SDL_GetAndroidActivity());
+    if (!env || !activity) {
+        return;
+    }
+
+    jclass activityClass = env->GetObjectClass(activity);
+    jmethodID getAssets = env->GetMethodID(activityClass, "getAssets", "()Landroid/content/res/AssetManager;");
+    jobject assetManager = getAssets ? env->CallObjectMethod(activity, getAssets) : nullptr;
+    jclass assetClass = assetManager ? env->GetObjectClass(assetManager) : nullptr;
+    jmethodID listMethod = assetClass ? env->GetMethodID(assetClass, "list", "(Ljava/lang/String;)[Ljava/lang/String;") : nullptr;
+    AAssetManager* nativeAssets = assetManager ? AAssetManager_fromJava(env, assetManager) : nullptr;
+
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+    }
+
+    if (nativeAssets && listMethod) {
+        const std::string rootVirtual = m_aliasPath.empty() ? std::string("/") : m_aliasPath;
+        std::function<void(const std::string&, const std::string&)> scan =
+            [&](const std::string& assetDir, const std::string& virtualDir) {
+                jstring jPath = env->NewStringUTF(assetDir.c_str());
+                auto names = static_cast<jobjectArray>(env->CallObjectMethod(assetManager, listMethod, jPath));
+                env->DeleteLocalRef(jPath);
+                if (env->ExceptionCheck()) {
+                    env->ExceptionClear();
+                    if (names) {
+                        env->DeleteLocalRef(names);
+                    }
+                    return;
+                }
+                if (!names) {
+                    return;
+                }
+
+                const jsize count = env->GetArrayLength(names);
+                for (jsize i = 0; i < count; ++i) {
+                    auto jName = static_cast<jstring>(env->GetObjectArrayElement(names, i));
+                    const char* nameChars = jName ? env->GetStringUTFChars(jName, nullptr) : nullptr;
+                    const std::string name = nameChars ? nameChars : "";
+                    if (nameChars) {
+                        env->ReleaseStringUTFChars(jName, nameChars);
+                    }
+                    if (jName) {
+                        env->DeleteLocalRef(jName);
+                    }
+                    if (name.empty() || name == "." || name == "..") {
+                        continue;
+                    }
+
+                    const std::string childAsset = assetDir.empty() ? name : assetDir + "/" + name;
+                    const std::string childVirtual = (virtualDir == "/" ? std::string("/") : virtualDir + "/") + name;
+                    AAsset* asset = AAssetManager_open(nativeAssets, childAsset.c_str(), AASSET_MODE_UNKNOWN);
+                    const bool isFile = asset != nullptr;
+                    if (asset) {
+                        AAsset_close(asset);
+                    }
+
+                    m_fileList.emplace_back(m_aliasPath, m_basePath, childVirtual,
+                        isFile ? vfspp::EntryType::File : vfspp::EntryType::Directory);
+                    if (!isFile) {
+                        scan(childAsset, childVirtual);
+                    }
+                }
+                env->DeleteLocalRef(names);
+            };
+        scan(m_basePath, rootVirtual);
+    }
+
+    if (assetClass) {
+        env->DeleteLocalRef(assetClass);
+    }
+    if (assetManager) {
+        env->DeleteLocalRef(assetManager);
+    }
+    if (activityClass) {
+        env->DeleteLocalRef(activityClass);
+    }
+    env->DeleteLocalRef(activity);
+#else
+    (void)0;
+#endif
 }
 
 void SdlFileSystem::Shutdown() {
@@ -145,7 +240,16 @@ const std::string& SdlFileSystem::VirtualPath() const {
 }
 
 vfspp::IFileSystem::EntriesList SdlFileSystem::GetEntriesList(bool excludeDirectories) const {
-    return m_fileList;
+    if (!excludeDirectories) {
+        return m_fileList;
+    }
+    EntriesList files;
+    for (const auto& entry : m_fileList) {
+        if (!entry.IsDirectory()) {
+            files.push_back(entry);
+        }
+    }
+    return files;
 }
 
 bool SdlFileSystem::IsReadOnly() const {
@@ -242,11 +346,13 @@ bool SdlFileSystem::IsFileExists(const std::string& virtualPath) const {
 }
 
 bool SdlFileSystem::IsDirectoryExists(const std::string& virtualPath) const {
-    auto entry = GetEntryInfo(virtualPath).value();
-    std::error_code ec;
-    bool isDirectory = std::filesystem::is_directory(entry.NativePath(), ec);
-    if (!ec) {
-        return isDirectory;
+    if (virtualPath.empty() || virtualPath == "/" || virtualPath == m_aliasPath) {
+        return true;
+    }
+    for (const auto& entry : m_fileList) {
+        if (entry.IsDirectory() && entry.VirtualPath() == virtualPath) {
+            return true;
+        }
     }
     return false;
 }

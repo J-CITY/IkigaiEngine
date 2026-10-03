@@ -24,7 +24,11 @@ namespace {
 #elif defined(__APPLE__)
 			const char* glslVersion = "#version 150";
 #elif defined(__ANDROID__)
+#if !defined(IKIGAI_GLES_VERSION) || IKIGAI_GLES_VERSION >= 300
+			const char* glslVersion = "#version 300 es";
+#else
 			const char* glslVersion = "#version 100";
+#endif
 #else
 			const char* glslVersion = "#version 330";
 #endif

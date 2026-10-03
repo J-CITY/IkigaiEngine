@@ -31,9 +31,9 @@ void IKIGAI::EDITOR::MaterialWindow::draw() {
 		if (dataRes.isErr()) {
 			LOG_ERROR << "Can not save: " << material->getPath();
 		} else {
-			std::ofstream f(UTILS::GetRealPath(material->getPath()));
-			f << dataRes.unwrap().dump(4) << std::endl;
-			f.close();
+			//std::ofstream f(UTILS::GetRealPath(material->getPath()));
+			//f << dataRes.unwrap().dump(4) << std::endl;
+			//f.close();
 		}
 	}
 	ImGui::SameLine();

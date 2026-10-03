@@ -6,7 +6,10 @@
 #include <coreModule/ecs/object.h>
 
 #include "utilsModule/log/loggerDefine.h"
+#include "resourceModule/serviceManager.h"
+#include "resourceModule/fileSystem/fileSystem.h"
 #include <iostream>
+#include <nlohmann/json.hpp>
 
 using namespace IKIGAI;
 using namespace IKIGAI::SCENE_SYSTEM;
@@ -121,10 +124,13 @@ void SceneManager::loadFromFile(const std::string& sceneFilePath) {
 	m_currentScene = std::make_unique<Scene>();
 	m_currentSceneSourcePath = sceneFilePath;
 
-	//TODO: load with vfs
-	std::ifstream f(UTILS::GetRealPath(sceneFilePath));
-	nlohmann::json data = nlohmann::json::parse(f);
-	f.close();
+	auto& fs = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>();
+	auto file = fs.getFile(sceneFilePath, RESOURCES::FileMode::READ);
+	if (!file || !file->isValid()) {
+		LOG_ERROR << "Scene file not found: " << sceneFilePath;
+		return;
+	}
+	nlohmann::json data = nlohmann::json::parse(file->readStr());
 	if (data.contains("Objects")) {
 		for (auto& object : data["Objects"]) {
 			auto newActorRes = IKIGAI::UTILS::FromJson<ECS::Object::Descriptor>(object);

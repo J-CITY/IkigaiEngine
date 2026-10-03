@@ -9,8 +9,7 @@ CMakeFiles/
 3rd/SDL/
 3rd/SDL2_windows/
 3rd/VulkanSDK/
-android/app/src/main/assets
-android/sdl
+android/out
 oculus/gl2tri3dOXR/app/src/main/assets
 windows/out
 CMakeCache.txt

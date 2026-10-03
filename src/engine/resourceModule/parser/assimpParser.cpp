@@ -339,7 +339,7 @@ void AssimpParser::loadBones(std::vector<Vertex>& vertices, aiMesh* mesh, const 
 }
 
 void AssimpParser::setVertexBoneData(Vertex& vertex, int boneID, float weight) {
-	for (int i = 0; i < MAX_BONE_WEIGHTS; ++i) {
+	for (unsigned i = 0; i < MAX_BONE_WEIGHTS; ++i) {
 		if (vertex.m_BoneIDs[i] < 0) {
 			vertex.m_Weights[i] = weight;
 			vertex.m_BoneIDs[i] = boneID;

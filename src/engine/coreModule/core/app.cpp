@@ -99,8 +99,6 @@ void App::run() {
 //#include "../../../application/opengl/opengl-pipeline.hpp"
 //#include "../../../application/opengl/opengl-texture.hpp"
 
-#include <resourceModule/androidStorage.h>
-
 #ifdef USE_SDL
 //ast::PerspectiveCamera createCamera()
 //{

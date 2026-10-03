@@ -10,7 +10,7 @@ Vertex::Vertex(const MATH::Vector3f& position, const MATH::Vector2f& texCoord, c
 	this->normal = normal;
 	this->tangent = tangent;
 	this->bitangent = bitangent;
-#if (defined(USING_GLES) || defined(OPENGL_SIMPLE_RENDER)) && !defined(__EMSCRIPTEN__)
+#if defined(USING_GLES) && defined(IKIGAI_GLES_VERSION) && IKIGAI_GLES_VERSION < 300
 	m_BoneIDs = { (float)boneIDs[0], (float)boneIDs[1], (float)boneIDs[2], (float)boneIDs[3]};
 #else
 	m_BoneIDs = boneIDs;

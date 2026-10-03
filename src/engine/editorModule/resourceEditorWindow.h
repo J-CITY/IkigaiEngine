@@ -337,9 +337,9 @@ namespace IKIGAI::EDITOR {
 				}
 				auto jsonStr = jsonStrRes.unwrap();
 				//write
-				std::ofstream f(UTILS::GetRealPath(mPath));
-				f << jsonStr << std::endl;
-				f.close();
+				//std::ofstream f(UTILS::GetRealPath(mPath));
+				//f << jsonStr << std::endl;
+				//f.close();
 			}
 			ImGui::End();
 		}

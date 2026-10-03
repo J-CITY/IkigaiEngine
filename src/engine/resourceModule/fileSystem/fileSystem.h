@@ -80,7 +80,14 @@ namespace IKIGAI::RESOURCES {
 		FileTime lastWriteTime(const std::string& path);
 		uintmax_t fileSize(const std::string& path);
 
+		struct DirectoryEntry {
+			std::string path;
+			std::string name;
+			bool isDirectory = false;
+		};
+
 		std::shared_ptr<File> getFile(const std::string& path, FileMode mode = FileMode::READ_WRITE);
 		std::optional<std::string> getFilePath(const std::string& path) const;
+		std::vector<DirectoryEntry> listDirectory(const std::string& path) const;
 	};
 }

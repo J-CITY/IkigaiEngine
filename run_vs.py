@@ -100,12 +100,13 @@ def format_command(command):
     return str(command)
 
 
-def run_logged(command, env=None, shell=False, check=True):
+def run_logged(command, env=None, shell=False, check=True, cwd=None):
     print(f"\n$ {format_command(command)}")
     process = subprocess.Popen(
         command,
         env=env,
         shell=shell,
+        cwd=cwd,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -132,6 +133,10 @@ def main():
     parser.add_argument('-p', type=str, default="win", help='Platform: win, uwp, linux , macos, android, ios, web, switch (default: win)')
     parser.add_argument('-e', type=bool, default=True, help='Edittor mode (default: True)')
     parser.add_argument('-g', type=str, default="opengl", choices=['opengl', 'vulkan', 'dx12'], help='Graphics API (default: opengl)')
+    parser.add_argument('--esVer', dest='es_ver', type=str, default='3.2', choices=['3', '3.1', '3.2'],
+                        help='Android OpenGL ES version (default: 3.2)')
+    parser.add_argument('--abi', type=str, default='arm64-v8a,armeabi-v7a',
+                        help='Comma-separated Android ABIs (default: arm64-v8a,armeabi-v7a)')
     parser.add_argument('-b', type=str, default=None, help='CMake generate directory (default: <platform>/build)')
     parser.add_argument('-o', type=str, default=None, help='Runtime output directory for the executable (default: <platform>/out)')
     parser.add_argument('-s', type=str, default='windows', choices=['windows', 'console'],
@@ -227,11 +232,17 @@ def main():
                 run_logged([emrun_path(ROOT_DIR), html_path], env=emsdk_env, check=True)
 
         elif platform_arg == 'android':
-            build_dir = args.b if args.b else './android/build'
-            run_logged(['cmake', './android', f'-B{build_dir}', f'-DCMAKE_BUILD_TYPE={build_type}'], check=True)
-            create_assets_link(build_dir)
+            from generate_android import generate_android
+
+            output_dir = args.b if args.b else os.path.join(ROOT_DIR, 'android', 'out')
+            if not os.path.isabs(output_dir):
+                output_dir = os.path.abspath(os.path.join(ROOT_DIR, output_dir))
+            abis = [part.strip() for part in args.abi.split(',') if part.strip()]
+            generate_android(ROOT_DIR, output_dir, es_ver=args.es_ver, abis=abis)
             if args.build:
-                run_cmake_build(build_dir, build_type)
+                gradlew_name = 'gradlew.bat' if os.name == 'nt' else 'gradlew'
+                gradlew = os.path.join(output_dir, gradlew_name)
+                run_logged([gradlew, ':app:assembleDebug'], cwd=output_dir, check=True)
 
         elif platform_arg == 'oculus':
             build_dir = args.b if args.b else './oculus/build'
