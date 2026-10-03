@@ -31,7 +31,9 @@
 
 #ifdef OCULUS
 #include "util_matrix.h"
-#include <common/xr_linear.h>
+#include "xr_linear.h"
+#include "coreModule/ecs/components/cameraComponent.h"
+#include "coreModule/ecs/object.h"
 #endif
 
 namespace IKIGAI::RENDER {
@@ -390,69 +392,50 @@ namespace IKIGAI::RENDER {
 	void GameRenderer::renderSceneOculus(
 		XrCompositionLayerProjectionView& layerView, render_target_t& rtarget,
 		XrPosef& stagePose, uint32_t viewID) {
+		(void)stagePose;
 
-		auto& scene = IKIGAI::RESOURCES::ServiceManager::Get<
-			IKIGAI::SCENE_SYSTEM::SceneManager>()
-			.getCurrentScene();
-		auto& window =
-			IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::WINDOW::Window>();
-
-		mainCameraComponent = std::nullopt;
-		if (mContext.sceneManager->hasCurrentScene()) {
-			mainCameraComponent =
-				mContext.sceneManager->getCurrentScene().findMainCamera();
-		}
-		if (!mainCameraComponent) {
+		if (!mContext.sceneManager->hasCurrentScene()) {
 			return;
 		}
-		auto cameraComp = mainCameraComponent.value();
+		auto& scene = mContext.sceneManager->getCurrentScene();
+		auto mainCamera = scene.findMainCamera();
+		if (!mainCamera) {
+			return;
+		}
 
-		int view_x = layerView.subImage.imageRect.offset.x;
-		int view_y = layerView.subImage.imageRect.offset.y;
-		int view_w = layerView.subImage.imageRect.extent.width;
-		int view_h = layerView.subImage.imageRect.extent.height;
-		window.setSize(view_w, view_h);
+		ECS::CameraComponent* cameraComp = mainCamera.get();
+		if (auto* vrCamera = dynamic_cast<ECS::VrCameraComponent*>(cameraComp)) {
+			auto eyeObject = (viewID == 0) ? vrCamera->left : vrCamera->right;
+			if (eyeObject) {
+				if (auto eyeCamera = eyeObject->getComponent<ECS::CameraComponent>()) {
+					cameraComp = eyeCamera.get();
+				}
+			}
+		}
+
+		auto& window = *mContext.window;
+		const int view_x = layerView.subImage.imageRect.offset.x;
+		const int view_y = layerView.subImage.imageRect.offset.y;
+		const int view_w = layerView.subImage.imageRect.extent.width;
+		const int view_h = layerView.subImage.imageRect.extent.height;
+		window.setSize(static_cast<unsigned int>(view_w), static_cast<unsigned int>(view_h));
 
 		glBindFramebuffer(GL_FRAMEBUFFER, rtarget.fbo_id);
-
 		glViewport(view_x, view_y, view_w, view_h);
+		glEnable(GL_DEPTH_TEST);
+		glClearColor(0.05f, 0.05f, 0.08f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		// mDriver->setClearColor(1.0f, 0.0f, 0.0f, 1.0f);
-		// mDriver->clear(true, true, false);
-		// glClearColor (0.1f, 0.1f, 0.1f, 1.0f);
-		// glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		/* ------------------------------------------- *
-		 *  Matrix Setup
-		 *    (matPV)  = (proj) x (view)
-		 *    (matPVM) = (proj) x (view) x (model)
-		 * ------------------------------------------- */
-		XrMatrix4x4f matP, matV, matC, matM, matPV, matPVM;
-
-		/* Projection Matrix */
+		XrMatrix4x4f matP{};
+		XrMatrix4x4f matV{};
+		XrMatrix4x4f matC{};
 		XrMatrix4x4f_CreateProjectionFov(&matP, GRAPHICS_OPENGL_ES, layerView.fov,
 			cameraComp->getNear(), cameraComp->getFar());
 
-		/* View Matrix (inverse of Camera matrix) */
-		XrVector3f scale = {1.0f, 1.0f, 1.0f};
-		const auto& vewPose = layerView.pose;
-		XrMatrix4x4f_CreateTranslationRotationScale(&matC, &vewPose.position,
-			&vewPose.orientation, &scale);
+		const XrVector3f scale = {1.0f, 1.0f, 1.0f};
+		XrMatrix4x4f_CreateTranslationRotationScale(&matC, &layerView.pose.position,
+			&layerView.pose.orientation, &scale);
 		XrMatrix4x4f_InvertRigidBody(&matV, &matC);
-
-		/* Stage Space Matrix */
-		XrMatrix4x4f_CreateTranslationRotationScale(&matM, &stagePose.position,
-			&stagePose.orientation, &scale);
-
-		XrMatrix4x4f_Multiply(&matPV, &matP, &matV);
-		XrMatrix4x4f_Multiply(&matPVM, &matPV, &matM);
-
-		mainCameraComponent.value()->obj->getTransform()->setLocalPosition(
-			MATH::Vector3f(stagePose.position.x, stagePose.position.y,
-			stagePose.position.z));
-		mainCameraComponent.value()->obj->getTransform()->setLocalRotation(
-			MATH::QuaternionF(stagePose.orientation.x, stagePose.orientation.y,
-			stagePose.orientation.z, stagePose.orientation.w));
 
 		auto toMat4 = [](const XrMatrix4x4f& from) {
 			MATH::Matrix4f to(from.m[0], from.m[1], from.m[2], from.m[3], from.m[4],
@@ -460,39 +443,11 @@ namespace IKIGAI::RENDER {
 				from.m[10], from.m[11], from.m[12], from.m[13],
 				from.m[14], from.m[15]);
 			return MATH::Matrix4f::Transpose(to);
-			};
-		mainCameraComponent.value()->getCamera().cacheViewMatrix(toMat4(matV));
-		mainCameraComponent.value()->getCamera().cacheProjectionMatrix(toMat4(matP));
+		};
+		cameraComp->getCamera().cacheViewMatrix(toMat4(matV));
+		cameraComp->getCamera().cacheProjectionMatrix(toMat4(matP));
 
-		// cameraComp->setFov(layerView.fov.);
-		// cameraComp->setNear(0.05f);
-		// cameraComp->setFar(100.0f);
-
-		/* ------------------------------------------- *
-		 *  Render
-		 * ------------------------------------------- */
-		 // float *matStage = reinterpret_cast<float*>(&matPVM);
-
-		renderScene(mainCameraComponent.value());
-		// draw_stage (matStage);
-		// draw_triangle (matStage);
-
-		//{
-		//	XrVector3f    &pos = layerView.pose.position;
-		//	XrQuaternionf &rot = layerView.pose.orientation;
-		//	XrFovf        &fov = layerView.fov;
-		//	int x = 100;
-		//	int y = 100;
-		//	char strbuf[128];
-		//	update_dbgstr_winsize (view_w, view_h);
-		//	sprintf (strbuf, "VIEWPOS(%6.4f, %6.4f, %6.4f)", pos.x, pos.y, pos.z);
-		//	draw_dbgstr(strbuf, x, y); y += 22;
-		//	sprintf (strbuf, "VIEWROT(%6.4f, %6.4f, %6.4f, %6.4f)", rot.x, rot.y,
-		// rot.z, rot.w); 	draw_dbgstr(strbuf, x, y); y += 22; 	sprintf (strbuf,
-		//"VIEWFOV(%6.4f, %6.4f, %6.4f, %6.4f)", 			 fov.angleLeft,
-		// fov.angleRight, fov.angleUp, fov.angleDown); 	draw_dbgstr(strbuf, x,
-		// y); y += 22;
-		//}
+		renderScene(scene, *cameraComp);
 
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	}

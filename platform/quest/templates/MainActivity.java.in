@@ -1,0 +1,8 @@
+package {{APP_ID}};
+
+public class MainActivity extends android.app.NativeActivity {
+    static {
+        System.loadLibrary("openxr_loader");
+        System.loadLibrary("main");
+    }
+}

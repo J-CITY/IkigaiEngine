@@ -705,8 +705,34 @@ void Window::create(Window* sharedWindow) {
 #endif
 
 #ifdef OCULUS
+#include "oxrInput.h"
+#include <android/input.h>
+#include <memory>
+
 using namespace IKIGAI;
 using namespace IKIGAI::WINDOW;
+
+static int32_t ProcessAndroidInput(struct android_app* app, AInputEvent* event) {
+    auto* appState = static_cast<AndroidAppState*>(app->userData);
+    if (!appState || !appState->window || !event) {
+        return 0;
+    }
+    return appState->window->onAndroidInput(event);
+}
+
+static void DrainAndroidInputQueue(android_app* app) {
+    if (!app || !app->inputQueue) {
+        return;
+    }
+    AInputEvent* event = nullptr;
+    while (AInputQueue_getEvent(app->inputQueue, &event) >= 0) {
+        int32_t handled = 0;
+        if (app->onInputEvent) {
+            handled = app->onInputEvent(app, event);
+        }
+        AInputQueue_finishEvent(app->inputQueue, event, handled);
+    }
+}
 
 static void ProcessAndroidCmd (struct android_app* app, int32_t cmd) {
     AndroidAppState* appState = (AndroidAppState*)app->userData;
@@ -750,10 +776,19 @@ static void ProcessAndroidCmd (struct android_app* app, int32_t cmd) {
 }
 
 Window::Window(const WindowSettings &p_windowSettings, android_app *app): m_app(app) {
+    appState.window = this;
     app->userData = &appState;
     app->onAppCmd = ProcessAndroidCmd;
+    app->onInputEvent = ProcessAndroidInput;
 
     init();
+}
+
+int32_t Window::onAndroidInput(AInputEvent* event) {
+    if (!mOxrInput || !event) {
+        return 0;
+    }
+    return mOxrInput->handleAndroidInput(event);
 }
 
 void Window::init()
@@ -774,7 +809,10 @@ void Window::init()
     m_stageSpace = oxr_create_ref_space (m_session, XR_REFERENCE_SPACE_TYPE_STAGE);
 
     m_viewSurface = oxr_create_viewsurface (m_instance, m_systemId, m_session);
+    mOxrInput = std::make_unique<OxrInput>(*this, m_instance, m_session);
 }
+
+Window::~Window() = default;
 
 void Window::pollEvent() {
     //TODO: send event to input system
@@ -788,11 +826,14 @@ void Window::pollEvent() {
         if (appState.Resumed || oxr_is_session_running() || m_app->destroyRequested)
             timeout = 0;  // non blocking
 
-        if (ALooper_pollAll(timeout, nullptr, &events, (void**)&source) < 0) {
+        const int ident = ALooper_pollOnce(timeout, nullptr, &events, (void**)&source);
+        if (ident < 0) {
             break;
         }
 
-        if (source != nullptr) {
+        if (ident == LOOPER_ID_INPUT || (source && source->id == LOOPER_ID_INPUT)) {
+            DrainAndroidInputQueue(m_app);
+        } else if (source != nullptr) {
             source->process(m_app, source);
         }
     }
@@ -814,9 +855,8 @@ void Window::setSize(unsigned int width, unsigned int height) {
 void Window::preUpdate() {
     bool exit_loop, req_restart;
     oxr_poll_events (m_instance, m_session, &exit_loop, &req_restart);
-
-    if (!oxr_is_session_running()) {
-        return;
+    if (mOxrInput) {
+        mOxrInput->sync();
     }
 }
 

@@ -200,23 +200,18 @@ namespace IKIGAI {
 				int32_t length,
 				const char* message,
 				const void* userParam);
+#endif
 
 		public:
 			void begin() override {};
 			void end() override {};
 			void submit() override;
-			;
 			void cleanup() override {};
 			void setBlending(const Blending& value) override {};
 			void resetBlending() override {};
 			void setTriangleOrientation(TriangleOrientation value) override {}
-			void
-				setFrameBuffer(std::shared_ptr<FrameBufferInterface> frameBuffer) override;
+			void setFrameBuffer(std::shared_ptr<FrameBufferInterface> frameBuffer) override;
 			void resetFrameBuffer() override;
-			;
-
-		private:
-#endif
 		};
 	} // namespace RENDER
 } // namespace IKIGAI

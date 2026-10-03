@@ -5,11 +5,12 @@ CMakeFiles/
 3rd/glew/
 3rd/Oculus_OpenXR_Mobile_SDK/
 3rd/Oculus_OVRAudio/
-3rd/OpenXR-SDK/
+3rd/MetaOpenXR/
 3rd/SDL/
 3rd/SDL2_windows/
 3rd/VulkanSDK/
 android/out
+quest/out
 oculus/gl2tri3dOXR/app/src/main/assets
 windows/out
 CMakeCache.txt

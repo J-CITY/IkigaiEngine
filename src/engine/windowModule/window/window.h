@@ -1,5 +1,8 @@
 #pragma once
+#include <functional>
+#include <memory>
 #include <string>
+#include <vector>
 
 #include <utilsModule/event.h>
 #include <mathModule/math.h>
@@ -12,6 +15,7 @@
 
 #include "util_egl.h"
 #include "util_oxr.h"
+#include <android/input.h>
 #endif
 
 #ifdef USE_GLFW
@@ -162,37 +166,49 @@ namespace IKIGAI::WINDOW {
 #endif
 
 #ifdef OCULUS
+	class Window;
+	class OxrInput;
 
-#ifdef OCULUS
     struct AndroidAppState {
         ANativeWindow* NativeWindow = nullptr;
         bool Resumed = false;
+        Window* window = nullptr;
     };
-#endif
+
     class Window {
-		//friend DEBUG::DebugRender;
         bool renderLayer(XrTime dpy_time,
                                std::vector<XrCompositionLayerProjectionView> &layerViews,
                                XrCompositionLayerProjection                  &layer);
 	public:
+		EVENT::Event<int> keyPressedEvent;
+		EVENT::Event<int> keyReleasedEvent;
+		EVENT::Event<int> mouseButtonPressedEvent;
+		EVENT::Event<int> mouseButtonReleasedEvent;
+		EVENT::Event<float, float> mouseMovedEvent;
+
+		EVENT::Event<int, INPUT::Gamepad::GAMEPAD_BUTTON> gamepadButtonPressedEvent;
+		EVENT::Event<int, INPUT::Gamepad::GAMEPAD_BUTTON> gamepadButtonReleasedEvent;
+		EVENT::Event<int, INPUT::Gamepad::GAMEPAD_AXIS, float> gamepadAxisEvent;
+		EVENT::Event<int, INPUT::Gamepad::GAMEPAD_TRIGGER, float> gamepadTriggerEvent;
+
+		EVENT::Event<INPUT::Gamepad> gamepadAddEvent;
+		EVENT::Event<int> gamepadRemoveEvent;
 
 		explicit Window(const WindowSettings& p_windowSettings, android_app* app);
         void init();
 
 		Window() = delete;
-		~Window() = default;
+		~Window();
 
-		//MATHGL::Vector2i getMousePos() const;
+		[[nodiscard]] unsigned int getId() const { return 1; }
+		[[nodiscard]] bool getIsMainWindow() const { return true; }
+		[[nodiscard]] MATH::Vector2i getMousePos() const { return {}; }
 		void setSize(unsigned int width, unsigned int height);
 		MATH::Vector2u getSize() const;
 
 		[[nodiscard]] bool getIsFullscreen() const { return true; };
 		void toggleFullscreen() {};
 
-		//void hide() const;
-		//void show() const;
-		//void focus() const;
-		//[[nodiscard]] bool hasFocus() const;
 		void pollEvent();
 
         void preUpdate();
@@ -200,14 +216,11 @@ namespace IKIGAI::WINDOW {
                                        render_target_t &rtarget, XrPosef &stagePose,
                                        uint32_t viewID)> renderCb);
 		void draw() const;
-		//EVENT::Event<GLFWwindow*, int, int, int, int> keyEvent;
-		//EVENT::Event<GLFWwindow*, int, int, int> mouseButtonEvent;
-		//[[nodiscard]] GLFWwindow& getContext() const;
 		[[nodiscard]] bool isClosed() const;
+		XrSession getXrSession() const { return m_session; }
+		XrInstance getXrInstance() const { return m_instance; }
+		int32_t onAndroidInput(AInputEvent* event);
 
-		//void setCursorVisible(bool isVisible, bool isLock) const;
-
-		//std::pair<int, int> getDrawableSize();
 	private:
 
 		MATH::Vector2u mSize;
@@ -226,6 +239,7 @@ namespace IKIGAI::WINDOW {
         std::function<void(XrCompositionLayerProjectionView &layerView,
                            render_target_t &rtarget, XrPosef &stagePose,
                            uint32_t viewID)> m_RenderCb;
+		std::unique_ptr<OxrInput> mOxrInput;
 	};
 #endif
 }

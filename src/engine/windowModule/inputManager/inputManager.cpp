@@ -19,10 +19,8 @@ InputManager::InputManager(IKIGAI::WINDOW::Window& _window) : mWindow(_window) {
 	mGamepadButtonReleasedListener = mWindow.gamepadButtonReleasedEvent.add(std::bind(&InputManager::onGamepadButtonReleased, this, std::placeholders::_1, std::placeholders::_2));
 	mGamepadAxisListener = mWindow.gamepadAxisEvent.add(std::bind(&InputManager::onGamepadAxis, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 	mGamepadTriggerListener = mWindow.gamepadTriggerEvent.add(std::bind(&InputManager::onGamepadTrigger, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-#ifdef USE_SDL
 	mGamepadAddListener = mWindow.gamepadAddEvent.add(std::bind(&InputManager::addGamepad, this, std::placeholders::_1));
 	mGamepadRemoveListener = mWindow.gamepadRemoveEvent.add(std::bind(&InputManager::removeGamepad, this, std::placeholders::_1));
-#endif
 }
 
 InputManager::~InputManager() {
@@ -36,10 +34,8 @@ InputManager::~InputManager() {
 	mWindow.gamepadButtonReleasedEvent.removeListener(mGamepadButtonReleasedListener);
 	mWindow.gamepadAxisEvent.removeListener(mGamepadAxisListener);
 	mWindow.gamepadTriggerEvent.removeListener(mGamepadTriggerListener);
-#ifdef USE_SDL
 	mWindow.gamepadAddEvent.removeListener(mGamepadAddListener);
 	mWindow.gamepadRemoveEvent.removeListener(mGamepadRemoveListener);
-#endif
 }
 
 bool InputManager::isKeyPressed(EKey p_key) const {

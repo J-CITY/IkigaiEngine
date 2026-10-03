@@ -79,3 +79,6 @@
 [submodule "3rd/emsdk"]
 	path = 3rd/emsdk
 	url = https://github.com/emscripten-core/emsdk.git
+[submodule "3rd/OpenXR-SDK"]
+	path = 3rd/OpenXR-SDK
+	url = https://github.com/KhronosGroup/OpenXR-SDK.git

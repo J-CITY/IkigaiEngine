@@ -3,12 +3,12 @@
 #include <SDL3/SDL.h>
 #endif
 #include <memory>
-#ifdef USE_EDITOR
 namespace IKIGAI::ECS2
 {
 	class World;
 }
 
+#ifdef USE_EDITOR
 namespace IKIGAI
 {
 	namespace EDITOR
@@ -140,6 +140,10 @@ namespace IKIGAI {
 #endif
 			);
 			~Core();
+
+#ifdef OCULUS
+			android_app* androidApp = nullptr;
+#endif
 		
 			std::unique_ptr<WINDOW::WindowManager> windowManager;
 			std::shared_ptr<WINDOW::Window> window;

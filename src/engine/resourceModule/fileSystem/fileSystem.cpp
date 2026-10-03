@@ -1,6 +1,12 @@
 #include "fileSystem.h"
 #include "vfspp/VFS.h"
+#ifdef USE_SDL
 #include "sdlFileSystem.h"
+#endif
+#ifdef OCULUS
+#include "androidAssetFileSystem.h"
+#include <android/asset_manager.h>
+#endif
 #include "utilsModule/exeptions.h"
 #include <filesystem>
 
@@ -143,9 +149,28 @@ void IKIGAI::RESOURCES::FileSystem::addMemoryFileSystem(const std::string& pathI
 }
 
 void IKIGAI::RESOURCES::FileSystem::addSdlFileSystem(const std::string& path, const std::string& pathInFs) {
+#ifdef USE_SDL
 	vfspp::IFileSystemPtr fs(new SdlFileSystem(pathInFs, path));
 	(void)fs->Initialize();
 	mInternal->mVFS->AddFileSystem(pathInFs, fs);
+#else
+	(void)path;
+	(void)pathInFs;
+#endif
+}
+
+void IKIGAI::RESOURCES::FileSystem::addAndroidAssetFileSystem(const std::string& path, const std::string& pathInFs, void* assetManager, void* androidApp) {
+#ifdef OCULUS
+	vfspp::IFileSystemPtr fs(new AndroidAssetFileSystem(pathInFs, path,
+		static_cast<AAssetManager*>(assetManager), androidApp));
+	(void)fs->Initialize();
+	mInternal->mVFS->AddFileSystem(pathInFs, fs);
+#else
+	(void)path;
+	(void)pathInFs;
+	(void)assetManager;
+	(void)androidApp;
+#endif
 }
 
 bool IKIGAI::RESOURCES::FileSystem::isValid(const std::string& path) const {

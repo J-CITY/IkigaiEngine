@@ -71,6 +71,9 @@ Core:: Core(
 #ifdef DX12_BACKEND
 : hInstance(hInstance)
 #endif
+#ifdef OCULUS
+: androidApp(app)
+#endif
 {
 	//TODO: init Config::ROOT | UTILS::ReplaceSubstrings(std::filesystem::current_path().string(), "\\", "/") + "/";
 	std::cout << "Create Core\n";
@@ -81,7 +84,10 @@ Core:: Core(
 	fileSystem = std::make_unique<RESOURCES::FileSystem>();
 	RESOURCES::ServiceManager::Set<RESOURCES::FileSystem>(fileSystem.get());
 	//fileSystem->addNativeFileSystem(".", "/");
-#ifdef __ANDROID__
+#ifdef OCULUS
+	fileSystem->addAndroidAssetFileSystem("engine", "/", app->activity->assetManager, app);
+	fileSystem->addAndroidAssetFileSystem("game", "/", app->activity->assetManager, app);
+#elif defined(__ANDROID__)
 	// APK assets root is the repo assets/ folder. SDL_IOFromFile reads engine/ and game/.
 	fileSystem->addSdlFileSystem("engine", "/");
 	fileSystem->addSdlFileSystem("game", "/");
@@ -112,6 +118,9 @@ Core:: Core(
 	windowSettings.renderBackend = RENDER::DriverInterface::settings.backend;
 
 	windowManager = std::make_unique<WINDOW::WindowManager>();
+#ifdef OCULUS
+	windowManager->setAndroidApp(app);
+#endif
 	window = windowManager->createMainWindow(windowSettings);
 
 	std::cout << "Create Window\n";
@@ -270,7 +279,9 @@ Core:: Core(
 	}
 
 	std::cout << "Create render\n";
+#ifndef OCULUS
 	window->initImGUI();
+#endif
 	
 	//renderer->setCapability(RENDER::RenderingCapability::MULTISAMPLE, true);
 	RESOURCES::ServiceManager::Set<RENDER::GameRendererInterface>(static_cast<RENDER::GameRendererInterface*>(renderer.get()));
@@ -290,8 +301,10 @@ Core:: Core(
 }
 
 Core::~Core() {
+#ifndef OCULUS
 	if (window) {
 		window->shutdownImGUI();
 	}
+#endif
 	RENDER::DriverInterface::SetActive(nullptr);
 }

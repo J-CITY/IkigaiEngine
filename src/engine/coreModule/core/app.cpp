@@ -320,7 +320,7 @@ void App::update(std::chrono::duration<double> dt) {
 	}
 	WebLog("physics done");
 	
-#ifdef USE_SDL
+#if defined(USE_SDL) || defined(OCULUS)
 	if (RESOURCES::ServiceManager::Check<INPUT_SYSTEM::InputActions>() && RESOURCES::ServiceManager::Check<ECS2::World>()) {
 		auto& actions = RESOURCES::ServiceManager::Get<INPUT_SYSTEM::InputActions>();
 		actions.prepareMaps(RESOURCES::ServiceManager::Get<ECS2::World>());
@@ -379,7 +379,7 @@ void App::update(std::chrono::duration<double> dt) {
 	core.window->update([this](XrCompositionLayerProjectionView &layerView,
 							   render_target_t &rtarget, XrPosef &stagePose,
 							   uint32_t viewID) {
-		static_cast<RENDER::GameRendererGl*>(core.renderer.get())->renderSceneOculus(layerView, rtarget, stagePose, viewID);
+		static_cast<RENDER::GameRenderer*>(core.renderer.get())->renderSceneOculus(layerView, rtarget, stagePose, viewID);
 	});
 #endif
 
@@ -400,7 +400,7 @@ void App::postUpdate(std::chrono::duration<double> dt) {
 	WebLog("window draw");
 	core.window->draw();
 	WebLog("window draw done");
-#ifdef USE_SDL
+#if defined(USE_SDL) || defined(OCULUS)
 	if (RESOURCES::ServiceManager::Check<INPUT_SYSTEM::InputManager>()) {
 		RESOURCES::ServiceManager::Get<INPUT_SYSTEM::InputManager>().endFrame();
 	}

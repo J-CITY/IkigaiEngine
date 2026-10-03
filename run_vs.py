@@ -130,13 +130,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', type=str, default="vs22", help='Compiller type: vs22 (default: vs22)')
     parser.add_argument('-a', type=str, default="x64", help='Architecture: x86, x64 (default: x64)')
-    parser.add_argument('-p', type=str, default="win", help='Platform: win, uwp, linux , macos, android, ios, web, switch (default: win)')
+    parser.add_argument('-p', type=str, default="win", help='Platform: win, uwp, linux, macos, android, quest, ios, web, switch (default: win)')
     parser.add_argument('-e', type=bool, default=True, help='Edittor mode (default: True)')
     parser.add_argument('-g', type=str, default="opengl", choices=['opengl', 'vulkan', 'dx12'], help='Graphics API (default: opengl)')
     parser.add_argument('--esVer', dest='es_ver', type=str, default='3.2', choices=['3', '3.1', '3.2'],
                         help='Android OpenGL ES version (default: 3.2)')
     parser.add_argument('--abi', type=str, default='arm64-v8a,armeabi-v7a',
-                        help='Comma-separated Android ABIs (default: arm64-v8a,armeabi-v7a)')
+                        help='Comma-separated Android/Quest ABIs (android default: arm64-v8a,armeabi-v7a; quest default: arm64-v8a)')
     parser.add_argument('-b', type=str, default=None, help='CMake generate directory (default: <platform>/build)')
     parser.add_argument('-o', type=str, default=None, help='Runtime output directory for the executable (default: <platform>/out)')
     parser.add_argument('-s', type=str, default='windows', choices=['windows', 'console'],
@@ -244,12 +244,20 @@ def main():
                 gradlew = os.path.join(output_dir, gradlew_name)
                 run_logged([gradlew, ':app:assembleDebug'], cwd=output_dir, check=True)
 
-        elif platform_arg == 'oculus':
-            build_dir = args.b if args.b else './oculus/build'
-            run_logged(['cmake', './oculus', f'-B{build_dir}', f'-DCMAKE_BUILD_TYPE={build_type}'], check=True)
-            create_assets_link(build_dir)
+        elif platform_arg == 'quest':
+            from generate_quest import generate_quest
+
+            output_dir = args.b if args.b else os.path.join(ROOT_DIR, 'quest', 'out')
+            if not os.path.isabs(output_dir):
+                output_dir = os.path.abspath(os.path.join(ROOT_DIR, output_dir))
+            default_abi = 'arm64-v8a,armeabi-v7a'
+            abi_arg = args.abi if args.abi != default_abi else 'arm64-v8a'
+            abis = [part.strip() for part in abi_arg.split(',') if part.strip()]
+            generate_quest(ROOT_DIR, output_dir, abis=abis)
             if args.build:
-                run_cmake_build(build_dir, build_type)
+                gradlew_name = 'gradlew.bat' if os.name == 'nt' else 'gradlew'
+                gradlew = os.path.join(output_dir, gradlew_name)
+                run_logged([gradlew, ':app:assembleDebug'], cwd=output_dir, check=True)
 
         else:
             print(f"Unknown platform: {platform_arg}")

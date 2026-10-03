@@ -69,6 +69,7 @@ namespace IKIGAI::RESOURCES {
 		void addZipFileSystem(const std::string& path, const std::string& pathInFs);
 		void addMemoryFileSystem(const std::string& pathInFs);
 		void addSdlFileSystem(const std::string& path, const std::string& pathInFs);
+		void addAndroidAssetFileSystem(const std::string& path, const std::string& pathInFs, void* assetManager, void* androidApp);
 
 		bool isValid(const std::string& path) const;
 		bool isFileExist(const std::string& path) const;

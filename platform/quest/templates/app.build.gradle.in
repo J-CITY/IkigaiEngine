@@ -1,0 +1,54 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace = "{{APP_ID}}"
+    compileSdk = {{COMPILE_SDK}}
+
+    defaultConfig {
+        applicationId "{{APP_ID}}"
+        minSdk = {{MIN_SDK}}
+        targetSdk = {{TARGET_SDK}}
+        versionCode 1
+        versionName "1.0"
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared", "-DANDROID_PLATFORM={{ANDROID_PLATFORM}}", "-DIKIGAI_GLES_VERSION={{GLES_CMAKE}}"
+                abiFilters {{ABI_FILTERS}}
+            }
+        }
+
+        ndk {
+            abiFilters {{ABI_FILTERS}}
+        }
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs += ["{{JNI_LIBS}}"]
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file("{{CMAKE_PATH}}")
+        }
+    }
+
+    lint {
+        abortOnError = false
+    }
+}
+
+dependencies {
+    implementation 'org.khronos.openxr:openxr_loader_for_android:{{OPENXR_LOADER_VERSION}}'
+}
