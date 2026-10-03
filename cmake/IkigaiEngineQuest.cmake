@@ -4,7 +4,7 @@
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(THIRD_PARTY_DIR "${REPO_ROOT}/3rd")
 set(MAIN_SOURCE_DIR "${REPO_ROOT}/src")
-set(QUEST_COMMON_DIR "${REPO_ROOT}/oculus/common")
+set(QUEST_COMMON_DIR "${REPO_ROOT}/platform/quest/oxr")
 set(OPENXR_SDK_DIR "${THIRD_PARTY_DIR}/OpenXR-SDK")
 set(META_OPENXR_DIR "${THIRD_PARTY_DIR}/MetaOpenXR")
 

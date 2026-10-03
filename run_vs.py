@@ -130,7 +130,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', type=str, default="vs22", help='Compiller type: vs22 (default: vs22)')
     parser.add_argument('-a', type=str, default="x64", help='Architecture: x86, x64 (default: x64)')
-    parser.add_argument('-p', type=str, default="win", help='Platform: win, uwp, linux, macos, android, quest, ios, web, switch (default: win)')
+    parser.add_argument('-p', type=str, default="win", help='Platform: win, linux, macos, android, quest, ios, web (default: win)')
     parser.add_argument('-e', type=bool, default=True, help='Edittor mode (default: True)')
     parser.add_argument('-g', type=str, default="opengl", choices=['opengl', 'vulkan', 'dx12'], help='Graphics API (default: opengl)')
     parser.add_argument('--esVer', dest='es_ver', type=str, default='3.2', choices=['3', '3.1', '3.2'],

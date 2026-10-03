@@ -7,8 +7,6 @@ python run_vs.py -p quest
 python run_vs.py -p quest --abi arm64-v8a --build
 ```
 
-The old `oculus/gl2tri3dOXR` tree is a reference sample only. Do not generate or build from it.
-
 ## OpenXR
 
 Quest uses:

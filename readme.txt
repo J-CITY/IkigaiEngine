@@ -18,7 +18,18 @@ python run_vs.py -p android
 python run_vs.py -p android --esVer 3.1 --abi arm64-v8a --build
 --------------------------------------------------------------
 - Meta Quest
-//TODO
+Open quest/out in Android Studio (not repo root). Headset must be in developer mode.
+NativeActivity + OpenXR GLES, no SDL, no editor. ABI by default: arm64-v8a.
+run_vs.py pulls 3rd/OpenXR-SDK and fetches the Android loader into 3rd/MetaOpenXR/ if needed.
+
+python run_vs.py -p quest
+python run_vs.py -p quest --abi arm64-v8a --build
+
+# loader only, if Maven is blocked set META_OPENXR_AAR to a local .aar:
+python utils/fetch_meta_openxr.py
+python utils/fetch_meta_openxr.py --force
+
+Do not edit quest/out by hand. Change platform/quest/templates or cmake/IkigaiEngineQuest.cmake, then regenerate.
 ---------------------------------------------------------------
 - Emscripten
 Нужны Python 3, Git, CMake и Ninja. Emscripten SDK 6.0.10 ставится из submodule 3rd/emsdk

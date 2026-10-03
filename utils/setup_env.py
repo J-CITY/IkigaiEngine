@@ -54,7 +54,7 @@ def main(platform="win"):
         print("\nUpdating GLEW (update_glew.py)...")
         subprocess.run([sys.executable, os.path.join(script_dir, "update_glew.py")], cwd=root_dir, check=True)
 
-    if platform in ("quest", "oculus"):
+    if platform == "quest":
         print("\nFetching OpenXR Android loader (fetch_meta_openxr.py)...")
         subprocess.run([sys.executable, os.path.join(script_dir, "fetch_meta_openxr.py")], cwd=root_dir, check=True)
 
