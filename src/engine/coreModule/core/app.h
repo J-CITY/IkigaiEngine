@@ -32,6 +32,7 @@ namespace IKIGAI {
 			UTILS::Ref<Core> getCore();
 		protected:
 			Core core;
+			std::chrono::duration<double> m_fixedTimeAccumulator{};
 		};
 	}
 }

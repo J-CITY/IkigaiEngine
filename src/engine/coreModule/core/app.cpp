@@ -291,17 +291,6 @@ void App::update(std::chrono::duration<double> dt) {
 	//core.renderer->getUBO().setSubData(static_cast<float>(TIME::Timer::GetInstance().getTimeSinceStart().count()), 
 	//	3 * sizeof(MATHGL::Matrix4) + sizeof(MATHGL::Vector3));
 
-	//EMSCRIPTEN has problems with threads
-#ifndef __EMSCRIPTEN__
-	auto taskUpdatePhysics = RESOURCES::ServiceManager::Get<TASK::TaskSystem>().submit("UpdatePhysics", 2, nullptr, [this]() {
-		core.physicsManger->startFrame();
-		auto duration = static_cast<float>(TIME::Timer::GetInstance().getDeltaTime().count());
-		if (duration > 0.0f) {
-			core.physicsManger->runPhysics(duration);
-		}
-	});
-#endif
-
 #ifdef USE_FILE_WATCHER
 	static std::chrono::duration<double> fwwait = std::chrono::milliseconds(0);
 	fwwait += dt;
@@ -314,14 +303,38 @@ void App::update(std::chrono::duration<double> dt) {
 	RESOURCES::FileWatcher::getInstance()->applyUpdate();
 #endif
 
-	WebLog("physics start");
-	core.physicsManger->startFrame();
-	auto duration = static_cast<float>(TIME::Timer::GetInstance().getDeltaTime().count());
-	if (duration > 0.0f) {
-		core.physicsManger->runPhysics(duration);
+	const auto fixedDt = TIME::Timer::GetInstance().getFixedDeltaTime();
+	m_fixedTimeAccumulator += dt;
+	constexpr int kMaxFixedStepsPerFrame = 8;
+	int fixedSteps = 0;
+	while (m_fixedTimeAccumulator >= fixedDt && fixedSteps < kMaxFixedStepsPerFrame) {
+		m_fixedTimeAccumulator -= fixedDt;
+		++fixedSteps;
+
+		WebLog("physics fixed step");
+		core.physicsManger->startFrame();
+		const auto fixedDuration = static_cast<float>(fixedDt.count());
+		if (fixedDuration > 0.0f) {
+			core.physicsManger->runPhysics(fixedDuration);
+		}
+
+		if (core.sceneManager->hasCurrentScene()) {
+			auto& currentScene = core.sceneManager->getCurrentScene();
+			WebLog("scene fixedUpdate");
+			currentScene.fixedUpdate(fixedDt);
+			WebLog("scene fixedUpdate done");
+
+			auto& world = RESOURCES::ServiceManager::Get<ECS2::World>();
+			auto systemManager = world.getSystemManager();
+			WebLog("ecs runFixedUpdate");
+			systemManager->runFixedUpdate(fixedDt);
+			WebLog("ecs runFixedUpdate done");
+		}
 	}
-	WebLog("physics done");
-	
+	if (fixedSteps >= kMaxFixedStepsPerFrame) {
+		m_fixedTimeAccumulator = std::chrono::duration<double>::zero();
+	}
+
 #if defined(USE_SDL) || defined(OCULUS)
 	if (RESOURCES::ServiceManager::Check<INPUT_SYSTEM::InputActions>() && RESOURCES::ServiceManager::Check<ECS2::World>()) {
 		auto& actions = RESOURCES::ServiceManager::Get<INPUT_SYSTEM::InputActions>();
@@ -333,15 +346,9 @@ void App::update(std::chrono::duration<double> dt) {
 	if (core.sceneManager->hasCurrentScene()) {
 		WebLog("scene update");
 		auto& currentScene = core.sceneManager->getCurrentScene();
-		WebLog("scene fixedUpdate");
-		currentScene.fixedUpdate(dt);
-		WebLog("scene fixedUpdate done");
 
 		auto& world = RESOURCES::ServiceManager::Get<ECS2::World>();
 		auto systemManager = world.getSystemManager();
-		WebLog("ecs runFixedUpdate");
-		systemManager->runFixedUpdate(dt);
-		WebLog("ecs runFixedUpdate done");
 		WebLog("ecs runUpdate");
 		systemManager->runUpdate(dt);
 		WebLog("ecs runUpdate done");

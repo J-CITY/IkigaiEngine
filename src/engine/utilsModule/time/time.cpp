@@ -31,6 +31,16 @@ std::chrono::duration<double> Timer::getDeltaTimeUnscaled() const {
 	return dt;
 }
 
+std::chrono::duration<double> Timer::getFixedDeltaTime() const {
+	return fixedDt * scale;
+}
+
+void Timer::setFixedDeltaTime(std::chrono::duration<double> step) {
+	if (step.count() > 0.0) {
+		fixedDt = step;
+	}
+}
+
 std::chrono::duration<double> Timer::getTimeSinceStart() const {
 	return std::chrono::steady_clock::now() - start;
 }

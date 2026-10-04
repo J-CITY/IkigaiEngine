@@ -64,9 +64,11 @@ namespace IKIGAI::TIME {
 		[[nodiscard]] double getFPS() const;
 		[[nodiscard]] std::chrono::duration<double> getDeltaTime() const;
 		[[nodiscard]] std::chrono::duration<double> getDeltaTimeUnscaled() const;
+		[[nodiscard]] std::chrono::duration<double> getFixedDeltaTime() const;
 		[[nodiscard]] std::chrono::duration<double> getTimeSinceStart() const;
 		[[nodiscard]] double getTimeScale() const;
 		void setScale(double s);
+		void setFixedDeltaTime(std::chrono::duration<double> step);
 
 		using TimerGenerator = Generator<std::chrono::duration<double>>;
 
@@ -80,6 +82,7 @@ namespace IKIGAI::TIME {
 		std::chrono::steady_clock::time_point start;
 		double scale = 1.0;
 		std::chrono::duration<double> dt{};
+		std::chrono::duration<double> fixedDt{1.0 / 50.0};
 #ifdef __EMSCRIPTEN__
 		double mLastMs = -1.0;
 #endif
