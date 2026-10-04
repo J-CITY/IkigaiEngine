@@ -1,3 +1,13 @@
+- Assets
+Локальный каталог assets/ не в Git. После clone run_vs.py / setup_env.py
+сами делают pull, если локальная копия старше utils/assets.source.json
+или каталога нет:
+
+python utils/sync_assets.py
+python utils/sync_assets.py ensure
+
+Подробности: docs/ASSETS.md
+--------------------------------------------------------------
 - Win
 1. Подготовка окружения (скачивание зависимостей и сабмодулей).
    run_vs.py вызывает setup_env.py сам, если окружение ещё не готово:

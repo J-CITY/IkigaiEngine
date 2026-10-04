@@ -2,6 +2,12 @@ import os
 import sys
 import subprocess
 
+_UTILS_DIR = os.path.dirname(os.path.abspath(__file__))
+if _UTILS_DIR not in sys.path:
+    sys.path.insert(0, _UTILS_DIR)
+
+from sync_assets import ensure_assets
+
 GLEW_VERSION = "2.3.1"
 SPINE_VERSION = "4.2"
 
@@ -60,6 +66,9 @@ def main(platform="win"):
 
     print("\nUpdating Spine...")
     subprocess.run([sys.executable, os.path.join(script_dir, "update_spine.py")], cwd=root_dir, check=True)
+
+    print("\nChecking game assets...")
+    ensure_assets(root_dir)
 
     print("\nEnvironment setup complete!")
 

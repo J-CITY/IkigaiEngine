@@ -41,3 +41,5 @@ mac/out
 mac/.DS_Store
 run_vs.log
 run_vs-*.log
+utils/assets.remote.json
+utils/.pack/

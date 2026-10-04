@@ -10,6 +10,7 @@ if UTILS_DIR not in sys.path:
     sys.path.insert(0, UTILS_DIR)
 
 from setup_env import is_environment_ready, main as setup_environment
+from sync_assets import ensure_assets
 from ensure_emsdk import ensure_emsdk, emrun_path
 
 LOG_FILE = None
@@ -89,6 +90,7 @@ def ensure_environment(platform_arg, skip_setup):
     if skip_setup:
         return
     if is_environment_ready(ROOT_DIR, platform_arg):
+        ensure_assets(ROOT_DIR)
         return
     print("Environment is not ready. Running utils/setup_env.py...")
     setup_environment(platform_arg)
