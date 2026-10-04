@@ -170,7 +170,7 @@ namespace IKIGAI {
 			}
 
 			virtual void addFileWatchSubscribe(const std::string& mainPath, const std::unordered_set<std::string>& watchPaths, std::weak_ptr<ResourceT> weakRes) {
-#ifdef __EMSCRIPTEN__
+#ifndef USE_FILE_WATCHER
 				(void)mainPath;
 				(void)watchPaths;
 				(void)weakRes;
@@ -195,6 +195,10 @@ namespace IKIGAI {
 			}
 
 			virtual void unsubscribeFileWatch(const std::string& mainPath) {
+#ifndef USE_FILE_WATCHER
+				(void)mainPath;
+				return;
+#endif
 				for (auto& e : sFWSubscribersIds[mainPath]) {
 					RESOURCES::FileWatcher::getInstance()->removeDeferred(e.first, e.second);
 				}

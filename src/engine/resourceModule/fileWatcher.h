@@ -1,5 +1,9 @@
 #pragma once
 
+#if defined(USE_FILE_WATCHER) && !defined(USE_EDITOR)
+#error "USE_FILE_WATCHER requires USE_EDITOR"
+#endif
+
 #include <filesystem>
 #include <functional>
 #include <string>

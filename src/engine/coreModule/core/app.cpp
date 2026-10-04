@@ -300,12 +300,14 @@ void App::update(std::chrono::duration<double> dt) {
 			core.physicsManger->runPhysics(duration);
 		}
 	});
+#endif
 
+#ifdef USE_FILE_WATCHER
 	static std::chrono::duration<double> fwwait = std::chrono::milliseconds(0);
 	fwwait += dt;
 	if (fwwait > std::chrono::milliseconds(5000)) {
 		fwwait = std::chrono::milliseconds(0);
-		auto taskUpdatePhysics = RESOURCES::ServiceManager::Get<TASK::TaskSystem>().submit("UpdateFileWatcher", 2, nullptr, [this]() {
+		RESOURCES::ServiceManager::Get<TASK::TaskSystem>().submit("UpdateFileWatcher", 2, nullptr, []() {
 			RESOURCES::FileWatcher::getInstance()->update();
 		});
 	}

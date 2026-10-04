@@ -6,6 +6,34 @@
 
 namespace IKIGAI::RESOURCES {
 
+#ifndef USE_FILE_WATCHER
+
+IKIGAI::IdGenerator<IKIGAI::EVENT::Event<>>::ID FileWatcher::_add(const std::string&, std::function<void(FileStatus)>) {
+	return EVENT::Event<FileStatus>::ID(0);
+}
+
+IKIGAI::IdGenerator<IKIGAI::EVENT::Event<>>::ID FileWatcher::add(const Path&, std::function<void(FileStatus)>) {
+	return EVENT::Event<FileStatus>::ID(0);
+}
+
+void FileWatcher::addDeferred(const Path&, std::function<void(FileStatus)>, std::function<void(EVENT::Event<FileStatus>::ID)>) {}
+
+void FileWatcher::_remove(const std::string&, EVENT::Event<FileStatus>::ID) {}
+
+void FileWatcher::remove(const Path&, EVENT::Event<FileStatus>::ID) {}
+
+void FileWatcher::removeDeferred(const Path&, EVENT::Event<FileStatus>::ID) {}
+
+void FileWatcher::start() {}
+
+void FileWatcher::stop() {}
+
+void FileWatcher::applyUpdate() {}
+
+void FileWatcher::update() {}
+
+#else
+
 IKIGAI::IdGenerator<IKIGAI::EVENT::Event<>>::ID FileWatcher::_add(const std::string& path, std::function<void(FileStatus)> cb) {
 	auto& fs = ServiceManager::Get<FileSystem>();
 	if (!fs.isFileExist(path)) {
@@ -116,4 +144,7 @@ void FileWatcher::update() {
 		}
 	}
 }
+
+#endif
+
 }

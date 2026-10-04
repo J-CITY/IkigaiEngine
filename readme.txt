@@ -17,6 +17,11 @@ python run_vs.py -c vs22 -a x64 -g vulkan -t Debug
 # или
 python run_vs.py -c vs22 -a x64 -g dx12 --build
 
+--use-editor / --use_file_watcher — редактор и hot-reload (CMake USE_EDITOR / USE_FILE_WATCHER):
+python run_vs.py --use-editor 0
+python run_vs.py --use_file_watcher 0
+python run_vs.py --use_file_watcher 1
+
 Лог cmake/сборки пишется в run_vs.log (переопределить: --log path)
 
 Ручной вызов:

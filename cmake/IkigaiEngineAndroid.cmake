@@ -5,6 +5,9 @@ get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(THIRD_PARTY_DIR "${REPO_ROOT}/3rd")
 set(MAIN_SOURCE_DIR "${REPO_ROOT}/src")
 
+option(USE_EDITOR "Build with in-engine editor UI" ON)
+cmake_dependent_option(USE_FILE_WATCHER "Watch asset files for hot reload" OFF "USE_EDITOR" OFF)
+
 set(IKIGAI_GLES_VERSION "320" CACHE STRING "OpenGL ES version: 300, 310, or 320")
 set_property(CACHE IKIGAI_GLES_VERSION PROPERTY STRINGS 300 310 320)
 if(NOT IKIGAI_GLES_VERSION MATCHES "^(300|310|320)$")
@@ -168,11 +171,16 @@ target_compile_definitions(main PRIVATE
     USING_GLES
     IMGUI_IMPL_OPENGL_ES3
     IKIGAI_GLES_VERSION=${IKIGAI_GLES_VERSION}
-    USE_EDITOR
     USE_CHEATS
     SOL_EXCEPTIONS_SAFE_PROPAGATION=1
     $<$<CONFIG:Debug>:SOL_ALL_SAFETIES_ON=1>
 )
+if(USE_EDITOR)
+    target_compile_definitions(main PRIVATE USE_EDITOR)
+endif()
+if(USE_EDITOR AND USE_FILE_WATCHER)
+    target_compile_definitions(main PRIVATE USE_FILE_WATCHER)
+endif()
 
 target_include_directories(main PRIVATE
     "${MAIN_SOURCE_DIR}/engine"

@@ -9,6 +9,8 @@ option(USE_OPENGL   "Use OpenGL rendering backend" ON)
 option(USE_VULKAN   "Use Vulkan rendering backend" OFF)
 option(USE_METAL    "Use Metal rendering backend" OFF)
 option(USE_MIMALLOC "Use mimalloc override" OFF)
+option(USE_EDITOR "Build with in-engine editor UI" ON)
+cmake_dependent_option(USE_FILE_WATCHER "Watch asset files for hot reload" ON "USE_EDITOR" OFF)
 
 if(NOT USE_OPENGL AND NOT USE_VULKAN AND NOT USE_METAL)
     message(FATAL_ERROR "At least one render backend must be enabled (USE_OPENGL, USE_VULKAN, USE_METAL)")
@@ -233,7 +235,13 @@ if(USE_METAL)
 endif()
 
 # Additional definitions
-target_compile_definitions(${APP_NAME} PRIVATE USE_EDITOR USE_CHEATS)
+target_compile_definitions(${APP_NAME} PRIVATE USE_CHEATS)
+if(USE_EDITOR)
+    target_compile_definitions(${APP_NAME} PRIVATE USE_EDITOR)
+endif()
+if(USE_EDITOR AND USE_FILE_WATCHER)
+    target_compile_definitions(${APP_NAME} PRIVATE USE_FILE_WATCHER)
+endif()
 
 # --- Includes and Linking ---
 

@@ -128,12 +128,60 @@ def run_cmake_build(build_dir, build_type, env=None):
     run_logged(['cmake', '--build', build_dir, '--config', build_type], env=env, check=True)
 
 
+def _optional_bool(value):
+    if value is True or value is False:
+        return value
+    if isinstance(value, str):
+        lowered = value.lower()
+        if lowered in ('1', 'true', 'yes', 'on', 't', 'y'):
+            return True
+        if lowered in ('0', 'false', 'no', 'off', 'f', 'n'):
+            return False
+    raise argparse.ArgumentTypeError(f'expected a boolean value, got {value!r}')
+
+
+def resolve_engine_features(platform, use_editor, use_file_watcher):
+    use_editor = True if use_editor is None else bool(use_editor)
+    if use_file_watcher is None:
+        if platform in ('web', 'android'):
+            use_file_watcher = False
+        else:
+            use_file_watcher = use_editor
+    if not use_editor:
+        use_file_watcher = False
+    return use_editor, use_file_watcher
+
+
+def append_engine_feature_cmake_args(command, use_editor, use_file_watcher):
+    command.append('-DUSE_EDITOR=' + ('ON' if use_editor else 'OFF'))
+    command.append('-DUSE_FILE_WATCHER=' + ('ON' if use_file_watcher else 'OFF'))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', type=str, default="vs22", help='Compiller type: vs22 (default: vs22)')
     parser.add_argument('-a', type=str, default="x64", help='Architecture: x86, x64 (default: x64)')
     parser.add_argument('-p', type=str, default="win", help='Platform: win, linux, macos, android, quest, ios, web (default: win)')
-    parser.add_argument('-e', type=bool, default=True, help='Edittor mode (default: True)')
+    parser.add_argument(
+        '--use-editor',
+        dest='use_editor',
+        nargs='?',
+        const=True,
+        default=True,
+        type=_optional_bool,
+        metavar='BOOL',
+        help='Editor UI (default: on). --use-editor or --use-editor 1; --use-editor 0 / false to disable.',
+    )
+    parser.add_argument(
+        '--use_file_watcher',
+        dest='use_file_watcher',
+        nargs='?',
+        const=True,
+        default=None,
+        type=_optional_bool,
+        metavar='BOOL',
+        help='Asset file watching / hot reload (default: on for win/mac when editor on; off for web/android).',
+    )
     parser.add_argument('-g', type=str, default="opengl", choices=['opengl', 'vulkan', 'dx12'], help='Graphics API (default: opengl)')
     parser.add_argument('--esVer', dest='es_ver', type=str, default='3.2', choices=['3', '3.1', '3.2'],
                         help='Android OpenGL ES version (default: 3.2)')
@@ -166,6 +214,11 @@ def main():
 
         platform_arg = args.p.lower()
         build_type = args.build_type
+        use_editor, use_file_watcher = resolve_engine_features(
+            platform_arg, args.use_editor, args.use_file_watcher
+        )
+        if platform_arg == 'quest' and (args.use_editor is False or args.use_file_watcher is not None):
+            print('Note: Quest build has no editor or file watcher; --use-editor / --use_file_watcher are ignored.')
         ensure_environment(platform_arg, args.skip_setup)
 
         if platform_arg == 'win':
@@ -188,6 +241,7 @@ def main():
             command.append('-DUSE_VULKAN=' + ('ON' if args.g == 'vulkan' else 'OFF'))
             command.append('-DUSE_DX12=' + ('ON' if args.g == 'dx12' else 'OFF'))
             command.append(f'-DENGINE_WIN_SUBSYSTEM={args.s}')
+            append_engine_feature_cmake_args(command, use_editor, use_file_watcher)
 
             run_logged(command, check=True)
             create_assets_link(build_dir)
@@ -205,6 +259,7 @@ def main():
             ]
             command.append('-DUSE_OPENGL=' + ('ON' if args.g == 'opengl' else 'OFF'))
             command.append('-DUSE_VULKAN=' + ('ON' if args.g == 'vulkan' else 'OFF'))
+            append_engine_feature_cmake_args(command, use_editor, use_file_watcher)
             run_logged(command, check=True)
             create_assets_link(build_dir)
             create_assets_link(output_dir)
@@ -222,6 +277,7 @@ def main():
                     f'-DENGINE_RUNTIME_OUTPUT_DIRECTORY={output_dir}',
                     f'-DCMAKE_BUILD_TYPE={build_type}',
                 ]
+                append_engine_feature_cmake_args(command, use_editor, use_file_watcher)
                 run_logged(command, env=emsdk_env, check=True, shell=(os.name == 'nt'))
                 create_assets_link(build_dir)
                 create_assets_link(output_dir)
@@ -240,7 +296,14 @@ def main():
             if not os.path.isabs(output_dir):
                 output_dir = os.path.abspath(os.path.join(ROOT_DIR, output_dir))
             abis = [part.strip() for part in args.abi.split(',') if part.strip()]
-            generate_android(ROOT_DIR, output_dir, es_ver=args.es_ver, abis=abis)
+            generate_android(
+                ROOT_DIR,
+                output_dir,
+                es_ver=args.es_ver,
+                abis=abis,
+                use_editor=use_editor,
+                use_file_watcher=use_file_watcher,
+            )
             if args.build:
                 gradlew_name = 'gradlew.bat' if os.name == 'nt' else 'gradlew'
                 gradlew = os.path.join(output_dir, gradlew_name)

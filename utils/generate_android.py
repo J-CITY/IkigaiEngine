@@ -121,6 +121,8 @@ def generate_android(
     es_ver="3.2",
     app_id=DEFAULT_APP_ID,
     abis=None,
+    use_editor=True,
+    use_file_watcher=False,
 ):
     if es_ver not in ES_VERSIONS:
         raise ValueError("es_ver must be one of: " + ", ".join(ES_VERSIONS))
@@ -135,6 +137,9 @@ def generate_android(
     abis = [abi.strip() for abi in abis if abi and abi.strip()]
     if not abis:
         raise ValueError("at least one ABI is required")
+
+    if not use_editor:
+        use_file_watcher = False
 
     sdl_project = os.path.join(repo_root, "3rd", "SDL3", "android-project")
     java_src = os.path.join(sdl_project, "app", "src", "main", "java", "org", "libsdl", "app")
@@ -160,6 +165,8 @@ def generate_android(
         "GLES_HEX": spec["hex"],
         "ABI_FILTERS": abi_filters,
         "CMAKE_PATH": cmake_rel,
+        "USE_EDITOR": "ON" if use_editor else "OFF",
+        "USE_FILE_WATCHER": "ON" if use_file_watcher else "OFF",
     }
 
     os.makedirs(output_dir, exist_ok=True)
