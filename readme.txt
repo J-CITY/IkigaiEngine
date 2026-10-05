@@ -87,3 +87,18 @@ Metal: SDL_WINDOW_METAL and a CAMetalLayer; no extra brew package.
 python run_vs.py -p macos -c xcode -g opengl vulkan metal
 open mac/build_xcode/IkigaiEngine.xcodeproj
 python run_vs.py -p macos -c xcode -g opengl vulkan metal --build
+---------------------------------------------------------------
+- Linux
+Установка зависимостей (Ubuntu/Debian):
+sudo apt install cmake build-essential python3 libgl1-mesa-dev libglew-dev libvulkan-dev vulkan-validationlayers libx11-dev libxext-dev libwayland-dev libxkbcommon-dev libpulse-dev libasound2-dev
+
+Установка зависимостей (Arch/Manjaro):
+sudo pacman -S cmake base-devel python mesa glew vulkan-headers vulkan-validation-layers libx11 libxext wayland libxkbcommon libpulse alsa-lib
+
+Сборка:
+# -p linux собирает под Linux. Поддерживаются API: opengl, vulkan.
+python run_vs.py -p linux -g opengl vulkan --build
+
+Запуск:
+./linux/out/IkigaiEngine --render-backend=vulkan
+./linux/out/IkigaiEngine --render-backend=opengl

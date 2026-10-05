@@ -168,6 +168,7 @@ def normalize_platform(name):
 
 WIN_GRAPHICS_BACKENDS = ('opengl', 'vulkan', 'dx12')
 MAC_GRAPHICS_BACKENDS = ('opengl', 'vulkan', 'metal')
+LINUX_GRAPHICS_BACKENDS = ('opengl', 'vulkan')
 
 
 def resolve_graphics_backends(platform, names):
@@ -184,6 +185,8 @@ def resolve_graphics_backends(platform, names):
         allowed = MAC_GRAPHICS_BACKENDS
     elif platform == 'win':
         allowed = WIN_GRAPHICS_BACKENDS
+    elif platform == 'linux':
+        allowed = LINUX_GRAPHICS_BACKENDS
     else:
         return set(ordered)
     unknown = [name for name in ordered if name not in allowed]
@@ -213,7 +216,7 @@ def main():
     parser.add_argument('-a', type=str, default="x64", help='Architecture: x86, x64 (default: x64)')
     parser.add_argument(
         '-p', type=str, default="win",
-        help='Platform: win, mac/macos, android, quest, web (default: win)',
+        help='Platform: win, mac/macos, linux, android, quest, web (default: win)',
     )
     parser.add_argument(
         '--use-editor',
@@ -245,6 +248,7 @@ def main():
             'Graphics APIs compiled into one binary (default: opengl). '
             'Several values share one build, e.g. -g opengl vulkan metal. '
             'mac: opengl, vulkan, metal. win: opengl, vulkan, dx12. '
+            'linux: opengl, vulkan. '
             'Pick the active API at launch via Configs/render.json or --render-backend=.'
         ),
     )
@@ -283,7 +287,7 @@ def main():
             platform_arg, args.use_editor, args.use_file_watcher
         )
         graphics_backends = None
-        if platform_arg in ('win', 'mac'):
+        if platform_arg in ('win', 'mac', 'linux'):
             graphics_backends = resolve_graphics_backends(platform_arg, args.g)
             print('Graphics backends: ' + ', '.join(sorted(graphics_backends)))
         if platform_arg == 'quest' and (args.use_editor is False or args.use_file_watcher is not None):
@@ -341,6 +345,22 @@ def main():
                 project = os.path.abspath(os.path.join(build_dir, 'IkigaiEngine.xcodeproj'))
                 print(f"Xcode project: {project}")
                 print(f"Open with: open {project}")
+            if args.build:
+                run_cmake_build(build_dir, build_type)
+
+        elif platform_arg == 'linux':
+            build_dir = args.b if args.b else './linux/build'
+            output_dir = resolve_runtime_output(args.o, './linux')
+            command = [
+                'cmake', './linux', f'-B{build_dir}',
+                f'-DENGINE_RUNTIME_OUTPUT_DIRECTORY={output_dir}',
+                f'-DCMAKE_BUILD_TYPE={build_type}',
+            ]
+            append_graphics_cmake_args(command, platform_arg, graphics_backends)
+            append_engine_feature_cmake_args(command, use_editor, use_file_watcher)
+            run_logged(command, check=True)
+            create_assets_link(build_dir)
+            create_assets_link(output_dir)
             if args.build:
                 run_cmake_build(build_dir, build_type)
 

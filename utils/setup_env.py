@@ -18,6 +18,38 @@ MAC_BREW_PACKAGES = (
     "molten-vk",
 )
 
+LINUX_PACMAN_PACKAGES = (
+    "cmake",
+    "base-devel",
+    "python",
+    "mesa",
+    "glew",
+    "vulkan-headers",
+    "vulkan-validation-layers",
+    "libx11",
+    "libxext",
+    "wayland",
+    "libxkbcommon",
+    "libpulse",
+    "alsa-lib"
+)
+
+LINUX_APT_PACKAGES = (
+    "cmake",
+    "build-essential",
+    "python3",
+    "libgl1-mesa-dev",
+    "libglew-dev",
+    "libvulkan-dev",
+    "vulkan-validationlayers",
+    "libx11-dev",
+    "libxext-dev",
+    "libwayland-dev",
+    "libxkbcommon-dev",
+    "libpulse-dev",
+    "libasound2-dev"
+)
+
 
 def repo_root(root_dir=None):
     if root_dir:
@@ -75,6 +107,67 @@ def ensure_mac_brew_packages():
     subprocess.run([brew, "install", *missing], check=True)
 
 
+def apt_package_installed(name):
+    dpkg = shutil.which("dpkg")
+    if not dpkg:
+        return False
+    result = subprocess.run(
+        [dpkg, "-s", name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def missing_linux_apt_packages():
+    return [name for name in LINUX_APT_PACKAGES if not apt_package_installed(name)]
+
+
+def pacman_package_installed(name):
+    pacman = shutil.which("pacman")
+    if not pacman:
+        return False
+    result = subprocess.run(
+        [pacman, "-Qq", name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def missing_linux_pacman_packages():
+    return [name for name in LINUX_PACMAN_PACKAGES if not pacman_package_installed(name)]
+
+
+def ensure_linux_packages():
+    if shutil.which("apt-get"):
+        missing = missing_linux_apt_packages()
+        if not missing:
+            print("Linux apt packages are already installed.")
+            return
+        print("Please install the missing Linux packages. You may be prompted for your password:")
+        print(f"sudo apt-get install {' '.join(missing)}")
+        try:
+            subprocess.run(["sudo", "apt-get", "install", "-y", *missing], check=True)
+        except Exception as e:
+            print(f"Failed to install packages: {e}")
+            print("Please install them manually.")
+    elif shutil.which("pacman"):
+        missing = missing_linux_pacman_packages()
+        if not missing:
+            print("Linux pacman packages are already installed.")
+            return
+        print("Please install the missing Linux packages. You may be prompted for your password:")
+        print(f"sudo pacman -S {' '.join(missing)}")
+        try:
+            subprocess.run(["sudo", "pacman", "-S", "--noconfirm", *missing], check=True)
+        except Exception as e:
+            print(f"Failed to install packages: {e}")
+            print("Please install them manually.")
+    else:
+        print("Warning: Neither 'apt-get' nor 'pacman' found. Please ensure dependencies are installed.")
+
+
 def is_environment_ready(root_dir=None, platform="win"):
     root_dir = repo_root(root_dir)
     platform = (platform or "win").lower()
@@ -85,6 +178,11 @@ def is_environment_ready(root_dir=None, platform="win"):
         return False
     if platform == "mac" and missing_mac_brew_packages():
         return False
+    if platform == "linux":
+        if shutil.which("apt-get") and missing_linux_apt_packages():
+            return False
+        elif shutil.which("pacman") and missing_linux_pacman_packages():
+            return False
     return True
 
 
@@ -103,6 +201,10 @@ def main(platform="win"):
     if platform == "mac":
         print("\nChecking macOS Homebrew packages...")
         ensure_mac_brew_packages()
+
+    if platform == "linux":
+        print("\nChecking Linux packages...")
+        ensure_linux_packages()
 
     if platform == "quest":
         print("\nFetching OpenXR Android loader (fetch_meta_openxr.py)...")
