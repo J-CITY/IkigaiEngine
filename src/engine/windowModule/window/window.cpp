@@ -19,6 +19,7 @@
 
 #ifdef VULKAN_BACKEND
 #include <SDL3/SDL_vulkan.h>
+#include "renderModule/backends/vk/vulkanLoader.h"
 #endif
 #ifdef METAL_BACKEND
 #include <SDL3/SDL_metal.h>
@@ -197,6 +198,26 @@ MATH::Vector2u Window::getSize() const
 #endif
 
 	return MATH::Vector2u(displayWidth, displayHeight);
+}
+
+MATH::Vector2u Window::getPixelSize() const
+{
+	uint32_t displayWidth{ 0 };
+	uint32_t displayHeight{ 0 };
+
+#ifdef __EMSCRIPTEN__
+	return getSize();
+#else
+	if (mContext && mContext->mWindow) {
+		int w = 0;
+		int h = 0;
+		SDL_GetWindowSizeInPixels(mContext->mWindow, &w, &h);
+		if (w > 0 && h > 0) {
+			return MATH::Vector2u(static_cast<uint32_t>(w), static_cast<uint32_t>(h));
+		}
+	}
+	return getSize();
+#endif
 }
 
 void Window::setPosition(int x, int y) {
@@ -619,8 +640,8 @@ void Window::create(Window* sharedWindow) {
 #elif defined(__APPLE__)
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 #elif defined(__ANDROID__)
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
@@ -656,6 +677,11 @@ void Window::create(Window* sharedWindow) {
 		flags = static_cast<SDL_WindowFlags>(flags | SDL_WINDOW_OPENGL);
 	} else if (backend == RENDER::RenderSettings::Backend::VULKAN) {
 		flags = static_cast<SDL_WindowFlags>(flags | SDL_WINDOW_VULKAN);
+#if defined(__APPLE__) && defined(VULKAN_BACKEND)
+		if (const char* loader = RENDER::FindVulkanLoaderPath()) {
+			SDL_SetHint(SDL_HINT_VULKAN_LIBRARY, loader);
+		}
+#endif
 	} else if (backend == RENDER::RenderSettings::Backend::METAL) {
 		flags = static_cast<SDL_WindowFlags>(flags | SDL_WINDOW_METAL);
 	}

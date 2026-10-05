@@ -111,8 +111,10 @@ std::tuple<vk::raii::PipelineLayout, vk::raii::DescriptorSetLayout, std::vector<
 		required_descriptor_bindings.push_back(descriptor_set_layout_binding);
 	}
 
+	// Not a push-descriptor layout. MoltenVK writes spvBufferSizeConstants only
+	// inside vkCmdBindDescriptorSets; vkCmdPushDescriptorSet leaves that Metal
+	// buffer unbound and validation aborts in vkQueueSubmit.
 	auto descriptor_set_layout_create_info = vk::DescriptorSetLayoutCreateInfo()
-		.setFlags(vk::DescriptorSetLayoutCreateFlagBits::ePushDescriptorKHR)
 		.setBindings(required_descriptor_bindings);
 
 	auto descriptor_set_layout = UtilityVk::GetDriver()->mDevice.createDescriptorSetLayout(descriptor_set_layout_create_info);

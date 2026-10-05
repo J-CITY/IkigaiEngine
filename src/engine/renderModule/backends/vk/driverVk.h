@@ -4,6 +4,7 @@
 #include <memory>
 #include <unordered_set>
 #include <variant>
+#include <vector>
 
 #include "indexBufferVk.h"
 #include "shaderVk.h"
@@ -44,6 +45,9 @@ namespace IKIGAI::RENDER {
 		vk::SurfaceFormatKHR mSurfaceFormat;
 		
 		vk::raii::CommandPool mCommandPool = nullptr;
+		// Freed at the start of begin(), after the previous frame's fence has signaled.
+		vk::raii::DescriptorPool mDescriptorPool = nullptr;
+		std::vector<vk::raii::DescriptorSet> mFrameDescriptorSets;
 
 		constexpr static vk::Format DefaultDepthStencilFormat = vk::Format::eD32SfloatS8Uint;
 

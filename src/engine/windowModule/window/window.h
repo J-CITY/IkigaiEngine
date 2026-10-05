@@ -96,6 +96,7 @@ namespace IKIGAI::WINDOW {
 		[[nodiscard]] MATH::Vector2i getMousePos() const;
 		void setSize(unsigned int width, unsigned int height);
 		[[nodiscard]] MATH::Vector2u getSize() const;
+		[[nodiscard]] MATH::Vector2u getPixelSize() const;
 		void setPosition(int x, int y);
 		[[nodiscard]] MATH::Vector2i getPosition() const;
 		void setTitle(const std::string& title);

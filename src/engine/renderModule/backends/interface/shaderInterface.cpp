@@ -105,7 +105,8 @@ void IKIGAI::RENDER::ShaderInterface::GetReflection(
         }
         uniform.mMembers.push_back(m);
       }
-      uniform.mSize = sz;
+      const size_t padded = spvUniformInfo->block.padded_size;
+      uniform.mSize = padded > sz ? padded : sz;
       reflection.mUniforms.push_back(uniform);
     }
   }
@@ -397,7 +398,26 @@ IKIGAI::RENDER::CompileGlslToSpirv(IKIGAI::RENDER::ShaderType stage,
   auto _stage = StageMap.at(stage);
   glslang::TShader shader(_stage);
 
-  auto str = code.c_str();
+  // The last member of an SSBO keeps a runtime .length() even when the array
+  // is sized, so MoltenVK still asks for spvBufferSizeConstants. The GLSL file
+  // stays unsized; only the macOS compile uses a fixed bound (MAX_LIGHTS).
+  std::string appleCode;
+  const std::string* source = &code;
+#if defined(__APPLE__)
+  appleCode = code;
+  const std::string runtimeLights = "LightOGL lights[]";
+  const std::string fixedLights = "LightOGL lights[64]";
+  for (size_t pos = 0; (pos = appleCode.find(runtimeLights, pos)) != std::string::npos; pos += fixedLights.size()) {
+    appleCode.replace(pos, runtimeLights.size(), fixedLights);
+  }
+  const std::string runtimeLength = "engine_Lights.lights.length()";
+  const std::string fixedLength = "64";
+  for (size_t pos = 0; (pos = appleCode.find(runtimeLength, pos)) != std::string::npos; pos += fixedLength.size()) {
+    appleCode.replace(pos, runtimeLength.size(), fixedLength);
+  }
+  source = &appleCode;
+#endif
+  auto str = source->c_str();
   shader.setStrings(&str, 1);
 
   std::string preamble;
@@ -531,8 +551,8 @@ std::string IKIGAI::RENDER::CompileSpirvToGlsl(
     }
   }
 
-  // WebGL2 / GLSL ES 3.00: SSBO + std430 are invalid; emit std140 UBOs instead.
-  if (es && version < 310) {
+  // SSBO + std430 need GLES 3.10 or desktop GL 4.30. macOS is 4.10 and WebGL2 is ES 3.00.
+  if ((es && version < 310) || (!es && version < 430)) {
     compiler.RemapStorageBuffersForEs300();
   }
 

@@ -8,8 +8,8 @@
 namespace IKIGAI::RENDER {
 
     static id<MTLBuffer> MakeSharedBuffer(size_t bytes) {
-        if (bytes == 0) {
-            return nil;
+        if (bytes < 16) {
+            bytes = 16;
         }
         id<MTLDevice> device = DeviceMetal::Get();
         if (!device) {
@@ -20,7 +20,15 @@ namespace IKIGAI::RENDER {
 
     // --- UniformBufferMetal ---
     UniformBufferMetal::UniformBufferMetal(size_t sz) : UniformBufferInterface(sz) {
-        mBuffer = MakeSharedBuffer(sz);
+        if (sz > 0) {
+            // MSL rounds std140 blocks up to the struct alignment (16 when the block contains a vec4).
+            const size_t aligned = (sz + 15u) & ~size_t{15};
+            mSizeByte = aligned;
+            mBuffer = MakeSharedBuffer(aligned);
+        } else {
+            mSizeByte = 16;
+            mBuffer = MakeSharedBuffer(mSizeByte);
+        }
     }
 
     void UniformBufferMetal::setData(const void* data, size_t sz, size_t offset) {

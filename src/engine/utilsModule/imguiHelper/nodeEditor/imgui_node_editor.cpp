@@ -1492,9 +1492,12 @@ void ed::EditorContext::End()
 
         m_DrawList->AddRectFilled(VIEW_POS, VIEW_POS + VIEW_SIZE, GetColor(StyleColor_Bg));
 
-        for (float x = fmodf(offset.x, GRID_SX); x < VIEW_SIZE.x; x += GRID_SX)
+        int max_lines_x = 10000;
+        for (float x = fmodf(offset.x, GRID_SX); x < VIEW_SIZE.x && max_lines_x-- > 0; x += GRID_SX)
             m_DrawList->AddLine(ImVec2(x, 0.0f) + VIEW_POS, ImVec2(x, VIEW_SIZE.y) + VIEW_POS, GRID_COLOR);
-        for (float y = fmodf(offset.y, GRID_SY); y < VIEW_SIZE.y; y += GRID_SY)
+        
+        int max_lines_y = 10000;
+        for (float y = fmodf(offset.y, GRID_SY); y < VIEW_SIZE.y && max_lines_y-- > 0; y += GRID_SY)
             m_DrawList->AddLine(ImVec2(0.0f, y) + VIEW_POS, ImVec2(VIEW_SIZE.x, y) + VIEW_POS, GRID_COLOR);
     }
 # endif

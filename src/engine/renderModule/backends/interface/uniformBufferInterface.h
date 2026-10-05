@@ -10,6 +10,7 @@ namespace IKIGAI::RENDER
 		UniformBufferInterface(size_t sz) : mSizeByte(sz) {};
 		virtual ~UniformBufferInterface() = default;
 		virtual void setData(const void* data, size_t sz, size_t offset = 0) = 0;
+		size_t getSizeByte() const { return mSizeByte; }
 
 		template<class T>
 		void setData(const T& data) {

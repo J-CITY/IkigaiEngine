@@ -194,7 +194,7 @@ namespace IKIGAI {
 			uint8_t mState = 0;
 
 			void initGlew();
-#ifndef OCULUS
+#if !defined(OCULUS) && !defined(__APPLE__)
 			static void __stdcall GLDebugMessageCallback(uint32_t source, uint32_t type,
 				uint32_t id, uint32_t severity,
 				int32_t length,

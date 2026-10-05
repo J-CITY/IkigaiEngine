@@ -3,12 +3,14 @@
 #include "driverMetal.h"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <sstream>
 
 #include <SDL3/SDL.h>
 
 #include "deviceMetal.h"
+#include "metalVertexLayout.h"
 #include "frameBufferMetal.h"
 #include "materialMetal.h"
 #include "modelMetal.h"
@@ -133,7 +135,9 @@ namespace IKIGAI::RENDER {
 		return std::make_unique<DriverMetal>();
 	}
 
-	DriverMetal::DriverMetal() = default;
+	DriverMetal::DriverMetal() {
+		init();
+	}
 
 	DriverMetal::~DriverMetal() {
 		cleanup();
@@ -183,7 +187,6 @@ namespace IKIGAI::RENDER {
 		mLayer.framebufferOnly = YES;
 		mLayer.maximumDrawableCount = 3;
 		updateDrawableSize(window.getSize().x, window.getSize().y);
-		begin();
 	}
 
 	void DriverMetal::begin() {
@@ -204,6 +207,7 @@ namespace IKIGAI::RENDER {
 		mCurrentCommandBuffer = [mCommandQueue commandBuffer];
 		mCurrentEncoder = nil;
 		mPushBytes = 0;
+		mUniformStagingOffset = 0;
 	}
 
 	void DriverMetal::endPass() {
@@ -392,6 +396,9 @@ namespace IKIGAI::RENDER {
 	}
 
 	void DriverMetal::ensurePass() {
+		if (!mCurrentCommandBuffer) {
+			begin();
+		}
 		if (!mCurrentEncoder) {
 			beginPass();
 		}
@@ -430,14 +437,14 @@ namespace IKIGAI::RENDER {
 		return key.str();
 	}
 
-	void DriverMetal::ensurePipeline() {
+	bool DriverMetal::ensurePipeline() {
 		auto shader = mCurrentState.mShader;
 		if (!shader || !mCurrentEncoder) {
-			return;
+			return false;
 		}
 		id<MTLFunction> vertexFunction = shader->rasterVertexFunction();
 		if (!vertexFunction) {
-			return;
+			return false;
 		}
 		const std::string key = pipelineKey();
 		if (!mPipelines.contains(key)) {
@@ -475,15 +482,21 @@ namespace IKIGAI::RENDER {
 			const auto& inputs = shader->getReflection().mInputParams;
 			if (!shader->hasTessellation() && !inputs.empty()) {
 				MTLVertexDescriptor* vertex = [[MTLVertexDescriptor alloc] init];
-				NSUInteger packed = 0;
+				const NSUInteger stride = sizeof(MetalMeshVertex);
 				for (const auto& param : inputs) {
+					if (param.mLocation >= 31) {
+						continue;
+					}
+					const size_t offset = MetalMeshVertexOffset(param.mLocation);
+					if (offset == static_cast<size_t>(-1) || offset + param.mSize > stride) {
+						LOG_ERROR << "Metal vertex attribute location " << param.mLocation << " is not in the mesh layout";
+						continue;
+					}
 					MTLVertexAttributeDescriptor* attribute = vertex.attributes[param.mLocation];
 					attribute.format = ToMetalVertexFormat(param.mFormat);
-					attribute.offset = param.mOffset;
+					attribute.offset = offset;
 					attribute.bufferIndex = kMetalVertexBufferIndex;
-					packed = std::max(packed, static_cast<NSUInteger>(param.mOffset + param.mSize));
 				}
-				const NSUInteger stride = mVertexBuffer && mVertexBuffer->getStride() > 0 ? mVertexBuffer->getStride() : packed;
 				vertex.layouts[kMetalVertexBufferIndex].stride = stride;
 				vertex.layouts[kMetalVertexBufferIndex].stepFunction = MTLVertexStepFunctionPerVertex;
 				vertex.layouts[kMetalVertexBufferIndex].stepRate = 1;
@@ -499,9 +512,11 @@ namespace IKIGAI::RENDER {
 				mPipelines[key] = pipeline;
 			}
 		}
-		if (mPipelines.contains(key)) {
-			[mCurrentEncoder setRenderPipelineState:mPipelines[key]];
+		if (!mPipelines.contains(key)) {
+			return false;
 		}
+		[mCurrentEncoder setRenderPipelineState:mPipelines[key]];
+		return true;
 	}
 
 	void DriverMetal::applyFixedState() {
@@ -513,9 +528,10 @@ namespace IKIGAI::RENDER {
 		const Viewport viewport = mViewport.value_or(Viewport{{0.0f, 0.0f}, {width, height}});
 		MTLViewport metalViewport;
 		metalViewport.originX = viewport.mPosition.x;
-		metalViewport.originY = viewport.mPosition.y;
 		metalViewport.width = std::max(viewport.mSize.x, 1.0f);
 		metalViewport.height = std::max(viewport.mSize.y, 1.0f);
+		// Match OpenGL NDC (Y up): Metal viewport origin is top-left, Y grows downward.
+		metalViewport.originY = static_cast<double>(mPassHeight) - viewport.mPosition.y - metalViewport.height;
 		metalViewport.znear = viewport.mMinDepth;
 		metalViewport.zfar = viewport.mMaxDepth;
 		[mCurrentEncoder setViewport:metalViewport];
@@ -596,24 +612,159 @@ namespace IKIGAI::RENDER {
 				[mCurrentEncoder setFragmentSamplerState:texture->getSampler() atIndex:binding];
 			}
 		}
-		auto bindBuffer = [&](size_t binding, id<MTLBuffer> buffer) {
+		auto bindBuffer = [&](size_t binding, id<MTLBuffer> buffer, NSUInteger offset) {
 			if (!buffer) {
 				return;
 			}
 			const NSUInteger index = MetalBufferIndexForBinding(static_cast<uint32_t>(binding));
-			[mCurrentEncoder setVertexBuffer:buffer offset:0 atIndex:index];
-			[mCurrentEncoder setFragmentBuffer:buffer offset:0 atIndex:index];
+			[mCurrentEncoder setVertexBuffer:buffer offset:offset atIndex:index];
+			[mCurrentEncoder setFragmentBuffer:buffer offset:offset atIndex:index];
 		};
 		for (const auto& [binding, buffer] : mUniformBuffers) {
-			bindBuffer(binding, buffer ? buffer->getBuffer() : nil);
+			if (!buffer || !buffer->getBuffer()) {
+				continue;
+			}
+			NSUInteger offset = 0;
+			id<MTLBuffer> snapshot = snapshotUniform(buffer->getBuffer(), offset);
+			bindBuffer(binding, snapshot, offset);
 		}
 		for (const auto& [binding, buffer] : mStorageBuffers) {
-			bindBuffer(binding, buffer ? buffer->getBuffer() : nil);
+			bindBuffer(binding, buffer ? buffer->getBuffer() : nil, 0);
 		}
 		if (mPushBytes > 0) {
 			const NSUInteger length = std::max<NSUInteger>((mPushBytes + 3u) & ~3u, 4u);
 			[mCurrentEncoder setVertexBytes:mPushConstants.data() length:length atIndex:kMetalPushConstantBufferIndex];
 			[mCurrentEncoder setFragmentBytes:mPushConstants.data() length:length atIndex:kMetalPushConstantBufferIndex];
+		}
+		bindBufferSizeConstants();
+		bindMissingShaderResources();
+	}
+
+	id<MTLBuffer> DriverMetal::snapshotUniform(id<MTLBuffer> source, NSUInteger& outOffset) {
+		outOffset = 0;
+		if (!source || !mDevice || !source.contents) {
+			return source;
+		}
+		constexpr NSUInteger alignment = 256;
+		const NSUInteger bytes = source.length;
+		const NSUInteger aligned = (bytes + alignment - 1) & ~(alignment - 1);
+		if (!mUniformStaging || mUniformStagingOffset + aligned > mUniformStaging.length) {
+			const NSUInteger capacity = std::max<NSUInteger>(aligned, 1024 * 1024);
+			mUniformStaging = [mDevice newBufferWithLength:capacity options:MTLResourceStorageModeShared];
+			mUniformStagingOffset = 0;
+		}
+		std::memcpy(static_cast<uint8_t*>(mUniformStaging.contents) + mUniformStagingOffset, source.contents, bytes);
+		outOffset = mUniformStagingOffset;
+		mUniformStagingOffset += aligned;
+		return mUniformStaging;
+	}
+
+	void DriverMetal::bindBufferSizeConstants() {
+		if (!mCurrentEncoder || !mDevice) {
+			return;
+		}
+		constexpr NSUInteger kSlots = 24;
+		if (!mBufferSizeConstants || mBufferSizeConstants.length < kSlots * sizeof(uint32_t)) {
+			mBufferSizeConstants = [mDevice newBufferWithLength:kSlots * sizeof(uint32_t) options:MTLResourceStorageModeShared];
+		}
+		auto* sizes = static_cast<uint32_t*>(mBufferSizeConstants.contents);
+		std::fill_n(sizes, kSlots, 0u);
+		for (const auto& [binding, buffer] : mStorageBuffers) {
+			if (!buffer || !buffer->getBuffer()) {
+				continue;
+			}
+			const uint32_t index = MetalBufferIndexForBinding(static_cast<uint32_t>(binding));
+			if (index < kSlots) {
+				sizes[index] = static_cast<uint32_t>(buffer->getBuffer().length);
+			}
+		}
+		[mCurrentEncoder setVertexBuffer:mBufferSizeConstants offset:0 atIndex:kMetalBufferSizeBufferIndex];
+		[mCurrentEncoder setFragmentBuffer:mBufferSizeConstants offset:0 atIndex:kMetalBufferSizeBufferIndex];
+		// MoltenVK and some SPIRV-Cross defaults put this table at index 29.
+		[mCurrentEncoder setVertexBuffer:mBufferSizeConstants offset:0 atIndex:kMetalIndirectParamsBufferIndex];
+		[mCurrentEncoder setFragmentBuffer:mBufferSizeConstants offset:0 atIndex:kMetalIndirectParamsBufferIndex];
+	}
+
+	id<MTLBuffer> DriverMetal::fallbackBuffer(NSUInteger bytes) {
+		if (bytes < 16) {
+			bytes = 16;
+		}
+		if (!mFallbackBuffer || mFallbackBuffer.length < bytes) {
+			mFallbackBuffer = [mDevice newBufferWithLength:bytes options:MTLResourceStorageModeShared];
+		}
+		return mFallbackBuffer;
+	}
+
+	void DriverMetal::ensureFallbackTexture() {
+		if (mFallbackTexture) {
+			return;
+		}
+		MTLTextureDescriptor* desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm width:1 height:1 mipmapped:NO];
+		desc.usage = MTLTextureUsageShaderRead;
+		desc.storageMode = MTLStorageModeShared;
+		mFallbackTexture = [mDevice newTextureWithDescriptor:desc];
+		const uint8_t white[4] = {255, 255, 255, 255};
+		[mFallbackTexture replaceRegion:MTLRegionMake2D(0, 0, 1, 1) mipmapLevel:0 withBytes:white bytesPerRow:4];
+		MTLSamplerDescriptor* samplerDesc = [[MTLSamplerDescriptor alloc] init];
+		samplerDesc.minFilter = MTLSamplerMinMagFilterLinear;
+		samplerDesc.magFilter = MTLSamplerMinMagFilterLinear;
+		mFallbackSampler = [mDevice newSamplerStateWithDescriptor:samplerDesc];
+	}
+
+	void DriverMetal::bindMissingShaderResources() {
+		auto shader = mCurrentState.mShader;
+		if (!shader || !mCurrentEncoder || !mDevice) {
+			return;
+		}
+		for (const auto& uniform : shader->getReflection().mUniforms) {
+			const bool isBuffer = uniform.mType == ShaderReflection::UniformType::UNIFORM_BUFFER
+				|| uniform.mType == ShaderReflection::UniformType::STORAGE_BUFFER;
+			const bool isTexture = uniform.mType == ShaderReflection::UniformType::SAMPLER_2D
+				|| uniform.mType == ShaderReflection::UniformType::SAMPLER_CUBE
+				|| uniform.mType == ShaderReflection::UniformType::SAMPLER_3D
+				|| uniform.mType == ShaderReflection::UniformType::SAMPLER_2D_ARRAY;
+			if (uniform.mType == ShaderReflection::UniformType::PUSH_CONSTANT) {
+				const NSUInteger needed = std::max<NSUInteger>(uniform.mSize, 16);
+				if (mPushBytes < needed) {
+					[mCurrentEncoder setVertexBytes:mPushConstants.data() length:needed atIndex:kMetalPushConstantBufferIndex];
+					[mCurrentEncoder setFragmentBytes:mPushConstants.data() length:needed atIndex:kMetalPushConstantBufferIndex];
+				}
+			} else if (isBuffer) {
+				id<MTLBuffer> bound = nil;
+				if (auto it = mUniformBuffers.find(uniform.mBind); it != mUniformBuffers.end() && it->second) {
+					bound = it->second->getBuffer();
+				}
+				if (!bound) {
+					if (auto it = mStorageBuffers.find(uniform.mBind); it != mStorageBuffers.end() && it->second) {
+						bound = it->second->getBuffer();
+					}
+				}
+				const NSUInteger needed = std::max<NSUInteger>(uniform.mSize, 16);
+				if (!bound || bound.length < needed) {
+					const NSUInteger index = MetalBufferIndexForBinding(static_cast<uint32_t>(uniform.mBind));
+					id<MTLBuffer> fallback = fallbackBuffer(needed);
+					[mCurrentEncoder setVertexBuffer:fallback offset:0 atIndex:index];
+					[mCurrentEncoder setFragmentBuffer:fallback offset:0 atIndex:index];
+				}
+			} else if (isTexture) {
+				id<MTLTexture> texture = nil;
+				id<MTLSamplerState> sampler = nil;
+				if (auto it = mTextures.find(uniform.mBind); it != mTextures.end() && it->second) {
+					texture = it->second->getTexture();
+					sampler = it->second->getSampler();
+				}
+				if (!texture) {
+					ensureFallbackTexture();
+					texture = mFallbackTexture;
+					sampler = mFallbackSampler;
+					[mCurrentEncoder setVertexTexture:texture atIndex:uniform.mBind];
+					[mCurrentEncoder setFragmentTexture:texture atIndex:uniform.mBind];
+					if (sampler) {
+						[mCurrentEncoder setVertexSamplerState:sampler atIndex:uniform.mBind];
+						[mCurrentEncoder setFragmentSamplerState:sampler atIndex:uniform.mBind];
+					}
+				}
+			}
 		}
 	}
 
@@ -646,6 +797,9 @@ namespace IKIGAI::RENDER {
 	void DriverMetal::setTriangleOrientation(TriangleOrientation value) { mTriangleOrientation = value; }
 
 	void DriverMetal::clear(bool clearColor, bool clearDepth, bool clearStencil) {
+		if (!mCurrentCommandBuffer) {
+			begin();
+		}
 		mLoadColor = clearColor ? MTLLoadActionClear : MTLLoadActionLoad;
 		mLoadDepth = clearDepth ? MTLLoadActionClear : MTLLoadActionLoad;
 		mLoadStencil = clearStencil ? MTLLoadActionClear : MTLLoadActionLoad;
@@ -789,7 +943,9 @@ namespace IKIGAI::RENDER {
 		}
 		encodePreDraw(count, false);
 		ensurePass();
-		ensurePipeline();
+		if (!ensurePipeline()) {
+			return;
+		}
 		applyFixedState();
 		bindResources();
 		if (!mCurrentEncoder) {
@@ -818,7 +974,9 @@ namespace IKIGAI::RENDER {
 		}
 		encodePreDraw(count, true);
 		ensurePass();
-		ensurePipeline();
+		if (!ensurePipeline()) {
+			return;
+		}
 		applyFixedState();
 		bindResources();
 		if (!mCurrentEncoder) {
@@ -848,6 +1006,32 @@ namespace IKIGAI::RENDER {
 		}
 		const NSUInteger stride = mIndexBuffer->getStride() == 0 ? sizeof(uint32_t) : mIndexBuffer->getStride();
 		const MTLIndexType indexType = stride == sizeof(uint16_t) ? MTLIndexTypeUInt16 : MTLIndexTypeUInt32;
+		id<MTLBuffer> indexBuffer = mIndexBuffer->getBuffer();
+		const NSUInteger indexBytes = (static_cast<NSUInteger>(offset) + count) * stride;
+		if (indexBytes > indexBuffer.length || !mVertexBuffer || !mVertexBuffer->getBuffer()) {
+			LOG_ERROR << "Metal draw skipped: index or vertex buffer is too small";
+			return;
+		}
+		if (const void* contents = indexBuffer.contents) {
+			uint32_t maxIndex = 0;
+			if (indexType == MTLIndexTypeUInt16) {
+				const auto* indices = reinterpret_cast<const uint16_t*>(static_cast<const uint8_t*>(contents) + static_cast<NSUInteger>(offset) * stride);
+				for (uint32_t i = 0; i < count; ++i) {
+					maxIndex = std::max(maxIndex, static_cast<uint32_t>(indices[i]));
+				}
+			} else {
+				const auto* indices = reinterpret_cast<const uint32_t*>(static_cast<const uint8_t*>(contents) + static_cast<NSUInteger>(offset) * stride);
+				for (uint32_t i = 0; i < count; ++i) {
+					maxIndex = std::max(maxIndex, indices[i]);
+				}
+			}
+			const NSUInteger vertexStride = std::max<NSUInteger>(mVertexBuffer->getStride(), 1);
+			if ((static_cast<NSUInteger>(maxIndex) + 1) * vertexStride > mVertexBuffer->getBuffer().length) {
+				LOG_ERROR << "Metal draw skipped: index " << maxIndex << " is outside the vertex buffer";
+				return;
+			}
+		}
+		bindBufferSizeConstants();
 		[mCurrentEncoder drawIndexedPrimitives:ToPrimitive(mPrimitiveMode)
 									indexCount:count
 									 indexType:indexType

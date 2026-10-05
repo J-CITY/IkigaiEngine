@@ -156,6 +156,7 @@ target_include_directories(lua PUBLIC "${THIRD_PARTY_DIR}/lua")
 # 9. Volk
 add_library(volk STATIC "${THIRD_PARTY_DIR}/volk/volk.c" "${THIRD_PARTY_DIR}/volk/volk.h")
 target_include_directories(volk PUBLIC "${THIRD_PARTY_DIR}/Vulkan-Headers/include")
+target_compile_definitions(volk PUBLIC VK_NO_PROTOTYPES)
 
 # 10. SDL3
 if(USE_SDL)
@@ -322,6 +323,7 @@ if(USE_OPENGL)
 endif()
 
 if(USE_VULKAN)
+    target_compile_definitions(${APP_NAME} PRIVATE VK_NO_PROTOTYPES)
     target_link_libraries(${APP_NAME} PRIVATE volk)
 endif()
 

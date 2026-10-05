@@ -14,6 +14,7 @@ namespace IKIGAI::RENDER {
 	inline constexpr uint32_t kMetalTessFactorBufferIndex = 26;
 	inline constexpr uint32_t kMetalPatchOutputBufferIndex = 27;
 	inline constexpr uint32_t kMetalShaderOutputBufferIndex = 28;
+	inline constexpr uint32_t kMetalBufferSizeBufferIndex = 25;
 	inline constexpr uint32_t kMetalIndirectParamsBufferIndex = 29;
 	inline constexpr uint32_t kMetalPushConstantBufferIndex = 30;
 

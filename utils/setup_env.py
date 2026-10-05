@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import subprocess
 
@@ -10,6 +11,12 @@ from sync_assets import ensure_assets
 
 GLEW_VERSION = "2.3.1"
 SPINE_VERSION = "4.2"
+MAC_BREW_PACKAGES = (
+    "glew",
+    "vulkan-headers",
+    "vulkan-loader",
+    "molten-vk",
+)
 
 
 def repo_root(root_dir=None):
@@ -37,6 +44,37 @@ def has_spine(root_dir):
     return _version_matches(os.path.join(root_dir, "3rd", "spine", "spine", "version.txt"), SPINE_VERSION)
 
 
+def brew_package_installed(name):
+    brew = shutil.which("brew")
+    if not brew:
+        return False
+    result = subprocess.run(
+        [brew, "list", "--formula", name],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def missing_mac_brew_packages():
+    return [name for name in MAC_BREW_PACKAGES if not brew_package_installed(name)]
+
+
+def ensure_mac_brew_packages():
+    missing = missing_mac_brew_packages()
+    if not missing:
+        print("macOS Homebrew packages are already installed.")
+        return
+    brew = shutil.which("brew")
+    if not brew:
+        raise RuntimeError(
+            "Homebrew is required for macOS dependencies (glew, vulkan-loader, molten-vk). "
+            "Install it from https://brew.sh and re-run."
+        )
+    print("Installing macOS packages: " + " ".join(missing))
+    subprocess.run([brew, "install", *missing], check=True)
+
+
 def is_environment_ready(root_dir=None, platform="win"):
     root_dir = repo_root(root_dir)
     platform = (platform or "win").lower()
@@ -44,6 +82,8 @@ def is_environment_ready(root_dir=None, platform="win"):
     if not has_submodules(root_dir) or not has_spine(root_dir):
         return False
     if platform == "win" and not has_glew(root_dir):
+        return False
+    if platform == "mac" and missing_mac_brew_packages():
         return False
     return True
 
@@ -59,6 +99,10 @@ def main(platform="win"):
     if platform == "win":
         print("\nUpdating GLEW (update_glew.py)...")
         subprocess.run([sys.executable, os.path.join(script_dir, "update_glew.py")], cwd=root_dir, check=True)
+
+    if platform == "mac":
+        print("\nChecking macOS Homebrew packages...")
+        ensure_mac_brew_packages()
 
     if platform == "quest":
         print("\nFetching OpenXR Android loader (fetch_meta_openxr.py)...")

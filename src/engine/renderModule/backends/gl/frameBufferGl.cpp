@@ -9,35 +9,38 @@ using namespace IKIGAI;
 using namespace IKIGAI::RENDER;
 
 void checkGlError(const char* op, ...) {
-	//if (IS_DEBUG_MODE) {
 	va_list params;
 	char buf[BUFSIZ];
 
 	va_start(params, op);
 	vsprintf(buf, op, params);
+	int count = 0;
 	for (GLint error = glGetError(); error; error = glGetError()) {
 		switch (error) {
 		case GL_INVALID_ENUM:
-			std::cout << "after %s() glError: GL_INVALID_ENUM \n" << buf;
+			std::cout << "after " << buf << "() glError: GL_INVALID_ENUM\n";
 			break;
 		case GL_INVALID_VALUE:
-			std::cout << "after %s() glError: GL_INVALID_VALUE \n" << buf;
+			std::cout << "after " << buf << "() glError: GL_INVALID_VALUE\n";
 			break;
 		case GL_INVALID_OPERATION:
-			std::cout << "after %s() glError: GL_INVALID_OPERATION \n" << buf;
+			std::cout << "after " << buf << "() glError: GL_INVALID_OPERATION\n";
 			break;
 		case GL_INVALID_FRAMEBUFFER_OPERATION:
-			std::cout << "after %s() glError: GL_INVALID_FRAMEBUFFER_OPERATION \n" << buf;
+			std::cout << "after " << buf << "() glError: GL_INVALID_FRAMEBUFFER_OPERATION\n";
 			break;
 		case GL_OUT_OF_MEMORY:
-			std::cout << "after %s() glError: GL_OUT_OF_MEMORY \n" << buf;
+			std::cout << "after " << buf << "() glError: GL_OUT_OF_MEMORY\n";
 			break;
 		default:
 			break;
 		}
+		if (++count > 10) {
+			std::cout << "Too many GL errors, breaking loop\n";
+			break;
+		}
 	}
 	va_end(params);
-	//}
 }
 void FrameBufferGl::create() {
 	glGenFramebuffers(1, &mId);

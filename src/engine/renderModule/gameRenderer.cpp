@@ -51,7 +51,7 @@ namespace IKIGAI::RENDER {
 		//mEmptyMaterial->setShader(render->createShader(shaderRes));
 		//mEmptyMaterial->set("u_Diffuse", MATH::Vector4(1.f, 0.f, 1.f, 1.f));
 
-#if defined(USING_GLES) && !defined(IKIGAI_GLES_HAS_SSBO)
+#if !defined(IKIGAI_GL_HAS_SSBO)
 		mLightSSBO = render->createStorageBuffer(nullptr, MAX_LIGHTS, sizeof(LightOGL));
 #else
 		mLightSSBO = render->createStorageBuffer(nullptr, 0, 0);
@@ -88,7 +88,7 @@ namespace IKIGAI::RENDER {
 
 		if (auto mainCameraComponent = mContext.sceneManager->getCurrentScene().findMainCamera()) {
 			WEB_LOG("GameRenderer camera found");
-			auto sz = mContext.window->getSize();
+			auto sz = mContext.window->getPixelSize();
 			auto winWidth = sz.x;
 			auto winHeight = sz.y;
 			if (winWidth > 0 && winHeight > 0) {
@@ -203,12 +203,14 @@ namespace IKIGAI::RENDER {
 			WEB_LOG("draw done");
 			if (drawLogs > 0) {
 				--drawLogs;
-				const auto err = glGetError();
 				IKIGAI_COUT("draw indices=" << (drawable.mesh ? drawable.mesh->getIndexCount() : 0)
 					<< " verts=" << (drawable.mesh ? drawable.mesh->getVertexCount() : 0)
 					<< " instances=" << drawable.material->getGPUInstances()
 					<< " skin=" << (data.use == 1 ? 1 : 0)
-					<< " glError=" << static_cast<unsigned>(err));
+#ifdef OPENGL_BACKEND
+					<< " glError=" << static_cast<unsigned>(glGetError())
+#endif
+					);
 			}
 
 
@@ -220,10 +222,10 @@ namespace IKIGAI::RENDER {
 	void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::CameraComponent& cameraComponent) {
 		uboData.View = MATH::Matrix4f::Transpose(cameraComponent.getCamera().getViewMatrix());
 		auto projection = cameraComponent.getCamera().getProjectionMatrix();
-		if (DriverInterface::settings.backend == RenderSettings::Backend::VULKAN) {
-			// The engine builds OpenGL projections (NDC z in [-1, 1]), Vulkan clips z to [0, 1]:
-			// without this correction everything in the near half of the depth range is clipped away.
-			// Y flip is already done by the negative viewport height in DriverVk::EnsureViewport.
+		if (DriverInterface::settings.backend == RenderSettings::Backend::VULKAN
+			|| DriverInterface::settings.backend == RenderSettings::Backend::METAL) {
+			// OpenGL-style projection (NDC z in [-1, 1]); Vulkan/Metal clip space uses z in [0, 1].
+			// Y flip: DriverVk negative viewport height; DriverMetal flips viewport origin in applyFixedState.
 			MATH::Matrix4f clipCorrection = MATH::Matrix4f::Identity;
 			clipCorrection(2, 2) = 0.5f;
 			clipCorrection(2, 3) = 0.5f;
@@ -232,7 +234,7 @@ namespace IKIGAI::RENDER {
 		uboData.Projection = MATH::Matrix4f::Transpose(projection);
 		uboData.ViewPos = cameraComponent.obj->getTransform()->getWorldPosition();
 		uboData.Time = 1.0f;
-		auto sz = mContext.window->getSize();
+		auto sz = mContext.window->getPixelSize();
 		uboData.ViewportSize = MATH::Vector2f(sz.x,  sz.y);
 		uboData.FPS = 60.0f;
 		uboData.FrameCount = 1;
@@ -257,7 +259,8 @@ namespace IKIGAI::RENDER {
 				opaque += chunk.opaqueDrawablesForward.size();
 				transparent += chunk.transparentDrawablesForward.size();
 			}
-			const auto windowSize = mContext.window->getSize();
+			const auto windowSize = mContext.window->getPixelSize();
+#ifdef OPENGL_BACKEND
 			GLint viewport[4] = {};
 			glGetIntegerv(GL_VIEWPORT, viewport);
 			const auto scissor = glIsEnabled(GL_SCISSOR_TEST);
@@ -265,14 +268,18 @@ namespace IKIGAI::RENDER {
 			if (scissor) {
 				glGetIntegerv(GL_SCISSOR_BOX, scissorBox);
 			}
+#endif
 			IKIGAI_COUT("renderScene chunks=" << chunks.size()
 				<< " opaque=" << opaque
 				<< " transparent=" << transparent
 				<< " cam=" << cameraPosition.x << "," << cameraPosition.y << "," << cameraPosition.z
 				<< " window=" << windowSize.x << "x" << windowSize.y
+#ifdef OPENGL_BACKEND
 				<< " viewport=" << viewport[2] << "x" << viewport[3]
 				<< " scissor=" << (scissor ? 1 : 0)
-				<< " scissorBox=" << scissorBox[2] << "x" << scissorBox[3]);
+				<< " scissorBox=" << scissorBox[2] << "x" << scissorBox[3]
+#endif
+				);
 		}
 
 		auto runStage = [&](std::unique_ptr<PipelineStage>& stage) {
@@ -350,7 +357,7 @@ namespace IKIGAI::RENDER {
 	}
 
 	namespace {
-#if defined(USING_GLES) && !defined(IKIGAI_GLES_HAS_SSBO)
+#if !defined(IKIGAI_GL_HAS_SSBO)
 		void PadLightsForEsUbo(std::vector<LightOGL>& lights) {
 			if (lights.size() > MAX_LIGHTS) {
 				lights.resize(MAX_LIGHTS);
@@ -363,7 +370,7 @@ namespace IKIGAI::RENDER {
 
 	void GameRenderer::updateLights(SCENE_SYSTEM::Scene& scene) {
 		auto lightMatrices = scene.findLightData();
-#if defined(USING_GLES) && !defined(IKIGAI_GLES_HAS_SSBO)
+#if !defined(IKIGAI_GL_HAS_SSBO)
 		PadLightsForEsUbo(lightMatrices);
 #endif
 		mLightSSBO->setData(lightMatrices);
@@ -371,7 +378,7 @@ namespace IKIGAI::RENDER {
 
 	void GameRenderer::updateLightsInFrustum(SCENE_SYSTEM::Scene& scene, const Frustum& frustum) {
 		auto lightMatrices = scene.findLightDataInFrustum(frustum);
-#if defined(USING_GLES) && !defined(IKIGAI_GLES_HAS_SSBO)
+#if !defined(IKIGAI_GL_HAS_SSBO)
 		PadLightsForEsUbo(lightMatrices);
 #endif
 		mLightSSBO->setData(lightMatrices);

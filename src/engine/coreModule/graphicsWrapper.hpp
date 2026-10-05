@@ -39,3 +39,8 @@
 #endif
 
 #endif
+
+// Shader storage buffers are OpenGL 4.3 / GLES 3.1. macOS is 4.1, WebGL2 is ES 3.00.
+#if defined(IKIGAI_GLES_HAS_SSBO) || (!defined(USING_GLES) && !defined(__APPLE__))
+#define IKIGAI_GL_HAS_SSBO 1
+#endif

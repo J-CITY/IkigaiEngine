@@ -92,6 +92,7 @@ namespace IKIGAI::RENDER {
 		id<MTLCommandBuffer> getCurrentCommandBuffer() const { return mCurrentCommandBuffer; }
 		id<MTLRenderCommandEncoder> getCurrentEncoder() const { return mCurrentEncoder; }
 		id<MTLTexture> getSwapchainTexture() const { return mCurrentDrawable ? mCurrentDrawable.texture : nil; }
+		id<MTLTexture> getDepthTexture() const { return mDepthTarget ? mDepthTarget->getTexture() : nil; }
 
 		struct State {
 			std::shared_ptr<ShaderMetal> mShader;
@@ -105,9 +106,14 @@ namespace IKIGAI::RENDER {
 		void ensurePass();
 		void endPass();
 		void ensureTargets(NSUInteger width, NSUInteger height, NSUInteger samples);
-		void ensurePipeline();
+		bool ensurePipeline();
 		void applyFixedState();
 		void bindResources();
+		void bindBufferSizeConstants();
+		id<MTLBuffer> snapshotUniform(id<MTLBuffer> source, NSUInteger& outOffset);
+		void bindMissingShaderResources();
+		void ensureFallbackTexture();
+		id<MTLBuffer> fallbackBuffer(NSUInteger bytes);
 		void bindComputeResources(id<MTLComputeCommandEncoder> encoder);
 		void encodePreDraw(uint32_t count, bool indexed);
 		id<MTLBuffer> ensureBuffer(id<MTLBuffer> slot, NSUInteger length);
@@ -144,6 +150,12 @@ namespace IKIGAI::RENDER {
 		std::map<std::string, id<MTLRenderPipelineState>> mPipelines;
 		std::map<std::string, id<MTLComputePipelineState>> mComputePipelines;
 		std::map<std::string, id<MTLDepthStencilState>> mDepthStates;
+		id<MTLBuffer> mBufferSizeConstants = nil;
+		id<MTLBuffer> mUniformStaging = nil;
+		NSUInteger mUniformStagingOffset = 0;
+		id<MTLBuffer> mFallbackBuffer = nil;
+		id<MTLTexture> mFallbackTexture = nil;
+		id<MTLSamplerState> mFallbackSampler = nil;
 		id<MTLBuffer> mStageVertexOutput = nil;
 		id<MTLBuffer> mStagePatchOutput = nil;
 		id<MTLBuffer> mStageTessFactors = nil;

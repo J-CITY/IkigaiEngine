@@ -224,6 +224,7 @@ namespace IKIGAI::RENDER {
 			options.set_msl_version(2, 4);
 			options.platform = spirv_cross::CompilerMSL::Options::macOS;
 			options.swizzle_buffer_index = 15;
+			options.buffer_size_buffer_index = kMetalBufferSizeBufferIndex;
 			options.shader_patch_input_buffer_index = kMetalShaderPatchInputBufferIndex;
 			options.shader_index_buffer_index = kMetalShaderIndexBufferIndex;
 			options.shader_input_buffer_index = kMetalShaderInputBufferIndex;

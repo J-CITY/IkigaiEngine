@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <utilsModule/log/logger.h>
 #include <utilsModule/jsonLoader.h>
+#include <utilsModule/contentRoot.h>
 
 #include "../config.h"
 #include "resourceModule/materialManager.h"
@@ -75,7 +76,14 @@ Core:: Core(
 : androidApp(app)
 #endif
 {
-	//TODO: init Config::ROOT | UTILS::ReplaceSubstrings(std::filesystem::current_path().string(), "\\", "/") + "/";
+	UTILS::InitContentRoot();
+	if (Config::ROOT.empty()) {
+		std::cerr << "Content root not found (expected assets/engine/ near cwd or executable). "
+			<< "Run: python3 utils/sync_assets.py ensure. "
+			<< "For Xcode, set scheme Working Directory to mac/build_xcode (with assets symlink).\n";
+	} else {
+		std::cout << "Content root: " << Config::ROOT << "\n";
+	}
 	std::cout << "Create Core\n";
 	mLogger = std::make_unique<UTILS::LOGG::Logger>();
 	UTILS::LOGG::Manager::AddOutput(std::make_shared<UTILS::LOGG::OutputConsole>());
@@ -92,8 +100,8 @@ Core:: Core(
 	fileSystem->addSdlFileSystem("engine", "/");
 	fileSystem->addSdlFileSystem("game", "/");
 #else
-	fileSystem->addNativeFileSystem(Config::ENGINE_ASSETS_PATH, "/");
-	fileSystem->addNativeFileSystem(Config::USER_ASSETS_PATH, "/");
+	fileSystem->addNativeFileSystem(Config::ROOT + Config::ENGINE_ASSETS_PATH, "/");
+	fileSystem->addNativeFileSystem(Config::ROOT + Config::USER_ASSETS_PATH, "/");
 #endif
 
 
@@ -285,7 +293,7 @@ Core:: Core(
 	
 	//renderer->setCapability(RENDER::RenderingCapability::MULTISAMPLE, true);
 	RESOURCES::ServiceManager::Set<RENDER::GameRendererInterface>(static_cast<RENDER::GameRendererInterface*>(renderer.get()));
-	//driver->init();
+	// Driver backends initialize in their constructors (DriverGl/DriverVk/DriverDx12/DriverMetal).
 
 //#ifdef VULKAN_BACKEND
 //	reinterpret_cast<RENDER::GameRenderer*>(renderer.get())->createVkResources();

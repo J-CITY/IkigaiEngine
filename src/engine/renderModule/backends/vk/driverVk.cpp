@@ -1,6 +1,10 @@
 
 
 #include "driverVk.h"
+#include "vulkanLoader.h"
+#if defined(__APPLE__)
+#include <dlfcn.h>
+#endif
 //#include "Render/vk/raytracing/dw/include/macros.h"
 #ifdef VULKAN_BACKEND
 #include <string>
@@ -14,8 +18,10 @@
 
 //#include "raytracing/dw/include/extensions_vk.h"
 
+#include <algorithm>
 #include <array>
 #include <iostream>
+#include <limits>
 #include <set>
 #include <stdexcept>
 #include <assimp/Importer.hpp>
@@ -131,8 +137,21 @@ std::string DriverVk::State::getName() {
 }
 
 DriverVk::VolkInitializer::VolkInitializer() {
+#if defined(__APPLE__)
+	if (const char* path = FindVulkanLoaderPath()) {
+		void* module = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+		auto* getInstanceProcAddr = module
+			? reinterpret_cast<PFN_vkGetInstanceProcAddr>(dlsym(module, "vkGetInstanceProcAddr"))
+			: nullptr;
+		if (getInstanceProcAddr) {
+			volkInitializeCustom(getInstanceProcAddr);
+			return;
+		}
+	}
+#endif
 	if (volkInitialize() != VK_SUCCESS) {
-		throw std::runtime_error("Failed to initialize volk");
+		throw std::runtime_error(
+			"Failed to initialize volk. On macOS install the loader and MoltenVK: brew install vulkan-loader molten-vk");
 	}
 }
 
@@ -191,14 +210,16 @@ void DriverVk::init() {
 	//	//	std::cout << layer.layerName << std::endl;
 	//}
 	auto& win = RESOURCES::ServiceManager::Get<WINDOW::Window>();
+	bool enableValidation = false;
 #if defined(DEBUG) || defined(_DEBUG)
 	std::vector validationLayers = {
 		"VK_LAYER_KHRONOS_validation"
 	};
-
-	if (!checkValidationLayerSupport(validationLayers))
-		throw std::runtime_error("VkInstance doesn't support the required validation layers");
-
+	enableValidation = checkValidationLayerSupport(validationLayers);
+	if (!enableValidation) {
+		std::cerr << "VK_LAYER_KHRONOS_validation is not installed; continuing without it. "
+			<< "brew install vulkan-validationlayers\n";
+	}
 #endif
 
 //	auto extensions = {
@@ -210,9 +231,15 @@ void DriverVk::init() {
 
 	auto extensions = win.getSDLVulkanExtentions();
 	extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
-#if defined(DEBUG) || defined(_DEBUG)
-	extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-#endif
+	if (enableValidation) {
+		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+	}
+	// MoltenVK is a portability driver. The loader hides it unless this extension
+	// and VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR are both set.
+	const bool portabilityEnumeration = checkInstanceExtensionSupport({VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME});
+	if (portabilityEnumeration) {
+		extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+	}
 	if (!checkInstanceExtensionSupport(extensions))
 		throw std::runtime_error("VkInstance doesn't support the required extensions");
 
@@ -225,17 +252,20 @@ void DriverVk::init() {
 	//std::cout << "available vulkan version: " << major_version << "." << minor_version << std::endl;
 
 	vk::ApplicationInfo applicationInfo{};
-	applicationInfo.setApiVersion(VK_API_VERSION_1_3); //VK_API_VERSION_1_4
+	applicationInfo.setApiVersion(VK_API_VERSION_1_3);
 
 	vk::InstanceCreateInfo instanceInfo{};
 	instanceInfo.setPEnabledExtensionNames(extensions);
 	instanceInfo.setPApplicationInfo(&applicationInfo);
+	if (portabilityEnumeration) {
+		instanceInfo.setFlags(vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR);
+	}
 
-#if defined(DEBUG) || defined(_DEBUG) 
-	instanceInfo.setPEnabledLayerNames(validationLayers);
-#endif
+#if defined(DEBUG) || defined(_DEBUG)
+	if (enableValidation) {
+		instanceInfo.setPEnabledLayerNames(validationLayers);
+	}
 
-#if defined(DEBUG) || defined(_DEBUG) 
 	vk::DebugUtilsMessengerCreateInfoEXT debugMessengerInfo{};
 	debugMessengerInfo.setMessageSeverity(vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError);
 	debugMessengerInfo.setMessageType(vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation);
@@ -253,23 +283,47 @@ void DriverVk::init() {
 
 	vk::ValidationFeaturesEXT validationFeatures{};
 	validationFeatures.setEnabledValidationFeatures(features);
+
 #endif
 
-	auto structureChain = vk::StructureChain<vk::InstanceCreateInfo
-#if defined(DEBUG) || defined(_DEBUG) 
-		, vk::DebugUtilsMessengerCreateInfoEXT, vk::ValidationFeaturesEXT
+	const uint32_t apiVersions[] = {
+		VK_API_VERSION_1_3,
+		VK_API_VERSION_1_2,
+		VK_API_VERSION_1_1,
+	};
+	bool instanceCreated = false;
+	for (const uint32_t apiVersion : apiVersions) {
+		applicationInfo.setApiVersion(apiVersion);
+		try {
+#if defined(DEBUG) || defined(_DEBUG)
+			if (enableValidation) {
+				auto structureChain = vk::StructureChain<vk::InstanceCreateInfo, vk::DebugUtilsMessengerCreateInfoEXT, vk::ValidationFeaturesEXT>(
+					instanceInfo, debugMessengerInfo, validationFeatures);
+				mInstance = mContext.createInstance(structureChain.get<vk::InstanceCreateInfo>());
+			} else
 #endif
-	>(instanceInfo
-#if defined(DEBUG) || defined(_DEBUG) 
-		, debugMessengerInfo, validationFeatures
-#endif
-		);
-
-	mInstance = mContext.createInstance(structureChain.get<vk::InstanceCreateInfo>());
+			{
+				mInstance = mContext.createInstance(instanceInfo);
+			}
+			instanceCreated = true;
+			std::cout << "Vulkan instance API "
+				<< VK_API_VERSION_MAJOR(apiVersion) << "." << VK_API_VERSION_MINOR(apiVersion) << "\n";
+			break;
+		} catch (const vk::IncompatibleDriverError&) {
+			std::cerr << "vkCreateInstance rejected Vulkan "
+				<< VK_API_VERSION_MAJOR(apiVersion) << "." << VK_API_VERSION_MINOR(apiVersion) << "\n";
+		}
+	}
+	if (!instanceCreated) {
+		throw std::runtime_error(
+			"vkCreateInstance failed: no compatible Vulkan driver. On macOS install MoltenVK (brew install molten-vk vulkan-loader).");
+	}
 	volkLoadInstance(*mInstance);
 
-#if defined(DEBUG) || defined(_DEBUG) 
-	mDebugMessenger = mInstance.createDebugUtilsMessengerEXT(debugMessengerInfo);
+#if defined(DEBUG) || defined(_DEBUG)
+	if (enableValidation) {
+		mDebugMessenger = mInstance.createDebugUtilsMessengerEXT(debugMessengerInfo);
+	}
 #endif
 
 	auto devices = mInstance.enumeratePhysicalDevices();
@@ -306,6 +360,12 @@ void DriverVk::init() {
 		VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
 		VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME,
 	};
+	for (const auto& device_extension : all_device_extensions) {
+		if (std::string_view(device_extension.extensionName) == "VK_KHR_portability_subset") {
+			device_extensions.push_back("VK_KHR_portability_subset");
+			break;
+		}
+	}
 
 	//if (features.contains(Feature::Raytracing)) {
 	//	device_extensions.push_back(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
@@ -334,6 +394,19 @@ void DriverVk::init() {
 
 	mDevice = mPhysicalDevice.createDevice(deviceInfo);
 	volkLoadDevice(*mDevice);
+
+	{
+		const std::array<vk::DescriptorPoolSize, 3> poolSizes = {{
+			{vk::DescriptorType::eUniformBuffer, 2048},
+			{vk::DescriptorType::eStorageBuffer, 1024},
+			{vk::DescriptorType::eCombinedImageSampler, 4096},
+		}};
+		auto poolInfo = vk::DescriptorPoolCreateInfo()
+			.setFlags(vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet)
+			.setMaxSets(512)
+			.setPoolSizes(poolSizes);
+		mDescriptorPool = mDevice.createDescriptorPool(poolInfo);
+	}
 
 	{
 		VmaVulkanFunctions vulkanFunctions{};
@@ -456,7 +529,7 @@ bool DriverVk::checkInstanceExtensionSupport(const std::vector<const char*>& ext
 	for (const auto& proposedExt : extensionsToCheck) {
 		bool hasExtension = false;
 		for (const auto& extension : availableExt) {
-			if (strcmp(proposedExt, extension.extensionName)) {
+			if (strcmp(proposedExt, extension.extensionName) == 0) {
 				hasExtension = true;
 				break;
 			}
@@ -471,6 +544,8 @@ bool DriverVk::checkInstanceExtensionSupport(const std::vector<const char*>& ext
 
 void DriverVk::begin() {
 	working = true;
+	// Previous frame's fence has already signaled (submit waits before begin).
+	mFrameDescriptorSets.clear();
 
 	setDirty(Dirty::VERTEX_BUFFER);
 	setDirty(Dirty::INDEX_BUFFER);
@@ -605,8 +680,16 @@ vk::raii::Pipeline DriverVk::createState(const State& pipeline_state) {
 
 	auto fb = pipeline_state.mFrameBuffer ? pipeline_state.mFrameBuffer : getCurrentFrame().mFrameBuffer;
 
+	// MoltenVK indexes pAttachments while building fragment outputs. A count without
+	// the array crashes inside MVKGraphicsPipeline::addFragmentOutputToPipeline.
+	std::vector<vk::PipelineColorBlendAttachmentState> blendAttachments(fb->getTextures().size());
+	for (auto& attachment : blendAttachments) {
+		attachment.blendEnable = VK_FALSE;
+		attachment.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG
+			| vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA;
+	}
 	auto pipeline_color_blend_state_create_info = vk::PipelineColorBlendStateCreateInfo()
-		.setAttachmentCount((uint32_t)fb->getTextures().size());
+		.setAttachments(blendAttachments);
 
 	std::vector<vk::VertexInputBindingDescription> vertex_input_binding_descriptions;
 	std::vector<vk::VertexInputAttributeDescription> vertex_input_attribute_descriptions;
@@ -1051,11 +1134,17 @@ void DriverVk::createSwapchain(unsigned int windowID, uint32_t width, uint32_t h
 		desired_number_of_swapchain_images = surface_capabilities.maxImageCount;
 	}
 
-	auto max_width = surface_capabilities.maxImageExtent.width;
-	auto max_height = surface_capabilities.maxImageExtent.height;
-
-	ctx.width = glm::min(width, max_width);
-	ctx.height = glm::min(height, max_height);
+	// On a Retina display the surface extent is in pixels. The window size passed in
+	// is in points, and a swapchain smaller than the surface only covers part of the layer.
+	if (surface_capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
+		ctx.width = surface_capabilities.currentExtent.width;
+		ctx.height = surface_capabilities.currentExtent.height;
+	} else {
+		ctx.width = std::clamp(width, surface_capabilities.minImageExtent.width, surface_capabilities.maxImageExtent.width);
+		ctx.height = std::clamp(height, surface_capabilities.minImageExtent.height, surface_capabilities.maxImageExtent.height);
+	}
+	mWidth = ctx.width;
+	mHeight = ctx.height;
 
 	auto image_extent = vk::Extent2D()
 		.setWidth(ctx.width)
@@ -1332,38 +1421,137 @@ void DriverVk::PushDescriptors(vk::raii::CommandBuffer& cmdlist, vk::PipelineBin
 	const vk::raii::PipelineLayout& pipeline_layout, const std::vector<vk::DescriptorSetLayoutBinding>& required_descriptor_bindings,
 	const std::unordered_set<uint32_t>& ignore_bindings = {}) {
 
+	if (required_descriptor_bindings.empty() || !*mDescriptorPool || !mCurrentState.mShader) {
+		return;
+	}
 
-	for (const auto& required_descriptor_binding : required_descriptor_bindings) {
-		auto binding = required_descriptor_binding.binding;
-
-		if (ignore_bindings.contains(binding))
-			continue;
-
-		auto type = required_descriptor_binding.descriptorType;
-
-		if (type == vk::DescriptorType::eCombinedImageSampler) {
-			PushDescriptorTexture(cmdlist, pipeline_bind_point, pipeline_layout, binding);
-		}
-		if (type == vk::DescriptorType::eUniformBuffer) {
-			PushDescriptorUniformBuffer(cmdlist, pipeline_bind_point, pipeline_layout, binding);
-
-		}
-		if (type == vk::DescriptorType::eStorageImage) {
-			PushDescriptorStorageImage(cmdlist, pipeline_bind_point, pipeline_layout, binding);
-
-		}
-		if (type == vk::DescriptorType::eStorageBuffer) {
-			PushDescriptorStorageBuffer(cmdlist, pipeline_bind_point, pipeline_layout, binding);
-
+	bool needsUpdate = false;
+	for (const auto& required : required_descriptor_bindings) {
+		if (!ignore_bindings.contains(required.binding)) {
+			needsUpdate = true;
+			break;
 		}
 	}
+	if (!needsUpdate) {
+		return;
+	}
+
+	// A new set starts empty, so every binding is written, not only the dirty ones.
+	// Image transitions are illegal inside a dynamic rendering pass.
+	for (const auto& required : required_descriptor_bindings) {
+		if (required.descriptorType != vk::DescriptorType::eCombinedImageSampler) {
+			continue;
+		}
+		auto texture = mTextures.at(required.binding);
+		if (texture->mCurrentState != vk::ImageLayout::eGeneral) {
+			deactivateRenderPass();
+		}
+		texture->setState(cmdlist, vk::ImageLayout::eGeneral);
+	}
+
+	struct BufferWrite {
+		uint32_t binding = 0;
+		vk::DescriptorType type = vk::DescriptorType::eUniformBuffer;
+		vk::DescriptorBufferInfo info;
+	};
+	struct ImageWrite {
+		uint32_t binding = 0;
+		vk::DescriptorImageInfo info;
+	};
+	std::vector<BufferWrite> buffers;
+	std::vector<ImageWrite> images;
+	buffers.reserve(required_descriptor_bindings.size());
+	images.reserve(required_descriptor_bindings.size());
+
+	for (const auto& required : required_descriptor_bindings) {
+		const uint32_t binding = required.binding;
+		if (required.descriptorType == vk::DescriptorType::eCombinedImageSampler) {
+			auto texture = mTextures.at(binding);
+			images.push_back(ImageWrite{
+				binding,
+				vk::DescriptorImageInfo()
+					.setSampler(*texture->mSampler)
+					.setImageView(*texture->mImageView)
+					.setImageLayout(vk::ImageLayout::eGeneral)
+			});
+		} else if (required.descriptorType == vk::DescriptorType::eUniformBuffer) {
+			auto buffer = mUniformBuffers.at(binding);
+			const vk::DeviceSize range = buffer->getSizeByte() > 0 ? buffer->getSizeByte() : VK_WHOLE_SIZE;
+			buffers.push_back(BufferWrite{
+				binding,
+				vk::DescriptorType::eUniformBuffer,
+				vk::DescriptorBufferInfo().setBuffer(*buffer->getBuffer()).setOffset(0).setRange(range)
+			});
+		} else if (required.descriptorType == vk::DescriptorType::eStorageBuffer) {
+			auto buffer = mStorageBuffers.at(binding);
+			const vk::DeviceSize range = buffer->getSizeByte() > 0 ? buffer->getSizeByte() : VK_WHOLE_SIZE;
+			buffers.push_back(BufferWrite{
+				binding,
+				vk::DescriptorType::eStorageBuffer,
+				vk::DescriptorBufferInfo().setBuffer(*buffer->getBuffer()).setOffset(0).setRange(range)
+			});
+		}
+	}
+
+	if (buffers.empty() && images.empty()) {
+		return;
+	}
+
+	const vk::DescriptorSetLayout layout = *mCurrentState.mShader->mDescriptorSetLayout;
+	auto allocInfo = vk::DescriptorSetAllocateInfo()
+		.setDescriptorPool(*mDescriptorPool)
+		.setDescriptorSetCount(1)
+		.setPSetLayouts(&layout);
+	auto allocated = mDevice.allocateDescriptorSets(allocInfo);
+	mFrameDescriptorSets.push_back(std::move(allocated.front()));
+	const vk::DescriptorSet set = *mFrameDescriptorSets.back();
+
+	std::vector<vk::WriteDescriptorSet> writes;
+	writes.reserve(buffers.size() + images.size());
+	for (const auto& image : images) {
+		writes.push_back(vk::WriteDescriptorSet()
+			.setDstSet(set)
+			.setDstBinding(image.binding)
+			.setDescriptorCount(1)
+			.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+			.setImageInfo(image.info));
+	}
+	for (const auto& buffer : buffers) {
+		writes.push_back(vk::WriteDescriptorSet()
+			.setDstSet(set)
+			.setDstBinding(buffer.binding)
+			.setDescriptorCount(1)
+			.setDescriptorType(buffer.type)
+			.setBufferInfo(buffer.info));
+	}
+	mDevice.updateDescriptorSets(writes, {});
+	cmdlist.bindDescriptorSets(pipeline_bind_point, *pipeline_layout, 0, set, {});
 }
 
 void DriverVk::resize(size_t width, size_t height) {
+	auto found = mSwapchains.find(mCurrentWindowID);
+	if (found == mSwapchains.end() || !*found->second.swapchain) {
+		mWidth = static_cast<uint32_t>(width);
+		mHeight = static_cast<uint32_t>(height);
+		return;
+	}
+	auto& ctx = found->second;
+	auto surface_capabilities = mPhysicalDevice.getSurfaceCapabilitiesKHR(*ctx.surface);
+	uint32_t targetWidth = static_cast<uint32_t>(width);
+	uint32_t targetHeight = static_cast<uint32_t>(height);
+	if (surface_capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
+		targetWidth = surface_capabilities.currentExtent.width;
+		targetHeight = surface_capabilities.currentExtent.height;
+	}
+	if (targetWidth == ctx.width && targetHeight == ctx.height) {
+		mWidth = targetWidth;
+		mHeight = targetHeight;
+		return;
+	}
 	end();
 	wait();
-	mWidth = static_cast<uint32_t>(width);
-	mHeight = static_cast<uint32_t>(height);
+	mWidth = targetWidth;
+	mHeight = targetHeight;
 	createSwapchain(mCurrentWindowID, mWidth, mHeight);
 	nextFrame();
 	begin();
@@ -1487,6 +1675,10 @@ void DriverVk::setTriangleOrientation(TriangleOrientation value) {
 
 void DriverVk::clear(bool clearColor, bool clearDepth, bool clearStencil) {
 	activateRenderPass();
+	// vkCmdClearAttachments is clipped by the scissor. Set it before the clear,
+	// otherwise MoltenVK keeps a stale rect and only part of the image is cleared.
+	EnsureViewport(getCurrentFrame().mCommandBuffer);
+	EnsureScissor(getCurrentFrame().mCommandBuffer);
 
 	auto width = getBackbufferWidth();
 	auto height = getBackbufferHeight();

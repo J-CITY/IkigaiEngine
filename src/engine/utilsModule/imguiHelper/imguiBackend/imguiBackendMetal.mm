@@ -53,9 +53,27 @@ namespace {
 
 		void renderDrawData() override {
 			auto* driverMetal = static_cast<IKIGAI::RENDER::DriverMetal*>(IKIGAI::RENDER::DriverInterface::Get());
-			if (!driverMetal || !ImGui::GetDrawData()) {
+			if (!driverMetal || !ImGui::GetDrawData() || !driverMetal->getCurrentCommandBuffer() || !driverMetal->getCurrentEncoder()) {
 				return;
 			}
+			id<MTLTexture> color = driverMetal->getSwapchainTexture();
+			if (!color || color.sampleCount == 0) {
+				return;
+			}
+			// newFrame runs before the drawable exists, so ImGui cached sampleCount 0.
+			// Refresh the descriptor from the pass that is actually open.
+			mPassDescriptor.colorAttachments[0].texture = color;
+			mPassDescriptor.colorAttachments[0].loadAction = MTLLoadActionLoad;
+			mPassDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
+			if (id<MTLTexture> depth = driverMetal->getDepthTexture()) {
+				mPassDescriptor.depthAttachment.texture = depth;
+				mPassDescriptor.depthAttachment.loadAction = MTLLoadActionLoad;
+				mPassDescriptor.depthAttachment.storeAction = MTLStoreActionStore;
+				mPassDescriptor.stencilAttachment.texture = depth;
+				mPassDescriptor.stencilAttachment.loadAction = MTLLoadActionLoad;
+				mPassDescriptor.stencilAttachment.storeAction = MTLStoreActionStore;
+			}
+			ImGui_ImplMetal_NewFrame(mPassDescriptor);
 			ImGui_ImplMetal_RenderDrawData(ImGui::GetDrawData(), driverMetal->getCurrentCommandBuffer(), driverMetal->getCurrentEncoder());
 			ImGuiIO& io = ImGui::GetIO();
 			if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {

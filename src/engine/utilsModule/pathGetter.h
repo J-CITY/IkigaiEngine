@@ -9,11 +9,11 @@ static std::string GetRealPath(const std::string &p_path) {
   if (std::filesystem::exists(p_path)) {
     return p_path;
   }
-  if (std::filesystem::exists(Config::ENGINE_ASSETS_PATH + p_path)) {
-    return Config::ENGINE_ASSETS_PATH + p_path;
+  if (std::filesystem::exists(Config::ROOT + Config::ENGINE_ASSETS_PATH + p_path)) {
+    return Config::ROOT + Config::ENGINE_ASSETS_PATH + p_path;
   }
-  if (std::filesystem::exists(Config::USER_ASSETS_PATH + p_path)) {
-    return Config::USER_ASSETS_PATH + p_path;
+  if (std::filesystem::exists(Config::ROOT + Config::USER_ASSETS_PATH + p_path)) {
+    return Config::ROOT + Config::USER_ASSETS_PATH + p_path;
   }
   // TODO: throw or assert here
   return "";

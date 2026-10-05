@@ -9,7 +9,7 @@ UTILS_DIR = os.path.join(ROOT_DIR, "utils")
 if UTILS_DIR not in sys.path:
     sys.path.insert(0, UTILS_DIR)
 
-from setup_env import is_environment_ready, main as setup_environment
+from setup_env import ensure_mac_brew_packages, is_environment_ready, main as setup_environment
 from sync_assets import ensure_assets
 from ensure_emsdk import ensure_emsdk, emrun_path
 
@@ -89,6 +89,8 @@ def create_assets_link(build_dir):
 def ensure_environment(platform_arg, skip_setup):
     if skip_setup:
         return
+    if platform_arg == "mac":
+        ensure_mac_brew_packages()
     if is_environment_ready(ROOT_DIR, platform_arg):
         ensure_assets(ROOT_DIR)
         return

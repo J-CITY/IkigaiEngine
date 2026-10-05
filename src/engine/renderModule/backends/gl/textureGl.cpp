@@ -519,12 +519,13 @@ void TextureGl::generateMips() {
 void TextureGl::bindImage(uint32_t unit, uint32_t mip_level, uint32_t layer, unsigned access, unsigned format) {
 	glActiveTexture(GL_TEXTURE0 + unit);
 #ifndef USING_GLES
+#ifndef __APPLE__
 	glBindTexture(GL_TEXTURE_3D, id);
-
 	if (mType == TextureType::TEXTURE_3D)
 		glBindImageTexture(unit, id, mip_level, GL_TRUE, layer, access, format);
 	else
 		glBindImageTexture(unit, id, mip_level, GL_FALSE, 0, access, format);
+#endif
 #endif
 }
 

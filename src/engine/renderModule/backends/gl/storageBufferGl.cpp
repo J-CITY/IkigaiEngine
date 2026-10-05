@@ -4,7 +4,7 @@
 
 namespace {
 GLenum StorageBufferTarget() {
-#if defined(IKIGAI_GLES_HAS_SSBO) || !defined(USING_GLES)
+#if defined(IKIGAI_GL_HAS_SSBO)
 	return GL_SHADER_STORAGE_BUFFER;
 #elif defined(GL_UNIFORM_BUFFER)
 	return GL_UNIFORM_BUFFER;

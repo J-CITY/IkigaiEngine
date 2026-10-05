@@ -25,7 +25,9 @@ std::map<IKIGAI::RENDER::ShaderType, uint32_t> ToGlEnum = {
     {IKIGAI::RENDER::ShaderType::VERTEX, GL_VERTEX_SHADER},
     {IKIGAI::RENDER::ShaderType::FRAGMENT, GL_FRAGMENT_SHADER},
 #ifndef USING_GLES
+#ifdef GL_COMPUTE_SHADER
     {IKIGAI::RENDER::ShaderType::COMPUTE, GL_COMPUTE_SHADER},
+#endif
     {IKIGAI::RENDER::ShaderType::TESSELLATION_CONTROL, GL_TESS_CONTROL_SHADER},
     {IKIGAI::RENDER::ShaderType::TESSELLATION_EVALUATION,
      GL_TESS_EVALUATION_SHADER},
@@ -234,7 +236,8 @@ void IKIGAI::RENDER::ShaderGl::create(const ShaderResource &res) {
   version = 450;
   enable_420pack_extension = true;
   force_flattened_io_blocks = true;
-#elif defined(MACOS)
+#elif defined(__APPLE__)
+  // macOS OpenGL is 4.1. SSBOs need 4.3, so the cross-compile remaps them to UBOs.
   es = false;
   version = 410;
   enable_420pack_extension = false;
@@ -468,8 +471,12 @@ IKIGAI::MATH::Vector2f
 IKIGAI::RENDER::ShaderGl::getUniformVec2(const std::string &name) const {
   GLfloat values[2];
 #ifndef USING_GLES
+#ifdef __APPLE__
+  glGetUniformfv(static_cast<unsigned>(mId), getUniformLocation(name), values);
+#else
   glGetnUniformfv(static_cast<unsigned>(mId), getUniformLocation(name),
                   2 * sizeof(float), values);
+#endif
 #endif
   return reinterpret_cast<IKIGAI::MATH::Vector2f &>(values);
 }
@@ -478,8 +485,12 @@ IKIGAI::MATH::Vector3f
 IKIGAI::RENDER::ShaderGl::getUniformVec3(const std::string &name) const {
   GLfloat values[3];
 #ifndef USING_GLES
+#ifdef __APPLE__
+  glGetUniformfv(static_cast<unsigned>(mId), getUniformLocation(name), values);
+#else
   glGetnUniformfv(static_cast<unsigned>(mId), getUniformLocation(name),
                   3 * sizeof(float), values);
+#endif
 #endif
   return reinterpret_cast<IKIGAI::MATH::Vector3f &>(values);
 }
@@ -488,8 +499,12 @@ IKIGAI::MATH::Vector4f
 IKIGAI::RENDER::ShaderGl::getUniformVec4(const std::string &name) const {
   GLfloat values[4];
 #ifndef USING_GLES
+#ifdef __APPLE__
+  glGetUniformfv(static_cast<unsigned>(mId), getUniformLocation(name), values);
+#else
   glGetnUniformfv(static_cast<unsigned>(mId), getUniformLocation(name),
                   4 * sizeof(float), values);
+#endif
 #endif
   return reinterpret_cast<IKIGAI::MATH::Vector4f &>(values);
 }
@@ -498,8 +513,12 @@ IKIGAI::MATH::Matrix3f
 IKIGAI::RENDER::ShaderGl::getUniformMat3(const std::string &name) const {
   GLfloat values[16];
 #ifndef USING_GLES
+#ifdef __APPLE__
+  glGetUniformfv(static_cast<unsigned>(mId), getUniformLocation(name), values);
+#else
   glGetnUniformfv(static_cast<unsigned>(mId), getUniformLocation(name),
                   9 * sizeof(float), values);
+#endif
 #endif
   return reinterpret_cast<IKIGAI::MATH::Matrix3f &>(values);
 }
@@ -508,8 +527,12 @@ IKIGAI::MATH::Matrix4f
 IKIGAI::RENDER::ShaderGl::getUniformMat4(const std::string &name) const {
   GLfloat values[16];
 #ifndef USING_GLES
+#ifdef __APPLE__
+  glGetUniformfv(static_cast<unsigned>(mId), getUniformLocation(name), values);
+#else
   glGetnUniformfv(static_cast<unsigned>(mId), getUniformLocation(name),
                   16 * sizeof(float), values);
+#endif
 #endif
   return reinterpret_cast<IKIGAI::MATH::Matrix4f &>(values);
 }

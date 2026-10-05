@@ -155,7 +155,7 @@ void IKIGAI::RENDER::DriverGl::initGlew() {
 void IKIGAI::RENDER::DriverGl::init() {
   initGlew();
 
-#if defined(BEDUG) || defined(_DEBUG)
+#if (defined(BEDUG) || defined(_DEBUG)) && !defined(__APPLE__)
   GLint flags;
   glGetIntegerv(GL_CONTEXT_FLAGS, &flags);
   if (flags & GL_CONTEXT_FLAG_DEBUG_BIT) {
@@ -588,7 +588,7 @@ void IKIGAI::RENDER::DriverGl::applyState() {
     }
     for (auto& [bind, storage] : mStorageBuffers)
     {
-#if defined(IKIGAI_GLES_HAS_SSBO) || !defined(USING_GLES)
+#if defined(IKIGAI_GL_HAS_SSBO)
     	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, bind, storage->getId());
 #elif defined(GL_UNIFORM_BUFFER)
     	glBindBufferBase(GL_UNIFORM_BUFFER, bind, storage->getId());
@@ -605,7 +605,7 @@ void IKIGAI::RENDER::DriverGl::resetFrameBuffer() {
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-#ifndef OCULUS
+#if !defined(OCULUS) && !defined(__APPLE__)
 void IKIGAI::RENDER::DriverGl::GLDebugMessageCallback(
     uint32_t source, uint32_t type, uint32_t id, uint32_t severity,
     int32_t length, const char *message, const void *userParam) {
