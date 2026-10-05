@@ -12,7 +12,7 @@ namespace IKIGAI::RENDER {
 
     class UniformBufferMetal : public UniformBufferInterface {
     public:
-        UniformBufferMetal(id<MTLDevice> device, size_t sz);
+        explicit UniformBufferMetal(size_t sz);
         virtual ~UniformBufferMetal() override = default;
         
         void setData(const void* data, size_t sz, size_t offset = 0) override;
@@ -24,7 +24,7 @@ namespace IKIGAI::RENDER {
 
     class StorageBufferMetal : public StorageBufferInterface {
     public:
-        StorageBufferMetal(id<MTLDevice> device, size_t sz, size_t stride);
+        StorageBufferMetal(size_t sz, size_t stride);
         virtual ~StorageBufferMetal() override = default;
         
         void bind() override {}
@@ -41,7 +41,7 @@ namespace IKIGAI::RENDER {
 
     class VertexBufferMetal : public VertexBufferInterface {
     public:
-        VertexBufferMetal(id<MTLDevice> device, size_t sz, size_t stride);
+        VertexBufferMetal(size_t sz, size_t stride);
         virtual ~VertexBufferMetal() override = default;
         
         void bind() override {}
@@ -56,7 +56,7 @@ namespace IKIGAI::RENDER {
 
     class IndexBufferMetal : public IndexBufferInterface {
     public:
-        IndexBufferMetal(id<MTLDevice> device, size_t sz, size_t stride);
+        IndexBufferMetal(size_t sz, size_t stride);
         virtual ~IndexBufferMetal() override = default;
         
         void bind() override {}

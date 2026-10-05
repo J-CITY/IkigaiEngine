@@ -36,6 +36,12 @@ namespace {
 		}
 
 		void newFrame() override {
+			auto* driverMetal = static_cast<IKIGAI::RENDER::DriverMetal*>(IKIGAI::RENDER::DriverInterface::Get());
+			if (driverMetal) {
+				if (id<MTLTexture> texture = driverMetal->getSwapchainTexture()) {
+					mPassDescriptor.colorAttachments[0].texture = texture;
+				}
+			}
 			ImGui_ImplMetal_NewFrame(mPassDescriptor);
 			ImGui_ImplSDL3_NewFrame();
 			ImGui::NewFrame();

@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
+include(CMakeDependentOption)
+
 set(APP_NAME "IkigaiEngine")
 project(${APP_NAME} LANGUAGES C CXX)
 
@@ -14,6 +16,12 @@ cmake_dependent_option(USE_FILE_WATCHER "Watch asset files for hot reload" ON "U
 
 if(NOT USE_OPENGL AND NOT USE_VULKAN AND NOT USE_METAL)
     message(FATAL_ERROR "At least one render backend must be enabled (USE_OPENGL, USE_VULKAN, USE_METAL)")
+endif()
+
+if(USE_METAL)
+    enable_language(OBJCXX)
+    set(CMAKE_OBJCXX_STANDARD 20)
+    set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
 endif()
 
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum OS X deployment version")
@@ -195,6 +203,15 @@ endif()
 list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
 list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
 list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendDx12\\.cpp$")
+# Quest / Android (OCULUS) — separate Gradle target, not desktop macOS
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]platform[/\\\\]quest[/\\\\]")
+list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]platform[/\\\\]quest[/\\\\]")
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "androidAssetFileSystem\\.cpp$")
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "androidAssetFileSystem\\.h$")
+list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "androidAssetFileSystem\\.h$")
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "oxrInput\\.cpp$")
+list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "oxrInput\\.h$")
+list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "oxrInput\\.h$")
 
 # Source Groups for IDE
 source_group(TREE ${MAIN_SOURCE_DIR} FILES ${PROJECT_ABSOLUTE_HEADERS} ${PROJECT_ABSOLUTE_SOURCES})
@@ -205,9 +222,10 @@ add_executable(${APP_NAME} MACOSX_BUNDLE
 )
 
 # --- Generate Reflection Headers ---
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 add_custom_command(
     TARGET ${APP_NAME} PRE_BUILD
-    COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/../utils/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../utils/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
     COMMENT "Running IkigaiHeaderTool to generate reflection headers..."
 )
 
@@ -232,6 +250,11 @@ endif()
 
 if(USE_METAL)
     target_compile_definitions(${APP_NAME} PRIVATE IKIGAI_HAS_METAL METAL_BACKEND)
+    foreach(src ${PROJECT_ABSOLUTE_SOURCES})
+        if(src MATCHES "\\.(mm|m)$")
+            set_source_files_properties(${src} PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+        endif()
+    endforeach()
 endif()
 
 # Additional definitions
@@ -310,6 +333,7 @@ find_library(COREAUDIO_FRAMEWORK CoreAudio)
 find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox)
 find_library(METAL_FRAMEWORK Metal)
 find_library(METALKIT_FRAMEWORK MetalKit)
+find_library(QUARTZCORE_FRAMEWORK QuartzCore)
 
 target_link_libraries(${APP_NAME} PRIVATE 
     ${LIBS_TO_LINK}
@@ -321,7 +345,7 @@ target_link_libraries(${APP_NAME} PRIVATE
 )
 
 if(USE_METAL)
-    target_link_libraries(${APP_NAME} PRIVATE ${METAL_FRAMEWORK} ${METALKIT_FRAMEWORK})
+    target_link_libraries(${APP_NAME} PRIVATE ${METAL_FRAMEWORK} ${METALKIT_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
     # Tell CMake to compile core.cpp as Objective-C++ since it includes Metal headers
     set_source_files_properties(${MAIN_SOURCE_DIR}/engine/coreModule/core/core.cpp PROPERTIES COMPILE_FLAGS "-x objective-c++")
 endif()

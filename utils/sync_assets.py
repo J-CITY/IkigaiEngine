@@ -15,6 +15,7 @@ import site
 import subprocess
 import sys
 import tempfile
+import time
 import zipfile
 
 STAMP_NAME = ".ikigai-assets-stamp.json"
@@ -210,21 +211,83 @@ def ensure_gdown():
     import gdown  # noqa: F401
 
 
+def _drive_quota_error(exc):
+    text = str(exc).lower()
+    return (
+        "many accesses" in text
+        or "cannot retrieve the public link" in text
+        or "failed to retrieve file url" in text
+    )
+
+
+# gdown's default file user-agent is an old Chrome build. Drive answers that
+# client with an HTML page the parser treats as a quota/permission error.
+# Folder listing already uses a current browser agent; file downloads must too.
+# Cookies stay off: a stale ~/.cache/gdown/cookies.txt produces the same page.
+DRIVE_USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36"
+)
+
+
+def download_drive_file(file_id, dest_file, attempts=5):
+    import gdown
+    from gdown.exceptions import FileURLRetrievalError
+
+    os.makedirs(os.path.dirname(os.path.abspath(dest_file)), exist_ok=True)
+    url = f"https://drive.google.com/uc?id={file_id}"
+    last_error = None
+    for attempt in range(1, attempts + 1):
+        try:
+            saved = gdown.download(
+                url,
+                output=dest_file,
+                quiet=False,
+                use_cookies=False,
+                resume=True,
+                user_agent=DRIVE_USER_AGENT,
+            )
+            if not saved:
+                raise RuntimeError(f"gdown returned no file for {url}")
+            return saved
+        except FileURLRetrievalError as exc:
+            last_error = exc
+            if attempt >= attempts or not _drive_quota_error(exc):
+                raise
+            wait = 15 * attempt
+            print(
+                f"Google Drive refused {os.path.basename(dest_file)} "
+                f"(attempt {attempt}/{attempts}). Waiting {wait}s..."
+            )
+            time.sleep(wait)
+    raise last_error
+
+
 def download_folder(url, dest_dir):
     import gdown
 
     os.makedirs(dest_dir, exist_ok=True)
     print(f"gdown --folder {url}")
-    gdown.download_folder(url, output=dest_dir, remaining_ok=True, quiet=False, use_cookies=False)
+    listed = gdown.download_folder(
+        url,
+        output=dest_dir,
+        remaining_ok=True,
+        quiet=False,
+        use_cookies=False,
+        skip_download=True,
+    )
+    if not listed:
+        raise RuntimeError(f"Could not list Google Drive folder: {url}")
+    print(f"Downloading {len(listed)} files")
+    for item in listed:
+        print(f"gdown {item.path}")
+        download_drive_file(item.id, item.local_path)
 
 
 def download_file(file_id, dest_file):
-    import gdown
-
-    os.makedirs(os.path.dirname(dest_file), exist_ok=True)
     url = f"https://drive.google.com/uc?id={file_id}"
     print(f"gdown {url}")
-    gdown.download(url, output=dest_file, fuzzy=True, quiet=False)
+    download_drive_file(file_id, dest_file)
 
 
 def payload_dir(path):

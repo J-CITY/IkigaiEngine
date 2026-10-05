@@ -1,5 +1,11 @@
 #ifdef METAL_BACKEND
 #include "materialMetal.h"
+
+#include <cstddef>
+#include <cstring>
+#include <type_traits>
+#include <vector>
+
 #include <resourceModule/serviceManager.h>
 #include <resourceModule/shaderManager.h>
 #include <resourceModule/textureManager.h>
@@ -82,6 +88,7 @@ namespace IKIGAI::RENDER {
             mUniformBuffers.erase(name);
             return;
         }
+        mExternalBuffers.insert(name);
         mUniformBuffers[name] = std::static_pointer_cast<UniformBufferMetal>(buffer);
     }
     
@@ -91,25 +98,114 @@ namespace IKIGAI::RENDER {
             mStorageBuffers.erase(name);
             return;
         }
+        mExternalBuffers.insert(name);
         mStorageBuffers[name] = std::static_pointer_cast<StorageBufferMetal>(buffer);
     }
     
     void MaterialMetal::set(const std::string& name, const UniformData& data) {
-        mUniforms[name] = data;
+        mUniforms.at(name) = data;
     }
     
     MaterialInterface::UniformData& MaterialMetal::get(const std::string& name) {
-        return mUniforms[name];
+        return mUniforms.at(name);
     }
     
     void MaterialMetal::generateUniformsData() {
-        // TODO: Extract uniform buffer layout and types using spirv-cross reflection.
-        // For now, this is a stub. 
+        mUniforms.clear();
+        mUniformBuffers.clear();
+        mStorageBuffers.clear();
+        mExternalBuffers.clear();
+        if (!mShader) {
+            return;
+        }
+
+        const auto& shaderInfo = mShader->getReflection();
+        for (const auto& uniform : shaderInfo.mUniforms) {
+            if (isEngineUniform(uniform.mName)) {
+                continue;
+            }
+            switch (uniform.mType) {
+            case ShaderReflection::UniformType::SAMPLER_2D:
+            case ShaderReflection::UniformType::SAMPLER_CUBE:
+            case ShaderReflection::UniformType::SAMPLER_3D:
+            case ShaderReflection::UniformType::SAMPLER_2D_ARRAY: {
+                std::shared_ptr<TextureMetal> texture;
+                mUniforms[uniform.mName] = texture;
+            } break;
+            case ShaderReflection::UniformType::UNIFORM_BUFFER: {
+                mUniformBuffers[uniform.mName] = std::make_shared<UniformBufferMetal>(uniform.mSize);
+                for (const auto& member : uniform.mMembers) {
+                    switch (member.mType) {
+                    case ShaderReflection::UniformType::MAT4: mUniforms[uniform.mName + member.mName] = MATH::Matrix4f(); break;
+                    case ShaderReflection::UniformType::MAT3: mUniforms[uniform.mName + member.mName] = MATH::Matrix3f(); break;
+                    case ShaderReflection::UniformType::VEC4: mUniforms[uniform.mName + member.mName] = MATH::Vector4f(); break;
+                    case ShaderReflection::UniformType::VEC3: mUniforms[uniform.mName + member.mName] = MATH::Vector3f(); break;
+                    case ShaderReflection::UniformType::VEC2: mUniforms[uniform.mName + member.mName] = MATH::Vector2f(); break;
+                    case ShaderReflection::UniformType::INT: mUniforms[uniform.mName + member.mName] = 0; break;
+                    case ShaderReflection::UniformType::FLOAT: mUniforms[uniform.mName + member.mName] = 0.0f; break;
+                    case ShaderReflection::UniformType::BOOL: mUniforms[uniform.mName + member.mName] = false; break;
+                    default: break;
+                    }
+                }
+            } break;
+            case ShaderReflection::UniformType::STORAGE_BUFFER: {
+                mStorageBuffers[uniform.mName] = std::make_shared<StorageBufferMetal>(uniform.mSize, 1);
+            } break;
+            default: break;
+            }
+        }
     }
     
     void MaterialMetal::fillUniforms(std::shared_ptr<TextureInterface> defaultTexture, bool useTextures) {
-        // TODO: Using reflection info, fill the allocated UniformBufferMetal instances 
-        // with the data from mUniforms, and bind textures to DriverMetal.
+        (void)useTextures;
+        if (!mShader) {
+            return;
+        }
+        auto& renderer = RESOURCES::ServiceManager::Get<Renderer>();
+        for (const auto& uniform : mShader->getReflection().mUniforms) {
+            switch (uniform.mType) {
+            case ShaderReflection::UniformType::SAMPLER_2D:
+            case ShaderReflection::UniformType::SAMPLER_CUBE:
+            case ShaderReflection::UniformType::SAMPLER_3D:
+            case ShaderReflection::UniformType::SAMPLER_2D_ARRAY: {
+                std::shared_ptr<TextureInterface> texture;
+                if (mUniforms.contains(uniform.mName)) {
+                    texture = std::get<std::shared_ptr<TextureInterface>>(mUniforms[uniform.mName]);
+                }
+                if (!texture && defaultTexture) {
+                    texture = defaultTexture;
+                }
+                if (texture) {
+                    renderer.setTexture(uniform.mBind, texture);
+                }
+            } break;
+            case ShaderReflection::UniformType::UNIFORM_BUFFER: {
+                if (!mExternalBuffers.contains(uniform.mName) && mUniformBuffers.contains(uniform.mName)) {
+                    std::vector<std::byte> bufferData(uniform.mSize);
+                    for (const auto& member : uniform.mMembers) {
+                        const std::string memberName = uniform.mName + member.mName;
+                        if (!mUniforms.contains(memberName)) {
+                            continue;
+                        }
+                        std::visit([&](auto& arg) {
+                            using T = std::decay_t<decltype(arg)>;
+                            if constexpr (!std::is_same_v<T, std::shared_ptr<TextureInterface>>) {
+                                std::memcpy(bufferData.data() + member.mOffset, &arg, sizeof(T));
+                            }
+                        }, mUniforms[memberName]);
+                    }
+                    mUniformBuffers[uniform.mName]->setData(bufferData.data(), bufferData.size());
+                }
+                if (mUniformBuffers.contains(uniform.mName)) {
+                    renderer.setUniformBuffer(uniform.mBind, mUniformBuffers[uniform.mName]);
+                }
+            } break;
+            case ShaderReflection::UniformType::STORAGE_BUFFER:
+                break;
+            default:
+                break;
+            }
+        }
     }
     
     void MaterialMetal::bind(std::shared_ptr<TextureInterface> defaultTexture, bool useTextures) {

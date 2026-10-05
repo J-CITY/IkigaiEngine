@@ -37,6 +37,7 @@ src/engine/generated
 assets/
 assetses/
 mac/out
+mac/build_xcode
 .DS_Store
 mac/.DS_Store
 run_vs.log

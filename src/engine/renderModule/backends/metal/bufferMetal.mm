@@ -1,14 +1,26 @@
 #ifdef METAL_BACKEND
 #include "bufferMetal.h"
+
 #include <cstring>
+
+#include "deviceMetal.h"
 
 namespace IKIGAI::RENDER {
 
-    // --- UniformBufferMetal ---
-    UniformBufferMetal::UniformBufferMetal(id<MTLDevice> device, size_t sz) : UniformBufferInterface(sz) {
-        if (sz > 0) {
-            mBuffer = [device newBufferWithLength:sz options:MTLResourceStorageModeShared];
+    static id<MTLBuffer> MakeSharedBuffer(size_t bytes) {
+        if (bytes == 0) {
+            return nil;
         }
+        id<MTLDevice> device = DeviceMetal::Get();
+        if (!device) {
+            return nil;
+        }
+        return [device newBufferWithLength:bytes options:MTLResourceStorageModeShared];
+    }
+
+    // --- UniformBufferMetal ---
+    UniformBufferMetal::UniformBufferMetal(size_t sz) : UniformBufferInterface(sz) {
+        mBuffer = MakeSharedBuffer(sz);
     }
 
     void UniformBufferMetal::setData(const void* data, size_t sz, size_t offset) {
@@ -18,10 +30,8 @@ namespace IKIGAI::RENDER {
     }
 
     // --- StorageBufferMetal ---
-    StorageBufferMetal::StorageBufferMetal(id<MTLDevice> device, size_t sz, size_t stride) : StorageBufferInterface(sz, stride) {
-        if (mSizeByte > 0) {
-            mBuffer = [device newBufferWithLength:mSizeByte options:MTLResourceStorageModeShared];
-        }
+    StorageBufferMetal::StorageBufferMetal(size_t sz, size_t stride) : StorageBufferInterface(sz, stride) {
+        mBuffer = MakeSharedBuffer(mSizeByte);
     }
 
     void StorageBufferMetal::setData(const void* data, size_t sz, size_t stride) {
@@ -29,9 +39,8 @@ namespace IKIGAI::RENDER {
         mStride = stride;
         mSizeByte = sz * stride;
         
-        if (mBuffer && [mBuffer length] < mSizeByte) {
-            id<MTLDevice> device = [mBuffer device];
-            mBuffer = [device newBufferWithLength:mSizeByte options:MTLResourceStorageModeShared];
+        if (!mBuffer || [mBuffer length] < mSizeByte) {
+            mBuffer = MakeSharedBuffer(mSizeByte);
         }
         
         if (mBuffer && data && mSizeByte > 0) {
@@ -46,10 +55,8 @@ namespace IKIGAI::RENDER {
     }
 
     // --- VertexBufferMetal ---
-    VertexBufferMetal::VertexBufferMetal(id<MTLDevice> device, size_t sz, size_t stride) : VertexBufferInterface(sz, stride) {
-        if (mSizeByte > 0) {
-            mBuffer = [device newBufferWithLength:mSizeByte options:MTLResourceStorageModeShared];
-        }
+    VertexBufferMetal::VertexBufferMetal(size_t sz, size_t stride) : VertexBufferInterface(sz, stride) {
+        mBuffer = MakeSharedBuffer(mSizeByte);
     }
 
     void VertexBufferMetal::setData(const void* data, size_t sz, size_t stride) {
@@ -57,9 +64,8 @@ namespace IKIGAI::RENDER {
         mStride = stride;
         mSizeByte = sz * stride;
         
-        if (mBuffer && [mBuffer length] < mSizeByte) {
-            id<MTLDevice> device = [mBuffer device];
-            mBuffer = [device newBufferWithLength:mSizeByte options:MTLResourceStorageModeShared];
+        if (!mBuffer || [mBuffer length] < mSizeByte) {
+            mBuffer = MakeSharedBuffer(mSizeByte);
         }
         
         if (mBuffer && data && mSizeByte > 0) {
@@ -68,10 +74,8 @@ namespace IKIGAI::RENDER {
     }
 
     // --- IndexBufferMetal ---
-    IndexBufferMetal::IndexBufferMetal(id<MTLDevice> device, size_t sz, size_t stride) : IndexBufferInterface(sz, stride) {
-        if (mSizeByte > 0) {
-            mBuffer = [device newBufferWithLength:mSizeByte options:MTLResourceStorageModeShared];
-        }
+    IndexBufferMetal::IndexBufferMetal(size_t sz, size_t stride) : IndexBufferInterface(sz, stride) {
+        mBuffer = MakeSharedBuffer(mSizeByte);
     }
 
     void IndexBufferMetal::setData(const void* data, size_t sz, size_t stride) {
@@ -79,9 +83,8 @@ namespace IKIGAI::RENDER {
         mStride = stride;
         mSizeByte = sz * stride;
         
-        if (mBuffer && [mBuffer length] < mSizeByte) {
-            id<MTLDevice> device = [mBuffer device];
-            mBuffer = [device newBufferWithLength:mSizeByte options:MTLResourceStorageModeShared];
+        if (!mBuffer || [mBuffer length] < mSizeByte) {
+            mBuffer = MakeSharedBuffer(mSizeByte);
         }
         
         if (mBuffer && data && mSizeByte > 0) {

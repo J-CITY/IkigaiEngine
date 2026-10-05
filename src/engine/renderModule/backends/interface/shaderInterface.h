@@ -45,7 +45,6 @@ namespace IKIGAI::RENDER {
 
 		virtual void recompile(const ShaderResource& res) = 0;
 
-		static std::string ConstructRealPath(const std::string& path);
 		static void GetReflection(ShaderReflection& reflection, const std::vector<uint32_t>& shaderCode, ShaderType type);
 	};
 

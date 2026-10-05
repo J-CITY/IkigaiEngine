@@ -16,6 +16,7 @@
 #ifdef METAL_BACKEND
 namespace IKIGAI::RENDER {
 	std::shared_ptr<ModelInterface> CreateEmptyModelMetal(const std::string& path);
+	std::shared_ptr<MeshInterface> CreateMeshMetal(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, size_t offset, unsigned materialIndex);
 }
 #endif
 
@@ -66,6 +67,10 @@ namespace IKIGAI::RENDER {
 #ifdef DX12_BACKEND
 		case RenderSettings::Backend::DIRECTX12:
 			return std::make_shared<MeshDx12>(vertices, indices, materialIndex);
+#endif
+#ifdef METAL_BACKEND
+		case RenderSettings::Backend::METAL:
+			return CreateMeshMetal(vertices, indices, offset, materialIndex);
 #endif
 		default:
 			return nullptr;

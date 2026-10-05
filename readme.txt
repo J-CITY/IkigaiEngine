@@ -16,6 +16,9 @@ python run_vs.py -c vs22 -a x64 -g opengl -t Release
 python run_vs.py -c vs22 -a x64 -g vulkan -t Debug
 # или
 python run_vs.py -c vs22 -a x64 -g dx12 --build
+# несколько API в одном exe; активный выбирается при запуске
+python run_vs.py -c vs22 -a x64 -g opengl vulkan dx12 --build
+IkigaiEngine.exe --render-backend=vulkan
 
 --use-editor / --use_file_watcher — редактор и hot-reload (CMake USE_EDITOR / USE_FILE_WATCHER):
 python run_vs.py --use-editor 0
@@ -61,14 +64,26 @@ python -m http.server 8000 --directory emscripten/out
 # открыть http://localhost:8000/IkigaiEngine.html
 ---------------------------------------------------------------
 macOS
-brew install sdl2 glew vulkan-headers vulkan-loader
-cmake -B mac/build -S mac
+brew install glew vulkan-headers vulkan-loader molten-vk
 
-cmake --build mac/build -j 8
+# -p macos и -p mac — одно и то же. -g задаёт API, которые компилируются
+# в один IkigaiEngine.app (по умолчанию mac/build, бинарник mac/out).
+# Активный API при запуске: assets/engine/Configs/render.json
+# (если есть assets/game/Configs/render.json, он перекрывает engine)
+# или аргумент --render-backend=opengl|vulkan|metal.
 
-xcode
-# Генерируем проект для Xcode в папку mac/build_xcode
-cmake -G Xcode -B mac/build_xcode -S mac
+python run_vs.py -p macos -g opengl --build
+python run_vs.py -p macos -g opengl vulkan metal --build
+open mac/out/IkigaiEngine.app --args --render-backend=metal
+open mac/out/IkigaiEngine.app --args --render-backend=vulkan
 
-# Открываем созданный проект в Xcode
+OpenGL: SDL core 3.2 + GLEW (Homebrew). Apple deprecation warnings are expected.
+Vulkan: needs MoltenVK at runtime (libMoltenVK / vulkan-loader). Debug builds
+also ask for VK_LAYER_KHRONOS_validation; use Release if that layer is missing.
+Metal: SDL_WINDOW_METAL and a CAMetalLayer; no extra brew package.
+
+# Xcode project (default dir mac/build_xcode, binary still mac/out)
+# After changing mac/CMakeLists.txt, re-run configure so Xcode picks up sources/scripts.
+python run_vs.py -p macos -c xcode -g opengl vulkan metal
 open mac/build_xcode/IkigaiEngine.xcodeproj
+python run_vs.py -p macos -c xcode -g opengl vulkan metal --build

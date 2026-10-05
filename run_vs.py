@@ -157,11 +157,62 @@ def append_engine_feature_cmake_args(command, use_editor, use_file_watcher):
     command.append('-DUSE_FILE_WATCHER=' + ('ON' if use_file_watcher else 'OFF'))
 
 
+def normalize_platform(name):
+    platform = (name or '').lower()
+    if platform in ('macos', 'osx', 'darwin'):
+        return 'mac'
+    return platform
+
+
+WIN_GRAPHICS_BACKENDS = ('opengl', 'vulkan', 'dx12')
+MAC_GRAPHICS_BACKENDS = ('opengl', 'vulkan', 'metal')
+
+
+def resolve_graphics_backends(platform, names):
+    if isinstance(names, str):
+        names = [names]
+    ordered = []
+    for name in names:
+        lowered = name.lower()
+        if lowered not in ordered:
+            ordered.append(lowered)
+    if not ordered:
+        raise ValueError('At least one graphics backend is required (-g)')
+    if platform == 'mac':
+        allowed = MAC_GRAPHICS_BACKENDS
+    elif platform == 'win':
+        allowed = WIN_GRAPHICS_BACKENDS
+    else:
+        return set(ordered)
+    unknown = [name for name in ordered if name not in allowed]
+    if unknown:
+        raise ValueError(
+            f"Graphics backend(s) not available on {platform}: {', '.join(unknown)}. "
+            f"Allowed: {', '.join(allowed)}"
+        )
+    return set(ordered)
+
+
+def append_graphics_cmake_args(command, platform, backends):
+    command.append('-DUSE_OPENGL=' + ('ON' if 'opengl' in backends else 'OFF'))
+    command.append('-DUSE_VULKAN=' + ('ON' if 'vulkan' in backends else 'OFF'))
+    if platform == 'win':
+        command.append('-DUSE_DX12=' + ('ON' if 'dx12' in backends else 'OFF'))
+    elif platform == 'mac':
+        command.append('-DUSE_METAL=' + ('ON' if 'metal' in backends else 'OFF'))
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', type=str, default="vs22", help='Compiller type: vs22 (default: vs22)')
+    parser.add_argument(
+        '-c', type=str, default="vs22",
+        help='Generator: vs22, vs19 (Windows); xcode (macOS, default on mac is Unix Makefiles)',
+    )
     parser.add_argument('-a', type=str, default="x64", help='Architecture: x86, x64 (default: x64)')
-    parser.add_argument('-p', type=str, default="win", help='Platform: win, linux, macos, android, quest, ios, web (default: win)')
+    parser.add_argument(
+        '-p', type=str, default="win",
+        help='Platform: win, mac/macos, android, quest, web (default: win)',
+    )
     parser.add_argument(
         '--use-editor',
         dest='use_editor',
@@ -182,7 +233,19 @@ def main():
         metavar='BOOL',
         help='Asset file watching / hot reload (default: on for win/mac when editor on; off for web/android).',
     )
-    parser.add_argument('-g', type=str, default="opengl", choices=['opengl', 'vulkan', 'dx12'], help='Graphics API (default: opengl)')
+    parser.add_argument(
+        '-g',
+        nargs='+',
+        default=['opengl'],
+        choices=['opengl', 'vulkan', 'dx12', 'metal'],
+        metavar='API',
+        help=(
+            'Graphics APIs compiled into one binary (default: opengl). '
+            'Several values share one build, e.g. -g opengl vulkan metal. '
+            'mac: opengl, vulkan, metal. win: opengl, vulkan, dx12. '
+            'Pick the active API at launch via Configs/render.json or --render-backend=.'
+        ),
+    )
     parser.add_argument('--esVer', dest='es_ver', type=str, default='3.2', choices=['3', '3.1', '3.2'],
                         help='Android OpenGL ES version (default: 3.2)')
     parser.add_argument('--abi', type=str, default='arm64-v8a,armeabi-v7a',
@@ -212,11 +275,15 @@ def main():
         print(f"Args: {' '.join(sys.argv)}")
         print(f"Cwd: {os.getcwd()}")
 
-        platform_arg = args.p.lower()
+        platform_arg = normalize_platform(args.p)
         build_type = args.build_type
         use_editor, use_file_watcher = resolve_engine_features(
             platform_arg, args.use_editor, args.use_file_watcher
         )
+        graphics_backends = None
+        if platform_arg in ('win', 'mac'):
+            graphics_backends = resolve_graphics_backends(platform_arg, args.g)
+            print('Graphics backends: ' + ', '.join(sorted(graphics_backends)))
         if platform_arg == 'quest' and (args.use_editor is False or args.use_file_watcher is not None):
             print('Note: Quest build has no editor or file watcher; --use-editor / --use_file_watcher are ignored.')
         ensure_environment(platform_arg, args.skip_setup)
@@ -237,9 +304,7 @@ def main():
             if (args.a == 'x64'):
                 command.extend(['-A', 'x64'])
 
-            command.append('-DUSE_OPENGL=' + ('ON' if args.g == 'opengl' else 'OFF'))
-            command.append('-DUSE_VULKAN=' + ('ON' if args.g == 'vulkan' else 'OFF'))
-            command.append('-DUSE_DX12=' + ('ON' if args.g == 'dx12' else 'OFF'))
+            append_graphics_cmake_args(command, platform_arg, graphics_backends)
             command.append(f'-DENGINE_WIN_SUBSYSTEM={args.s}')
             append_engine_feature_cmake_args(command, use_editor, use_file_watcher)
 
@@ -250,19 +315,30 @@ def main():
                 run_cmake_build(build_dir, build_type)
 
         elif platform_arg == 'mac':
-            build_dir = args.b if args.b else './mac/build'
+            compiler = args.c.lower()
+            use_xcode = compiler == 'xcode'
+            if compiler not in ('xcode', 'vs22', 'vs19'):
+                raise ValueError(
+                    f"Unknown macOS generator {args.c!r}. Use -c xcode, or omit -c for Unix Makefiles."
+                )
+            build_dir = args.b if args.b else ('./mac/build_xcode' if use_xcode else './mac/build')
             output_dir = resolve_runtime_output(args.o, './mac')
             command = [
                 'cmake', './mac', f'-B{build_dir}',
                 f'-DENGINE_RUNTIME_OUTPUT_DIRECTORY={output_dir}',
                 f'-DCMAKE_BUILD_TYPE={build_type}',
             ]
-            command.append('-DUSE_OPENGL=' + ('ON' if args.g == 'opengl' else 'OFF'))
-            command.append('-DUSE_VULKAN=' + ('ON' if args.g == 'vulkan' else 'OFF'))
+            if use_xcode:
+                command.extend(['-G', 'Xcode'])
+            append_graphics_cmake_args(command, platform_arg, graphics_backends)
             append_engine_feature_cmake_args(command, use_editor, use_file_watcher)
             run_logged(command, check=True)
             create_assets_link(build_dir)
             create_assets_link(output_dir)
+            if use_xcode:
+                project = os.path.abspath(os.path.join(build_dir, 'IkigaiEngine.xcodeproj'))
+                print(f"Xcode project: {project}")
+                print(f"Open with: open {project}")
             if args.build:
                 run_cmake_build(build_dir, build_type)
 

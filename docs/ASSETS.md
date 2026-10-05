@@ -44,7 +44,7 @@ python utils/sync_assets.py pull --dry-run
 
 `mode` in `assets.source.json`:
 
-- **`folder`** — `gdown --folder` using `driveFolderId` / `shareUrl`. Simpler publish step; Google can throttle large folders.
+- **`folder`** — list the public folder, then download each file with a current browser user-agent and without gdown's cookie jar. Google sometimes still refuses a file after many downloads (`Cannot retrieve the public link` / many accesses). The script waits and retries that file instead of dropping the whole pull.
 - **`zip`** — download one public zip by `driveFileId`, check `sha256`, unpack. Prefer this once a packed archive exists.
 
 ## Push (publisher only)

@@ -1,52 +1,12 @@
 #include "shaderInterface.h"
 #include <cstdint>
-#include <utilsModule/stringUtils.h>
 
 #include "SPIRV/GlslangToSpv.h"
-#include "driverInterface.h"
 #include "glslang/Public/ShaderLang.h"
 #include "spirv_glsl.hpp"
 #include "spirv_hlsl.hpp"
 #include "spirv_reflect.h"
 #include "utilsModule/assertion.h"
-
-std::string
-IKIGAI::RENDER::ShaderInterface::ConstructRealPath(const std::string &path) {
-  // if (IKIGAI::UTILS::IsFindInString(path, "/gl/") ||
-  // IKIGAI::UTILS::IsFindInString(path, "/gui/") || //TODO: remove it
-  //	IKIGAI::UTILS::IsFindInString(path, "/opengl/") ||
-  // IKIGAI::UTILS::IsFindInString(path, "/vulkan/") ||
-  // IKIGAI::UTILS::IsFindInString(path, "/dx12/")) { 	return path;
-  // }
-
-#ifdef OPENGL_BACKEND
-  if (RENDER::DriverInterface::settings.backend ==
-      RENDER::RenderSettings::Backend::OPENGL) {
-    return path;
-  }
-#endif
-#ifdef VULKAN_BACKEND
-  if (RENDER::DriverInterface::settings.backend ==
-      RENDER::RenderSettings::Backend::VULKAN) {
-    return IKIGAI::UTILS::ReplaceSubstring(path, "shaders/", "shaders/vulkan/");
-  }
-#endif
-#ifdef DX12_BACKEND
-  if (RENDER::DriverInterface::settings.backend ==
-      RENDER::RenderSettings::Backend::DIRECTX12) {
-    return IKIGAI::UTILS::ReplaceSubstring(path, "shaders/", "shaders/dx12/");
-  }
-#endif
-#ifdef METAL_BACKEND
-  if (RENDER::DriverInterface::settings.backend ==
-      RENDER::RenderSettings::Backend::METAL) {
-    return IKIGAI::UTILS::ReplaceSubstring(path, "shaders/", "shaders/metal/");
-  }
-#endif
-
-  // TODO: assert
-  return path;
-}
 
 void IKIGAI::RENDER::ShaderInterface::GetReflection(
     ShaderReflection &reflection, const std::vector<uint32_t> &shaderCode,

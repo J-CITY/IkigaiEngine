@@ -34,6 +34,13 @@ serdepp writes the enum names (`OPENGL`, `VULKAN`, `DIRECTX12`, `METAL`). CLI al
 | macOS | `-DUSE_OPENGL=ON -DUSE_METAL=ON` (optional `USE_VULKAN`) |
 | Emscripten | OpenGL only |
 
+`run_vs.py -g` passes those flags for one binary. Several names compile every listed API; the process still starts a single backend from `render.json` or `--render-backend=`.
+
+```bash
+python run_vs.py -p macos -g opengl vulkan metal --build
+python run_vs.py -p win -g opengl vulkan dx12 --build
+```
+
 A shipping game can still enable a single `USE_*` to keep the binary smaller.
 
 ## Startup order
