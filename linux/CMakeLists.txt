@@ -200,18 +200,18 @@ add_executable(${APP_NAME}
 
 # --- Generate Reflection Headers ---
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
-add_custom_command(
-    TARGET ${APP_NAME} PRE_BUILD
+add_custom_target(GenerateReflectionHeaders
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../utils/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
     COMMENT "Running IkigaiHeaderTool to generate reflection headers..."
 )
+add_dependencies(${APP_NAME} GenerateReflectionHeaders)
 
 # Properties
 set_target_properties(${APP_NAME} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-target_compile_options(${APP_NAME} PRIVATE -Wall -Wextra)
+target_compile_options(${APP_NAME} PRIVATE -Wall -Wextra -fpermissive)
 
 # Definitions
-target_compile_definitions(${APP_NAME} PRIVATE SOL_EXCEPTIONS_SAFE_PROPAGATION=1)
+target_compile_definitions(${APP_NAME} PRIVATE SOL_EXCEPTIONS_SAFE_PROPAGATION=1 SOL_NO_LUA_HPP=1)
 
 if(USE_SDL)
     target_compile_definitions(${APP_NAME} PRIVATE USE_SDL)

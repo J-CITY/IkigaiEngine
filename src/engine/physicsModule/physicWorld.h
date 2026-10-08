@@ -7,7 +7,7 @@
 #include <renderModule/objects/boundingSphere.h>
 #include <vector>
 
-#include "cloth/Cloth.h"
+#include "cloth/cloth.h"
 //#include "particel/ParticleSystem.h"
 
 

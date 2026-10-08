@@ -3,7 +3,7 @@
 #ifdef OPENGL_BACKEND
 #include "../interface/reflectionStructs.h"
 #include "../interface/resourceStruct.h"
-#include "resourceModule/ServiceManager.h"
+#include "resourceModule/serviceManager.h"
 #include "resourceModule/shaderManager.h"
 #include "resourceModule/textureManager.h"
 #include "utilsModule/jsonLoader.h"

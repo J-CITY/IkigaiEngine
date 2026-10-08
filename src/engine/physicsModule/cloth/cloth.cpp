@@ -1,4 +1,4 @@
-#include "Cloth.h"
+#include "cloth.h"
 
 void ClothObj::Initialize(int gridSize, float distance, const glm::vec3& position) {
 	float k = -1.0f;

@@ -140,7 +140,7 @@ IKIGAI::RENDER::DriverGl::~DriverGl() {
 }
 
 void IKIGAI::RENDER::DriverGl::initGlew() {
-#if defined(_WIN32) || defined(WIN32)
+#if defined(_WIN32) || defined(WIN32) || (defined(__linux__) && !defined(__ANDROID__))
   glewExperimental = GL_TRUE;
   const GLenum error = glewInit();
   if (error != GLEW_OK) {
@@ -606,7 +606,7 @@ void IKIGAI::RENDER::DriverGl::resetFrameBuffer() {
 }
 
 #if !defined(OCULUS) && !defined(__APPLE__)
-void IKIGAI::RENDER::DriverGl::GLDebugMessageCallback(
+void APIENTRY IKIGAI::RENDER::DriverGl::GLDebugMessageCallback(
     uint32_t source, uint32_t type, uint32_t id, uint32_t severity,
     int32_t length, const char *message, const void *userParam) {
   if (id == 131169 || id == 131185 || id == 131218 || id == 131204) {

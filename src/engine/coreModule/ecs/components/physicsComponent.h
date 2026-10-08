@@ -2,7 +2,7 @@
 
 #include "component.h"
 #include <functional>
-#include <renderModule/objects/BoundingSphere.h>
+#include <renderModule/objects/boundingSphere.h>
 #include <physicsModule/body.h>
 #include "physicsModule/narrowPhase.h"
 #include "utilsModule/reflection/reflection_macros.h"

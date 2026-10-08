@@ -1,5 +1,5 @@
 #include "textureManager.h"
-#include "ServiceManager.h"
+#include "serviceManager.h"
 #include <resourceModule/fileSystem/fileSystem.h>
 #include <filesystem>
 

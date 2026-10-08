@@ -185,7 +185,7 @@ add_custom_command(
 set_target_properties(${APP_NAME} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 
 target_compile_definitions(${APP_NAME} PRIVATE NOMINMAX)
-target_compile_definitions(${APP_NAME} PRIVATE SOL_NO_EXCEPTIONS=1)
+target_compile_definitions(${APP_NAME} PRIVATE SOL_NO_EXCEPTIONS=1 SOL_NO_LUA_HPP=1)
 target_compile_definitions(${APP_NAME} PRIVATE $<$<CONFIG:Debug>:SOL_ALL_SAFETIES_ON=1>)
 target_compile_definitions(${APP_NAME} PRIVATE EMSCRIPTEN __EMSCRIPTEN__ USING_GLES OPENGL_SIMPLE_RENDER)
 

@@ -1,4 +1,4 @@
-#include "animFabrikIk.h"
+#include "animFabrikIK.h"
 
 namespace {
 	IKIGAI::MATH::QuaternionF rotationFromTwoVectors(IKIGAI::MATH::Vector3f u, IKIGAI::MATH::Vector3f v) {

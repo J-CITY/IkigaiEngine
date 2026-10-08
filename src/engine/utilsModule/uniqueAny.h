@@ -1,5 +1,6 @@
 #pragma once
 #include <functional>
+#include <utility>
 
 namespace IKIGAI::UTILS {
     namespace detail {

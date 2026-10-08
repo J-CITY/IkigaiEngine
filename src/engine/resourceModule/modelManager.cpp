@@ -1,5 +1,5 @@
 #include "modelManager.h"
-#include "ServiceManager.h"
+#include "serviceManager.h"
 #include <resourceModule/fileSystem/fileSystem.h>
 #include <renderModule/backends/interface/modelInterface.h>
 

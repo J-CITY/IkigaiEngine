@@ -27,7 +27,7 @@
 #if IKIGAI_GLES_VERSION >= 310
 #define IKIGAI_GLES_HAS_SSBO 1
 #endif
-#elif WIN32
+#elif defined(WIN32) || defined(_WIN32) || defined(__linux__) || defined(__unix__)
 
 #ifdef OPENGL_BACKEND
 #define GLEW_STATIC

@@ -2,6 +2,8 @@
 #include <memory>
 #include <future>
 #include <optional>
+#include <vector>
+#include <thread>
 
 #include "safeQueue.h"
 

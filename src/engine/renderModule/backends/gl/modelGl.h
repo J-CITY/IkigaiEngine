@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #ifdef OPENGL_BACKEND
 
 #include "indexBufferGl.h"

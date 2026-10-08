@@ -2,6 +2,7 @@
 #ifdef OPENGL_BACKEND
 #include <vector>
 #include "../interface/indexBufferInterface.h"
+#include <cstdint>
 
 namespace IKIGAI::RENDER
 {

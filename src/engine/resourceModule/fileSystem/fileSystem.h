@@ -47,11 +47,9 @@ namespace IKIGAI::RESOURCES {
 		void write(const T& value) {
 			write(reinterpret_cast<const uint8_t*>(&value), sizeof(value));
 		}
-		template<>
 		void write(const std::string& value) {
 			write(reinterpret_cast<const uint8_t*>(value.data()), value.size());
 		}
-		template<>
 		void write(const std::vector<uint8_t>& value) {
 			write(value.data(), value.size());
 		}

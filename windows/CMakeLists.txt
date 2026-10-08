@@ -230,7 +230,7 @@ target_compile_options(${APP_NAME} PRIVATE /bigobj /MP12 /Zm200)
 
 # Definitions
 target_compile_definitions(${APP_NAME} PRIVATE NOMINMAX)
-target_compile_definitions(${APP_NAME} PRIVATE SOL_EXCEPTIONS_SAFE_PROPAGATION=1)
+target_compile_definitions(${APP_NAME} PRIVATE SOL_EXCEPTIONS_SAFE_PROPAGATION=1 SOL_NO_LUA_HPP=1)
 target_compile_definitions(${APP_NAME} PRIVATE $<$<CONFIG:Debug>:SOL_ALL_SAFETIES_ON=1>)
 
 if(USE_SDL)

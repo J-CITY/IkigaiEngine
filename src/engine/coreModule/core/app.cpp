@@ -4,8 +4,8 @@
 #include <stdexcept>
 
 #include "coreModule/ecs/componentManager.h"
-#include "editorModule/EditorRender.h"
-#include "physicsModule/PhysicWorld.h"
+#include "editorModule/editorRender.h"
+#include "physicsModule/physicWorld.h"
 #include "renderModule/gameRendererInterface.h"
 #include "renderModule/render.h"
 #include "resourceModule/fileWatcher.h"

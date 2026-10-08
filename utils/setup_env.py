@@ -22,6 +22,7 @@ LINUX_PACMAN_PACKAGES = (
     "cmake",
     "base-devel",
     "python",
+    "python-pip",
     "mesa",
     "glew",
     "vulkan-headers",
@@ -31,13 +32,14 @@ LINUX_PACMAN_PACKAGES = (
     "wayland",
     "libxkbcommon",
     "libpulse",
-    "alsa-lib"
+    "alsa-lib",
 )
 
 LINUX_APT_PACKAGES = (
     "cmake",
     "build-essential",
     "python3",
+    "python3-pip",
     "libgl1-mesa-dev",
     "libglew-dev",
     "libvulkan-dev",
@@ -47,7 +49,7 @@ LINUX_APT_PACKAGES = (
     "libwayland-dev",
     "libxkbcommon-dev",
     "libpulse-dev",
-    "libasound2-dev"
+    "libasound2-dev",
 )
 
 

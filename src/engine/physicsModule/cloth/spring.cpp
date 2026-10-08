@@ -1,4 +1,4 @@
-#include "Spring.h"
+#include "spring.h"
 
 #include <glm/vec3.hpp>
 

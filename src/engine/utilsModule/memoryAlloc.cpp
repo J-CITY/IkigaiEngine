@@ -1,6 +1,7 @@
 #include "memoryAlloc.h"
 #include <memory>
 #include <shared_mutex>
+#include <mutex>
 #include <unordered_map>
 
 #include "log/loggerDefine.h"

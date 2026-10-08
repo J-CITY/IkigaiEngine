@@ -16,7 +16,7 @@ std::unordered_map<std::thread::id, std::vector<ProfilerReport::Node>> Profiler:
 uint32_t Profiler::__ELAPSED_FRAMES;
 
 Profiler::Profiler() {
-	mLastTime = std::chrono::high_resolution_clock::now();
+	mLastTime = std::chrono::steady_clock::now();
 	__ENABLED = false;
 }
 
@@ -26,7 +26,7 @@ ProfilerReport Profiler::GenerateReport() {
 	if (__ELAPSED_FRAMES == 0)
 		return report;
 
-	std::chrono::duration<double> elapsed = std::chrono::high_resolution_clock::now() - mLastTime;
+	std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - mLastTime;
 
 	report.mFrames = __ELAPSED_FRAMES;
 	report.mTime = elapsed.count();
@@ -49,7 +49,7 @@ void Profiler::ClearHistory() {
 	__WORKING_THREADS_LEVEL.clear();
 	__WORKING_THREADS_CALLS.clear();
 	__ELAPSED_FRAMES = 0;
-	mLastTime = std::chrono::high_resolution_clock::now();
+	mLastTime = std::chrono::steady_clock::now();
 	__REPORT_HISTORY.clear();
 }
 
@@ -64,7 +64,7 @@ void Profiler::Update(float p_deltaTime) {
 void Profiler::UpdateEnd() {
 	if (IsEnabled()) {
 		__REPORT_HISTORY.push_back(GenerateReport());
-		std::chrono::duration<double> dur = std::chrono::high_resolution_clock::now() - mFrameStart;
+		std::chrono::duration<double> dur = std::chrono::steady_clock::now() - mFrameStart;
 		__REPORT_HISTORY_DURATIONS.push_back(dur.count());
 	}
 }

@@ -3,7 +3,7 @@
 
 #include <memory>
 
-#include "ClothParticle.h"
+#include "clothParticle.h"
 
 // F = -kx-bv
 // k - spring "tightness" constant [negative to 0] rigid at 0

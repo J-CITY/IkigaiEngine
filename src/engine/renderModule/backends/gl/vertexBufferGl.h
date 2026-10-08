@@ -3,6 +3,7 @@
 #ifdef OPENGL_BACKEND
 #include <vector>
 #include "../interface/vertexBufferInterface.h"
+#include <cstdint>
 
 namespace IKIGAI::RENDER
 {

@@ -141,11 +141,11 @@ namespace ImGui
         const auto& imStyle = GetStyle();
         const auto width = style.CurrentFramePointerSize * GetIO().FontGlobalScale;
         const auto cursor =
-                context.TopBarStartCursor + ImVec2{context.ValuesWidth + imStyle.FramePadding.x - width / 2.0f, 0};
-        const auto currentFrameCursor = cursor + ImVec2{getKeyframePositionX(frame, context), 0};
+                context.TopBarStartCursor + ImVec2(context.ValuesWidth + imStyle.FramePadding.x - width / 2.0f, 0);
+        const auto currentFrameCursor = cursor + ImVec2(getKeyframePositionX(frame, context), 0);
 
         float pointerHeight = style.CurrentFramePointerSize * 2.5f;
-        ImRect rect{currentFrameCursor, currentFrameCursor + ImVec2{width, pointerHeight * GetIO().FontGlobalScale}};
+        ImRect rect{currentFrameCursor, currentFrameCursor + ImVec2(width, pointerHeight * GetIO().FontGlobalScale)};
 
         return rect;
     }
@@ -178,8 +178,8 @@ namespace ImGui
     static void processCurrentFrame(FrameIndexType* frame, ImGuiNeoSequencerInternalData& context)
     {
         auto pointerRect = getCurrentFrameBB(*frame, context);
-        pointerRect.Min -= ImVec2{2.0f, 2.0f};
-        pointerRect.Max += ImVec2{2.0f, 2.0f};
+        pointerRect.Min -= ImVec2(2.0f, 2.0f);
+        pointerRect.Max += ImVec2(2.0f, 2.0f);
 
         const auto& imStyle = GetStyle();
 
@@ -388,12 +388,12 @@ namespace ImGui
             keyframeDuplicates.back().Count = 1;
         }
 
-        const auto pos = ImVec2{context.StartValuesCursor.x + imStyle.FramePadding.x, context.ValuesCursor.y} +
-                         ImVec2{timelineOffset + context.ValuesWidth + offset, 0};
+        const auto pos = ImVec2(context.StartValuesCursor.x + imStyle.FramePadding.x, context.ValuesCursor.y) +
+                         ImVec2(timelineOffset + context.ValuesWidth + offset, 0);
 
-        const auto bbPos = pos - ImVec2{currentTimelineHeight / 2, 0};
+        const auto bbPos = pos - ImVec2(currentTimelineHeight / 2, 0);
 
-        const ImRect bb = {bbPos, bbPos + ImVec2{currentTimelineHeight, currentTimelineHeight}};
+        const ImRect bb(bbPos, bbPos + ImVec2(currentTimelineHeight, currentTimelineHeight));
 
         const auto drawList = ImGui::GetWindowDrawList();
 
@@ -446,7 +446,7 @@ namespace ImGui
 
             ImColor color = getKeyframeColor(context, hovered, inSelection);
 
-            drawList->AddCircleFilled(pos + ImVec2{0, currentTimelineHeight / 2.f}, currentTimelineHeight / 3.0f,
+            drawList->AddCircleFilled(pos + ImVec2(0, currentTimelineHeight / 2.f), currentTimelineHeight / 3.0f,
                                       color, 4);
             if (hovered && IsMouseClicked(ImGuiMouseButton_Middle)) {
                 res = 1;
@@ -524,17 +524,17 @@ namespace ImGui
 
         const auto inputWidthWithPadding = inputWidth + imStyle.ItemSpacing.x;
 
-        const auto cursorV = allowEditingLength ? cursor + ImVec2{inputWidthWithPadding, 0}
+        const auto cursorV = allowEditingLength ? cursor + ImVec2(inputWidthWithPadding, 0)
                                                 : cursor;
 
         const auto size = allowEditingLength ?
                           context.Size.x - 2 * inputWidthWithPadding :
                           context.Size.x;
 
-        const ImRect bb{cursorV, cursorV + ImVec2{size, zoomHeight}};
+        const ImRect bb{cursorV, cursorV + ImVec2(size, zoomHeight)};
 
 
-        const auto zoomBarEndWithSpacing = ImVec2{bb.Max.x + imStyle.ItemSpacing.x, bb.Min.y};
+        const auto zoomBarEndWithSpacing = ImVec2(bb.Max.x + imStyle.ItemSpacing.x, bb.Min.y);
 
         FrameIndexType startFrameVal = *start;
         FrameIndexType endFrameVal = *end;
@@ -552,7 +552,7 @@ namespace ImGui
             InputScalar("##input_start_frame", ImGuiDataType_U32, &startFrameVal, NULL, NULL, "%i",
                         allowEditingLength ? 0 : ImGuiInputTextFlags_ReadOnly);
 
-            window->DC.CursorPos = ImVec2{zoomBarEndWithSpacing.x, cursor.y};
+            window->DC.CursorPos = ImVec2(zoomBarEndWithSpacing.x, cursor.y);
             window->DC.CursorPos.x -= sideOffset;
 
             PushItemWidth(inputWidth);
@@ -574,7 +574,7 @@ namespace ImGui
         *start = startFrameVal;
         *end = endFrameVal;
 
-        //drawList->AddText(startFrameTextCursor + ImVec2{frameNumberBorderSize.x, 0} - ImVec2{numberTextWidth,0},IM_COL32_WHITE,numberText);
+        //drawList->AddText(startFrameTextCursor + ImVec2(frameNumberBorderSize.x, 0) - ImVec2(numberTextWidth,0),IM_COL32_WHITE,numberText);
 
         //Background
         drawList->AddRectFilled(bb.Min, bb.Max,
@@ -600,14 +600,14 @@ namespace ImGui
 
         const auto zoomSliderOffset = singleFrameWidthOffset * (float) context.OffsetFrame;
 
-        const auto sliderStart = sliderMin + ImVec2{zoomSliderOffset, 0};
+        const auto sliderStart = sliderMin + ImVec2(zoomSliderOffset, 0);
 
         const float sideSize = sliderHeight;
 
-        const ImRect finalSliderBB{sliderStart, sliderStart + ImVec2{sliderWidth, sliderHeight}};
+        const ImRect finalSliderBB{sliderStart, sliderStart + ImVec2(sliderWidth, sliderHeight)};
 
-        const ImRect finalSliderInteractBB = {finalSliderBB.Min + ImVec2{sideSize, 0},
-                                              finalSliderBB.Max - ImVec2{sideSize, 0}};
+        const ImRect finalSliderInteractBB(finalSliderBB.Min + ImVec2(sideSize, 0),
+                                              finalSliderBB.Max - ImVec2(sideSize, 0));
 
 
         const auto viewWidth = (uint32_t) ((float) totalFrames / context.Zoom);
@@ -714,9 +714,9 @@ namespace ImGui
 
         const auto windowWorkRect = GetCurrentWindow()->ClipRect;
 
-        const auto sequencerWorkRect = ImRect{
-                context.TopBarStartCursor + ImVec2{context.ValuesWidth, context.TopBarSize.y},
-                context.TopBarStartCursor + context.Size - ImVec2{0, context.TopBarSize.y}};
+        const auto sequencerWorkRect = ImRect(
+                context.TopBarStartCursor + ImVec2(context.ValuesWidth, context.TopBarSize.y),
+                context.TopBarStartCursor + context.Size - ImVec2(0, context.TopBarSize.y));
 
         if (IsMouseDown(ImGuiMouseButton_Left) && windowWorkRect.Contains(GetMousePos()) &&
             sequencerWorkRect.Contains(GetMousePos()))
@@ -832,7 +832,7 @@ namespace ImGui
                 context.ValuesCursor,
                 context.ValuesCursor + arrowSize
         };
-        const ImVec2 groupBBMin = {context.ValuesCursor + ImVec2{arrowSize.x, 0.0f}};
+        const ImVec2 groupBBMin(context.ValuesCursor + ImVec2(arrowSize.x, 0.0f));
         const ImRect groupBB = {
                 groupBBMin,
                 groupBBMin + labelSize
@@ -960,7 +960,7 @@ namespace ImGui
 
         // If Zoom is shown, we offset it by height of Zoom bar + padding
         context.TopBarStartCursor = showZoom ? context.TopLeftCursor +
-                                               ImVec2{0, calculateZoomBarHeight()}
+                                               ImVec2(0, calculateZoomBarHeight())
                                              : context.TopLeftCursor;
         context.StartFrame = *startFrame;
         context.EndFrame = *endFrame;
@@ -1001,9 +1001,9 @@ namespace ImGui
         context.FilledHeight = context.TopBarSize.y + style.TopBarSpacing +
                                (showZoom ? calculateZoomBarHeight() : 0.0f);
 
-        context.StartValuesCursor = cursor + ImVec2{0, context.TopBarSize.y + style.TopBarSpacing};
+        context.StartValuesCursor = cursor + ImVec2(0, context.TopBarSize.y + style.TopBarSpacing);
         if (showZoom)
-            context.StartValuesCursor = context.StartValuesCursor + ImVec2{0, calculateZoomBarHeight()};
+            context.StartValuesCursor = context.StartValuesCursor + ImVec2(0, calculateZoomBarHeight());
         context.ValuesCursor = context.StartValuesCursor;
 
         processCurrentFrame(frame, context);
@@ -1015,7 +1015,7 @@ namespace ImGui
 
         drawList->PushClipRect(clipMin,
                                clipMin + backgroundSize - ImVec2(0, context.TopBarSize.y) -
-                               ImVec2{0, GetFontSize() * style.ZoomHeightScale}, true);
+                               ImVec2(0, GetFontSize() * style.ZoomHeightScale), true);
         return true;
     }
 
@@ -1170,8 +1170,8 @@ namespace ImGui
         bool isGroup = flags & ImGuiNeoTimelineFlags_Group && closable;
 
         auto drawList = ImGui::GetWindowDrawList();
-        auto cursor = context.ValuesCursor + ImVec2{context.ValuesWidth, 0};
-    	auto size = ImVec2{context.Size.x - context.ValuesWidth, labelSize.y};
+        auto cursor = context.ValuesCursor + ImVec2(context.ValuesWidth, 0);
+    	auto size = ImVec2(context.Size.x - context.ValuesWidth, labelSize.y);
         const ImRect area = {cursor, cursor + size};
         if (!isGroup && IsMouseHoveringRect(area.Min, area.Max)) {
             drawList->AddRectFilled(area.Min, area.Max, ColorConvertFloat4ToU32(ImVec4{0.22f, 0.22f, 0.22f, 0.94f}));
@@ -1210,8 +1210,8 @@ namespace ImGui
         if (addRes)
         {
             RenderNeoTimelane(id == context.SelectedTimeline,
-                              context.ValuesCursor + ImVec2{context.ValuesWidth, 0},
-                              ImVec2{context.Size.x - context.ValuesWidth, currentTimelineHeight},
+                              context.ValuesCursor + ImVec2(context.ValuesWidth, 0),
+                              ImVec2(context.Size.x - context.ValuesWidth, currentTimelineHeight),
                               GetStyleNeoSequencerColorVec4(ImGuiNeoSequencerCol_SelectedTimeline));
 
             ImVec4 color = GetStyleColorVec4(ImGuiCol_Text);
@@ -1219,7 +1219,7 @@ namespace ImGui
 
             RenderNeoTimelineLabel(label,
                                    context.ValuesCursor + imStyle.FramePadding +
-                                   ImVec2{(float) currentTimelineDepth * style.DepthItemSpacing, 0},
+                                   ImVec2((float) currentTimelineDepth * style.DepthItemSpacing, 0),
                                    labelSize,
                                    color,
                                    isGroup,
@@ -1230,7 +1230,7 @@ namespace ImGui
                 PushID(label);
                 PushStyleColor(ImGuiCol_Button, GetStyleNeoSequencerColorVec4(ImGuiNeoSequencerCol_TopBarBg));
                 PushStyleColor(ImGuiCol_ButtonHovered, GetStyleNeoSequencerColorVec4(ImGuiNeoSequencerCol_Bg));
-                SetCursorScreenPos(context.ValuesCursor + ImVec2{context.ValuesWidth - 20, 0});
+                SetCursorScreenPos(context.ValuesCursor + ImVec2(context.ValuesWidth - 20, 0));
                 if (Button("X")) {
                     if (buttonPressed) {
                         *buttonPressed = true;

@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include <functional>
 
 namespace IKIGAI::ECS2 {
 	class Component;

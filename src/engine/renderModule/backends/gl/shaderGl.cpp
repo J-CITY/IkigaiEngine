@@ -17,7 +17,7 @@
 #include "utilsModule/pathGetter.h"
 #include "utilsModule/stringUtils.h"
 #include <renderModule/backends/interface/resourceStruct.h>
-#include <resourceModule/ServiceManager.h>
+#include <resourceModule/serviceManager.h>
 #include <resourceModule/fileSystem/fileSystem.h>
 
 namespace {

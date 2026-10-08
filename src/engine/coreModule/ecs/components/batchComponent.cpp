@@ -1,5 +1,6 @@
 #include "batchComponent.h"
 #include <string>
+#include <coreModule/graphicsWrapper.hpp>
 
 #include "transform.h"
 #include "coreModule/ecs/object.h"

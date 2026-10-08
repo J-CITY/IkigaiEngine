@@ -1,4 +1,5 @@
 #include "gamepad.h"
+#include <cmath>
 
 using namespace IKIGAI::INPUT;
 

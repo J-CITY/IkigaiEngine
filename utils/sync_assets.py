@@ -203,11 +203,43 @@ def ensure_gdown():
         return
     except ImportError:
         pass
+
+    check_pip = subprocess.run(
+        [sys.executable, "-m", "pip", "--version"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if check_pip.returncode != 0:
+        raise RuntimeError(
+            "Python module 'pip' is not installed.\n"
+            "Please install pip via your package manager:\n"
+            "  Arch / Manjaro: sudo pacman -S python-pip\n"
+            "  Ubuntu / Debian: sudo apt install python3-pip\n"
+            "Or pass --skip-setup (-S) to run_vs.py to skip asset downloading for now."
+        )
+
     print("Installing gdown (once, no Google account)...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "--user", "gdown"], check=True)
+    res = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--user", "gdown"],
+        capture_output=True,
+        text=True,
+    )
+    if res.returncode != 0:
+        if "externally-managed-environment" in res.stderr or "PEP 668" in res.stderr:
+            subprocess.run(
+                [sys.executable, "-m", "pip", "install", "--user", "--break-system-packages", "gdown"],
+                check=True,
+            )
+        else:
+            sys.stderr.write(res.stderr)
+            res.check_returncode()
+
     user_site = site.getusersitepackages()
     if user_site not in sys.path:
         sys.path.append(user_site)
+    import importlib
+
+    importlib.invalidate_caches()
     import gdown  # noqa: F401
 
 
@@ -265,17 +297,20 @@ def download_drive_file(file_id, dest_file, attempts=5):
 
 def download_folder(url, dest_dir):
     import gdown
+    import inspect
 
     os.makedirs(dest_dir, exist_ok=True)
     print(f"gdown --folder {url}")
-    listed = gdown.download_folder(
-        url,
-        output=dest_dir,
-        remaining_ok=True,
-        quiet=False,
-        use_cookies=False,
-        skip_download=True,
-    )
+    kwargs = {
+        "output": dest_dir,
+        "quiet": False,
+        "use_cookies": False,
+        "skip_download": True,
+    }
+    if "remaining_ok" in inspect.signature(gdown.download_folder).parameters:
+        kwargs["remaining_ok"] = True
+
+    listed = gdown.download_folder(url, **kwargs)
     if not listed:
         raise RuntimeError(f"Could not list Google Drive folder: {url}")
     print(f"Downloading {len(listed)} files")

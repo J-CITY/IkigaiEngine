@@ -86,16 +86,13 @@ namespace IKIGAI::IMGUI {
 		bool draw(const std::string& _nameId, T& val) {
 			return false;
 		}
-		template<>
-		bool draw<int>(const std::string& _nameId, int& val) {
+		bool draw(const std::string& _nameId, int& val) {
 			return ImGui::DragInt(_nameId.c_str(), &val);
 		}
-		template<>
-		bool draw<float>(const std::string& _nameId, float& val) {
+		bool draw(const std::string& _nameId, float& val) {
 			return ImGui::DragFloat(_nameId.c_str(), &val, 0.1f);
 		}
-		template<>
-		bool draw<bool>(const std::string& _nameId, bool& val) {
+		bool draw(const std::string& _nameId, bool& val) {
 			return ImGui::Checkbox(_nameId.c_str(), &val);
 		}
 	};

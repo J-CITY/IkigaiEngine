@@ -8,7 +8,7 @@
 #include <resourceModule/materialManager.h>
 #include <windowModule/inputManager/inputManager.h>
 #include <windowModule/inputManager/inputActions.h>
-#include <resourceModule/ServiceManager.h>
+#include <resourceModule/serviceManager.h>
 
 #include "utilsModule/log/loggerDefine.h"
 

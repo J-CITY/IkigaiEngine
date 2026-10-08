@@ -11,13 +11,13 @@
 #include "../config.h"
 #include "resourceModule/materialManager.h"
 #include "resourceModule/modelManager.h"
-#include "resourceModule/ServiceManager.h"
+#include "resourceModule/serviceManager.h"
 #include "resourceModule/shaderManager.h"
 #include "resourceModule/audioSourceManager.h"
 #include "resourceModule/textureManager.h"
 #include <audioModule/audioManager.h>
 #include <debugModule/debugRender.h>
-#include <physicsModule/PhysicWorld.h>
+#include <physicsModule/physicWorld.h>
 #include <resourceModule/fileSystem/fileSystem.h>
 #include <taskModule/taskSystem.h>
 #include <utilsModule/pathGetter.h>

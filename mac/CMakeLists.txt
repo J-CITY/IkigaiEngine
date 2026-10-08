@@ -235,7 +235,7 @@ set_target_properties(${APP_NAME} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIR
 target_compile_options(${APP_NAME} PRIVATE -Wall -Wextra)
 
 # Definitions
-target_compile_definitions(${APP_NAME} PRIVATE SOL_EXCEPTIONS_SAFE_PROPAGATION=1)
+target_compile_definitions(${APP_NAME} PRIVATE SOL_EXCEPTIONS_SAFE_PROPAGATION=1 SOL_NO_LUA_HPP=1)
 
 if(USE_SDL)
     target_compile_definitions(${APP_NAME} PRIVATE USE_SDL)

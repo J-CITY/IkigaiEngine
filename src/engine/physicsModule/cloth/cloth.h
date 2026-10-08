@@ -2,8 +2,8 @@
 
 #include <memory>
 
-#include "ClothParticle.h"
-#include "Spring.h"
+#include "clothParticle.h"
+#include "spring.h"
 #include <vector>
 
 class ClothObj {

@@ -2,16 +2,16 @@
 
 #include <sol/sol.hpp>
 
-#include <coreModule/ecs/Object.h>
-#include <coreModule/ecs/components/Transform.h>
+#include <coreModule/ecs/object.h>
+#include <coreModule/ecs/components/transform.h>
 #include <coreModule/ecs/components/cameraComponent.h>
-#include <coreModule/ecs/components/DirectionalLight.h>
-#include <coreModule/ecs/components/PointLight.h>
-#include <coreModule/ecs/components/SpotLight.h>
-#include <coreModule/ecs/components/AmbientLight.h>
-#include <coreModule/ecs/components/AmbientSphereLight.h>
-#include <coreModule/ecs/components/ModelRenderer.h>
-#include <coreModule/ecs/components/MaterialRenderer.h>
+#include <coreModule/ecs/components/directionalLight.h>
+#include <coreModule/ecs/components/pointLight.h>
+#include <coreModule/ecs/components/spotLight.h>
+#include <coreModule/ecs/components/ambientLight.h>
+#include <coreModule/ecs/components/ambientSphereLight.h>
+#include <coreModule/ecs/components/modelRenderer.h>
+#include <coreModule/ecs/components/materialRenderer.h>
 
 using namespace IKIGAI::SCRIPTING;
 

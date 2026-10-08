@@ -1,6 +1,6 @@
 #include "materialManager.h"
 #include <fstream>
-#include "ServiceManager.h"
+#include "serviceManager.h"
 #include <nlohmann/json.hpp>
 #include <renderModule/backends/interface/materialInterface.h>
 #include <resourceModule/fileSystem/fileSystem.h>

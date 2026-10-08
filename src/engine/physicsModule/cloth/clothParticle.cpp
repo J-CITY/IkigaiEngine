@@ -1,4 +1,4 @@
-#include "ClothParticle.h"
+#include "clothParticle.h"
 
 #include <glm/vec3.hpp>
 #include <glm/mat3x3.hpp>

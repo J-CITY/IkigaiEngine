@@ -1,6 +1,6 @@
 
 #include <cstdlib>
-#include "PhysicWorld.h"
+#include "physicWorld.h"
 
 #include "broadPhase.h"
 #include "narrowPhase.h"
