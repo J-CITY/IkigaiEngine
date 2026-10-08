@@ -16,7 +16,7 @@
 #include <serdepp/serializer.hpp>
 #include <nlohmann/json.hpp>
 namespace serde {
-	template<typename E, int SIZE>
+	template<typename E, size_t SIZE>
 	struct serde_adaptor<nlohmann::json, std::array<E, SIZE>, type::seq_t> {
 		static void from(nlohmann::json& s, std::string_view key, std::array<E, SIZE>& arr) {
 			auto& table = key.empty() ? s : s.at(std::string{key});
@@ -2536,7 +2536,7 @@ namespace IKIGAI::MATH {
 		T x = 0.0;
 		T y = 0.0;
 		T z = 0.0;
-		T w = 0.0;
+		T w = 1.0;
 
 		static const Quaternion Identity;
 		Quaternion() = default;
@@ -2693,8 +2693,9 @@ namespace IKIGAI::MATH {
 		}
 
 		static Matrix3<T> ToMatrix3(const Quaternion& target) {
-			if (!IsNormalized(target))
+			if (!IsNormalized(target)) {
 				throw std::logic_error("Cannot convert non-normalized quaternions to Matrix4");
+			}
 
 			float y2 = target.y * target.y;
 			float wz = target.w * target.z;
@@ -2720,8 +2721,10 @@ namespace IKIGAI::MATH {
 		}
 
 		static Matrix4<T> ToMatrix4(const Quaternion& target) {
-			if (!IsNormalized(target))
+			if (!IsNormalized(target)) {
+				printf("ToMatrix4 non-normalized: %f, %f, %f, %f (len %f)\n", target.x, target.y, target.z, target.w, Length(target));
 				throw std::logic_error("Cannot convert non-normalized quaternions to Matrix4");
+			}
 
 			float y2 = target.y * target.y;	float wz = target.w * target.z;	float x2 = target.x * target.x;
 			float z2 = target.z * target.z;	float xz = target.x * target.z;	float yz = target.y * target.z;
@@ -2736,7 +2739,7 @@ namespace IKIGAI::MATH {
 		}
 
 		static bool IsNormalized(const Quaternion& target) {
-			return abs(Length(target) - 1.0f) < 0.0001f;
+			return std::abs(Length(target) - 1.0f) < 0.0001f;
 		}
 
 		static Vector3<T> RotatePoint(const Vector3<T>& point, const Quaternion& quaternion) {
@@ -2764,11 +2767,11 @@ namespace IKIGAI::MATH {
 		}
 
 		bool operator==(const Quaternion& otherQuat) const {
-			return x == otherQuat.x && y == otherQuat.x && z == otherQuat.z && w == otherQuat.w;
+			return x == otherQuat.x && y == otherQuat.y && z == otherQuat.z && w == otherQuat.w;
 		}
 
 		bool operator!=(const Quaternion& otherQuat) const {
-			return x != otherQuat.x || y != otherQuat.x || z != otherQuat.z || w != otherQuat.w;
+			return x != otherQuat.x || y != otherQuat.y || z != otherQuat.z || w != otherQuat.w;
 		}
 
 		Quaternion operator+(const Quaternion& otherQuat) const {
@@ -2778,7 +2781,7 @@ namespace IKIGAI::MATH {
 
 		Quaternion& operator+=(const Quaternion& otherQuat) {
 			x += otherQuat.x;
-			y += otherQuat.x;
+			y += otherQuat.y;
 			z += otherQuat.z;
 			w += otherQuat.w;
 			return *this;

@@ -27,7 +27,7 @@
 #include <assimp/Importer.hpp>
 
 #include <../../3rd/imgui/imgui/imgui.h>
-#include "DebugMessanger.h"
+#include "debugMessanger.h"
 #include "uniformBufferVk.h"
 #include <assimp/postprocess.h>
 #include "modelVk.h"
@@ -535,8 +535,10 @@ bool DriverVk::checkInstanceExtensionSupport(const std::vector<const char*>& ext
 			}
 		}
 
-		if (!hasExtension)
+		if (!hasExtension) {
+			std::cerr << "Missing Vulkan extension: " << proposedExt << std::endl;
 			return false;
+		}
 	}
 	return true;
 }

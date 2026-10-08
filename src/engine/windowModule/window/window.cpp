@@ -385,7 +385,7 @@ void Window::pollEvent() {
 #endif
 		switch (event.type) {
 		case SDL_EVENT_QUIT:
-			mIsClose = false;
+			mIsClose = true;
 			break;
 		case SDL_EVENT_KEY_DOWN:
 #ifdef __EMSCRIPTEN__
