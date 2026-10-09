@@ -86,6 +86,9 @@ namespace IKIGAI::WINDOW {
 		EVENT::Event<INPUT::Gamepad> gamepadAddEvent;
 		EVENT::Event<int> gamepadRemoveEvent;
 
+		EVENT::Event<> appPauseEvent;
+		EVENT::Event<> appResumeEvent;
+
 		explicit Window(const WindowSettings& p_windowSettings, bool isMain = true, Window* sharedWindow = nullptr);
 		Window() = delete;
 		~Window();

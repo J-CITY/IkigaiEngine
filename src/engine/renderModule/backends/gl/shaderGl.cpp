@@ -237,11 +237,18 @@ void IKIGAI::RENDER::ShaderGl::create(const ShaderResource &res) {
   enable_420pack_extension = true;
   force_flattened_io_blocks = true;
 #elif defined(__APPLE__)
+#if TARGET_OS_IPHONE
+  es = true;
+  version = 300;
+  enable_420pack_extension = false;
+  force_flattened_io_blocks = false;
+#else
   // macOS OpenGL is 4.1. SSBOs need 4.3, so the cross-compile remaps them to UBOs.
   es = false;
   version = 410;
   enable_420pack_extension = false;
   force_flattened_io_blocks = true;
+#endif
 #elif defined(EMSCRIPTEN)
   es = true;
   version = 300;

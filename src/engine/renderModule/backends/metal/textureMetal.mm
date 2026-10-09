@@ -54,7 +54,11 @@ namespace IKIGAI::RENDER {
 	}
 
 	bool MetalFormatHasStencil(MTLPixelFormat format) {
+#if TARGET_OS_IPHONE
+		return format == MTLPixelFormatDepth32Float_Stencil8;
+#else
 		return format == MTLPixelFormatDepth32Float_Stencil8 || format == MTLPixelFormatDepth24Unorm_Stencil8;
+#endif
 	}
 
 	namespace {

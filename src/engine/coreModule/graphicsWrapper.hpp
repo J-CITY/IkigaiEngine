@@ -7,7 +7,7 @@
 #define GL_SILENCE_DEPRECATION
 #include "TargetConditionals.h"
 #if TARGET_OS_IPHONE
-#include <OpenGLES/ES2/gl.h>
+#include <OpenGLES/ES3/gl.h>
 #define USING_GLES
 #else
 #include <OpenGL/gl3.h>

@@ -66,8 +66,13 @@ namespace IKIGAI::RESOURCES {
 			return nullptr;
 		}
 
-		auto data = ServiceManager::Get<FileSystem>().getFile(filepath)->read();
+		auto& fs = ServiceManager::Get<FileSystem>();
+		auto file = fs.getFile(filepath);
+		auto data = file->read();
 		if (data.empty()) {
+			IKIGAI_COUT("Model file is missing or empty: '" << filepath << "'; opened: " << file->isValid()
+				<< "; native path: " << fs.getAbsolutePath(filepath).value_or("<not found>")
+				<< "; content root: " << Config::ROOT);
 			ASSERT("Can`t create model");
 			return nullptr;
 		}

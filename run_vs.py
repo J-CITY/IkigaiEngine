@@ -145,7 +145,7 @@ def _optional_bool(value):
 def resolve_engine_features(platform, use_editor, use_file_watcher):
     use_editor = True if use_editor is None else bool(use_editor)
     if use_file_watcher is None:
-        if platform in ('web', 'android'):
+        if platform in ('web', 'android', 'ios'):
             use_file_watcher = False
         else:
             use_file_watcher = use_editor
@@ -169,6 +169,7 @@ def normalize_platform(name):
 WIN_GRAPHICS_BACKENDS = ('opengl', 'vulkan', 'dx12')
 MAC_GRAPHICS_BACKENDS = ('opengl', 'vulkan', 'metal')
 LINUX_GRAPHICS_BACKENDS = ('opengl', 'vulkan')
+IOS_GRAPHICS_BACKENDS = ('opengl', 'metal')
 
 
 def resolve_graphics_backends(platform, names):
@@ -187,6 +188,8 @@ def resolve_graphics_backends(platform, names):
         allowed = WIN_GRAPHICS_BACKENDS
     elif platform == 'linux':
         allowed = LINUX_GRAPHICS_BACKENDS
+    elif platform == 'ios':
+        allowed = IOS_GRAPHICS_BACKENDS
     else:
         return set(ordered)
     unknown = [name for name in ordered if name not in allowed]
@@ -203,7 +206,7 @@ def append_graphics_cmake_args(command, platform, backends):
     command.append('-DUSE_VULKAN=' + ('ON' if 'vulkan' in backends else 'OFF'))
     if platform == 'win':
         command.append('-DUSE_DX12=' + ('ON' if 'dx12' in backends else 'OFF'))
-    elif platform == 'mac':
+    elif platform in ('mac', 'ios'):
         command.append('-DUSE_METAL=' + ('ON' if 'metal' in backends else 'OFF'))
 
 
@@ -216,7 +219,7 @@ def main():
     parser.add_argument('-a', type=str, default="x64", help='Architecture: x86, x64 (default: x64)')
     parser.add_argument(
         '-p', type=str, default="win",
-        help='Platform: win, mac/macos, linux, android, quest, web (default: win)',
+        help='Platform: win, mac/macos, linux, android, quest, web, ios (default: win)',
     )
     parser.add_argument(
         '--use-editor',
@@ -287,7 +290,7 @@ def main():
             platform_arg, args.use_editor, args.use_file_watcher
         )
         graphics_backends = None
-        if platform_arg in ('win', 'mac', 'linux'):
+        if platform_arg in ('win', 'mac', 'linux', 'ios'):
             graphics_backends = resolve_graphics_backends(platform_arg, args.g)
             print('Graphics backends: ' + ', '.join(sorted(graphics_backends)))
         if platform_arg == 'quest' and (args.use_editor is False or args.use_file_watcher is not None):
@@ -361,6 +364,25 @@ def main():
             run_logged(command, check=True)
             create_assets_link(build_dir)
             create_assets_link(output_dir)
+            if args.build:
+                run_cmake_build(build_dir, build_type)
+
+        elif platform_arg == 'ios':
+            build_dir = args.b if args.b else './ios/build_xcode'
+            output_dir = resolve_runtime_output(args.o, './ios')
+            command = [
+                'cmake', './ios', f'-B{build_dir}',
+                '-G', 'Xcode',
+                f'-DENGINE_RUNTIME_OUTPUT_DIRECTORY={output_dir}',
+                f'-DCMAKE_BUILD_TYPE={build_type}',
+                '-DCMAKE_SYSTEM_NAME=iOS',
+            ]
+            append_graphics_cmake_args(command, platform_arg, graphics_backends)
+            append_engine_feature_cmake_args(command, use_editor, use_file_watcher)
+            run_logged(command, check=True)
+            project = os.path.abspath(os.path.join(build_dir, 'IkigaiEngine.xcodeproj'))
+            print(f"Xcode project: {project}")
+            print(f"Open with: open {project}")
             if args.build:
                 run_cmake_build(build_dir, build_type)
 

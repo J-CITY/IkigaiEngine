@@ -2830,6 +2830,7 @@ void DebugRender::drawScene() {
 
 				for (const auto& modelRenderer : ECS::ComponentManager::GetInstance().getComponentArrayRef<ECS::ModelRenderer>()) {
 					if (modelRenderer.obj.get().getIsActive()) {
+						if (!modelRenderer.getModel()) continue;
 						auto bs = modelRenderer.getModel()->getBoundingSphere();
 						std::vector<MATHGL::Vector3> hits;
 						auto _pos = bs.position + modelRenderer.obj.get().transform->getWorldPosition();

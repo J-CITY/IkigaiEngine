@@ -6,6 +6,7 @@
 #include <vector>
 
 namespace IKIGAI::RENDER {
+	void BindDefaultFramebufferGl();
 	class TextureGl;
 
 	class FrameBufferGl: public FrameBufferInterface {

@@ -44,3 +44,6 @@ run_vs.log
 run_vs-*.log
 utils/assets.remote.json
 utils/.pack/
+ios/build_xcode
+ios/build
+ios/out

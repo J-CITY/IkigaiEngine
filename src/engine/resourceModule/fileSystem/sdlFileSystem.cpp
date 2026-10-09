@@ -14,8 +14,8 @@ namespace IKIGAI::RESOURCES {
 
 // --- SdlFile ---
 
-SdlFile::SdlFile(const vfspp::EntryInfo& fileInfo)
-    : m_fileInfo(fileInfo)
+SdlFile::SdlFile(const vfspp::EntryInfo& fileInfo, bool readOnly)
+    : m_fileInfo(fileInfo), m_readOnly(readOnly)
 {}
 
 SdlFile::~SdlFile() {
@@ -35,6 +35,7 @@ uint64_t SdlFile::Size() const {
 }
 
 bool SdlFile::IsReadOnly() const {
+    if (m_readOnly) return true;
     std::error_code ec;
     auto perms = std::filesystem::status(m_fileInfo.NativePath(), ec).permissions();
     if (ec) {
@@ -44,19 +45,22 @@ bool SdlFile::IsReadOnly() const {
 }
 
 std::string SdlFile::getSdlMode(FileMode mode) const {
-    std::string strMode = "rb";
-    if (ModeHasFlag(mode, FileMode::ReadWrite)) {
-        strMode = "r+b";
-    } else if (ModeHasFlag(mode, FileMode::Write)) {
-        strMode = "wb";
-    }
+    const bool read = ModeHasFlag(mode, FileMode::Read);
+    const bool write = ModeHasFlag(mode, FileMode::Write);
+    if (!write) return "rb";
     if (ModeHasFlag(mode, FileMode::Append)) {
-        strMode = "ab";
+        return read ? "a+b" : "ab";
     }
-    return strMode;
+    if (ModeHasFlag(mode, FileMode::Truncate)) {
+        return read ? "w+b" : "wb";
+    }
+    return read ? "r+b" : "wb";
 }
 
 bool SdlFile::Open(FileMode mode) {
+    if (!IsModeValid(mode) || (ModeHasFlag(mode, FileMode::Write) && IsReadOnly())) {
+        return false;
+    }
     if (IsOpened()) {
         Close();
     }
@@ -121,8 +125,8 @@ uint64_t SdlFile::Write(const std::vector<uint8_t>& buffer) {
 
 // --- SdlFileSystem ---
 
-SdlFileSystem::SdlFileSystem(const std::string& aliasPath, const std::string& basePath)
-    : m_aliasPath(aliasPath), m_basePath(basePath)
+SdlFileSystem::SdlFileSystem(const std::string& aliasPath, const std::string& basePath, bool readOnly)
+    : m_aliasPath(aliasPath), m_basePath(basePath), m_readOnly(readOnly)
 {}
 
 SdlFileSystem::~SdlFileSystem() {
@@ -130,18 +134,18 @@ SdlFileSystem::~SdlFileSystem() {
 }
 
 bool SdlFileSystem::Initialize() {
-    m_isInitialized = true;
+    m_isInitialized = false;
     m_fileList.clear();
-    collectEntries();
-    return true;
+    m_isInitialized = collectEntries();
+    return m_isInitialized;
 }
 
-void SdlFileSystem::collectEntries() {
+bool SdlFileSystem::collectEntries() {
 #ifdef __ANDROID__
     auto* env = static_cast<JNIEnv*>(SDL_GetAndroidJNIEnv());
     auto activity = static_cast<jobject>(SDL_GetAndroidActivity());
     if (!env || !activity) {
-        return;
+        return false;
     }
 
     jclass activityClass = env->GetObjectClass(activity);
@@ -157,6 +161,7 @@ void SdlFileSystem::collectEntries() {
 
     if (nativeAssets && listMethod) {
         const std::string rootVirtual = m_aliasPath.empty() ? std::string("/") : m_aliasPath;
+        m_fileList.emplace_back(m_aliasPath, m_basePath, rootVirtual, vfspp::EntryType::Directory);
         std::function<void(const std::string&, const std::string&)> scan =
             [&](const std::string& assetDir, const std::string& virtualDir) {
                 jstring jPath = env->NewStringUTF(assetDir.c_str());
@@ -217,9 +222,37 @@ void SdlFileSystem::collectEntries() {
         env->DeleteLocalRef(activityClass);
     }
     env->DeleteLocalRef(activity);
+    return nativeAssets && listMethod;
 #else
-    (void)0;
+    const std::string rootVirtual = m_aliasPath.empty() ? std::string("/") : m_aliasPath;
+    SDL_PathInfo info{};
+    if (!SDL_GetPathInfo(m_basePath.c_str(), &info) || info.type != SDL_PATHTYPE_DIRECTORY) {
+        return false;
+    }
+    m_fileList.emplace_back(m_aliasPath, m_basePath, rootVirtual, vfspp::EntryType::Directory);
+    return collectDirectory(m_basePath, rootVirtual);
 #endif
+}
+
+bool SdlFileSystem::collectDirectory(const std::string& nativePath, const std::string& virtualPath) {
+    struct Context {
+        SdlFileSystem* filesystem;
+        const std::string& virtualPath;
+    } context{this, virtualPath};
+    return SDL_EnumerateDirectory(nativePath.c_str(), [](void* userdata, const char* dirname, const char* name) {
+        auto& context = *static_cast<Context*>(userdata);
+        auto& filesystem = *context.filesystem;
+        const std::string childNative = std::string(dirname) + name;
+        const std::string childVirtual = (context.virtualPath == "/" ? std::string("/") : context.virtualPath + "/") + name;
+        SDL_PathInfo info{};
+        if (!SDL_GetPathInfo(childNative.c_str(), &info)) return SDL_ENUM_FAILURE;
+        const bool isDirectory = info.type == SDL_PATHTYPE_DIRECTORY;
+        if (!isDirectory && info.type != SDL_PATHTYPE_FILE) return SDL_ENUM_CONTINUE;
+        filesystem.m_fileList.emplace_back(filesystem.m_aliasPath, filesystem.m_basePath, childVirtual,
+            isDirectory ? vfspp::EntryType::Directory : vfspp::EntryType::File);
+        if (isDirectory && !filesystem.collectDirectory(childNative, childVirtual)) return SDL_ENUM_FAILURE;
+        return SDL_ENUM_CONTINUE;
+    }, &context);
 }
 
 void SdlFileSystem::Shutdown() {
@@ -253,6 +286,7 @@ vfspp::IFileSystem::EntriesList SdlFileSystem::GetEntriesList(bool excludeDirect
 }
 
 bool SdlFileSystem::IsReadOnly() const {
+    if (m_readOnly) return true;
     std::error_code ec;
     auto perms = std::filesystem::status(m_basePath, ec).permissions();
     if (ec) {
@@ -262,11 +296,34 @@ bool SdlFileSystem::IsReadOnly() const {
 }
 
 std::optional<vfspp::EntryInfo> SdlFileSystem::GetEntryInfo(const std::string& virtualPath) const {
-    return vfspp::EntryInfo(m_aliasPath, m_basePath, virtualPath);
+    vfspp::EntryInfo candidate(m_aliasPath, m_basePath, virtualPath);
+    SDL_PathInfo info{};
+    if (SDL_GetPathInfo(candidate.NativePath().c_str(), &info)) {
+        if (info.type == SDL_PATHTYPE_FILE || info.type == SDL_PATHTYPE_DIRECTORY) {
+            return vfspp::EntryInfo(m_aliasPath, m_basePath, virtualPath,
+                info.type == SDL_PATHTYPE_DIRECTORY ? vfspp::EntryType::Directory : vfspp::EntryType::File);
+        }
+        return std::nullopt;
+    }
+#ifdef __ANDROID__
+    // APK assets are not native paths. Use the AssetManager index or SDL IO fallback.
+    for (const auto& entry : m_fileList) {
+        if (entry.VirtualPath() == candidate.VirtualPath()) return entry;
+    }
+    if (auto* io = SDL_IOFromFile(candidate.NativePath().c_str(), "rb")) {
+        SDL_CloseIO(io);
+        return candidate;
+    }
+#endif
+    return std::nullopt;
 }
 
 vfspp::IFilePtr SdlFileSystem::OpenFile(const std::string& virtualPath, vfspp::IFile::FileMode mode) {
-    auto file = std::make_shared<SdlFile>(GetEntryInfo(virtualPath).value());
+    const bool write = vfspp::IFile::ModeHasFlag(mode, vfspp::IFile::FileMode::Write);
+    if (write && IsReadOnly()) return nullptr;
+    const auto entry = GetEntryInfo(virtualPath);
+    if ((!entry && !write) || (entry && entry->IsDirectory())) return nullptr;
+    auto file = std::make_shared<SdlFile>(entry.value_or(vfspp::EntryInfo(m_aliasPath, m_basePath, virtualPath)), m_readOnly);
     if (!file->Open(mode)) {
         return nullptr;
     }
@@ -281,7 +338,7 @@ void SdlFileSystem::CloseFile(vfspp::IFilePtr file) {
 
 vfspp::IFilePtr SdlFileSystem::CreateFile(const std::string& virtualPath) {
     if (IsReadOnly()) return nullptr;
-    auto entry = GetEntryInfo(virtualPath).value();
+    const vfspp::EntryInfo entry(m_aliasPath, m_basePath, virtualPath);
     SDL_IOStream* io = SDL_IOFromFile(entry.NativePath().c_str(), "wb");
     if (io) {
         SDL_CloseIO(io);
@@ -293,36 +350,36 @@ vfspp::IFilePtr SdlFileSystem::CreateFile(const std::string& virtualPath) {
 bool SdlFileSystem::RemoveFile(const std::string& virtualPath) {
     if (IsReadOnly()) return false;
     std::error_code ec;
-    return std::filesystem::remove(GetEntryInfo(virtualPath).value().NativePath(), ec);
+    return std::filesystem::remove(vfspp::EntryInfo(m_aliasPath, m_basePath, virtualPath).NativePath(), ec);
 }
 
 bool SdlFileSystem::CopyFile(const std::string& srcVirtualPath, const std::string& dstVirtualPath, bool overwrite) {
     if (IsReadOnly()) return false;
     std::error_code ec;
     auto options = overwrite ? std::filesystem::copy_options::overwrite_existing : std::filesystem::copy_options::none;
-    return std::filesystem::copy_file(GetEntryInfo(srcVirtualPath).value().NativePath(), GetEntryInfo(dstVirtualPath).value().NativePath(), options, ec);
+    return std::filesystem::copy_file(vfspp::EntryInfo(m_aliasPath, m_basePath, srcVirtualPath).NativePath(), vfspp::EntryInfo(m_aliasPath, m_basePath, dstVirtualPath).NativePath(), options, ec);
 }
 
 bool SdlFileSystem::RenameFile(const std::string& srcVirtualPath, const std::string& dstVirtualPath) {
     if (IsReadOnly()) return false;
     std::error_code ec;
-    std::filesystem::rename(GetEntryInfo(srcVirtualPath).value().NativePath(), GetEntryInfo(dstVirtualPath).value().NativePath(), ec);
+    std::filesystem::rename(vfspp::EntryInfo(m_aliasPath, m_basePath, srcVirtualPath).NativePath(), vfspp::EntryInfo(m_aliasPath, m_basePath, dstVirtualPath).NativePath(), ec);
     return !ec;
 }
 
 bool SdlFileSystem::MakeDirectory(const std::string& virtualPath) {
     if (IsReadOnly()) return false;
     std::error_code ec;
-    return std::filesystem::create_directories(GetEntryInfo(virtualPath).value().NativePath(), ec);
+    return std::filesystem::create_directories(vfspp::EntryInfo(m_aliasPath, m_basePath, virtualPath).NativePath(), ec);
 }
 
 bool SdlFileSystem::DeleteDirectory(const std::string& virtualPath, bool recursive) {
     if (IsReadOnly()) return false;
     std::error_code ec;
     if (recursive) {
-        return std::filesystem::remove_all(GetEntryInfo(virtualPath).value().NativePath(), ec) > 0;
+        return std::filesystem::remove_all(vfspp::EntryInfo(m_aliasPath, m_basePath, virtualPath).NativePath(), ec) > 0;
     }
-    return std::filesystem::remove(GetEntryInfo(virtualPath).value().NativePath(), ec);
+    return std::filesystem::remove(vfspp::EntryInfo(m_aliasPath, m_basePath, virtualPath).NativePath(), ec);
 }
 
 bool SdlFileSystem::RenameDirectory(const std::string& srcVirtualPath, const std::string& dstVirtualPath) {
@@ -330,31 +387,13 @@ bool SdlFileSystem::RenameDirectory(const std::string& srcVirtualPath, const std
 }
 
 bool SdlFileSystem::IsFileExists(const std::string& virtualPath) const {
-    auto entry = GetEntryInfo(virtualPath).value();
-    std::error_code ec;
-    if (std::filesystem::exists(entry.NativePath(), ec) && std::filesystem::is_regular_file(entry.NativePath(), ec)) {
-        return true;
-    }
-
-    // Fallback для SDL-специфичных путей
-    SDL_IOStream* io = SDL_IOFromFile(entry.NativePath().c_str(), "rb");
-    if (io) {
-        SDL_CloseIO(io);
-        return true;
-    }
-    return false;
+    const auto entry = GetEntryInfo(virtualPath);
+    return entry && entry->IsFile();
 }
 
 bool SdlFileSystem::IsDirectoryExists(const std::string& virtualPath) const {
-    if (virtualPath.empty() || virtualPath == "/" || virtualPath == m_aliasPath) {
-        return true;
-    }
-    for (const auto& entry : m_fileList) {
-        if (entry.IsDirectory() && entry.VirtualPath() == virtualPath) {
-            return true;
-        }
-    }
-    return false;
+    const auto entry = GetEntryInfo(virtualPath);
+    return entry && entry->IsDirectory();
 }
 
 }

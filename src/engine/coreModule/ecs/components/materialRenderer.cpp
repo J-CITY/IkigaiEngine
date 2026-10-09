@@ -26,7 +26,7 @@ MaterialRenderer::~MaterialRenderer() {
 void MaterialRenderer::updateMaterialList() {
 	//TODO:: remove this dependence
 	auto model = obj->getComponent<ModelRenderer>();
-	if (!model) {
+	if (!model || !model->getModel()) {
 		return;
 	}
 	const auto& matNames = model->getModel()->getMaterialsNames();

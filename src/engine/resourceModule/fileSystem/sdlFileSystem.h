@@ -8,7 +8,7 @@ namespace IKIGAI::RESOURCES {
 
     class SdlFile : public vfspp::IFile {
     public:
-        SdlFile(const vfspp::EntryInfo& fileInfo);
+        SdlFile(const vfspp::EntryInfo& fileInfo, bool readOnly = false);
         ~SdlFile() override;
 
         const vfspp::EntryInfo& GetEntryInfo() const override;
@@ -29,11 +29,12 @@ namespace IKIGAI::RESOURCES {
 
         vfspp::EntryInfo m_fileInfo;
         SDL_IOStream* m_io = nullptr;
+        bool m_readOnly = false;
     };
 
     class SdlFileSystem : public vfspp::IFileSystem {
     public:
-        SdlFileSystem(const std::string& aliasPath, const std::string& basePath);
+        SdlFileSystem(const std::string& aliasPath, const std::string& basePath, bool readOnly = false);
         ~SdlFileSystem() override;
 
         bool Initialize() override;
@@ -58,11 +59,13 @@ namespace IKIGAI::RESOURCES {
         std::optional<vfspp::EntryInfo> GetEntryInfo(const std::string& virtualPath) const override;
 
     private:
-        void collectEntries();
+        bool collectEntries();
+        bool collectDirectory(const std::string& nativePath, const std::string& virtualPath);
 
         std::string m_aliasPath;
         std::string m_basePath;
         bool m_isInitialized = false;
+        bool m_readOnly = false;
         EntriesList m_fileList;
     };
 

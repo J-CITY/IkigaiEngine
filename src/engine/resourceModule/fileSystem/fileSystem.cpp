@@ -148,14 +148,15 @@ void IKIGAI::RESOURCES::FileSystem::addMemoryFileSystem(const std::string& pathI
 	mInternal->mVFS->AddFileSystem(pathInFs, fs);
 }
 
-void IKIGAI::RESOURCES::FileSystem::addSdlFileSystem(const std::string& path, const std::string& pathInFs) {
+void IKIGAI::RESOURCES::FileSystem::addSdlFileSystem(const std::string& path, const std::string& pathInFs, bool readOnly) {
 #ifdef USE_SDL
-	vfspp::IFileSystemPtr fs(new SdlFileSystem(pathInFs, path));
+	vfspp::IFileSystemPtr fs(new SdlFileSystem(pathInFs, path, readOnly));
 	(void)fs->Initialize();
 	mInternal->mVFS->AddFileSystem(pathInFs, fs);
 #else
 	(void)path;
 	(void)pathInFs;
+	(void)readOnly;
 #endif
 }
 

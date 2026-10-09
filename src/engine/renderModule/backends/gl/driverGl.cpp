@@ -599,10 +599,14 @@ void IKIGAI::RENDER::DriverGl::applyState() {
 void IKIGAI::RENDER::DriverGl::submit() {}
 void IKIGAI::RENDER::DriverGl::setFrameBuffer(
     std::shared_ptr<FrameBufferInterface> frameBuffer) {
-  // frameBuffer->bind();
+  if (frameBuffer) {
+    std::static_pointer_cast<FrameBufferGl>(frameBuffer)->bind();
+  } else {
+    resetFrameBuffer();
+  }
 }
 void IKIGAI::RENDER::DriverGl::resetFrameBuffer() {
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  BindDefaultFramebufferGl();
 }
 
 #if !defined(OCULUS) && !defined(__APPLE__)

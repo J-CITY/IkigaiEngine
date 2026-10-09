@@ -10,6 +10,8 @@
 #include "skeletalModule/skeleton.h"
 #include "skeletalModule/animation.h"
 #include <unordered_map>
+#include <filesystem>
+#include "utilsModule/log/loggerDefine.h"
 #include <renderModule/backends/meshFactory.h>
 #include <renderModule/backends/interface/driverInterface.h>
 #include <renderModule/backends/interface/modelInterface.h>
@@ -17,6 +19,21 @@
 
 using namespace IKIGAI;
 using namespace IKIGAI::RESOURCES;
+
+namespace {
+const aiScene* ReadAssetScene(Assimp::Importer& importer, const std::string& fileName,
+	const std::vector<uint8_t>& data, unsigned int flags) {
+	// Consume bytes supplied by the engine filesystem (SDL IO on iOS and Android).
+	// Assimp expects a format extension, not a virtual filename, as its memory hint.
+	auto hint = std::filesystem::path(fileName).extension().string();
+	if (!hint.empty()) hint.erase(0, 1);
+	const aiScene* scene = importer.ReadFileFromMemory(data.data(), data.size(), flags, hint.c_str());
+	if (!scene) {
+		IKIGAI_COUT("Assimp failed to load " << fileName << ": " << importer.GetErrorString());
+	}
+	return scene;
+}
+}
 
 unsigned int ID=0;
 
@@ -69,9 +86,10 @@ bool AssimpParser::LoadModel(const std::string& fileName, const std::vector<uint
 	RESOURCES::ResourcePtr<RENDER::ModelInterface> model,  ModelParserFlags parserFlags) {
 	
 	Assimp::Importer* import = new Assimp::Importer();
-	auto scene = import->ReadFileFromMemory(data.data(), data.size(), static_cast<int>(parserFlags), fileName.c_str());
+	auto scene = ReadAssetScene(*import, fileName, data, static_cast<unsigned int>(parserFlags));
 	
 	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
+		delete import;
 		return false;
 	}
 	processMaterials(scene, model->getMaterialsNames());
@@ -158,7 +176,7 @@ bool AssimpParser::LoadVertexes(const std::string& fileName, const std::vector<u
 	globalVerticesPerMesh = &_globalVerticesPerMesh;
 	globalIndicesPerMesh = &_globalIndicesPerMesh;
 	Assimp::Importer* import = new Assimp::Importer();
-	auto scene = import->ReadFileFromMemory(data.data(), data.size(), static_cast<int>(parserFlags), fileName.c_str());
+	auto scene = ReadAssetScene(*import, fileName, data, static_cast<unsigned int>(parserFlags));
 
 	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
 		delete import;
@@ -450,10 +468,8 @@ bool AssimpParser::LoadSkeleton(const std::string& fileName, SKELETON::Skeleton&
 bool AssimpParser::LoadSkeleton(const std::string& fileName, const std::vector<uint8_t>& data,
 	SKELETON::Skeleton& outSkeleton) {
 	Assimp::Importer importer;
-	const aiScene* scene = importer.ReadFileFromMemory(
-		data.data(), data.size(),
-		aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs,
-		fileName.c_str());
+	const aiScene* scene = ReadAssetScene(importer, fileName, data,
+		aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs);
 	if (!scene) {
 		return false;
 	}
@@ -579,10 +595,8 @@ bool AssimpParser::LoadAnimation(const std::string& fileName,
 	SKELETON::Animation& outAnimation,
 	bool additive, SKELETON::Animation* additiveReference) {
 	Assimp::Importer importer;
-	const aiScene* scene = importer.ReadFileFromMemory(
-		data.data(), data.size(),
-		aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs,
-		fileName.c_str());
+	const aiScene* scene = ReadAssetScene(importer, fileName, data,
+		aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_FlipUVs);
 	if (!scene) return false;
 	return fillAnimation(scene, skeleton, outAnimation, additive, additiveReference);
 }

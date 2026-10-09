@@ -1,7 +1,5 @@
 #pragma once
-#ifndef USING_GLES
-#include <format>
-#endif
+// Removed <format> to support iOS < 16
 #include <sstream>
 #include <string_view>
 

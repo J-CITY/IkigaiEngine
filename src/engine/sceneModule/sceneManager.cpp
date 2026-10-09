@@ -128,6 +128,7 @@ void SceneManager::loadFromFile(const std::string& sceneFilePath) {
 	auto file = fs.getFile(sceneFilePath, RESOURCES::FileMode::READ);
 	if (!file || !file->isValid()) {
 		LOG_ERROR << "Scene file not found: " << sceneFilePath;
+		IKIGAI_COUT("Scene file not found: " << sceneFilePath << "; content root: " << Config::ROOT);
 		return;
 	}
 	nlohmann::json data = nlohmann::json::parse(file->readStr());
@@ -156,6 +157,8 @@ void SceneManager::loadFromFile(const std::string& sceneFilePath) {
 	}
 
 	m_currentScene->postLoad();
+	IKIGAI_COUT("Loaded scene: " << sceneFilePath << "; objects: " << m_currentScene->getObjects().size()
+		<< "; camera: " << (m_currentScene->findMainCamera() ? "yes" : "no"));
 #ifdef __EMSCRIPTEN__
 	std::cout << "[web] SceneManager::loadFromFile done" << std::endl;
 	std::cout.flush();

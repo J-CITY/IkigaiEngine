@@ -4,9 +4,24 @@
 
 #include <coreModule/graphicsWrapper.hpp>
 #include <iostream>
+#if defined(USE_SDL) && defined(__APPLE__) && TARGET_OS_IPHONE
+#include <SDL3/SDL.h>
+#endif
 
 using namespace IKIGAI;
 using namespace IKIGAI::RENDER;
+
+void IKIGAI::RENDER::BindDefaultFramebufferGl() {
+	GLuint framebuffer = 0;
+#if defined(USE_SDL) && defined(__APPLE__) && TARGET_OS_IPHONE
+	// UIKit renders into an FBO owned by SDL; framebuffer 0 is not the screen.
+	if (auto* window = SDL_GL_GetCurrentWindow()) {
+		framebuffer = static_cast<GLuint>(SDL_GetNumberProperty(
+			SDL_GetWindowProperties(window), SDL_PROP_WINDOW_UIKIT_OPENGL_FRAMEBUFFER_NUMBER, 0));
+	}
+#endif
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+}
 
 void checkGlError(const char* op, ...) {
 	va_list params;
@@ -43,6 +58,8 @@ void checkGlError(const char* op, ...) {
 	va_end(params);
 }
 void FrameBufferGl::create() {
+	GLint previousRenderbuffer = 0;
+	glGetIntegerv(GL_RENDERBUFFER_BINDING, &previousRenderbuffer);
 	glGenFramebuffers(1, &mId);
 	std::cout << mId << std::endl;
 	checkGlError("glGenFramebuffers");
@@ -105,6 +122,8 @@ void FrameBufferGl::create() {
 		}
 	}
 	unbind();
+	// SDL's UIKit swap presents its color renderbuffer, which must remain bound.
+	glBindRenderbuffer(GL_RENDERBUFFER, static_cast<GLuint>(previousRenderbuffer));
 }
 
 void FrameBufferGl::bind() {
@@ -112,7 +131,7 @@ void FrameBufferGl::bind() {
 }
 
 void FrameBufferGl::unbind() {
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	BindDefaultFramebufferGl();
 }
 
 FrameBufferGl::FrameBufferGl(const std::vector<std::shared_ptr<TextureInterface>>& textures, std::shared_ptr<TextureInterface> depth): mTextures(textures), mDepth(depth) {

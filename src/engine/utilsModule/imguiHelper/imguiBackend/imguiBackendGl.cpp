@@ -1,6 +1,9 @@
 #ifdef OPENGL_BACKEND
 #include "imguiBackend.h"
 #include <SDL3/SDL.h>
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 #include "windowModule/window/window.h"
 #include "renderModule/backends/interface/textureInterface.h"
 #include "backends/imgui_impl_sdl3.h"
@@ -22,7 +25,11 @@ namespace {
 #ifdef __EMSCRIPTEN__
 			const char* glslVersion = "#version 300 es";
 #elif defined(__APPLE__)
+#if TARGET_OS_IPHONE
+			const char* glslVersion = "#version 300 es";
+#else
 			const char* glslVersion = "#version 150";
+#endif
 #elif defined(__ANDROID__)
 #if !defined(IKIGAI_GLES_VERSION) || IKIGAI_GLES_VERSION >= 300
 			const char* glslVersion = "#version 300 es";

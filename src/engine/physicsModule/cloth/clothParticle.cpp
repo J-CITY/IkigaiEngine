@@ -26,22 +26,22 @@ float MagnitudeSq(const glm::vec3& v) {
 
 
 struct Line {
-	Point start;
-	Point end;
+	glm::vec3 start;
+	glm::vec3 end;
 
 	inline Line() {}
-	inline Line(const Point& s, const Point& e) :
+	inline Line(const glm::vec3& s, const glm::vec3& e) :
 		start(s), end(e) { }
 };
 float LengthSq(const Line& line) {
 	return MagnitudeSq(line.start - line.end);
 }
 struct Ray {
-	Point origin;
+	glm::vec3 origin;
 	glm::vec3 direction;
 
 	inline Ray() : direction(0.0f, 0.0f, 1.0f) {}
-	inline Ray(const Point& o, const glm::vec3& d) :
+	inline Ray(const glm::vec3& o, const glm::vec3& d) :
 		origin(o), direction(d) {
 		NormalizeDirection();
 	}
@@ -69,11 +69,11 @@ void ResetRaycastResult(RaycastResult* outResult) {
 }
 
 struct AABB {
-	Point position;
+	glm::vec3 position;
 	glm::vec3 size; // HALF SIZE!
 
 	inline AABB() : size(1, 1, 1) { }
-	inline AABB(const Point& p, const glm::vec3& s) :
+	inline AABB(const glm::vec3& p, const glm::vec3& s) :
 		position(p), size(s) { }
 };
 
@@ -193,14 +193,14 @@ bool Raycast(const OBB& obb, const Ray& ray, RaycastResult* outResult) {
 	return true;
 }
 struct Sphere {
-	Point position;
+	glm::vec3 position;
 	float radius;
 
 	inline Sphere() : radius(1.0f) { }
-	inline Sphere(const Point& p, float r) :
+	inline Sphere(const glm::vec3& p, float r) :
 		position(p), radius(r) { }
 };
-Point ClosestPoint(const Line& line, const Point& point) {
+glm::vec3 ClosestPoint(const Line& line, const glm::vec3& point) {
 	glm::vec3 lVec = line.end - line.start; // Line Vector
 	// Project "point" onto the "Line Vector", computing:
 	// closest(t) = start + t * (end - start)
@@ -212,12 +212,12 @@ Point ClosestPoint(const Line& line, const Point& point) {
 	// Return projected position of t
 	return line.start + lVec * t;
 }
-bool PointOnLine(const Point& point, const Line& line) {
-	Point closest = ClosestPoint(line, point);
+bool PointOnLine(const glm::vec3& point, const Line& line) {
+	glm::vec3 closest = ClosestPoint(line, point);
 	float distanceSq = MagnitudeSq(closest - point);
 	return CMP(distanceSq, 0.0f);
 }
-bool PointOnRay(const Point& point, const Ray& ray) {
+bool PointOnRay(const glm::vec3& point, const Ray& ray) {
 	if (point == ray.origin) {
 		return true;
 	}
@@ -228,7 +228,7 @@ bool PointOnRay(const Point& point, const Ray& ray) {
 	// If BOTH vectors point in the same direction, diff should be 1
 	return CMP(diff, 1.0f);
 }
-bool PointInSphere(const Point& point, const Sphere& sphere) {
+bool PointInSphere(const glm::vec3& point, const Sphere& sphere) {
 	return MagnitudeSq(point - sphere.position) < sphere.radius * sphere.radius;
 }
 
@@ -245,9 +245,9 @@ glm::vec3 GetMax(const AABB& aabb) {
 
 	return glm::vec3(fmaxf(p1.x, p2.x), fmaxf(p1.y, p2.y), fmaxf(p1.z, p2.z));
 }
-bool PointInAABB(const Point& point, const AABB& aabb) {
-	Point min = GetMin(aabb);
-	Point max = GetMax(aabb);
+bool PointInAABB(const glm::vec3& point, const AABB& aabb) {
+	glm::vec3 min = GetMin(aabb);
+	glm::vec3 max = GetMax(aabb);
 
 	if (point.x < min.x || point.y < min.y || point.z < min.z) {
 		return false;
@@ -258,7 +258,7 @@ bool PointInAABB(const Point& point, const AABB& aabb) {
 
 	return true;
 }
-bool PointInOBB(const Point& point, const OBB& obb) {
+bool PointInOBB(const glm::vec3& point, const OBB& obb) {
 	glm::vec3 dir = point - obb.position;
 
 	for (int i = 0; i < 3; ++i) {

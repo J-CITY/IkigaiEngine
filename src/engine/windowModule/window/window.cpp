@@ -4,6 +4,9 @@
 
 #include <set>
 #include <SDL3/SDL.h>
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 #include "utilsModule/log/loggerDefine.h"
 #include "coreModule/platform.hpp"
 #include "windowModule/inputManager/inputManager.h"
@@ -403,10 +406,10 @@ void Window::pollEvent() {
 		case SDL_EVENT_KEY_UP:
 			keyReleasedEvent.run(event.key.scancode);
 			break;
-		case SDL_EVENT_MOUSE_BUTTON_UP:
+		case SDL_EVENT_MOUSE_BUTTON_DOWN:
 			mouseButtonPressedEvent.run(event.button.button);
 			break;
-		case SDL_EVENT_MOUSE_BUTTON_DOWN:
+		case SDL_EVENT_MOUSE_BUTTON_UP:
 			mouseButtonReleasedEvent.run(event.button.button);
 			break;
 		case SDL_EVENT_MOUSE_MOTION:
@@ -457,6 +460,12 @@ void Window::pollEvent() {
 			break;
 		case SDL_EVENT_WINDOW_FOCUS_LOST:
 			mContext->mIsFocus = false;
+			break;
+		case SDL_EVENT_DID_ENTER_BACKGROUND:
+			appPauseEvent.run();
+			break;
+		case SDL_EVENT_WILL_ENTER_FOREGROUND:
+			appResumeEvent.run();
 			break;
 		default:
 			break;
@@ -638,10 +647,17 @@ void Window::create(Window* sharedWindow) {
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
 #elif defined(__APPLE__)
+#if TARGET_OS_IPHONE
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#else
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+#endif
 #elif defined(__ANDROID__)
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);

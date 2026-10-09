@@ -1,6 +1,9 @@
 #include "imguiBackend.h"
 
 #include "imgui.h"
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 
 #ifdef OPENGL_BACKEND
 std::unique_ptr<IKIGAI::IMGUI::IImGuiBackend> CreateImGuiBackendOpenGL();
@@ -27,7 +30,7 @@ namespace IKIGAI::IMGUI {
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-#if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+#if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IPHONE)
 		if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL) {
 			io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 		}

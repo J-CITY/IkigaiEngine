@@ -66,7 +66,7 @@ namespace IKIGAI::RESOURCES {
 		void addNativeFileSystem(const std::string& path, const std::string& pathInFs);
 		void addZipFileSystem(const std::string& path, const std::string& pathInFs);
 		void addMemoryFileSystem(const std::string& pathInFs);
-		void addSdlFileSystem(const std::string& path, const std::string& pathInFs);
+        void addSdlFileSystem(const std::string& path, const std::string& pathInFs, bool readOnly = false);
 		void addAndroidAssetFileSystem(const std::string& path, const std::string& pathInFs, void* assetManager, void* androidApp);
 
 		bool isValid(const std::string& path) const;
@@ -85,7 +85,7 @@ namespace IKIGAI::RESOURCES {
 			bool isDirectory = false;
 		};
 
-		std::shared_ptr<File> getFile(const std::string& path, FileMode mode = FileMode::READ_WRITE);
+		std::shared_ptr<File> getFile(const std::string& path, FileMode mode = FileMode::READ);
 		std::optional<std::string> getFilePath(const std::string& path) const;
 		std::vector<DirectoryEntry> listDirectory(const std::string& path) const;
 	};

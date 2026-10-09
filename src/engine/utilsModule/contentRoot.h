@@ -6,7 +6,23 @@
 #include <string>
 
 #if defined(__APPLE__)
+#include <TargetConditionals.h>
 #include <mach-o/dyld.h>
+#include <CoreFoundation/CoreFoundation.h>
+
+inline std::filesystem::path GetAppleResourcePath() {
+	CFBundleRef mainBundle = CFBundleGetMainBundle();
+	if (!mainBundle) return {};
+	CFURLRef resourcesURL = CFBundleCopyResourcesDirectoryURL(mainBundle);
+	if (!resourcesURL) return {};
+	char path[1024];
+	if (!CFURLGetFileSystemRepresentation(resourcesURL, true, (UInt8*)path, 1024)) {
+		CFRelease(resourcesURL);
+		return {};
+	}
+	CFRelease(resourcesURL);
+	return std::filesystem::path(path);
+}
 #elif defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -30,7 +46,8 @@ inline std::string NormalizeRootPath(std::string path) {
 
 inline bool HasEngineAssetsTree(const std::filesystem::path& root) {
 	const auto engineRoot = root / "assets" / "engine";
-	return std::filesystem::is_directory(engineRoot);
+	std::error_code ec;
+	return std::filesystem::is_directory(engineRoot, ec);
 }
 
 inline std::optional<std::filesystem::path> FindContentRootFrom(const std::filesystem::path& start) {
@@ -85,8 +102,17 @@ inline void InitContentRoot() {
 
 	std::optional<std::filesystem::path> found;
 
-	if (auto fromCwd = FindContentRootFrom(std::filesystem::current_path())) {
-		found = fromCwd;
+#if defined(__APPLE__) && TARGET_OS_IPHONE
+	// A simulator's working directory may point outside the installed bundle.
+	const auto resources = GetAppleResourcePath();
+	if (!resources.empty() && HasEngineAssetsTree(resources)) {
+		found = resources;
+	}
+#endif
+	std::error_code ec;
+	const auto cwd = std::filesystem::current_path(ec);
+	if (!found && !ec) {
+		found = FindContentRootFrom(cwd);
 	}
 
 	if (!found) {
@@ -94,6 +120,14 @@ inline void InitContentRoot() {
 		if (!exe.empty()) {
 			found = FindContentRootFrom(exe.parent_path());
 		}
+#if defined(__APPLE__)
+		if (!found) {
+			const auto resources = GetAppleResourcePath();
+			if (!resources.empty()) {
+				found = FindContentRootFrom(resources);
+			}
+		}
+#endif
 	}
 
 	if (found) {

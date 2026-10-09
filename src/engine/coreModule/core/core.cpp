@@ -99,6 +99,9 @@ Core:: Core(
 	// APK assets root is the repo assets/ folder. SDL_IOFromFile reads engine/ and game/.
 	fileSystem->addSdlFileSystem("engine", "/");
 	fileSystem->addSdlFileSystem("game", "/");
+#elif defined(__APPLE__) && TARGET_OS_IPHONE
+	fileSystem->addSdlFileSystem(Config::ROOT + Config::ENGINE_ASSETS_PATH, "/", true);
+	fileSystem->addSdlFileSystem(Config::ROOT + Config::USER_ASSETS_PATH, "/", true);
 #else
 	fileSystem->addNativeFileSystem(Config::ROOT + Config::ENGINE_ASSETS_PATH, "/");
 	fileSystem->addNativeFileSystem(Config::ROOT + Config::USER_ASSETS_PATH, "/");
