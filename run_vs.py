@@ -252,7 +252,8 @@ def main():
             'Several values share one build, e.g. -g opengl vulkan metal. '
             'mac: opengl, vulkan, metal. win: opengl, vulkan, dx12. '
             'linux: opengl, vulkan. '
-            'Pick the active API at launch via Configs/render.json or --render-backend=.'
+            'Pick the active API at launch via Configs/render.json or --render-backend=. '
+            'A binary with one API uses it if the asset config requests an unavailable API.'
         ),
     )
     parser.add_argument('--esVer', dest='es_ver', type=str, default='3.2', choices=['3', '3.1', '3.2'],

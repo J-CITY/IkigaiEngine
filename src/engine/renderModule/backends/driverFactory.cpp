@@ -100,6 +100,31 @@ namespace IKIGAI::RENDER {
 		return true;
 	}
 
+	void ResolveRenderBackend(RenderSettings& settings) {
+		if (!ApplyCliRenderBackendOverride(settings)) {
+			throw std::runtime_error("Invalid --render-backend value");
+		}
+		if (!gCliBackend && !IsBackendCompiled(settings.backend)) {
+			std::optional<RenderSettings::Backend> soleBackend;
+			for (const auto candidate : {RenderSettings::Backend::OPENGL,
+				RenderSettings::Backend::VULKAN, RenderSettings::Backend::DIRECTX12,
+				RenderSettings::Backend::METAL}) {
+				if (!IsBackendCompiled(candidate)) {
+					continue;
+				}
+				if (soleBackend) {
+					// Several APIs are available: do not guess which one to use.
+					ValidateBackendAvailable(settings.backend);
+				}
+				soleBackend = candidate;
+			}
+			if (soleBackend) {
+				settings.backend = *soleBackend;
+			}
+		}
+		ValidateBackendAvailable(settings.backend);
+	}
+
 	std::unique_ptr<DriverInterface> CreateRenderDriver(RenderSettings::Backend backend, WINDOW::Window&) {
 		ValidateBackendAvailable(backend);
 		std::unique_ptr<DriverInterface> driver;

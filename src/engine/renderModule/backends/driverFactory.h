@@ -16,6 +16,9 @@ namespace IKIGAI::RENDER {
 	void ValidateBackendAvailable(RenderSettings::Backend backend);
 	void SetCliRenderBackendOverride(std::string_view name);
 	bool ApplyCliRenderBackendOverride(RenderSettings& settings);
+	// A shared asset config may target another platform. Only fall back when
+	// the binary contains exactly one backend and no explicit CLI selection.
+	void ResolveRenderBackend(RenderSettings& settings);
 
 	std::unique_ptr<DriverInterface> CreateRenderDriver(RenderSettings::Backend backend, WINDOW::Window& window);
 }

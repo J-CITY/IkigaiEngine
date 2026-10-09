@@ -6,6 +6,7 @@
 #include <exception>
 #include <map>
 #include <vector>
+#include <TargetConditionals.h>
 
 #include "deviceMetal.h"
 #include "spirv_msl.hpp"
@@ -222,7 +223,11 @@ namespace IKIGAI::RENDER {
 			spirv_cross::CompilerMSL compiler(spirv);
 			spirv_cross::CompilerMSL::Options options;
 			options.set_msl_version(2, 4);
+#if TARGET_OS_IPHONE
+			options.platform = spirv_cross::CompilerMSL::Options::iOS;
+#else
 			options.platform = spirv_cross::CompilerMSL::Options::macOS;
+#endif
 			options.swizzle_buffer_index = 15;
 			options.buffer_size_buffer_index = kMetalBufferSizeBufferIndex;
 			options.shader_patch_input_buffer_index = kMetalShaderPatchInputBufferIndex;

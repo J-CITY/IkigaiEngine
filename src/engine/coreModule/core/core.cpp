@@ -120,10 +120,14 @@ Core:: Core(
 	} else {
 		RENDER::DriverInterface::settings = renderSettings.unwrap();
 	}
-	if (!RENDER::ApplyCliRenderBackendOverride(RENDER::DriverInterface::settings)) {
-		throw std::runtime_error("Invalid --render-backend value");
+	const auto configuredBackend = RENDER::DriverInterface::settings.backend;
+	RENDER::ResolveRenderBackend(RENDER::DriverInterface::settings);
+	if (configuredBackend != RENDER::DriverInterface::settings.backend) {
+		std::cout << "Render backend: " << RENDER::BackendToString(RENDER::DriverInterface::settings.backend)
+			<< " (asset config: " << RENDER::BackendToString(configuredBackend) << ")\n";
+	} else {
+		std::cout << "Render backend: " << RENDER::BackendToString(configuredBackend) << "\n";
 	}
-	RENDER::ValidateBackendAvailable(RENDER::DriverInterface::settings.backend);
 
 	WINDOW::WindowSettings windowSettings;
 	windowSettings.renderBackend = RENDER::DriverInterface::settings.backend;
