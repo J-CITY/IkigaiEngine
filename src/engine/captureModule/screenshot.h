@@ -37,6 +37,7 @@ public:
 		return mResult.state == State::PENDING;
 	}
 	bool busy();
+	bool hasSource() const { return static_cast<bool>(mSource); }
 	const Result& status();
 	const std::string& textureName() const {
 		return mTextureName;

@@ -186,6 +186,12 @@ target_compile_definitions(soloud PUBLIC WITH_MINIAUDIO)
 # --- Main Application ---
 
 # Sources
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+# Populate/prune generated sources before globbing; PRE_BUILD runs after compilation.
+execute_process(
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../utils/build/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
+    COMMAND_ERROR_IS_FATAL ANY
+)
 file(GLOB_RECURSE PROJECT_ABSOLUTE_HEADERS "${MAIN_SOURCE_DIR}/*.hpp" "${MAIN_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE PROJECT_ABSOLUTE_SOURCES "${MAIN_SOURCE_DIR}/*.cpp" "${MAIN_SOURCE_DIR}/*.c" "${MAIN_SOURCE_DIR}/*.cxx" "${MAIN_SOURCE_DIR}/*.mm" "${MAIN_SOURCE_DIR}/*.m")
 

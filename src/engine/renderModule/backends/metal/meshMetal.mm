@@ -37,6 +37,8 @@ namespace IKIGAI::RENDER {
 	}
 
 	void MeshMetal::init(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, unsigned materialIndex) {
+		mCanonicalVertices = vertices;
+		mCanonicalIndices = indices;
 		mVertexCount = vertices.size();
 		mIndicesCount = indices.size();
 		mMaterialIndex = materialIndex;

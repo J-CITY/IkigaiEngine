@@ -1,4 +1,5 @@
 #include "stateGraphRuntime.h"
+#include "utilsModule/expressions/expressionDescriptor.h"
 #include "characterAnimation.h"
 #include <algorithm>
 #include <cmath>

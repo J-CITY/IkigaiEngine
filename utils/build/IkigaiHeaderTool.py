@@ -615,6 +615,16 @@ def main():
                     })
                     
     generate_headers(all_files_data, output_dir, root_dir)
+    # A renamed/deleted reflected header must not leave a translation unit behind.
+    expected = {os.path.splitext(os.path.basename(item['header']))[0] for item in all_files_data}
+    for filename in os.listdir(output_dir):
+        for suffix in ('.generated.h', '.generated.cpp'):
+            if filename.endswith(suffix) and filename[:-len(suffix)] not in expected:
+                path = os.path.join(output_dir, filename)
+                with open(path, 'r', encoding='utf-8') as generated:
+                    owned = generated.readline().strip() == '// AUTO GENERATED FILE. DO NOT MODIFY.'
+                if owned:
+                    os.unlink(path)
 
 if __name__ == '__main__':
     main()

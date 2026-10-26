@@ -17,6 +17,8 @@ namespace IKIGAI::RENDER {
 
 		void bind() const override;
 		void unbind() const override;
+		const std::vector<Vertex>& rayTracingVertices() const override { return mCanonicalVertices; }
+		const std::vector<unsigned>& rayTracingIndices() const override { return mCanonicalIndices; }
 
 	private:
 		void init(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, unsigned materialIndex);
@@ -25,6 +27,8 @@ namespace IKIGAI::RENDER {
 
 		std::shared_ptr<VertexBufferMetal> mVertexBuffer;
 		std::shared_ptr<IndexBufferMetal> mIndexBuffer;
+		std::vector<Vertex> mCanonicalVertices;
+		std::vector<unsigned> mCanonicalIndices;
 	};
 
 	std::shared_ptr<MeshInterface> CreateMeshMetal(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, size_t offset, unsigned materialIndex);

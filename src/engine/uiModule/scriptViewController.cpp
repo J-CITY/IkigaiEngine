@@ -80,7 +80,7 @@ namespace {
 		sol::state vm;
 		sol::object toLua(const Json& value) {
 			if (value.is_null())
-				return sol::make_object(vm, sol::nil);
+				return sol::make_object(vm, sol::lua_nil);
 			if (value.is_boolean())
 				return sol::make_object(vm, value.get<bool>());
 			if (value.is_number_integer())
@@ -98,7 +98,7 @@ namespace {
 		}
 		Json fromLua(const sol::object& value) {
 			switch (value.get_type()) {
-			case sol::type::nil:
+			case sol::type::lua_nil:
 				return nullptr;
 			case sol::type::boolean:
 				return value.as<bool>();

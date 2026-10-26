@@ -8,6 +8,7 @@
 #include "utilsModule/jsonLoader.h"
 #include <bit>
 #include <cstring>
+#include <cstdlib>
 #include <iostream>
 
 namespace IKIGAI::VECTOR {
@@ -166,7 +167,8 @@ std::vector<PreparedDraw> VectorRenderer::prepare(ECS::Object& object, float pix
 				std::error_code error;
 				auto time = std::filesystem::last_write_time(*path, error);
 				if (!error) {
-					signature += std::to_string(time.time_since_epoch().count());
+					const auto ticks = std::chrono::duration_cast<std::chrono::nanoseconds>(time.time_since_epoch()).count();
+					signature += std::to_string(ticks);
 				}
 			}
 		}
@@ -329,5 +331,11 @@ void VectorRenderer::flush(RENDER::Renderer& renderer) {
 	std::erase_if(mComponents, [&](auto& entry) { return entry.second.seen + 2 < mFrame; });
 	std::erase_if(mFonts, [&](auto& entry) { return entry.second.seen + 2 < mFrame; });
 	mStatistics.batches = mBatches.size();
+	if (std::getenv("IKIGAI_VECTOR_STATS")) {
+		std::cout << "VECTOR_STATS pass=" << (mWorld ? "world" : "screen") << " frame=" << mFrame
+			<< " geometry=" << mStatistics.geometryBuilds << " layout=" << mStatistics.textLayouts
+			<< " atlas=" << mStatistics.atlasUploads << " mesh=" << mStatistics.meshUploads
+			<< " batches=" << mStatistics.batches << '\n';
+	}
 }
 }

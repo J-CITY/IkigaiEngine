@@ -85,12 +85,7 @@ Core::Core(
 {
 	UTILS::LoadTimer coreTiming("core");
 	UTILS::InitContentRoot();
-	if (Config::ROOT.empty()) {
-		std::cerr << "Content root not found (expected assets/engine/ near cwd or executable). "
-				  << "Run: python3 utils/sync_assets.py ensure. "
-				  << "For Xcode, set scheme Working Directory to mac/build_xcode (with assets symlink).\n";
-	}
-	else {
+	if (!Config::ROOT.empty()) {
 		std::cout << "Content root: " << Config::ROOT << "\n";
 	}
 	std::cout << "Create Core\n";
@@ -103,7 +98,12 @@ Core::Core(
 #ifdef USE_FILE_WATCHER
 	RESOURCES::FileWatcher::getInstance()->start();
 #endif
-	if (Config::CONTENT_RELEASE.empty()) {
+	const auto mountLooseAssets = [&] {
+		if (Config::ROOT.empty()) {
+			std::cerr << "Content root not found (expected assets/engine/ near cwd or executable). "
+				<< "Run: python3 utils/sync_assets.py ensure. "
+				<< "For Xcode, set scheme Working Directory to mac/build_xcode (with assets symlink).\n";
+		}
 		// fileSystem->addNativeFileSystem(".", "/");
 #ifdef OCULUS
 		fileSystem->addAndroidAssetFileSystem("engine", "/", app->activity->assetManager, app);
@@ -119,7 +119,7 @@ Core::Core(
 		fileSystem->addNativeFileSystem(Config::ROOT + Config::ENGINE_ASSETS_PATH, "/");
 		fileSystem->addNativeFileSystem(Config::ROOT + Config::USER_ASSETS_PATH, "/");
 #endif
-	}
+	};
 	auto storageRoot = Config::STORAGE_ROOT.empty()
 #if defined(OCULUS) && !defined(USE_SDL)
 		? std::filesystem::path(app->activity->internalDataPath)
@@ -161,8 +161,8 @@ Core::Core(
 		content->stageLocal(std::filesystem::u8path(Config::CONTENT_RELEASE));
 		content->activate(nlohmann::json::parse(RESOURCES::STORAGE::Read(std::filesystem::u8path(Config::CONTENT_RELEASE))));
 	}
-	else {
-		content->restore();
+	else if (!content->restore()) {
+		mountLooseAssets();
 	}
 	RESOURCES::ServiceManager::Set<RESOURCES::ContentService>(content.get());
 

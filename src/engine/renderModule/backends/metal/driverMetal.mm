@@ -2,6 +2,7 @@
 #ifdef METAL_BACKEND
 
 #include "driverMetal.h"
+#include "captureModule/screenshot.h"
 #include "gpuMemoryMetal.h"
 #include "vertexFormatsMetal.h"
 
@@ -168,6 +169,12 @@ namespace IKIGAI::RENDER {
 		mDepthTarget.reset();
 		mMsaaColor = nil;
 		endPass();
+		// submit() may already have acquired the next drawable before SDL reports a resize.
+		// Its attachments must match the new pixel size used by the renderer and ImGui.
+		if (mCurrentDrawable && (mCurrentDrawable.texture.width != mWidth || mCurrentDrawable.texture.height != mHeight)) {
+			end();
+			begin();
+		}
 	}
 
 	void DriverMetal::init() {
@@ -314,6 +321,13 @@ namespace IKIGAI::RENDER {
 			if (mCurrentEncoder) {
 				imgui->renderDrawData();
 			}
+		}
+		auto& screenshot = CAPTURE::ScreenshotService::Get();
+		// A named source becomes available after asynchronous scene loading finishes.
+		if (screenshot.pending() && (screenshot.textureName().empty() || screenshot.hasSource())) {
+			screenshot.capture([]() -> CAPTURE::ScreenshotImage {
+				throw std::runtime_error("Metal window screenshots require a pipeline texture source");
+			});
 		}
 		end();
 		begin();
@@ -1071,6 +1085,10 @@ namespace IKIGAI::RENDER {
 	void DriverMetal::setClearColor(float r, float g, float b, float a) { mClearColor = {r, g, b, a}; }
 
 	void DriverMetal::draw(uint32_t count, uint32_t offset, uint32_t instance) {
+		if (mVertexLayout && mCurrentState.mShader && !mCurrentState.mShader->hasTessellation() && !mCurrentState.mShader->hasGeometry()) {
+			draw(DrawArguments {count, offset, instance, 0, 0, false});
+			return;
+		}
 		if (count == 0 || instance == 0) {
 			return;
 		}
@@ -1117,6 +1135,10 @@ namespace IKIGAI::RENDER {
     }
 
 	void DriverMetal::drawIndexed(uint32_t count, uint32_t offset, uint32_t instance) {
+		if (mVertexLayout && mCurrentState.mShader && !mCurrentState.mShader->hasTessellation() && !mCurrentState.mShader->hasGeometry()) {
+			draw(DrawArguments {count, offset, instance, 0, 0, true});
+			return;
+		}
 		if (count == 0 || instance == 0 || !mIndexBuffer || !mIndexBuffer->getBuffer()) {
 			return;
 		}
