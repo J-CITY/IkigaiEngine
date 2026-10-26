@@ -1,12 +1,9 @@
 #pragma once
-#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
-
 #include <mathModule/math.h>
 #include <utilsModule/event.h>
-
 #include "windowModule/inputManager/gamepad/gamepad.h"
 #ifdef OCULUS
 #include "util_egl.h"
@@ -14,11 +11,9 @@
 #include <android/input.h>
 #endif
 #include "renderModule/backends/interface/driverInterface.h"
-
 #ifdef DX12_BACKEND
 #include <d3d12.h>
 #endif
-
 #ifdef VULKAN_BACKEND
 #include <volk.h>
 #endif

@@ -1,25 +1,20 @@
 #include "window.h"
 #include "captureModule/screenshot.h"
 #include "coreModule/graphicsWrapper.hpp"
-
 #ifdef USE_SDL
 #include "renderModule/backends/interface/driverInterface.h"
 #include <SDL3/SDL.h>
 #include <set>
-
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #endif
 #include "coreModule/platform.hpp"
 #include "utilsModule/log/loggerDefine.h"
 #include "windowModule/inputManager/inputManager.h"
-
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #include <iostream>
-
 #endif
-
 #if defined(USE_EDITOR) || defined(USE_CHEATS)
 #include "imgui.h"
 #include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
@@ -27,7 +22,6 @@
 #ifdef VULKAN_BACKEND
 #include "renderModule/backends/vk/vulkanLoader.h"
 #include <SDL3/SDL_vulkan.h>
-
 #endif
 #ifdef METAL_BACKEND
 #include <SDL3/SDL_metal.h>
