@@ -2,6 +2,7 @@
 # Included from cmake/quest/CMakeLists.txt.
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+include("${CMAKE_CURRENT_LIST_DIR}/Python.cmake")
 set(THIRD_PARTY_DIR "${REPO_ROOT}/3rd")
 set(MAIN_SOURCE_DIR "${REPO_ROOT}/src")
 set(QUEST_COMMON_DIR "${REPO_ROOT}/platform/quest/oxr")
@@ -164,8 +165,9 @@ target_compile_options(main PRIVATE -Wno-error=format-security)
 
 add_custom_command(
     TARGET main PRE_BUILD
-    COMMAND python "${REPO_ROOT}/utils/build/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
+    COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/utils/build/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
     COMMENT "Running IkigaiHeaderTool to generate reflection headers..."
+    VERBATIM
 )
 
 target_compile_definitions(main PRIVATE

@@ -205,7 +205,7 @@ add_executable(${APP_NAME}
 )
 
 # --- Generate Reflection Headers ---
-find_package(Python3 COMPONENTS Interpreter REQUIRED)
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Python.cmake")
 add_custom_target(GenerateReflectionHeaders
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../utils/build/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
     COMMENT "Running IkigaiHeaderTool to generate reflection headers..."

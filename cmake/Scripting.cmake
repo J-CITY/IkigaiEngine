@@ -1,5 +1,6 @@
 include("${CMAKE_CURRENT_LIST_DIR}/Memory.cmake")
 include_guard(GLOBAL)
+include("${CMAKE_CURRENT_LIST_DIR}/Python.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/Physics2D.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/Physics3D.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/JsonViews.cmake")
@@ -39,7 +40,6 @@ function(ikigai_configure_scripting target)
         endif()
     endforeach()
     if(_script_generated)
-        find_package(Python3 COMPONENTS Interpreter REQUIRED)
         add_custom_command(OUTPUT ${_script_generated}
             COMMAND "${Python3_EXECUTABLE}" "${MAIN_SOURCE_DIR}/../utils/build/IkigaiHeaderTool.py"
                 "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"

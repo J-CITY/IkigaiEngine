@@ -22,8 +22,6 @@ MAC_BREW_PACKAGES = (
 LINUX_PACMAN_PACKAGES = (
     "cmake",
     "base-devel",
-    "python",
-    "python-pip",
     "mesa",
     "glew",
     "vulkan-headers",
@@ -39,8 +37,6 @@ LINUX_PACMAN_PACKAGES = (
 LINUX_APT_PACKAGES = (
     "cmake",
     "build-essential",
-    "python3",
-    "python3-pip",
     "libgl1-mesa-dev",
     "libglew-dev",
     "libvulkan-dev",
@@ -251,6 +247,8 @@ def main(platform="win", render_sdks=None, graphics_backends=(), generator='Visu
 
 if __name__ == "__main__":
     import argparse
+    from utils.environment.python_env import ensure_project_python
+    ensure_project_python()
     parser = argparse.ArgumentParser(description='Prepare engine dependencies and selected Windows SR/FG SDKs.')
     parser.add_argument('platform', nargs='?', default='win', choices=('win', 'mac', 'linux', 'ios', 'web', 'android', 'quest'))
     parser.add_argument('-g', nargs='+', default=['opengl'], choices=('opengl', 'vulkan', 'dx12', 'metal'))

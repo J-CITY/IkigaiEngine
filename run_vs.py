@@ -163,6 +163,7 @@ def resolve_engine_features(platform, use_editor, use_file_watcher):
 
 
 def append_engine_feature_cmake_args(command, use_editor, use_file_watcher, use_lua=True, use_ikigai_script=True):
+    command.append(f'-DPython3_EXECUTABLE={sys.executable}')
     command.append('-DUSE_LUA=' + ('ON' if use_lua else 'OFF'))
     command.append('-DUSE_IKIGAI_SCRIPT=' + ('ON' if use_ikigai_script else 'OFF'))
     command.append('-DUSE_EDITOR=' + ('ON' if use_editor else 'OFF'))
@@ -488,4 +489,6 @@ def main():
 
 
 if __name__ == '__main__':
+    from utils.environment.python_env import ensure_project_python
+    ensure_project_python()
     main()

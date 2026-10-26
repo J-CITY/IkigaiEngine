@@ -2,6 +2,7 @@
 # Included from cmake/android/CMakeLists.txt. Gradle passes -DIKIGAI_GLES_VERSION=300|310|320.
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+include("${CMAKE_CURRENT_LIST_DIR}/Python.cmake")
 set(THIRD_PARTY_DIR "${REPO_ROOT}/3rd")
 set(MAIN_SOURCE_DIR "${REPO_ROOT}/src")
 
@@ -165,8 +166,9 @@ target_compile_options(main PRIVATE -Wno-error=format-security)
 
 add_custom_command(
     TARGET main PRE_BUILD
-    COMMAND python "${REPO_ROOT}/utils/build/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
+    COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/utils/build/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
     COMMENT "Running IkigaiHeaderTool to generate reflection headers..."
+    VERBATIM
 )
 
 target_compile_definitions(main PRIVATE

@@ -87,12 +87,12 @@ For each compiled backend (`--render-backend=opengl|vulkan|dx12|metal`):
 
 The tracked shader overlay and migrated/environment/cloud pipeline presets are in
 [render_assets](../render_assets/README.md). Install with
-`python utils/assets/install_render_assets.py --activate`; this sets the `pipeline`
+`python utils/tests/assets/install_render_assets.py --activate`; this sets the `pipeline`
 field in both asset render configs while preserving the selected backend.
 See [shader migration validation](shader-migration-validation.md) for shader
 compiler results and native GPU smoke checks.
 Environment/IBL and compute cloud presets use
-`python utils/assets/install_render_assets.py --activate --pipeline environment-clouds`;
+`python utils/tests/assets/install_render_assets.py --activate --pipeline environment-clouds`;
 see [environment validation](environment-ibl-clouds-validation.md) for resource
 contracts, GPU regressions and Metal/platform limitations.
 

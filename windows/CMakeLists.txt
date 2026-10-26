@@ -6,6 +6,7 @@ cmake_minimum_required(VERSION 3.20)
 
 set(APP_NAME "IkigaiEngine")
 project(${APP_NAME} LANGUAGES C CXX)
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Python.cmake")
 include(CMakeDependentOption)
 
 # --- Configuration Options ---
@@ -237,14 +238,10 @@ add_executable(${APP_NAME} ${EXECUTABLE_FLAG}
 
 # --- Generate Reflection Headers ---
 add_custom_command(
-    TARGET ${APP_NAME} POST_BUILD
-    COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/../utils/assets/install_render_assets.py"
-    COMMENT "Installing tracked render pipeline assets..."
-)
-add_custom_command(
     TARGET ${APP_NAME} PRE_BUILD
-    COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/../utils/build/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../utils/build/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
     COMMENT "Running IkigaiHeaderTool to generate reflection headers..."
+    VERBATIM
 )
 
 # Properties

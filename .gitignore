@@ -37,8 +37,6 @@ emscripten/include
 3rd/emsdk/.emscripten_sanity
 3rd/emsdk/.emscripten_cache.lock
 src/engine/generated
-assets/
-assetses/
 mac/out
 mac/build_xcode
 .DS_Store
@@ -52,17 +50,11 @@ ios/build
 ios/out
 *.pyc
 /screenshots/
-!utils/build/
-!utils/assets/
 graphify-out/
 __pycache__/
 utils/__pycache__
 imgui.ini
 nodeEditor.json
-# uncomment, when add tests
-utils/assets
-utils/tests
-render_assets/
 
 # uncomment, docs
 docs/
@@ -75,3 +67,10 @@ render_assets/*
 cmake/tests/*
 script_assets/*
 testModule/
+
+# Recreated by run.cmd / run.sh; only manifests and uv.lock belong in Git.
+/.venv/
+/.python/
+
+# Build/setup tools are source files; their fixtures belong in utils/tests/.
+!/utils/assets/

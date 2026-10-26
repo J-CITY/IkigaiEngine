@@ -56,8 +56,9 @@ def download_file(url, dest_path, timeout=120):
                     f"Failed to download {url}\n"
                     f"  urllib: {urllib_error}\n"
                     f"  curl: {curl_error}\n"
-                    "Try: pip install certifi"
+                    "Use run.cmd / run.sh to run with the project's HTTPS certificates."
                 ) from curl_error
         raise RuntimeError(
-            f"Failed to download {url}: {urllib_error}\nTry: pip install certifi"
+            f"Failed to download {url}: {urllib_error}\n"
+            "Use run.cmd / run.sh to run with the project's HTTPS certificates."
         ) from urllib_error
