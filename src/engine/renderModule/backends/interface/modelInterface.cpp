@@ -1,6 +1,7 @@
 #include "modelInterface.h"
 
 #include "meshInterface.h"
+#include <utility>
 
 using namespace IKIGAI;
 using namespace IKIGAI::RENDER;
@@ -13,6 +14,23 @@ const std::string& ModelInterface::getPath() {
 	return mPath;
 }
 
+void ModelInterface::addMorphNodeMesh(const std::string& nodeName, std::size_t meshIndex) {
+	mMorphNodeMeshes[nodeName].push_back(meshIndex);
+}
+
+const std::vector<std::size_t>& ModelInterface::morphMeshesForNode(const std::string& nodeName) const {
+	static const std::vector<std::size_t> empty;
+	const auto found = mMorphNodeMeshes.find(nodeName);
+	return found == mMorphNodeMeshes.end() ? empty : found->second;
+}
+
+void ModelInterface::setMorphAnimations(std::vector<MorphAnimationClip> clips) {
+	mMorphAnimations = std::move(clips);
+}
+
+const std::vector<MorphAnimationClip>& ModelInterface::morphAnimations() const {
+	return mMorphAnimations;
+}
 
 void ModelInterface::computeBoundingSphere() {
 	if (mMeshes.size() == 1) {

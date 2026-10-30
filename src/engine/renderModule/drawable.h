@@ -11,6 +11,9 @@
 #include <coreModule/ecs/components/cameraComponent.h>
 
 namespace IKIGAI {
+namespace ECS {
+	class FacialAnimationComponent;
+}
 namespace SKELETON {
 	class Skeleton;
 	class IAnimationPlayable;
@@ -23,6 +26,7 @@ namespace IKIGAI {
 namespace RENDER {
 	class MeshInterface;
 	class MaterialInterface;
+	class InstanceBatch;
 
 	struct Drawable {
 		MATH::Matrix4f prevWorld;
@@ -34,6 +38,10 @@ namespace RENDER {
 		SKELETON::AnimOffset* mAnimOffset = nullptr;
 		SKELETON::AnimLocalTransform* mAnimLocalTransform = nullptr;
 		SKELETON::AnimGlobalTransform* mAnimGlobalTransform = nullptr;
+		int OwnerId = -1;
+		ECS::FacialAnimationComponent* facialAnimation = nullptr;
+		std::shared_ptr<InstanceBatch> instances = {};
+		MATH::Vector4f tint = { 1, 1, 1, 1 };
 	};
 
 	using OpaqueDrawables = std::multimap<float, Drawable, std::less<float>>;

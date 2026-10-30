@@ -1,6 +1,11 @@
 #include "meshInterface.h"
 #include "driverInterface.h"
 #include "vertexBufferInterface.h"
+#include "storageBufferInterface.h"
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
+#include <unordered_set>
 
 using namespace IKIGAI::RENDER;
 
@@ -10,6 +15,39 @@ const BoundingSphere& MeshInterface::getBoundingSphere() const {
 
 void MeshInterface::setOffset(size_t offset) {
 	mOffset = offset;
+}
+
+void MeshInterface::setMorphTargets(std::vector<MorphTarget> targets) {
+	if (targets.size() > 64) {
+		throw std::invalid_argument("A mesh supports at most 64 morph targets");
+	}
+	std::unordered_set<std::string> names;
+	std::vector<MorphVertexDelta> packed;
+	packed.reserve(targets.size() * mVertexCount);
+	float maximumDisplacement = 0;
+	for (const auto& target : targets) {
+		if (target.Name.empty() || !names.insert(target.Name).second || target.Deltas.size() != mVertexCount || !std::isfinite(target.DefaultWeight)
+			|| target.DefaultWeight < 0 || target.DefaultWeight > 1) {
+			throw std::invalid_argument("Invalid morph target name, weight or vertex count");
+		}
+		float targetDisplacement = 0;
+		for (const auto& delta : target.Deltas) {
+			const auto finite = [](const MATH::Vector4f& value) {
+				return std::isfinite(value.x) && std::isfinite(value.y) && std::isfinite(value.z) && std::isfinite(value.w);
+			};
+			if (!finite(delta.Position) || !finite(delta.Normal) || !finite(delta.Tangent)) {
+				throw std::invalid_argument("Morph target contains non-finite displacement");
+			}
+			targetDisplacement = std::max(targetDisplacement,
+				std::sqrt(delta.Position.x * delta.Position.x + delta.Position.y * delta.Position.y + delta.Position.z * delta.Position.z));
+		}
+		maximumDisplacement += targetDisplacement;
+		packed.insert(packed.end(), target.Deltas.begin(), target.Deltas.end());
+	}
+	auto buffer = targets.empty() ? nullptr : DriverInterface::Get()->createStorageBuffer(packed.data(), packed.size(), sizeof(MorphVertexDelta));
+	mMorphTargets = std::move(targets);
+	mMorphBuffer = std::move(buffer);
+	mBoundingSphere.radius += maximumDisplacement;
 }
 
 void DriverInterface::validateVertexInputs(const ShaderInterface& shader) const {

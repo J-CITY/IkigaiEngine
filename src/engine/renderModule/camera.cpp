@@ -35,7 +35,7 @@ void Camera::cacheViewMatrix(MATH::Matrix4f mat) {
 }
 
 void Camera::cacheFrustum(const MATH::Matrix4f& p_view, const MATH::Matrix4f& p_projection) {
-	// frustum.make(p_projection * p_view);
+	frustum.make(p_projection * p_view);
 }
 
 float Camera::getFov() const {

@@ -7,6 +7,9 @@
 #include <cstdint>
 
 void IKIGAI::RENDER::ShaderInterface::configureResourceInterface(const ShaderResource& res) {
+	mSupportsPbrLayers = res.supportsPbrLayers;
+	mCompiledPbrLayerCount = res.compiledPbrLayerCount;
+	mPbrLayerVariant = res.pbrLayerVariant;
 	mBindingMode = res.bindingMode;
 	mVertexFetchMode = res.vertexFetchMode;
 	mBindlessCapacity = res.bindlessCapacity;

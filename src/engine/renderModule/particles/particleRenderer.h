@@ -5,6 +5,7 @@
 #include <vector>
 namespace IKIGAI::ECS {
 class Object;
+class EnvironmentComponent;
 }
 namespace IKIGAI::SCENE_SYSTEM {
 class Scene;
@@ -25,8 +26,11 @@ public:
 	void drawScreen(ECS::Object& object, Renderer& renderer, const MATH::Matrix4f& projection, const Scissor& clip, bool clipped,
 		const MATH::Matrix4f& correction);
 	void drawWorld(SCENE_SYSTEM::Scene& scene, Renderer& renderer, const MATH::Matrix4f& view, const MATH::Matrix4f& projection);
+	void drawWeather(ECS::EnvironmentComponent& environment, Renderer& renderer, const MATH::Matrix4f& view, const MATH::Matrix4f& projection,
+		std::shared_ptr<TextureInterface> fallback, std::shared_ptr<TextureInterface> sceneDepth);
 
 private:
+	std::shared_ptr<MaterialInterface> mWeatherMaterial = {};
 	struct Instance {
 		MATH::Vector3f origin, right, up;
 		MATH::Vector4f color, uv;
@@ -47,6 +51,7 @@ private:
 	template <int D, class C>
 	void gather(const C& component, std::vector<Item>& items, bool screen, MATH::Matrix4f transform, MATH::Matrix4f view,
 		const MATH::Matrix4f& correction = MATH::Matrix4f::Identity);
-	void draw(std::vector<Item>& items, Renderer& renderer, const MATH::Matrix4f& projection, const Scissor& clip, bool clipped);
+	void draw(std::vector<Item>& items, Renderer& renderer, const MATH::Matrix4f& projection, const Scissor& clip, bool clipped,
+		std::shared_ptr<TextureInterface> sceneDepth = {});
 };
 }

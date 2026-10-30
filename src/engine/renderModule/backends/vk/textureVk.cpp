@@ -61,9 +61,8 @@ IKIGAI::RENDER::TextureVk::TextureVk(const TextureResource& descriptor, const st
 void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const std::vector<void*>& data) {
 	const TextureResource& desc = descriptor;
 	if (desc.width == 0 || desc.height == 0) {
-		LOG_ERROR << "Texture has zero width or height (failed to load?): "
-			<< (desc.pathTexture.empty() ? std::string("<memory>") : desc.pathTexture.front());
-		return;
+		throw std::invalid_argument(
+			"Texture has zero width or height (failed to load?): " + (desc.pathTexture.empty() ? std::string("<memory>") : desc.pathTexture.front()));
 	}
 
 	auto usage =

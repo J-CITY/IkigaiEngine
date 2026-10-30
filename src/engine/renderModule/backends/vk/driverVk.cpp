@@ -2389,4 +2389,8 @@ void IKIGAI::RENDER::DriverVk::draw(const DrawArguments& args) {
 IKIGAI::RENDER::BindlessCapabilities IKIGAI::RENDER::DriverVk::bindlessCapabilities() const {
 	return mBindlessCapabilities;
 }
+uint32_t IKIGAI::RENDER::DriverVk::maxFragmentSampledTextures() const {
+	const auto limits = mPhysicalDevice.getProperties().limits;
+	return std::min(limits.maxPerStageDescriptorSampledImages, limits.maxPerStageDescriptorSamplers);
+}
 #endif

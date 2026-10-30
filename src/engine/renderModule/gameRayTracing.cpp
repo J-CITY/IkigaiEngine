@@ -2,6 +2,7 @@
 #include "backends/interface/uniformBufferInterface.h"
 #include "coreModule/core/core.h"
 #include "gameRenderer.h"
+#include "instanceBatch.h"
 #include "render.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
@@ -76,8 +77,9 @@ struct GameRenderer::RayScene {
 
 void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks) {
 	auto& renderer = *mContext.render;
-	if (!renderer.getDriver()->rayTracingCapabilities().AccelerationStructure)
+	if (!renderer.getDriver()->rayTracingCapabilities().AccelerationStructure) {
 		throw UnsupportedRayTracing("RT scene extraction is unavailable on this backend");
+	}
 	if (!mRayScene) {
 		mRayScene = std::make_shared<RayScene>();
 		mRayScene->SkinProgram
@@ -111,8 +113,12 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 	auto visit = [&](const auto& drawables) {
 		for (const auto& [distance, drawable] : drawables) {
 			const auto mesh = drawable.mesh;
-			if (!mesh || mesh->rayTracingVertices().empty())
+			if (!mesh || mesh->rayTracingVertices().empty()) {
 				continue;
+			}
+			if (!mesh->morphTargets().empty()) {
+				throw UnsupportedRayTracing("Ray tracing does not support morph target geometry");
+			}
 			const auto* pose = skinningPose(drawable);
 			RayScene::Key key { mesh.get(), pose ? drawable.mAnimOffset : nullptr };
 			active.insert(key);
@@ -122,8 +128,9 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 				++skinned;
 			}
 			auto found = mRayScene->Meshes.find(key);
-			if (found == mRayScene->Meshes.end())
-				found = mRayScene->Meshes.emplace(key, RayScene::MeshEntry { }).first;
+			if (found == mRayScene->Meshes.end()) {
+				found = mRayScene->Meshes.emplace(key, RayScene::MeshEntry {}).first;
+			}
 			auto& entry = found->second;
 			entry.Mesh = mesh;
 			if (!entry.Source) {
@@ -136,9 +143,10 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 					for (const auto& vertex : mesh->rayTracingVertices()) {
 						const MATH::Vector4f p { vertex.position.x, vertex.position.y, vertex.position.z, 1 },
 							n { vertex.normal.x, vertex.normal.y, vertex.normal.z, 0 }, uv { vertex.texCoord.x, vertex.texCoord.y, 0, 0 };
-						std::array<int32_t, 4> boneIds { };
-						for (size_t j = 0; j < 4; ++j)
+						std::array<int32_t, 4> boneIds {};
+						for (size_t j = 0; j < 4; ++j) {
 							boneIds[j] = static_cast<int32_t>(vertex.m_BoneIDs[j]);
+						}
 						input.push_back({ p, n, uv, boneIds, vertex.m_Weights });
 						rigid.push_back({ p, n, uv });
 					}
@@ -152,22 +160,26 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 						const std::array<uint32_t, 4> row { original.empty() ? static_cast<uint32_t>(i) : original[i],
 							original.empty() ? static_cast<uint32_t>(i + 1) : original[i + 1],
 							original.empty() ? static_cast<uint32_t>(i + 2) : original[i + 2], 0 };
-						for (size_t j = 0; j < 3; ++j)
-							if (row[j] >= input.size())
+						for (size_t j = 0; j < 3; ++j) {
+							if (row[j] >= input.size()) {
 								throw std::runtime_error("RT triangle index exceeds vertex count");
+							}
+						}
 						indices.push_back(row);
 					}
 					source->TriangleCount = static_cast<uint32_t>(indices.size());
-					if (indices.empty())
+					if (indices.empty()) {
 						throw std::runtime_error("RT mesh needs triangle geometry");
+					}
 					source->TriangleIndices = renderer.createStorageBuffer(indices.data(), indices.size(), sizeof(indices[0]));
 				}
 				entry.Source = source;
 			}
 			if (pose && (!entry.DeformedBuffer || entry.PoseHash != poseHash)) {
-				if (!entry.DeformedBuffer)
+				if (!entry.DeformedBuffer) {
 					entry.DeformedBuffer
 						= renderer.getDriver()->createRayTracingVertexBuffer(nullptr, entry.Source->VertexCount, sizeof(DeformedVertex));
+				}
 				dispatchCompute(*renderer.getDriver(), mRayScene->SkinProgram, entry.Source->VertexCount,
 					{ { "0:0", { entry.Source->Vertices } }, { "0:1", { pose->CurrentUbo } }, { "0:2", { entry.DeformedBuffer } } },
 					{ entry.Source->VertexCount, 0, 0, 0 });
@@ -194,30 +206,42 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 			auto albedoMap = mRayWhite;
 			MATH::Vector2f tiling { 1, 1 }, offset { 0, 0 };
 			if (drawable.material) {
-				for (const auto* name : { "data_UBOu_Albedo", "data_UBOu_Diffuse", "u_Diffuse" })
+				if (!drawable.material->pbrLayers().Layers.empty()) {
+					throw std::runtime_error("Ray tracing does not yet support layered PBR textures: " + drawable.material->getPath());
+				}
+				for (const auto* name : { "data_UBOu_Albedo", "data_UBOu_Diffuse", "u_Diffuse" }) {
 					if (auto* v = std::get_if<MATH::Vector4f>(drawable.material->findUniform(name))) {
 						albedo = *v;
 						break;
 					}
-				if (auto* v = std::get_if<float>(drawable.material->findUniform("data_UBOu_Roughness")))
+				}
+				if (auto* v = std::get_if<float>(drawable.material->findUniform("data_UBOu_Roughness"))) {
 					roughness = *v;
-				if (auto* v = std::get_if<float>(drawable.material->findUniform("data_UBOu_Metallic")))
+				}
+				if (auto* v = std::get_if<float>(drawable.material->findUniform("data_UBOu_Metallic"))) {
 					metallic = *v;
-				for (const auto* name : { "u_AlbedoMap", "u_DiffuseMap" })
+				}
+				for (const auto* name : { "u_AlbedoMap", "u_DiffuseMap" }) {
 					if (auto* v = std::get_if<std::shared_ptr<TextureInterface>>(drawable.material->findUniform(name)); v && *v) {
 						albedoMap = *v;
 						break;
 					}
-				if (auto* v = std::get_if<MATH::Vector2f>(drawable.material->findUniform("data_UBOu_TextureTiling")))
+				}
+				if (auto* v = std::get_if<MATH::Vector2f>(drawable.material->findUniform("data_UBOu_TextureTiling"))) {
 					tiling = *v;
-				if (auto* v = std::get_if<MATH::Vector2f>(drawable.material->findUniform("data_UBOu_TextureOffset")))
+				}
+				if (auto* v = std::get_if<MATH::Vector2f>(drawable.material->findUniform("data_UBOu_TextureOffset"))) {
 					offset = *v;
+				}
 			}
 			const auto* identity = mesh.get();
 			hashBytes(hash, &identity, sizeof(identity));
 			hashBytes(hash, &key.second, sizeof(key.second));
 			hashBytes(hash, &poseHash, sizeof(poseHash));
 			hashBytes(hash, &drawable.world, sizeof(drawable.world));
+			albedo.x *= drawable.tint.x;
+			albedo.y *= drawable.tint.y;
+			albedo.z *= drawable.tint.z;
 			hashBytes(hash, &albedo, sizeof(albedo));
 			hashBytes(hash, &roughness, sizeof(roughness));
 			hashBytes(hash, &metallic, sizeof(metallic));
@@ -241,41 +265,66 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 		}
 	};
 	std::vector<std::pair<float, Drawable>> stableDrawables;
-	for (const auto& chunk : chunks)
-		for (const auto* list : { &chunk.opaqueDrawablesForward, &chunk.opaqueDrawablesDeferred })
-			for (const auto& item : *list)
-				stableDrawables.emplace_back(0, item.second);
+	for (const auto& chunk : chunks) {
+		for (const auto* list : { &chunk.opaqueDrawablesForward, &chunk.opaqueDrawablesDeferred }) {
+			for (const auto& item : *list) {
+				if (item.second.instances) {
+					for (const auto& transform : item.second.instances->transforms()) {
+						auto single = item.second;
+						single.instances.reset();
+						single.world = transform.World;
+						single.prevWorld = transform.PreviousWorld;
+						single.tint = transform.Tint;
+						stableDrawables.emplace_back(0, std::move(single));
+					}
+				}
+				else {
+					stableDrawables.emplace_back(0, item.second);
+				}
+			}
+		}
+	}
 	std::sort(stableDrawables.begin(), stableDrawables.end(), [](const auto& a, const auto& b) {
-		if (a.second.mesh.get() != b.second.mesh.get())
-			return std::less<const MeshInterface*> { }(a.second.mesh.get(), b.second.mesh.get());
-		if (a.second.material.get() != b.second.material.get())
-			return std::less<const MaterialInterface*> { }(a.second.material.get(), b.second.material.get());
-		if (a.second.mAnimOffset != b.second.mAnimOffset)
-			return std::less<const SKELETON::AnimOffset*> { }(a.second.mAnimOffset, b.second.mAnimOffset);
+		if (a.second.mesh.get() != b.second.mesh.get()) {
+			return std::less<const MeshInterface*> {}(a.second.mesh.get(), b.second.mesh.get());
+		}
+		if (a.second.material.get() != b.second.material.get()) {
+			return std::less<const MaterialInterface*> {}(a.second.material.get(), b.second.material.get());
+		}
+		if (a.second.mAnimOffset != b.second.mAnimOffset) {
+			return std::less<const SKELETON::AnimOffset*> {}(a.second.mAnimOffset, b.second.mAnimOffset);
+		}
 		return std::memcmp(&a.second.world, &b.second.world, sizeof(a.second.world)) < 0;
 	});
 	visit(stableDrawables);
-	if (albedoMaps.size() > 64)
+	if (albedoMaps.size() > 64) {
 		throw std::runtime_error("Default RT material provider supports 64 instances; bind a custom scene provider for larger scenes");
-	for (auto i = mRayScene->Meshes.begin(); i != mRayScene->Meshes.end();)
-		if (!active.contains(i->first))
+	}
+	for (auto i = mRayScene->Meshes.begin(); i != mRayScene->Meshes.end();) {
+		if (!active.contains(i->first)) {
 			i = mRayScene->Meshes.erase(i);
-		else
+		}
+		else {
 			++i;
+		}
+	}
 	for (auto i = mRayScene->Sources.begin(); i != mRayScene->Sources.end();) {
 		const bool used = std::any_of(active.begin(), active.end(), [&](const auto& key) { return key.first == i->first; });
-		if (!used)
+		if (!used) {
 			i = mRayScene->Sources.erase(i);
-		else
+		}
+		else {
 			++i;
+		}
 	}
 	// The geometry table is an optional default provider. Custom programs can
 	// bind their own buffers instead; it is not part of trace dispatch semantics.
 	if (hash != mRaySceneHash || !mRayTriangles) {
 		mRaySceneChanged = true;
-		if (offsets.empty())
+		if (offsets.empty()) {
 			offsets.resize(1);
-		TriangleData empty { };
+		}
+		TriangleData empty {};
 		mRayTriangles = renderer.createStorageBuffer(triangleCount ? nullptr : &empty, std::max<uint32_t>(1, triangleCount), sizeof(TriangleData));
 		for (const auto& batch : batches) {
 			auto uniform = renderer.createUniformBuffer<TriangleUniform>(batch.Uniform);
@@ -284,14 +333,16 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 				{ batch.Source->VertexCount, batch.Source->TriangleCount, batch.Base, 0 });
 		}
 		mRayInstances = renderer.createStorageBuffer(offsets.data(), offsets.size(), sizeof(offsets[0]));
-		if (mRayScene->Instances.size() != instances.size())
+		if (mRayScene->Instances.size() != instances.size()) {
 			mRayTopLevels.clear();
+		}
 		mRayScene->Instances = std::move(instances);
 		mRaySceneHash = hash;
 		for (auto& [key, top] : mRayTopLevels) {
 			auto updated = mRayScene->Instances;
-			for (auto& instance : updated)
+			for (auto& instance : updated) {
 				instance.HitGroupOffset = static_cast<uint32_t>(std::stoul(key));
+			}
 			renderer.getDriver()->refitTopLevelAS(top, updated);
 		}
 		mRayAlbedoMaps = std::move(albedoMaps);
@@ -308,8 +359,9 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 void GameRenderer::runRayTracingStage(PipelineStage& stage) {
 	const auto& desc = stage.mDescriptor;
 	if (!stage.mRayTracingProgram) {
-		for (const auto& [output, input] : desc.Bypass)
+		for (const auto& [output, input] : desc.Bypass) {
 			mRenderPipeline->mTextures.at(output) = mRenderPipeline->mTextures.at(input);
+		}
 		return;
 	}
 	RayTracingDispatch dispatch;
@@ -322,8 +374,9 @@ void GameRenderer::runRayTracingStage(PipelineStage& stage) {
 	}
 	dispatch.RaygenRecord = static_cast<uint32_t>(desc.RaygenRecord);
 	for (int b : desc.PushConstants) {
-		if (b < 0 || b > 255)
+		if (b < 0 || b > 255) {
 			throw std::runtime_error("RT PushConstants must contain bytes");
+		}
 		dispatch.PushConstants.push_back(static_cast<uint8_t>(b));
 	}
 	const MATH::Vector4f rayState { static_cast<float>(mRaySample), mRenderPipeline->mHistoryValid ? 1.f : 0.f, static_cast<float>(mFrameCount),
@@ -332,68 +385,88 @@ void GameRenderer::runRayTracingStage(PipelineStage& stage) {
 	auto rayFrame = renderer.createUniformBuffer<MATH::Vector4f>(rayState);
 	auto resource = [&](const std::string& source) -> RayTracingResource {
 		if (source == "@Scene") {
-			if (!mRayScene)
+			if (!mRayScene) {
 				throw std::runtime_error("No RT scene snapshot");
+			}
 			const auto key = std::to_string(desc.HitGroupOffset);
 			if (!mRayTopLevels.contains(key)) {
 				auto instances = mRayScene->Instances;
-				for (auto& instance : instances)
+				for (auto& instance : instances) {
 					instance.HitGroupOffset = static_cast<uint32_t>(desc.HitGroupOffset);
+				}
 				mRayTopLevels[key] = renderer.getDriver()->createTopLevelAS(instances, true);
 			}
 			return mRayTopLevels.at(key);
 		}
-		if (source == "@Triangles")
+		if (source == "@Triangles") {
 			return mRayTriangles;
-		if (source == "@Instances")
+		}
+		if (source == "@Instances") {
 			return mRayInstances;
-		if (source == "@RayFrame")
+		}
+		if (source == "@RayFrame") {
 			return rayFrame;
-		if (source == "engine_UBO")
+		}
+		if (source == "engine_UBO") {
 			return mEngineUbo;
-		if (source == "engine_Frame")
+		}
+		if (source == "engine_Frame") {
 			return mFrameUbo;
-		if (source == "engine_Lights")
+		}
+		if (source == "engine_Lights") {
 			return mRayLightSSBO;
-		if (source == "@VisibleLights")
+		}
+		if (source == "@VisibleLights") {
 			return mLightSSBO;
-		if (source == "engine_CurrentShadow")
+		}
+		if (source == "engine_CurrentShadow") {
 			return mCurrentShadowUbo;
-		if (source.rfind("AS:", 0) == 0)
+		}
+		if (source.rfind("AS:", 0) == 0) {
 			return mRenderPipeline->mAccelerationStructures.at(source.substr(3));
-		if (mRenderPipeline->mAccelerationStructures.contains(source))
+		}
+		if (mRenderPipeline->mAccelerationStructures.contains(source)) {
 			return mRenderPipeline->mAccelerationStructures.at(source);
-		if (mRenderPipeline->mTextures.contains(source))
+		}
+		if (mRenderPipeline->mTextures.contains(source)) {
 			return mRenderPipeline->mTextures.at(source);
-		if (mRenderPipeline->mStorageBuffers.contains(source))
+		}
+		if (mRenderPipeline->mStorageBuffers.contains(source)) {
 			return mRenderPipeline->mStorageBuffers.at(source);
-		if (mRenderPipeline->mUniformBuffers.contains(source))
+		}
+		if (mRenderPipeline->mUniformBuffers.contains(source)) {
 			return mRenderPipeline->mUniformBuffers.at(source);
+		}
 		throw std::runtime_error("Unknown RT pipeline binding: " + source);
 	};
 	// Array bindings use comma-separated resource names; each element resolves
 	// to a strong reference in the submitted immutable dispatch snapshot.
 	for (const auto& [name, sources] : desc.Bindings) {
 		if (sources == "@AlbedoMaps") {
-			for (const auto& texture : mRayAlbedoMaps)
+			for (const auto& texture : mRayAlbedoMaps) {
 				dispatch.Bindings[name].push_back(texture);
+			}
 			continue;
 		}
 		size_t begin = 0;
 		do {
 			const auto end = sources.find(',', begin);
 			dispatch.Bindings[name].push_back(resource(sources.substr(begin, end == std::string::npos ? end : end - begin)));
-			if (end == std::string::npos)
+			if (end == std::string::npos) {
 				break;
+			}
 			begin = end + 1;
 		} while (true);
 	}
-	if (desc.Draw == DrawContent::COMPUTE)
+	if (desc.Draw == DrawContent::COMPUTE) {
 		renderer.dispatchRayQueries(std::move(dispatch));
-	else
+	}
+	else {
 		renderer.traceRays(std::move(dispatch));
+	}
 	stage.mExecuted = true;
-	if (mFrameCount == 0)
+	if (mFrameCount == 0) {
 		std::cout << (desc.Draw == DrawContent::COMPUTE ? "Pipeline ray query: " : "Pipeline ray trace: ") << stage.mName << "\n";
+	}
 }
 }

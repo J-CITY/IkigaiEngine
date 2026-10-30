@@ -1,54 +1,37 @@
 #include "materialDx12.h"
 
-
 #ifdef DX12_BACKEND
 
 #include "d3dUtil.h"
 #include "driverDx12.h"
-#include <utilsModule/jsonLoader.h>
-#include "uniformBufferDx12.h"
-#include "storageBufferDx12.h"
+#include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
 #include "resourceModule/shaderManager.h"
 #include "resourceModule/textureManager.h"
-#include "resourceModule/fileSystem/fileSystem.h"
+#include "storageBufferDx12.h"
+#include "uniformBufferDx12.h"
 #include <algorithm>
+#include <utilsModule/jsonLoader.h>
 
-//TODO: add dirty flag for update buffers
+// TODO: add dirty flag for update buffers
 
 using namespace IKIGAI;
 using namespace IKIGAI::RENDER;
 
-MaterialDx12::MaterialDx12() {
-}
+MaterialDx12::MaterialDx12() { }
 
-MaterialDx12::MaterialDx12(const MaterialResource& res) : MaterialInterface(res) {
+MaterialDx12::MaterialDx12(const MaterialResource& res)
+	: MaterialInterface(res) {
 	create(res);
 }
 
 void MaterialDx12::create(const MaterialResource& res) {
-	//TODO: do it not in constructor (add var in Material resource)
-	//TODO: load textures befor create material
-    auto shader = std::static_pointer_cast<RENDER::ShaderDx12>(RESOURCES::ServiceManager::Get<RESOURCES::ShaderLoader>().loadResource(res.ShaderPath));
-    MaterialDx12::setShader(shader);
-
-	auto& textureLoader = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RESOURCES::TextureLoader>();
-	for (const auto& [k, v] : res.Uniforms) {
-		std::visit([&](auto& arg) {
-			using T = std::decay_t<decltype(arg)>;
-			if constexpr (std::is_same_v<T, std::string>) {
-				const auto ext = IKIGAI::RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().getFileExtension(arg);
-				if (ext == ".texture") {
-					mUniforms[k] = textureLoader.createFromResource(arg);
-				} else {
-					mUniforms[k] = textureLoader.createFromFile(arg, true);
-				}
-			}
-			else {
-				mUniforms[k] = arg;
-			}
-		}, v);
+	auto prepared = prepareMaterial(res);
+	setShader(prepared.shader);
+	for (auto& [name, value] : prepared.uniforms) {
+		mUniforms[name] = std::move(value);
 	}
+	applyMaterialState(res);
 }
 
 void MaterialDx12::setShader(std::shared_ptr<ShaderInterface> shader) {
@@ -71,17 +54,22 @@ MaterialResource MaterialDx12::getDescriptor() {
 	res.DepthFunc = mDepthFunc;
 
 	for (const auto& [name, value] : mUniforms) {
-		std::visit([&](auto& arg) {
-			using T = std::decay_t<decltype(arg)>;
-			if constexpr (std::is_same_v<T, std::shared_ptr<TextureInterface>>) {
-				res.Uniforms[name] = arg->getPath();
-			}
-			else {
-				res.Uniforms[name] = arg;
-			}
-		}, value);
+		std::visit(
+			[&](auto& arg) {
+				using T = std::decay_t<decltype(arg)>;
+				if constexpr (std::is_same_v<T, std::shared_ptr<TextureInterface>>) {
+					if (arg) {
+						res.Uniforms[name] = arg->getPath();
+					}
+				}
+				else {
+					res.Uniforms[name] = arg;
+				}
+			},
+			value);
 	}
 
+	completeDescriptor(res);
 	return res;
 }
 
@@ -92,7 +80,6 @@ void MaterialDx12::setExternalBuffer(const std::string& name, std::shared_ptr<Un
 		return;
 	}
 	mUniformBuffers[name] = std::static_pointer_cast<UniformBufferDx12>(buffer);
-
 }
 
 void MaterialDx12::setExternalBuffer(const std::string& name, std::shared_ptr<StorageBufferInterface> buffer) {
@@ -102,7 +89,6 @@ void MaterialDx12::setExternalBuffer(const std::string& name, std::shared_ptr<St
 		return;
 	}
 	mStorageBuffers[name] = std::static_pointer_cast<StorageBufferDx12>(buffer);
-
 }
 
 void MaterialDx12::generateUniformsData() {
@@ -112,8 +98,10 @@ void MaterialDx12::generateUniformsData() {
 	mExternalBuffers.clear();
 	const auto& shaderInfo = mShader->getReflection();
 	for (const auto& uniform : shaderInfo.mUniforms) {
-        if (mShader->isBindlessResource(uniform)) continue;
-		if (isEngineUniform(uniform.mName)) {//this pass from render
+		if (mShader->isBindlessResource(uniform)) {
+			continue;
+		}
+		if (isEngineUniform(uniform.mName)) { // this pass from render
 			continue;
 		}
 		switch (uniform.mType) {
@@ -126,22 +114,38 @@ void MaterialDx12::generateUniformsData() {
 		} break;
 		case ShaderReflection::UniformType::UNIFORM_BUFFER: {
 			mUniformBuffers[uniform.mName] = std::make_shared<UniformBufferDx12>(nullptr, uniform.mSize);
-			//TODO: array is not support yet
+			// TODO: array is not support yet
 			for (const auto& member : uniform.mMembers) {
 				switch (member.mType) {
-				case ShaderReflection::UniformType::MAT4: mUniforms[uniform.mName + member.mName] = MATH::Matrix4f(); break;
-				case ShaderReflection::UniformType::MAT3: mUniforms[uniform.mName + member.mName] = MATH::Matrix3f(); break;
-				case ShaderReflection::UniformType::VEC4: mUniforms[uniform.mName + member.mName] = MATH::Vector4f(); break;
-				case ShaderReflection::UniformType::VEC3: mUniforms[uniform.mName + member.mName] = MATH::Vector3f(); break;
-				case ShaderReflection::UniformType::VEC2: mUniforms[uniform.mName + member.mName] = MATH::Vector2f(); break;
-				case ShaderReflection::UniformType::INT: mUniforms[uniform.mName + member.mName] = 0; break;
-				case ShaderReflection::UniformType::FLOAT: mUniforms[uniform.mName + member.mName] = 0.0f; break;
-				case ShaderReflection::UniformType::BOOL: mUniforms[uniform.mName + member.mName] = false; break;
+				case ShaderReflection::UniformType::MAT4:
+					mUniforms[uniform.mName + member.mName] = MATH::Matrix4f();
+					break;
+				case ShaderReflection::UniformType::MAT3:
+					mUniforms[uniform.mName + member.mName] = MATH::Matrix3f();
+					break;
+				case ShaderReflection::UniformType::VEC4:
+					mUniforms[uniform.mName + member.mName] = MATH::Vector4f();
+					break;
+				case ShaderReflection::UniformType::VEC3:
+					mUniforms[uniform.mName + member.mName] = MATH::Vector3f();
+					break;
+				case ShaderReflection::UniformType::VEC2:
+					mUniforms[uniform.mName + member.mName] = MATH::Vector2f();
+					break;
+				case ShaderReflection::UniformType::INT:
+					mUniforms[uniform.mName + member.mName] = 0;
+					break;
+				case ShaderReflection::UniformType::FLOAT:
+					mUniforms[uniform.mName + member.mName] = 0.0f;
+					break;
+				case ShaderReflection::UniformType::BOOL:
+					mUniforms[uniform.mName + member.mName] = false;
+					break;
 				}
 			}
 		} break;
 		case ShaderReflection::UniformType::STORAGE_BUFFER: {
-			//TODO: save count elements of ssbo and use mSize * mCount
+			// TODO: save count elements of ssbo and use mSize * mCount
 			mStorageBuffers[uniform.mName] = std::make_shared<StorageBufferDx12>(nullptr, uniform.mSize, 1);
 		} break;
 		}
@@ -155,7 +159,9 @@ void MaterialDx12::fillUniforms(std::shared_ptr<TextureInterface> defaultTexture
 	auto& shaderInfo = mShader->getReflection();
 	auto driver = d3dUtil::GetDriver();
 	for (const auto& uniform : shaderInfo.mUniforms) {
-        if (mShader->isBindlessResource(uniform)) continue;
+		if (mShader->isBindlessResource(uniform)) {
+			continue;
+		}
 		switch (uniform.mType) {
 		case ShaderReflection::UniformType::SAMPLER_2D:
 		case ShaderReflection::UniformType::SAMPLER_CUBE:
@@ -201,14 +207,16 @@ void MaterialDx12::fillUniforms(std::shared_ptr<TextureInterface> defaultTexture
 						if (!mUniforms.contains(key) || member.mOffset < 0 || member.mSize <= 0) {
 							continue;
 						}
-						std::visit([&](auto& arg) {
-							using T = std::decay_t<decltype(arg)>;
-							const size_t copySize = std::min(sizeof(T), static_cast<size_t>(member.mSize));
-							if (static_cast<size_t>(member.mOffset) + copySize > bufferData.size()) {
-								return;
-							}
-							memcpy(bufferData.data() + member.mOffset, &arg, copySize);
-						}, mUniforms.at(key));
+						std::visit(
+							[&](auto& arg) {
+								using T = std::decay_t<decltype(arg)>;
+								const size_t copySize = std::min(sizeof(T), static_cast<size_t>(member.mSize));
+								if (static_cast<size_t>(member.mOffset) + copySize > bufferData.size()) {
+									return;
+								}
+								memcpy(bufferData.data() + member.mOffset, &arg, copySize);
+							},
+							mUniforms.at(key));
 					}
 					buffer->setData(bufferData.data(), bufferData.size());
 				}
@@ -216,9 +224,9 @@ void MaterialDx12::fillUniforms(std::shared_ptr<TextureInterface> defaultTexture
 			driver->setUniformBuffer(uniform.mBind, buffer);
 		} break;
 		case ShaderReflection::UniformType::STORAGE_BUFFER: {
-			//TODO: material now support only set ssbo external
-			//TODO:
-			//driver->mStorageBuffers[uniform.mBind] = mUniformBuffers[uniform.mName];
+			// TODO: material now support only set ssbo external
+			// TODO:
+			// driver->mStorageBuffers[uniform.mBind] = mUniformBuffers[uniform.mName];
 		} break;
 		}
 	}

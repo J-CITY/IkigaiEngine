@@ -4,10 +4,14 @@
 #include "backends/interface/resourceStruct.h"
 #include "backends/interface/upscalerInterface.h"
 #include "drawable.h"
+#include "environmentModule/atmosphereCache.h"
+#include "environmentModule/environment.h"
+#include "environmentModule/environmentQuality.h"
 #include "frustum.h"
 #include "gameRendererInterface.h"
 #include "light.h"
 #include "primitiveRender.h"
+#include "profilerModule/gpuStageProfiler.h"
 #include <filesystem>
 
 // TODO move include to .cpp
@@ -64,7 +68,8 @@ enum class DrawContent {
 	FRAME_GENERATION,
 	VECTOR_WORLD,
 	PRIMITIVES_WORLD,
-	PRIMITIVES_SCREEN
+	PRIMITIVES_SCREEN,
+	WEATHER
 };
 
 struct PipelineStage {
@@ -336,7 +341,7 @@ struct RenderGraphPipeline {
 	void rebuildFrameBuffers(Renderer& renderer);
 	void reloadSettings(Renderer& renderer, const std::string& asset = {});
 	void pollSettings(Renderer& renderer);
-	void invalidateResources(const std::vector<std::string>& resources);
+	void invalidateResources(const std::vector<std::string>& resources, bool resetHistory = true);
 	void pollResourceUpdates();
 	Descriptor mDescriptor;
 	Descriptor mSourceDescriptor;
@@ -389,8 +394,37 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	std::map<std::string, MaterialInterface::UniformData> mOverrideDefaults;
 	std::shared_ptr<RENDER::MaterialInterface> mEmptyMaterial;
 	std::shared_ptr<RENDER::TextureInterface> mEmptyTexture;
+	std::shared_ptr<RENDER::TextureInterface> mEmptyVolume;
 	std::shared_ptr<UniformBufferInterface> mEngineUbo;
+	std::shared_ptr<UniformBufferInterface> mEnvironmentUbo;
+	std::shared_ptr<UniformBufferInterface> mSurfaceWeatherUbo;
+	std::shared_ptr<UniformBufferInterface> mInteractionUbo;
+	std::shared_ptr<UniformBufferInterface> mSurfaceUbo;
+	std::shared_ptr<UniformBufferInterface> mInstanceMetaUbo = {};
+	std::shared_ptr<StorageBufferInterface> mEmptyInstanceBuffer = {};
+	ENVIRONMENT::GpuState mEnvironmentState = {};
+	ENVIRONMENT::QualitySettings mEnvironmentQuality = {};
+	MATH::Vector2f mCloudShadowAnchor = {};
+	MATH::Vector2i mCloudShadowViewport = {};
+	bool mCloudShadowAnchorValid = false;
+	bool mCloudShadowNeedsUpdate = true;
+	struct InteractionGpu {
+		MATH::Vector4f Count = {};
+		std::array<MATH::Vector4f, 32> StartRadius = {};
+		std::array<MATH::Vector4f, 32> EndStrength = {};
+		std::array<MATH::Vector4f, 32> PreviousStartRadius = {};
+		std::array<MATH::Vector4f, 32> PreviousEndStrength = {};
+		std::array<MATH::Vector4f, 32> Owners = {};
+	} mInteractionState = {};
+	ENVIRONMENT::AtmosphereCache mAtmosphereCache = {};
+	PipelineStage* mAtmosphereTransmittanceStage = nullptr;
+	PipelineStage* mAtmosphereSkyViewStage = nullptr;
+	PipelineStage* mAtmosphereAerialStage = nullptr;
+	void updateEnvironment(SCENE_SYSTEM::Scene& scene);
+	void bindEnvironment(Renderer& renderer, const ShaderReflection& reflection);
 	std::shared_ptr<UniformBufferInterface> mBoneUbo;
+	std::shared_ptr<UniformBufferInterface> mMorphUbo;
+	std::shared_ptr<StorageBufferInterface> mEmptyMorphBuffer;
 	struct SkinningPose {
 		std::shared_ptr<SKELETON::Skeleton> Skeleton;
 		SKELETON::IAnimationPlayable* Playable = nullptr;
@@ -407,6 +441,7 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	std::shared_ptr<UniformBufferInterface> mPointShadowPassUbo;
 	std::shared_ptr<MeshInterface> mFullscreenMesh;
 	std::shared_ptr<MaterialInterface> mOverrideMaterial;
+	std::map<std::tuple<ShaderInterface::Id, uint64_t, unsigned>, std::shared_ptr<MaterialInterface>> mPbrPassMaterials;
 	PipelineStage* mActiveStage = nullptr;
 	std::shared_ptr<MaterialInterface> mGuiSpriteMaterial;
 	std::shared_ptr<MaterialInterface> mGuiTextMaterial;
@@ -459,8 +494,7 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	int mCaptureLightIndex = -1;
 
 	unsigned long long mFrameCount = 0ull;
-	bool mProfileGpu = false;
-	std::map<std::string, std::pair<double, unsigned>> mGpuStageTimes;
+	PROFILER::GpuStageProfiler mGpuProfiler = {};
 
 	void renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::CameraComponent&);
 	void updateLights(SCENE_SYSTEM::Scene& scene);
@@ -494,9 +528,9 @@ public:
 		mRenderPipeline->mUpscaleHistoryValid = false;
 		mRenderPipeline->mPresentationHistoryValid = false;
 	}
-	void enableGpuProfiling() {
-		mProfileGpu = true;
-	}
+	void enableGpuProfiling(bool enabled = true);
+	void resetGpuProfile();
+	PROFILER::GpuProfileSnapshot gpuProfile() const;
 	void printGpuProfile() const;
 
 #ifdef OCULUS

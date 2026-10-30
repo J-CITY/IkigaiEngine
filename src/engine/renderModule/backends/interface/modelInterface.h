@@ -4,9 +4,11 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "../../objects/boundingSphere.h"
+#include "../../morphTarget.h"
 #include "../../vertex.h"
 
 
@@ -48,6 +50,10 @@ namespace IKIGAI
 			const std::vector<std::shared_ptr<MeshInterface>>& getMeshes() const {
 				return mMeshes;
 			}
+			void addMorphNodeMesh(const std::string& nodeName, std::size_t meshIndex);
+			const std::vector<std::size_t>& morphMeshesForNode(const std::string& nodeName) const;
+			void setMorphAnimations(std::vector<MorphAnimationClip> clips);
+			const std::vector<MorphAnimationClip>& morphAnimations() const;
 
 			bool isBoneExist(const std::string& boneName) const {
 				return mBoneInfoMap.contains(boneName);
@@ -94,6 +100,8 @@ namespace IKIGAI
 		protected:
 			std::vector<std::string> mMaterialNames;
 			std::vector<std::shared_ptr<MeshInterface>> mMeshes;
+			std::unordered_map<std::string, std::vector<std::size_t>> mMorphNodeMeshes {};
+			std::vector<MorphAnimationClip> mMorphAnimations {};
 			BoundingSphere mBoundingSphere;
 			std::string mPath;
 

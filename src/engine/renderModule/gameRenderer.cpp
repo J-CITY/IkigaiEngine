@@ -1,4 +1,8 @@
 #include "gameRenderer.h"
+#include "coreModule/ecs/components/facialAnimationComponent.h"
+#include "coreModule/ecs/systems/environmentSystem.h"
+#include "environmentModule/surfaceWeather.h"
+#include "instanceBatch.h"
 #include "particles/particleRenderer.h"
 #include "utilsModule/time/loadTimer.h"
 #if USE_PHYSICS_3D
@@ -55,6 +59,33 @@
 namespace IKIGAI::RENDER {
 std::shared_ptr<RayTracingProgram> LoadRayTracingProgram(Renderer&, const std::string&);
 
+namespace {
+	struct MorphWeightsGpu {
+		std::array<int, 4> Meta {};
+		std::array<MATH::Vector4f, 16> Current {};
+		std::array<MATH::Vector4f, 16> Previous {};
+	};
+	static_assert(sizeof(MorphWeightsGpu) == 528);
+
+	void setMorphWeight(std::array<MATH::Vector4f, 16>& values, std::size_t index, float weight) {
+		auto& vector = values[index / 4];
+		switch (index % 4) {
+		case 0:
+			vector.x = weight;
+			break;
+		case 1:
+			vector.y = weight;
+			break;
+		case 2:
+			vector.z = weight;
+			break;
+		default:
+			vector.w = weight;
+			break;
+		}
+	}
+}
+
 GameRenderer::GameRenderer(CORE::Core& context)
 	: mContext(context) {
 	Init();
@@ -75,11 +106,31 @@ void GameRenderer::Init() {
 	mLightSSBO = render->createStorageBuffer(nullptr, 0, 0);
 #endif
 	mEmptyTexture = render->createTexture("/textures/empty.png");
+	TextureResource volume;
+	volume.texType = TextureType::TEXTURE_3D;
+	volume.width = 1;
+	volume.height = 1;
+	volume.depth = 1;
+	volume.channels = 4;
+	volume.colorData = { 0, 0, 0, 0 };
+	volume.useMipmap = false;
+	mEmptyVolume = render->createTexture(volume);
 
 	mEngineUbo = render->createUniformBuffer<EngineUBO>({});
+	mEnvironmentUbo = render->createUniformBuffer<ENVIRONMENT::GpuState>({});
+	mSurfaceWeatherUbo = render->createUniformBuffer<ENVIRONMENT::SurfaceWeatherGpu>({});
+	mInteractionUbo = render->createUniformBuffer<InteractionGpu>({});
+	mSurfaceUbo = render->createUniformBuffer<SurfaceGpu>({});
+	mInstanceMetaUbo = render->createUniformBuffer<InstanceMetaGpu>({});
+	const InstanceTransform emptyInstance;
+	mEmptyInstanceBuffer = render->createStorageBuffer(&emptyInstance, 1, sizeof(emptyInstance));
 	mBoneUbo = render->createUniformBuffer<BonesUBO>({});
+	mMorphUbo = render->createUniformBuffer<MorphWeightsGpu>({});
+	const MorphVertexDelta emptyMorph {};
+	mEmptyMorphBuffer = render->createStorageBuffer(&emptyMorph, 1, sizeof(emptyMorph));
 	mFrameUbo = render->createUniformBuffer<FrameUBO>({});
-	if (DriverInterface::settings.backend == RenderSettings::Backend::VULKAN) {
+	if (DriverInterface::settings.backend == RenderSettings::Backend::VULKAN
+		|| DriverInterface::settings.backend == RenderSettings::Backend::OPENGL) {
 		mDrawFrameUbo = render->createUniformBuffer<FrameUBO>({});
 	}
 	mShadowUbo = render->createUniformBuffer<ShadowUBO>({});
@@ -252,6 +303,22 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 	if (!material || !drawable.mesh) {
 		return;
 	}
+	if (mOverrideMaterial && drawable.material && drawable.material->hasShader() && drawable.material->getShader()->supportsPbrLayers()) {
+		const auto passShader = mOverrideMaterial->getShader();
+		const auto count = drawable.material->getShader()->compiledPbrLayerCount();
+		if (passShader->pbrLayerVariant().empty()) {
+			throw std::runtime_error("Pass shader has no layered PBR variant: " + passShader->mPath);
+		}
+		const auto key = std::make_tuple(reinterpret_cast<ShaderInterface::Id>(mOverrideMaterial.get()), passShader->generation(), count);
+		auto& variant = mPbrPassMaterials[key];
+		if (!variant) {
+			auto descriptor = mOverrideMaterial->getDescriptor();
+			descriptor.ShaderPath = passShader->pbrLayerVariant();
+			descriptor.PbrLayers.Layers.resize(count);
+			variant = mContext.render->createMaterial(descriptor);
+		}
+		material = variant;
+	}
 	if (mOverrideMaterial && drawable.material) {
 		for (const auto& [key, value] : mOverrideDefaults) {
 			material->set(key, value);
@@ -283,6 +350,18 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 			}
 		}
 	}
+	if (drawable.instances
+		&& (!material->hasShader() || !material->getShader()->getReflection().mNameToUniforms.contains("engine_InstanceTransforms"))) {
+		for (const auto& transform : drawable.instances->transforms()) {
+			auto single = drawable;
+			single.instances.reset();
+			single.world = transform.World;
+			single.prevWorld = transform.PreviousWorld;
+			single.tint = transform.Tint;
+			drawDrawable(single);
+		}
+		return;
+	}
 
 	static int skipLogs = 4;
 	const bool canDraw = material && material->hasShader() && material->getGPUInstances() > 0 && drawable.mesh;
@@ -294,12 +373,13 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 	if (material->hasShader() && material->getGPUInstances() > 0) {
 		auto& render = mContext.render;
 
-		render->setDepth({ material->isDepthTest() ? material->getDepthFunc() : DepthFunction::ALWAYS, material->isDepthWriting() });
+		const auto& passState = mOverrideMaterial ? mOverrideMaterial : material;
+		render->setDepth({ passState->isDepthTest() ? passState->getDepthFunc() : DepthFunction::ALWAYS, passState->isDepthWriting() });
 		// Pass overrides replace shaders, while the surface retains its
 		// double-sided setting (including G-buffer and shadow passes).
 		const auto& surface = drawable.material ? drawable.material : material;
 		render->setCull(surface->isBackfaceCulling() ? CullFace::BACK : CullFace::NONE);
-		if (material->isBlendable()) {
+		if (passState->isBlendable()) {
 			render->setBlending({ BlendMode::SRC_ALPHA, BlendMode::ONE_MINUS_SRC_ALPHA });
 		}
 		else {
@@ -324,14 +404,38 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 		render->setPushConstant(IKIGAI::RENDER::ShaderType::VERTEX, 0, sizeof(MATH::Matrix4f), &model);
 
 		const auto* pose = skinningPose(drawable);
-		if (!pose) {
-			mBoneUbo->setData(BonesUBO {});
-		}
+		// mBoneUbo is the immutable empty pose; animated draws use pose-owned buffers.
 
 		// std::static_pointer_cast<ShaderGl>(material->getShader())->setMat4("engine_Model.Projection",
 		// MATH::Matrix4f::Transpose(uboData.Projection)); std::static_pointer_cast<ShaderGl>(material->getShader())->setMat4("engine_Model.View",
 		// MATH::Matrix4f::Transpose(uboData.View));
 		const auto& reflected = material->getShader()->getReflection().mNameToUniforms;
+		bindEnvironment(*render, material->getShader()->getReflection());
+		unsigned shellCount = 1;
+		const auto& deformation = surface->deformation();
+		if (deformation.Mode == DeformationMode::Fur) {
+			const auto position = drawable.world * MATH::Vector3f {};
+			const auto delta = position - uboData.ViewPos;
+			const float distance = std::sqrt(delta.dot(delta));
+			shellCount = std::max(2u,
+				std::min(deformation.FurShells, mEnvironmentQuality.FurShellLimit)
+					/ (distance > 40		? 4u
+							: distance > 15 ? 2u
+											: 1u));
+		}
+		if (reflected.contains("engine_Surface")) {
+			auto state = surfaceGpu(deformation, shellCount);
+			state.Pivot.w = float(drawable.OwnerId);
+			mSurfaceUbo->setData(state);
+			render->setUniformBuffer("engine_Surface", mSurfaceUbo);
+		}
+		if (reflected.contains("engine_InstanceTransforms")) {
+			const InstanceMetaGpu state { { drawable.instances ? float(drawable.instances->transforms().size()) : 0.0f, float(shellCount), 0, 0 },
+				drawable.tint };
+			mInstanceMetaUbo->setData(state);
+			render->setUniformBuffer("engine_InstanceMeta", mInstanceMetaUbo);
+			render->setStorageBuffer("engine_InstanceTransforms", drawable.instances ? drawable.instances->buffer() : mEmptyInstanceBuffer);
+		}
 		if (reflected.contains("engine_UBO")) {
 			render->setUniformBuffer("engine_UBO", mEngineUbo);
 		}
@@ -341,6 +445,25 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 		if (reflected.contains("engine_PreviousBones")) {
 			render->setUniformBuffer("engine_PreviousBones", pose ? pose->PreviousUbo : mBoneUbo);
 		}
+		if (reflected.contains("engine_MorphWeights") || reflected.contains("engine_MorphDeltas")) {
+			MorphWeightsGpu morph {};
+			const auto& targets = drawable.mesh->morphTargets();
+			morph.Meta[0] = static_cast<int>(targets.size());
+			morph.Meta[1] = static_cast<int>(drawable.mesh->getVertexCount());
+			const auto* current = drawable.facialAnimation ? drawable.facialAnimation->weightsFor(*drawable.mesh) : nullptr;
+			const auto* previous = drawable.facialAnimation ? drawable.facialAnimation->previousWeightsFor(*drawable.mesh) : nullptr;
+			for (std::size_t index = 0; index < targets.size(); ++index) {
+				setMorphWeight(morph.Current, index, current ? (*current)[index] : targets[index].DefaultWeight);
+				setMorphWeight(morph.Previous, index, previous ? (*previous)[index] : targets[index].DefaultWeight);
+			}
+			if (reflected.contains("engine_MorphWeights")) {
+				mMorphUbo->setData(morph);
+				render->setUniformBuffer("engine_MorphWeights", mMorphUbo);
+			}
+			if (reflected.contains("engine_MorphDeltas")) {
+				render->setStorageBuffer("engine_MorphDeltas", drawable.mesh->morphBuffer() ? drawable.mesh->morphBuffer() : mEmptyMorphBuffer);
+			}
+		}
 		if (reflected.contains("engine_Lights")) {
 			render->setStorageBuffer("engine_Lights", mLightSSBO);
 		}
@@ -348,8 +471,8 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 			auto frame = mFrameData;
 			frame.PreviousModel = MATH::Matrix4f::Transpose(drawable.prevWorld);
 			if (mDrawFrameUbo) {
-				// Vulkan snapshots preserve each draw's payload. Reuse their
-				// pool instead of allocating a VMA buffer for every object.
+				// Vulkan snapshots the payload; OpenGL replaces the buffer store on update.
+				// Both paths reuse the buffer object instead of allocating one per draw.
 				mDrawFrameUbo->setData(frame);
 				render->setUniformBuffer("engine_Frame", mDrawFrameUbo);
 			}
@@ -377,7 +500,8 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 		// }
 		// drawable.mesh->unbind();
 
-		render->draw(drawable.mesh, PrimitiveMode::TRIANGLES, material->getGPUInstances());
+		const unsigned instances = drawable.instances ? unsigned(drawable.instances->transforms().size()) : material->getGPUInstances();
+		render->draw(drawable.mesh, PrimitiveMode::TRIANGLES, instances * shellCount);
 
 		// std::static_pointer_cast<ShaderGl>(material->getShader())->unbind();
 		material->unbind();
@@ -385,6 +509,8 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 }
 // TODO: split it
 void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::CameraComponent& cameraComponent) {
+	mGpuProfiler.beginFrame();
+	auto frameProfile = mGpuProfiler.measure("Frame");
 #if USE_PHYSICS_3D
 	if (!mDeformableRenderer) {
 		mDeformableRenderer = std::make_shared<DeformableRenderer>();
@@ -403,6 +529,13 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		projection = clipCorrection * projection;
 	}
 	uboData.ViewPos = cameraComponent.obj->getTransform()->getWorldPosition();
+	if (cameraComponent.isFrustumLightCulling()) {
+		updateLightsInFrustum(scene, cameraComponent.getCamera().getFrustum());
+	}
+	else {
+		updateLights(scene);
+	}
+	updateEnvironment(scene);
 	const float previousTime = uboData.Time;
 	uboData.Time = static_cast<float>(TIME::Timer::GetInstance().getTimeSinceStart().count());
 	auto sz = mContext.window->getPixelSize();
@@ -491,12 +624,6 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	const auto cameraFrameState = mFrameData.FrameState;
 	mFrameUbo->setData(mFrameData);
 
-	if (cameraComponent.isFrustumLightCulling()) {
-		updateLightsInFrustum(scene, cameraComponent.getCamera().getFrustum());
-	}
-	else {
-		updateLights(scene);
-	}
 	std::vector<float> sun;
 	for (const auto& light : mLights) {
 		if (light.type == 1) {
@@ -504,7 +631,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			break;
 		}
 	}
-	if (mFrameCount > 0 && sun != mEnvironmentSun) {
+	if (mEnvironmentState.Atmosphere.x < .5f && mFrameCount > 0 && sun != mEnvironmentSun) {
 		mRenderPipeline->invalidateResources({ "Environment", "SkyEnvironment" });
 		mFrameData.FrameState.x = 0;
 		mFrameUbo->setData(mFrameData);
@@ -638,12 +765,17 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		if (stage->mDescriptor.UpdateInterval < 1) {
 			throw std::runtime_error("Invalid stage update interval: " + stage->mName);
 		}
-		if (stage->mDescriptor.UpdateInterval > 1 && mFrameCount == 0) {
+		const bool cloudShadowUpdate = stage->mName == "CloudShadowMap" && mCloudShadowNeedsUpdate;
+		if (stage->mName == "CloudShadowMap" && mEnvironmentState.CloudShadowMap.w > .5f && !cloudShadowUpdate) {
 			return;
 		}
-		if (mFrameCount % stage->mDescriptor.UpdateInterval != 0) {
+		if (stage->mDescriptor.UpdateInterval > 1 && mFrameCount == 0 && !cloudShadowUpdate) {
 			return;
 		}
+		if (mFrameCount % stage->mDescriptor.UpdateInterval != 0 && !cloudShadowUpdate) {
+			return;
+		}
+		auto stageProfile = mGpuProfiler.measure(stage->mName);
 		if (stage->mDrawContent == DrawContent::LIGHT_ACCUMULATION) {
 			auto& pass = mRenderPipeline->mLightPasses.at(stage->mDescriptor.LightPass);
 			bool rayShadows = false;
@@ -863,13 +995,6 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			}
 		}
 		auto& render = *mContext.render;
-#if defined(OPENGL_BACKEND) && !defined(USING_GLES)
-		GLuint profileQuery = 0;
-		if (mProfileGpu && DriverInterface::settings.backend == RenderSettings::Backend::OPENGL) {
-			glGenQueries(1, &profileQuery);
-			glBeginQuery(GL_TIME_ELAPSED, profileQuery);
-		}
-#endif
 		render.setFrameBuffer(stage->mFrameBuffer);
 		const auto size = stage->mFrameBuffer ? MATH::Vector2f(stage->mFrameBuffer->getWidth(), stage->mFrameBuffer->getHeight())
 											  : MATH::Vector2f(float(sz.x), float(sz.y));
@@ -888,15 +1013,17 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			mFrameData.FrameState = cameraFrameState;
 			mFrameUbo->setData(mFrameData);
 		}
-		if (stage->mDescriptor.PresentationSink && stage->mDrawContent == DrawContent::QUAD)
+		if (stage->mDescriptor.PresentationSink && stage->mDrawContent == DrawContent::QUAD) {
 			stage->mDefaults["data_UBOCompositeUI"]
 				= int(!(presentationDriver->mFrameGeneration && presentationDriver->mFrameGeneration->composesUI()));
-		if (stage->mMaterial)
+		}
+		if (stage->mMaterial) {
 			bindStage(*stage);
+		}
 		mOverrideMaterial = stage->mDescriptor.OverrideMaterial ? stage->mMaterial : nullptr;
 		mOverrideDefaults = stage->mDefaults;
 		mActiveStage = stage.get();
-		for (const auto& [name, value] : stage->mDescriptor.Uniforms)
+		for (const auto& [name, value] : stage->mDescriptor.Uniforms) {
 			std::visit(
 				[&](const auto& v) {
 					using T = std::decay_t<decltype(v)>;
@@ -907,68 +1034,81 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 					}
 				},
 				value);
+		}
 		if (stage->mDrawContent == DrawContent::SHADOW) {
 			captureShadows(*stage, shadowChunks, cameraPosition, size);
 		}
 		else if (stage->mDrawContent == DrawContent::QUAD || stage->mDrawContent == DrawContent::UPSCALE) {
-			if (!stage->mMaterial)
+			if (!stage->mMaterial) {
 				throw std::runtime_error("Fullscreen stage requires Material: " + stage->mName);
+			}
 			render.draw(mFullscreenMesh, PrimitiveMode::TRIANGLES, 1);
 		}
 		else if (stage->mDrawContent == DrawContent::GUI) {
 			renderGui(scene);
-			if (stage->mDescriptor.IncludeEditorUI)
+			if (stage->mDescriptor.IncludeEditorUI) {
 				presentationDriver->renderPresentationUI(stage->mFrameBuffer);
+			}
 		}
 		else if (stage->mDrawContent == DrawContent::PRIMITIVES_WORLD || stage->mDrawContent == DrawContent::PRIMITIVES_SCREEN) {
 			mPrimitives.render(render, MATH::Matrix4f::Transpose(uboData.View * uboData.Projection), size,
 				stage->mDrawContent == DrawContent::PRIMITIVES_WORLD ? PrimitiveSpace::World : PrimitiveSpace::Screen);
 		}
+		else if (stage->mDrawContent == DrawContent::WEATHER) {
+			if (auto* environment = ECS::EnvironmentSystem::active(scene)) {
+				if (!mParticleRenderer) {
+					mParticleRenderer = std::make_shared<ParticleRenderer>();
+				}
+				mParticleRenderer->drawWeather(*environment, render, uboData.View, uboData.View * uboData.Projection, mEmptyTexture,
+					mRenderPipeline->mTextures.at("CloudDepth"));
+			}
+		}
 		else if (stage->mDrawContent == DrawContent::VECTOR_WORLD) {
 			renderGui(scene, true);
 		}
-		else
+		else {
 			for (auto& chunk : chunks) {
 				if (stage->mDrawContent == DrawContent::FORWARD || stage->mDrawContent == DrawContent::DEFERRED
 					|| stage->mDrawContent == DrawContent::SHADOW) {
-					for (const auto& [distance, drawable] : chunk.opaqueDrawablesForward)
+					for (const auto& [distance, drawable] : chunk.opaqueDrawablesForward) {
 						drawDrawable(drawable);
-					for (const auto& [distance, drawable] : chunk.opaqueDrawablesDeferred)
+					}
+					for (const auto& [distance, drawable] : chunk.opaqueDrawablesDeferred) {
 						drawDrawable(drawable);
+					}
 				}
 				if (stage->mDrawContent == DrawContent::FORWARD || stage->mDrawContent == DrawContent::TRANSPARENT_GEOMETRY) {
-					for (const auto& [distance, drawable] : chunk.transparentDrawablesForward)
+					for (const auto& [distance, drawable] : chunk.transparentDrawablesForward) {
 						drawDrawable(drawable);
-					for (const auto& [distance, drawable] : chunk.transparentDrawablesDeferred)
+					}
+					for (const auto& [distance, drawable] : chunk.transparentDrawablesDeferred) {
 						drawDrawable(drawable);
+					}
 				}
 			}
+		}
 		if (stage->mDrawContent == DrawContent::TRANSPARENT_GEOMETRY || stage->mDrawContent == DrawContent::FORWARD) {
-			if (!mParticleRenderer)
+			if (!mParticleRenderer) {
 				mParticleRenderer = std::make_shared<ParticleRenderer>();
+			}
 			mParticleRenderer->drawWorld(scene, render, uboData.View, uboData.View * uboData.Projection);
 		}
 		mOverrideMaterial.reset();
 		mActiveStage = nullptr;
-		if (stage->mMaterial)
+		if (stage->mMaterial) {
 			stage->mMaterial->unbind();
-		render.setFrameBuffer(nullptr);
-#if defined(OPENGL_BACKEND) && !defined(USING_GLES)
-		if (profileQuery) {
-			glEndQuery(GL_TIME_ELAPSED);
-			GLuint64 ns = 0;
-			glGetQueryObjectui64v(profileQuery, GL_QUERY_RESULT, &ns);
-			glDeleteQueries(1, &profileQuery);
-			auto& time = mGpuStageTimes[stage->mName];
-			time.first += static_cast<double>(ns) * 1e-6;
-			++time.second;
 		}
-#endif
+		render.setFrameBuffer(nullptr);
 		stage->mExecuted = true;
-		if (stage->mDescriptor.Once)
+		if (stage->mName == "CloudShadowMap") {
+			mCloudShadowNeedsUpdate = false;
+		}
+		if (stage->mDescriptor.Once) {
 			std::cout << "Pipeline init: " << stage->mName << std::endl;
-		else if (stage->mDescriptor.UpdateInterval > 1)
+		}
+		else if (stage->mDescriptor.UpdateInterval > 1 && stage->mName != "CloudShadowMap") {
 			std::cout << "Pipeline update: " << stage->mName << std::endl;
+		}
 	};
 	if (!mRenderPipeline->mIsInitialized) {
 		for (auto& stage : mRenderPipeline->mStartStages) {
@@ -1169,6 +1309,24 @@ void GameRenderer::setPipeline(std::unique_ptr<RenderGraphPipeline>&& renderPipe
 	mRayFrameUbo.reset();
 	mRaySceneChanged = true;
 	mRenderPipeline = std::move(renderPipeline);
+	mCloudShadowAnchorValid = false;
+	mCloudShadowNeedsUpdate = true;
+	mAtmosphereCache = {};
+	mAtmosphereTransmittanceStage = nullptr;
+	mAtmosphereSkyViewStage = nullptr;
+	mAtmosphereAerialStage = nullptr;
+	for (auto& stage : mRenderPipeline->mStartStages) {
+		if (stage->mName == "AtmosphereTransmittance") {
+			mAtmosphereTransmittanceStage = stage.get();
+		}
+		else if (stage->mName == "AtmosphereSkyView") {
+			mAtmosphereSkyViewStage = stage.get();
+		}
+		else if (stage->mName == "AtmosphereAerial") {
+			mAtmosphereAerialStage = stage.get();
+		}
+	}
+	mPbrPassMaterials.clear();
 }
 
 #ifdef OCULUS
@@ -1549,9 +1707,22 @@ void GameRenderer::reloadPipelineSettings(const std::string& asset) {
 	}
 }
 
+void GameRenderer::enableGpuProfiling(bool enabled) {
+	mGpuProfiler.setEnabled(enabled);
+}
+void GameRenderer::resetGpuProfile() {
+	mGpuProfiler.reset();
+}
+PROFILER::GpuProfileSnapshot GameRenderer::gpuProfile() const {
+	return mGpuProfiler.snapshot();
+}
 void GameRenderer::printGpuProfile() const {
-	for (const auto& [stage, time] : mGpuStageTimes) {
-		std::cout << "LIGHTING_GPU_STAGE " << stage << " mean_ms=" << time.first / time.second << " samples=" << time.second << std::endl;
+	const auto profile = gpuProfile();
+	std::cout << "GPU_PROFILE supported=" << profile.Supported << " enabled=" << profile.Enabled << " pending=" << profile.PendingSamples
+			  << " dropped=" << profile.DroppedSamples << " query_pairs=" << profile.AllocatedQueryPairs << std::endl;
+	for (const auto& stage : profile.Stages) {
+		std::cout << "LIGHTING_GPU_STAGE " << stage.Name << " mean_ms=" << stage.MeanMilliseconds << " samples=" << stage.Samples
+				  << " median_ms=" << stage.MedianMilliseconds << " p95_ms=" << stage.Percentile95Milliseconds << std::endl;
 	}
 }
 
@@ -1675,7 +1846,7 @@ void RenderGraphPipeline::reloadSettings(Renderer& renderer, const std::string& 
 	}
 }
 
-void RenderGraphPipeline::invalidateResources(const std::vector<std::string>& resources) {
+void RenderGraphPipeline::invalidateResources(const std::vector<std::string>& resources, bool resetHistory) {
 	std::set<std::string> dirty(resources.begin(), resources.end());
 	for (auto* stages : stageGroups()) {
 		for (auto& stage : *stages) {
@@ -1706,8 +1877,10 @@ void RenderGraphPipeline::invalidateResources(const std::vector<std::string>& re
 			}
 		}
 	}
-	mHistoryValid = false;
-	mUpscaleHistoryValid = false;
+	if (resetHistory) {
+		mHistoryValid = false;
+		mUpscaleHistoryValid = false;
+	}
 	mIsInitialized = false;
 }
 
@@ -2177,6 +2350,7 @@ void GameRenderer::bindStage(PipelineStage& stage) {
 	if (reflection.mNameToUniforms.contains("engine_Lights")) {
 		renderer.setStorageBuffer("engine_Lights", mLightSSBO);
 	}
+	bindEnvironment(renderer, reflection);
 }
 
 void GameRenderer::renderGui(SCENE_SYSTEM::Scene& scene, bool worldVectors) {

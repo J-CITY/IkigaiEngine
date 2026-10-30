@@ -3,41 +3,28 @@
 #ifdef OPENGL_BACKEND
 #include "../interface/reflectionStructs.h"
 #include "../interface/resourceStruct.h"
+#include "renderModule/render.h"
+#include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
 #include "resourceModule/shaderManager.h"
 #include "resourceModule/textureManager.h"
-#include "utilsModule/jsonLoader.h"
-#include "utilsModule/visitorHelper.h"
 #include "storageBufferGl.h"
 #include "uniformBufferGl.h"
-#include "renderModule/render.h"
-#include "resourceModule/fileSystem/fileSystem.h"
+#include "utilsModule/jsonLoader.h"
+#include "utilsModule/visitorHelper.h"
 
-IKIGAI::RENDER::MaterialGl::MaterialGl(const MaterialResource& res): MaterialInterface(res){
+IKIGAI::RENDER::MaterialGl::MaterialGl(const MaterialResource& res)
+	: MaterialInterface(res) {
 	create(res);
 }
 
 void IKIGAI::RENDER::MaterialGl::create(const MaterialResource& res) {
-	//TODO: do it not in constructor (add var in Material resource) 
-    auto shader = std::static_pointer_cast<RENDER::ShaderGl>(RESOURCES::ServiceManager::Get<RESOURCES::ShaderLoader>().loadResource(res.ShaderPath));
-    MaterialGl::setShader(shader);
-
-	auto& textureLoader = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RESOURCES::TextureLoader>();
-	for (const auto& [k, v] : res.Uniforms) {
-		std::visit([&](auto& arg) {
-			using T = std::decay_t<decltype(arg)>;
-			if constexpr (std::is_same_v<T, std::string>) {
-				const auto ext = IKIGAI::RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().getFileExtension(arg);
-				if (ext == ".texture") {
-					mUniforms[k] = textureLoader.createFromResource(arg);
-				} else {
-					mUniforms[k] = textureLoader.createFromFile(arg, true);
-				}
-			} else {
-				mUniforms[k] = arg;
-			}
-			}, v);
+	auto prepared = prepareMaterial(res);
+	setShader(prepared.shader);
+	for (auto& [name, value] : prepared.uniforms) {
+		mUniforms[name] = std::move(value);
 	}
+	applyMaterialState(res);
 }
 
 IKIGAI::RENDER::MaterialGl::~MaterialGl() = default;
@@ -81,8 +68,10 @@ void IKIGAI::RENDER::MaterialGl::generateUniformsData() {
 
 	const auto& shaderInfo = mShader->getReflection();
 	for (const auto& uniform : shaderInfo.mUniforms) {
-        if (mShader->isBindlessResource(uniform)) continue;
-		if (isEngineUniform(uniform.mName)) {//this pass from render
+		if (mShader->isBindlessResource(uniform)) {
+			continue;
+		}
+		if (isEngineUniform(uniform.mName)) { // this pass from render
 			continue;
 		}
 		switch (uniform.mType) {
@@ -95,22 +84,38 @@ void IKIGAI::RENDER::MaterialGl::generateUniformsData() {
 		} break;
 		case ShaderReflection::UniformType::UNIFORM_BUFFER: {
 			mUniformBuffers[uniform.mName] = std::make_shared<UniformBufferGl>(nullptr, uniform.mSize);
-			//TODO: array is not support yet
+			// TODO: array is not support yet
 			for (const auto& member : uniform.mMembers) {
 				switch (member.mType) {
-				case ShaderReflection::UniformType::MAT4: mUniforms[uniform.mName + member.mName] = MATH::Matrix4f(); break;
-				case ShaderReflection::UniformType::MAT3: mUniforms[uniform.mName + member.mName] = MATH::Matrix3f(); break;
-				case ShaderReflection::UniformType::VEC4: mUniforms[uniform.mName + member.mName] = MATH::Vector4f(); break;
-				case ShaderReflection::UniformType::VEC3: mUniforms[uniform.mName + member.mName] = MATH::Vector3f(); break;
-				case ShaderReflection::UniformType::VEC2: mUniforms[uniform.mName + member.mName] = MATH::Vector2f(); break;
-				case ShaderReflection::UniformType::INT: mUniforms[uniform.mName + member.mName] = 0; break;
-				case ShaderReflection::UniformType::FLOAT: mUniforms[uniform.mName + member.mName] = 0.0f; break;
-				case ShaderReflection::UniformType::BOOL: mUniforms[uniform.mName + member.mName] = false; break;
+				case ShaderReflection::UniformType::MAT4:
+					mUniforms[uniform.mName + member.mName] = MATH::Matrix4f();
+					break;
+				case ShaderReflection::UniformType::MAT3:
+					mUniforms[uniform.mName + member.mName] = MATH::Matrix3f();
+					break;
+				case ShaderReflection::UniformType::VEC4:
+					mUniforms[uniform.mName + member.mName] = MATH::Vector4f();
+					break;
+				case ShaderReflection::UniformType::VEC3:
+					mUniforms[uniform.mName + member.mName] = MATH::Vector3f();
+					break;
+				case ShaderReflection::UniformType::VEC2:
+					mUniforms[uniform.mName + member.mName] = MATH::Vector2f();
+					break;
+				case ShaderReflection::UniformType::INT:
+					mUniforms[uniform.mName + member.mName] = 0;
+					break;
+				case ShaderReflection::UniformType::FLOAT:
+					mUniforms[uniform.mName + member.mName] = 0.0f;
+					break;
+				case ShaderReflection::UniformType::BOOL:
+					mUniforms[uniform.mName + member.mName] = false;
+					break;
 				}
 			}
 		} break;
 		case ShaderReflection::UniformType::STORAGE_BUFFER: {
-			//TODO: save count elements of ssbo and use mSize * mCount
+			// TODO: save count elements of ssbo and use mSize * mCount
 			mStorageBuffers[uniform.mName] = std::make_shared<StorageBufferGl>(nullptr, uniform.mSize, 1);
 		} break;
 		}
@@ -122,7 +127,9 @@ void IKIGAI::RENDER::MaterialGl::fillUniforms(std::shared_ptr<TextureInterface> 
 
 	auto& shaderInfo = mShader->getReflection();
 	for (const auto& uniform : shaderInfo.mUniforms) {
-        if (mShader->isBindlessResource(uniform)) continue;
+		if (mShader->isBindlessResource(uniform)) {
+			continue;
+		}
 		if (uniform.mName.starts_with("engine")) {
 			continue;
 		}
@@ -133,25 +140,27 @@ void IKIGAI::RENDER::MaterialGl::fillUniforms(std::shared_ptr<TextureInterface> 
 		case ShaderReflection::UniformType::SAMPLER_2D_ARRAY: {
 			if (useTextures) {
 				if (auto tex = std::get<std::shared_ptr<TextureInterface>>(mUniforms.at(uniform.mName))) {
-					RESOURCES::ServiceManager::Get<Renderer>().setTexture(uniform.mBind,tex);
+					RESOURCES::ServiceManager::Get<Renderer>().setTexture(uniform.mBind, tex);
 				}
 				else if (defaultTexture) {
-					RESOURCES::ServiceManager::Get<Renderer>().setTexture(uniform.mBind,defaultTexture);
+					RESOURCES::ServiceManager::Get<Renderer>().setTexture(uniform.mBind, defaultTexture);
 				}
 				mShader->setInt(uniform.mName, uniform.mBind);
 				textureSlot++;
 			}
 		} break;
 		case ShaderReflection::UniformType::UNIFORM_BUFFER: {
-			//TODO: support array
+			// TODO: support array
 			if (!mExternalBuffers.contains(uniform.mName)) {
 				std::vector<std::byte> bufferData(uniform.mSize);
 				for (const auto& member : uniform.mMembers) {
 					if (mUniforms.contains(uniform.mName + member.mName)) {
-						std::visit([&](auto& arg) {
-							using T = std::decay_t<decltype(arg)>;
-							memcpy((void*)(bufferData.data() + member.mOffset), &arg, sizeof(T));
-							}, mUniforms[uniform.mName + member.mName]);
+						std::visit(
+							[&](auto& arg) {
+								using T = std::decay_t<decltype(arg)>;
+								memcpy((void*)(bufferData.data() + member.mOffset), &arg, sizeof(T));
+							},
+							mUniforms[uniform.mName + member.mName]);
 					}
 				}
 				mUniformBuffers[uniform.mName]->setData(bufferData.data(), bufferData.size());
@@ -159,36 +168,44 @@ void IKIGAI::RENDER::MaterialGl::fillUniforms(std::shared_ptr<TextureInterface> 
 				auto& render = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RENDER::Renderer>();
 				render.setUniformBuffer(uniform.mBind, std::static_pointer_cast<UniformBufferInterface>(mUniformBuffers[uniform.mName]));
 			}
-				//TODO:
-			//driver->setUniformBuffer(uniform.mBind, mUniformBuffers[uniform.mName]);
+			// TODO:
+			// driver->setUniformBuffer(uniform.mBind, mUniformBuffers[uniform.mName]);
 		} break;
 		case ShaderReflection::UniformType::BOOL: {
-			mShader->setBool(uniform.mName, std::get<bool>(mUniforms.at(uniform.mName))); break;
+			mShader->setBool(uniform.mName, std::get<bool>(mUniforms.at(uniform.mName)));
+			break;
 		}
 		case ShaderReflection::UniformType::INT: {
-			mShader->setInt(uniform.mName, std::get<int>(mUniforms.at(uniform.mName))); break;
+			mShader->setInt(uniform.mName, std::get<int>(mUniforms.at(uniform.mName)));
+			break;
 		}
 		case ShaderReflection::UniformType::FLOAT: {
-			mShader->setFloat(uniform.mName, std::get<float>(mUniforms.at(uniform.mName))); break;
+			mShader->setFloat(uniform.mName, std::get<float>(mUniforms.at(uniform.mName)));
+			break;
 		}
 		case ShaderReflection::UniformType::VEC2: {
-			mShader->setVec2(uniform.mName, std::get<MATH::Vector2f>(mUniforms.at(uniform.mName))); break;
+			mShader->setVec2(uniform.mName, std::get<MATH::Vector2f>(mUniforms.at(uniform.mName)));
+			break;
 		} break;
 		case ShaderReflection::UniformType::VEC3: {
-			mShader->setVec3(uniform.mName, std::get<MATH::Vector3f>(mUniforms.at(uniform.mName))); break;
+			mShader->setVec3(uniform.mName, std::get<MATH::Vector3f>(mUniforms.at(uniform.mName)));
+			break;
 		}
 		case ShaderReflection::UniformType::VEC4: {
-			mShader->setVec4(uniform.mName, std::get<MATH::Vector4f>(mUniforms.at(uniform.mName))); break;
+			mShader->setVec4(uniform.mName, std::get<MATH::Vector4f>(mUniforms.at(uniform.mName)));
+			break;
 		}
 		case ShaderReflection::UniformType::MAT3: {
-			mShader->setMat3(uniform.mName, std::get<MATH::Matrix3f>(mUniforms.at(uniform.mName))); break;
+			mShader->setMat3(uniform.mName, std::get<MATH::Matrix3f>(mUniforms.at(uniform.mName)));
+			break;
 		}
 		case ShaderReflection::UniformType::MAT4: {
-			mShader->setMat4(uniform.mName, std::get<MATH::Matrix4f>(mUniforms.at(uniform.mName))); break;
+			mShader->setMat4(uniform.mName, std::get<MATH::Matrix4f>(mUniforms.at(uniform.mName)));
+			break;
 		}
 		case ShaderReflection::UniformType::STORAGE_BUFFER: {
-			//TODO: material now support only set ssbo external
-			//driver->mStorageBuffers[uniform.mBind] = mUniformBuffers[uniform.mName];
+			// TODO: material now support only set ssbo external
+			// driver->mStorageBuffers[uniform.mBind] = mUniformBuffers[uniform.mName];
 		} break;
 		}
 	}
@@ -218,7 +235,7 @@ const IKIGAI::RENDER::MaterialInterface::UniformData* IKIGAI::RENDER::MaterialGl
 
 IKIGAI::RENDER::MaterialResource IKIGAI::RENDER::MaterialGl::getDescriptor() {
 	MaterialResource d;
-	d.NeedFileWatch = false;//TODO
+	d.NeedFileWatch = false; // TODO
 
 	d.ShaderPath = mShader ? mShader->mPath : "";
 	d.BackfaceCulling = isBackfaceCulling();
@@ -231,14 +248,15 @@ IKIGAI::RENDER::MaterialResource IKIGAI::RENDER::MaterialGl::getDescriptor() {
 	d.IsDeferred = isDeferred();
 	d.GpuInstances = getGPUInstances();
 	for (auto& [k, v] : mUniforms) {
-		std::visit(overloaded{
-		[&d, &k](std::shared_ptr<TextureInterface> arg) {
-			d.Uniforms[k] = arg->getPath();
-		},
-		[&d, &k](auto& arg) {
-			d.Uniforms[k] = arg;
-		}}, v);
+		std::visit(overloaded { [&d, &k](std::shared_ptr<TextureInterface> arg) {
+								   if (arg) {
+									   d.Uniforms[k] = arg->getPath();
+								   }
+							   },
+				   [&d, &k](auto& arg) { d.Uniforms[k] = arg; } },
+			v);
 	}
+	completeDescriptor(d);
 	return d;
 }
 #endif
