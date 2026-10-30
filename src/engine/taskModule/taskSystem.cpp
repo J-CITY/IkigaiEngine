@@ -10,6 +10,7 @@ TaskSystemStatus TaskSystem::getStatus() {
 }
 
 bool TaskSystem::setup() {
+	mBackgroundExecutor = std::make_unique<ThreadPoolExecutor>(2);
 	mThreadPoolExecutor = std::make_unique<ThreadPoolExecutor>();
 	ObjectStatus = TaskSystemStatus::START;
 	return mThreadPoolExecutor->setup();
@@ -35,11 +36,15 @@ bool TaskSystem::update() {
 
 bool TaskSystem::terminate() {
 	ObjectStatus = TaskSystemStatus::TERMINANED;
+	mBackgroundExecutor.reset();
 	return mThreadPoolExecutor->terminate();
 }
 
 void TaskSystem::waitSync() {
 	mThreadPoolExecutor->waitSync();
+}
+void TaskSystem::dispatch(const char* name, std::function<void()> work) {
+	mBackgroundExecutor->addTask(std::make_unique<Task<std::function<void()>>>(std::move(work), name, nullptr), -1);
 }
 
 size_t TaskSystem::getThreadCounts() {

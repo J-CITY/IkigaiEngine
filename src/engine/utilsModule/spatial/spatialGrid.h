@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <limits>
 #include <map>
-#include <set>
 #include <vector>
 
 namespace IKIGAI::UTILS::SPATIAL {
@@ -116,18 +115,26 @@ public:
 		out.erase(std::unique(out.begin(), out.end()), out.end());
 	}
 	void pairs(std::vector<std::pair<Payload, Payload>>& out) const {
-		std::set<std::pair<Payload, Payload>> result;
+		std::vector<std::pair<Payload, Payload>> result;
 		auto add = [&](auto a, auto b) {
-			if (a != b)
-				result.emplace(std::min(a, b), std::max(a, b));
+			if (a != b) {
+				result.emplace_back(std::min(a, b), std::max(a, b));
+			}
 		};
-		for (const auto& [c, ids] : mCells)
-			for (std::size_t a = 0; a < ids.size(); ++a)
-				for (std::size_t b = a + 1; b < ids.size(); ++b)
+		for (const auto& [c, ids] : mCells) {
+			for (std::size_t a = 0; a < ids.size(); ++a) {
+				for (std::size_t b = a + 1; b < ids.size(); ++b) {
 					add(ids[a], ids[b]);
-		for (auto a : mLarge)
-			for (const auto& [b, bounds] : mEntries)
+				}
+			}
+		}
+		for (auto a : mLarge) {
+			for (const auto& [b, bounds] : mEntries) {
 				add(a, b);
+			}
+		}
+		std::sort(result.begin(), result.end());
+		result.erase(std::unique(result.begin(), result.end()), result.end());
 		out.insert(out.end(), result.begin(), result.end());
 	}
 };

@@ -1,5 +1,6 @@
 #pragma once
 #include "mathModule/math.h"
+#include "utilsModule/variables/entityRef.h"
 #include <functional>
 #include <map>
 #include <nlohmann/json.hpp>
@@ -7,8 +8,8 @@
 #include <vector>
 
 namespace IKIGAI::DATA {
-enum class ValueType { Float, Int, Bool, Vector3 };
-using Value = std::variant<float, int, bool, MATH::Vector3f>;
+enum class ValueType { Float, Int, Bool, Vector3, EntityRef };
+using Value = std::variant<float, int, bool, MATH::Vector3f, EntityRef>;
 ValueType typeOf(const Value&);
 Value defaultValue(const std::string& type);
 Value readValue(const nlohmann::json&, ValueType);

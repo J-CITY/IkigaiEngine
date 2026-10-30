@@ -42,6 +42,14 @@ static Result<nlohmann::json, JsonError> ApplyPatches(const nlohmann::json& data
 	if (parentIt == data.end()) {
 		return Ok(data);
 	}
+	if (parentIt->is_string() && parentIt->get_ref<const std::string&>().empty()) {
+		if (data.contains(PATCH_KEY)) {
+			return Err(JsonError(JsonError::Kind::SEREALIZE, "Patch requires a nonempty parent"));
+		}
+		auto plain = data;
+		plain.erase(PARENT_KEY);
+		return Ok(plain);
+	}
 	const auto patchIt = data.find(PATCH_KEY);
 	if (patchIt == data.end()) {
 		return Err(JsonError(JsonError::Kind::SEREALIZE, "No patch in config"));
@@ -61,6 +69,11 @@ static Result<nlohmann::json, JsonError> GetPatches(const nlohmann::json& data) 
 	const auto parentIt = data.find(PARENT_KEY);
 	if (parentIt == data.end()) {
 		return Ok(data);
+	}
+	if (parentIt->is_string() && parentIt->get_ref<const std::string&>().empty()) {
+		auto plain = data;
+		plain.erase(PARENT_KEY);
+		return Ok(plain);
 	}
 	try {
 		const auto parentJsonStr = ReadFileIntoString(parentIt.value());

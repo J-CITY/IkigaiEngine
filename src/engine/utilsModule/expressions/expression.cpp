@@ -66,6 +66,8 @@ Value readValue(const nlohmann::json& j, ValueType t) {
 		return j.get<bool>();
 	case ValueType::Vector3:
 		return MATH::Vector3f { finite(j.at("X")), finite(j.at("Y")), finite(j.at("Z")) };
+	case ValueType::EntityRef:
+		throw std::runtime_error("EntityRef requires a live entity binding");
 	}
 	throw std::runtime_error("Invalid value type");
 }
@@ -125,6 +127,8 @@ Value LiteralDescriptor::value() const {
 		return Bool;
 	case ValueType::Vector3:
 		return MATH::Vector3f { finite(Vector3.x), finite(Vector3.y), finite(Vector3.z) };
+	case ValueType::EntityRef:
+		throw std::runtime_error("EntityRef cannot be a numeric literal");
 	}
 	throw std::runtime_error("Invalid literal type");
 }
@@ -139,6 +143,7 @@ Expression Expression::compile(const ExpressionDescriptor& source, const Symbols
 			n.op = Op::Variable;
 			n.slot = it->second.slot;
 			n.type = it->second.type;
+			check(n.type != ValueType::EntityRef, "EntityRef is not supported by numeric expressions: " + e.Variable);
 		}
 		else if (e.Operation == Op::Constant) {
 			n.type = e.Constant.Type;

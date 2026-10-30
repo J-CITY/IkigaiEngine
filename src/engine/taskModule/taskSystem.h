@@ -1,4 +1,5 @@
 #pragma once
+#include <functional>
 #include <memory>
 
 #include "task.h"
@@ -25,6 +26,8 @@ namespace TASK {
 		}
 
 		void waitSync();
+		// CPU background work is independent of the per-frame waitSync fence.
+		void dispatch(const char* name, std::function<void()> work);
 
 		size_t getThreadCounts();
 
@@ -73,6 +76,7 @@ namespace TASK {
 	protected:
 		std::unique_ptr<ThreadPoolExecutor> mThreadPoolExecutor;
 		std::unique_ptr<NewThreadExecutor> mNewThreadExecutor;
+		std::unique_ptr<ThreadPoolExecutor> mBackgroundExecutor = {};
 
 		std::shared_ptr<ITask> addTask(std::unique_ptr<ITask>&& task, int threadID);
 		std::shared_ptr<ITask> addTaskFront(std::unique_ptr<ITask>&& task, int threadID);
