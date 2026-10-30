@@ -11,6 +11,10 @@
 #include "resourceModule/skeletonManager.h"
 #include "resourceModule/skeletonStateGraphManager.h"
 #include "resourceModule/textureManager.h"
+#if USE_PHYSICS_3D
+#include "resourceModule/destructibleManager.h"
+#include "resourceModule/ragdollManager.h"
+#endif
 #include "sceneLoadingContext.h"
 #include "utilsModule/log/loggerDefine.h"
 #include "utilsModule/time/loadTimer.h"
@@ -68,6 +72,39 @@ template <class D> Task<> PrepareComponent(D descriptor, std::shared_ptr<SceneLo
 			}
 		}
 	}
+
+	else if constexpr (std::is_same_v<D, ECS::SurfaceComponent::Descriptor>) {
+		descriptor.Surface.validate();
+		for (const auto& layer : descriptor.Surface.Layers) {
+			if (!layer.Material.empty()) {
+				co_await HoldResource(ServiceManager::Get<MaterialLoader>().requestResource(layer.Material), state, resources);
+			}
+		}
+		if (!descriptor.Surface.Water.Material.empty()) {
+			co_await HoldResource(ServiceManager::Get<MaterialLoader>().requestResource(descriptor.Surface.Water.Material), state, resources);
+		}
+	}
+	else if constexpr (std::is_same_v<D, ECS::FoliageComponent::Descriptor>) {
+		for (const auto& species : descriptor.Species) {
+			species.validate();
+			for (const auto& lod : species.Lods) {
+				co_await HoldResource(ServiceManager::Get<ModelLoader>().requestResource(
+										  lod.Model, lod.Model.ends_with(".model") ? ELoadingType::RESOURCE : ELoadingType::FILE),
+					state, resources);
+				if (!lod.Material.empty()) {
+					co_await HoldResource(ServiceManager::Get<MaterialLoader>().requestResource(lod.Material), state, resources);
+				}
+			}
+			for (const auto& material : species.Materials) {
+				if (!material.empty()) {
+					co_await HoldResource(ServiceManager::Get<MaterialLoader>().requestResource(material), state, resources);
+				}
+			}
+			for (const auto& binding : species.MaterialBindings) {
+				co_await HoldResource(ServiceManager::Get<MaterialLoader>().requestResource(binding.Material), state, resources);
+			}
+		}
+	}
 	else if constexpr (std::is_same_v<D, ECS::MaterialRenderer::Descriptor>) {
 		for (const auto& path : descriptor.Materials) {
 			if (!path.empty()) {
@@ -83,6 +120,18 @@ template <class D> Task<> PrepareComponent(D descriptor, std::shared_ptr<SceneLo
 			co_await HoldResource(ServiceManager::Get<TextureLoader>().requestAtlas(descriptor.TextureAtlasPath), state, resources);
 		}
 	}
+#if USE_PHYSICS_3D
+	else if constexpr (std::is_same_v<D, ECS::RagdollComponent::Descriptor>) {
+		if (!descriptor.Definition.empty()) {
+			co_await HoldResource(ServiceManager::Get<RagdollLoader>().requestResource(descriptor.Definition), state, resources);
+		}
+	}
+	else if constexpr (std::is_same_v<D, ECS::DestructibleMeshComponent::Descriptor>) {
+		if (!descriptor.Definition.empty()) {
+			co_await HoldResource(ServiceManager::Get<DestructibleLoader>().requestResource(descriptor.Definition), state, resources);
+		}
+	}
+#endif
 	else if constexpr (std::is_same_v<D, ECS::SkeletalComponent::Descriptor>) {
 		if (!descriptor.SkeletalPath.empty()) {
 			co_await HoldResource(
@@ -327,6 +376,13 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 		state->control->check();
 		context.scene->postLoadObject(*object);
 		co_await YieldIfBudgetExceeded();
+	}
+
+	for (const auto& object : objects) {
+		if (auto foliage = object->getComponent<ECS::FoliageComponent>()) {
+			foliage->bind(*context.scene);
+			co_await YieldIfBudgetExceeded();
+		}
 	}
 	context.scene->prefabInstances = std::move(expanded.instances);
 	for (std::size_t i = 0; i < objects.size(); ++i) {

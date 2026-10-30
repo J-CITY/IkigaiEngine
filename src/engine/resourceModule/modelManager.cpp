@@ -63,7 +63,7 @@ COROUTINE::Task<ResourcePtr<RENDER::ModelInterface>> ModelLoader::createResource
 }
 
 void ModelLoader::Reload(RENDER::ModelInterface& model, const RENDER::ModelResource& config) {
-	auto usedFlags = ModelParserFlags::NONE;
+	auto usedFlags = config.path == config.pathModel ? getDefaultFlag() : ModelParserFlags::NONE;
 	for (auto e : config.flags) {
 		usedFlags |= e;
 	}
@@ -71,7 +71,9 @@ void ModelLoader::Reload(RENDER::ModelInterface& model, const RENDER::ModelResou
 
 	if (newModel) {
 		model.setMeshes(newModel->getMeshes());
+		model.setMorphAnimations(newModel->morphAnimations());
 		model.setMaterialNames(newModel->getMaterialsNames());
+		model.computeBoundingSphere();
 		newModel->clearMeshes();
 	}
 }

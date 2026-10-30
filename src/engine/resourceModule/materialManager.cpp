@@ -13,30 +13,47 @@
 #include <resourceModule/fileSystem/fileSystem.h>
 #include <utilsModule/pathGetter.h>
 
-
 namespace IKIGAI::RESOURCES {
 
 COROUTINE::Task<ResourcePtr<RENDER::MaterialInterface>> MaterialLoader::createResourceTask(
 	std::string path, ELoadingType, std::shared_ptr<ResourceLoadControl> control) {
 	control->check();
-	if (auto ready = getResource(path))
+	if (auto ready = getResource(path)) {
 		co_return ready;
+	}
 	auto file = ServiceManager::Get<FileSystem>().getFile(path, FileMode::READ);
-	if (!file || !file->isValid())
+	if (!file || !file->isValid()) {
 		throw std::runtime_error("Missing material: " + path);
+	}
 	auto bytes = co_await file->readAllTask(control);
 	auto parsed = UTILS::FromJsonStr<RENDER::MaterialResource>(std::string(bytes.begin(), bytes.end()));
-	if (parsed.isErr())
+	if (parsed.isErr()) {
 		throw std::runtime_error("Invalid material: " + path);
+	}
 	auto descriptor = parsed.unwrap();
 	descriptor.path = path;
+	descriptor.PbrLayers.validate(path);
 	std::vector<std::shared_ptr<void>> dependencies;
 	dependencies.push_back(co_await ServiceManager::Get<ShaderLoader>().loadResourceTask(descriptor.ShaderPath));
 	for (const auto& [name, value] : descriptor.Uniforms) {
 		control->check();
-		if (const auto texture = std::get_if<std::string>(&value); texture && !texture->empty())
+		if (const auto texture = std::get_if<std::string>(&value); texture && !texture->empty()) {
 			dependencies.push_back(co_await ServiceManager::Get<TextureLoader>().loadResourceTask(
 				*texture, texture->ends_with(".texture") ? ELoadingType::RESOURCE : ELoadingType::FILE));
+		}
+	}
+	for (const auto& layer : descriptor.PbrLayers.Layers) {
+		for (const auto* texture : { &layer.AlbedoMap, &layer.NormalMap, &layer.OrmMap, &layer.HeightMap, &layer.MaskMap }) {
+			control->check();
+			if (texture->empty()) {
+				continue;
+			}
+			if (!ServiceManager::Get<FileSystem>().isFileExist(*texture)) {
+				throw std::runtime_error("Missing PbrLayers texture in " + path + ": " + *texture);
+			}
+			dependencies.push_back(co_await ServiceManager::Get<TextureLoader>().loadResourceTask(
+				*texture, texture->ends_with(".texture") ? ELoadingType::RESOURCE : ELoadingType::FILE));
+		}
 	}
 	control->check();
 	co_await COROUTINE::NextFrame();

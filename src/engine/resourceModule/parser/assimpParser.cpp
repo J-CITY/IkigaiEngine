@@ -13,8 +13,11 @@
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 #include <cassert>
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
+#include <stdexcept>
 #include <renderModule/backends/interface/driverInterface.h>
 #include <renderModule/backends/interface/modelInterface.h>
 #include <renderModule/backends/meshFactory.h>
@@ -161,6 +164,7 @@ bool AssimpParser::LoadModel(const std::string& fileName, RESOURCES::ResourcePtr
 		}
 	}
 	processNode(&identity, scene->mRootNode, scene, model, boneMapping);
+	importMorphAnimations(scene, *model);
 	//}
 	if (model->getUseBatching()) {
 		model->createBuffers(globalVertices, globalIndices);
@@ -200,6 +204,7 @@ bool AssimpParser::LoadModel(const std::string& fileName, const std::vector<uint
 	}
 
 	processNode(&identity, scene->mRootNode, scene, model, boneMapping);
+	importMorphAnimations(scene, *model);
 	//}
 	if (model->getUseBatching()) {
 		model->createBuffers(globalVertices, globalIndices);
@@ -365,6 +370,41 @@ void AssimpParser::processNode(void* transform, aiNode* node, const aiScene* sce
 				newMash->unbind();
 			}
 		}
+		if (newMash && mesh->mNumAnimMeshes) {
+			if (model->getUseBatching()) {
+				throw std::runtime_error("Morph targets cannot use batched model geometry");
+			}
+			std::vector<RENDER::MorphTarget> targets;
+			targets.reserve(mesh->mNumAnimMeshes);
+			for (unsigned targetIndex = 0; targetIndex < mesh->mNumAnimMeshes; ++targetIndex) {
+				const auto* source = mesh->mAnimMeshes[targetIndex];
+				if (!source || source->mNumVertices != mesh->mNumVertices) {
+					throw std::runtime_error("Morph target vertex count does not match the base mesh");
+				}
+				RENDER::MorphTarget target;
+				target.Name = source->mName.length ? source->mName.C_Str() : "Target" + std::to_string(targetIndex);
+				target.DefaultWeight = source->mWeight;
+				target.Deltas.reserve(mesh->mNumVertices);
+				for (unsigned vertexIndex = 0; vertexIndex < mesh->mNumVertices; ++vertexIndex) {
+					RENDER::MorphVertexDelta delta;
+					if (source->mVertices) {
+						const auto value = source->mVertices[vertexIndex] - mesh->mVertices[vertexIndex];
+						delta.Position = { value.x, value.y, value.z, 0 };
+					}
+					if (source->mNormals && mesh->mNormals) {
+						const auto value = source->mNormals[vertexIndex] - mesh->mNormals[vertexIndex];
+						delta.Normal = { value.x, value.y, value.z, 0 };
+					}
+					if (source->mTangents && mesh->mTangents) {
+						const auto value = source->mTangents[vertexIndex] - mesh->mTangents[vertexIndex];
+						delta.Tangent = { value.x, value.y, value.z, 0 };
+					}
+					target.Deltas.push_back(delta);
+				}
+				targets.push_back(std::move(target));
+			}
+			newMash->setMorphTargets(std::move(targets));
+		}
 
 		// newMash->m_pScene = scene;
 		// newMash->m_BoneMapping = m_BoneMapping;
@@ -405,6 +445,9 @@ void AssimpParser::processNode(void* transform, aiNode* node, const aiScene* sce
 		//
 		// newMash->m_GlobalInverseTransform = m_GlobalInverseTransform;
 		// newMash->m_NumBones = m_NumBones;
+		if (newMash && !newMash->morphTargets().empty()) {
+			model->addMorphNodeMesh(node->mName.C_Str(), model->getMeshes().size());
+		}
 		model->getMeshes().push_back(newMash); // The model will handle mesh destruction
 	}
 
@@ -412,6 +455,57 @@ void AssimpParser::processNode(void* transform, aiNode* node, const aiScene* sce
 	for (uint32_t i = 0; i < node->mNumChildren; ++i) {
 		processNode(&nodeTransformation, node->mChildren[i], scene, model, boneMapping);
 	}
+}
+
+void AssimpParser::importMorphAnimations(const aiScene* scene, RENDER::ModelInterface& model) {
+	std::vector<RENDER::MorphAnimationClip> clips;
+	for (unsigned animationIndex = 0; animationIndex < scene->mNumAnimations; ++animationIndex) {
+		const auto* animation = scene->mAnimations[animationIndex];
+		if (!animation || animation->mNumMorphMeshChannels == 0) {
+			continue;
+		}
+		RENDER::MorphAnimationClip clip;
+		clip.Name = animation->mName.length ? animation->mName.C_Str() : "Animation" + std::to_string(animationIndex);
+		clip.Duration = animation->mTicksPerSecond > 0 ? float(animation->mDuration / animation->mTicksPerSecond) : 0;
+		for (unsigned channelIndex = 0; channelIndex < animation->mNumMorphMeshChannels; ++channelIndex) {
+			const auto* channel = animation->mMorphMeshChannels[channelIndex];
+			if (!channel || !channel->mNumKeys) {
+				continue;
+			}
+			for (const auto meshIndex : model.morphMeshesForNode(channel->mName.C_Str())) {
+				const auto& targets = model.getMeshes()[meshIndex]->morphTargets();
+				for (std::size_t targetIndex = 0; targetIndex < targets.size(); ++targetIndex) {
+					RENDER::MorphAnimationTrack track;
+					track.MeshIndex = meshIndex;
+					track.TargetIndex = targetIndex;
+					track.Keys.reserve(channel->mNumKeys);
+					for (unsigned keyIndex = 0; keyIndex < channel->mNumKeys; ++keyIndex) {
+						const auto& source = channel->mKeys[keyIndex];
+						float weight = 0;
+						for (unsigned valueIndex = 0; valueIndex < source.mNumValuesAndWeights; ++valueIndex) {
+							if (source.mValues[valueIndex] == targetIndex) {
+								weight = float(source.mWeights[valueIndex]);
+								break;
+							}
+						}
+						const float time = animation->mTicksPerSecond > 0 ? float(source.mTime / animation->mTicksPerSecond) : 0;
+						if (!std::isfinite(time) || !std::isfinite(weight) || time < 0 || weight < 0 || weight > 1
+							|| (!track.Keys.empty() && time <= track.Keys.back().Time)) {
+							throw std::runtime_error("Invalid morph animation key in " + clip.Name);
+						}
+						track.Keys.push_back({ time, weight });
+					}
+					clip.Duration = std::max(clip.Duration, track.Keys.back().Time);
+					clip.Tracks.push_back(std::move(track));
+				}
+			}
+		}
+		if (!clip.Tracks.empty()) {
+			clip.Duration = std::max(clip.Duration, 0.001f);
+			clips.push_back(std::move(clip));
+		}
+	}
+	model.setMorphAnimations(std::move(clips));
 }
 
 void AssimpParser::loadBones(std::vector<Vertex>& vertices, aiMesh* mesh, const aiScene* scene, ResourcePtr<RENDER::ModelInterface> model,
@@ -585,6 +679,9 @@ bool AssimpParser::fillAnimation(
 	}
 
 	aiAnimation* anim = scene->mAnimations[0];
+	if (!anim || anim->mNumChannels == 0 || !anim->mChannels || anim->mTicksPerSecond <= 0) {
+		return false;
+	}
 
 	outAnimation.channels.resize(skeleton.getNumJolts());
 	outAnimation.name = std::string(anim->mName.C_Str());

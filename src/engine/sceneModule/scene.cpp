@@ -2,8 +2,11 @@
 #include "coreModule/ecs/components/characterMotorComponent.h"
 #include "coreModule/ecs/components/thirdPersonCameraComponent.h"
 #include "coreModule/ecs/components/traversalComponent.h"
+#include "coreModule/ecs/systems/behaviorTreeSystem.h"
 #include "coreModule/ecs/systems/characterSystem.h"
+#include "coreModule/ecs/systems/environmentSystem.h"
 #include "coreModule/ecs/systems/skeletalStateGraphSystem.h"
+#include "coreModule/ecs/systems/surfaceSystem.h"
 #include "coreModule/ecs/systems/variableContextSystem.h"
 #ifdef IKIGAI_TEST_MODULE
 #include "sceneModule/characterDiagnostics.h"
@@ -12,7 +15,10 @@
 #include "coreModule/ecs/components/variableContextComponent.h"
 #include "scene.h"
 #if USE_PHYSICS_3D
+#include "coreModule/ecs/components/ragdollComponent.h"
+#include "coreModule/ecs/systems/destructionSystem.h"
 #include "coreModule/ecs/systems/physics3dSystem.h"
+#include "coreModule/ecs/systems/ragdollSystem.h"
 #endif
 #if USE_PHYSICS_2D
 #include "coreModule/ecs/systems/physics2dSystem.h"
@@ -91,9 +97,22 @@ PHYSICS::PhysicWorld& Scene::physics3d() {
 }
 void Scene::stepPhysics3D(std::chrono::duration<double> dt) {
 	physics3d();
+	const bool destructionStep = !mPhysics3D->paused || mPhysics3D->singleStep;
+	if (destructionStep) {
+		ECS::DestructionSystem::beforePhysics(*this, float(dt.count()));
+	}
+	ECS::RagdollSystem::beforePhysics(*this, float(dt.count()));
 	ECS::CommandBuffer commands;
 	mPhysics3D->onFixedUpdate(getWorld(), commands, dt);
 	commands.execute();
+	ECS::RagdollSystem::afterPhysics(*this);
+	if (destructionStep) {
+		ECS::DestructionSystem::afterPhysics(*this, float(dt.count()));
+	}
+}
+std::shared_ptr<PHYSICS::PhysicWorld> Scene::physics3dShared() {
+	physics3d();
+	return mPhysics3D->sharedSimulation();
 }
 #ifdef USE_EDITOR
 void Scene::drawPhysics3DDebug() {
@@ -179,6 +198,10 @@ void Scene::go() {
 			o->onStart();
 		}
 	}
+	// Resolve the environment's typed light reference before scene loading reports success.
+	if (auto* environment = ECS::EnvironmentSystem::active(*this)) {
+		environment->update(*this, 0.0);
+	}
 }
 
 bool Scene::getIsExecute() const {
@@ -186,7 +209,10 @@ bool Scene::getIsExecute() const {
 }
 
 void Scene::update(std::chrono::duration<double> dt) {
+	ECS::SurfaceSystem::beginFrame(*this);
+	ECS::EnvironmentSystem::update(*this, dt.count());
 #if USE_PHYSICS_3D
+	ECS::RagdollSystem::update(*this, std::clamp(float(dt.count()), 0.f, .1f));
 	ECS::CharacterSystem::update(*this, std::clamp(float(dt.count()), 0.f, .1f));
 #ifdef IKIGAI_TEST_MODULE
 	CharacterDiagnostics::waitForFrame(*this);
@@ -220,11 +246,16 @@ void Scene::finishFixedUpdate(std::chrono::duration<double> dt) {
 	// Called after ECS producers and physics have completed for this tick.
 	// Scene-local ordered systems. Bound properties may target any component;
 	// these phases deliberately run serially, after producers and before consumers.
+	ECS::BehaviorTreeSystem::applyCommands(*this);
 #if USE_PHYSICS_3D
 	ECS::CharacterSystem::fixedUpdate(*this, float(dt.count()));
 #endif
 	ECS::VariableContextSystem::update(*this);
+	ECS::BehaviorTreeSystem::update(*this, dt.count());
 	ECS::SkeletalStateGraphSystem::update(*this, float(dt.count()));
+#if USE_PHYSICS_3D
+	ECS::RagdollSystem::afterAnimation(*this, float(dt.count()));
+#endif
 #if USE_PHYSICS_3D
 #ifdef IKIGAI_TEST_MODULE
 	CharacterDiagnostics::afterAnimation(*this, float(dt.count()));
@@ -311,6 +342,16 @@ RENDER::BoundingSphere getGlobalBoundingSphere(const RENDER::BoundingSphere& bou
 	return RENDER::BoundingSphere { worldCenter, scaledRadius };
 }
 
+static float DeformationPadding(const ECS::MaterialRenderer& renderer) {
+	float padding = 0;
+	for (const auto& material : renderer.getMaterials()) {
+		if (material && material->deformation().Mode != RENDER::DeformationMode::None) {
+			padding = std::max(padding, material->deformation().MaxBend * 2 + material->deformation().FurLength);
+		}
+	}
+	return padding;
+}
+
 void Scene::addToBVH(UTILS::WeakPtr<ECS::ComponentBase> component) {
 	if (component->getName() != "ModelRenderer") {
 		return;
@@ -334,6 +375,20 @@ void Scene::addToBVH(UTILS::WeakPtr<ECS::ComponentBase> component) {
 		// TODO: add support RENDER::CullingOptions::FRUSTUM_PER_MESH
 		// TODO: add event for change CullingOptions
 		auto gbs = getGlobalBoundingSphere(modelBoundingSphere, modelRenderer->obj->mTransform->getTransform());
+		if (auto materials = modelRenderer->obj->getComponent<ECS::MaterialRenderer>()) {
+			const auto scale = modelRenderer->obj->mTransform->getWorldScale();
+			gbs.radius += DeformationPadding(*materials) * std::max({ 1.0f, std::abs(scale.x), std::abs(scale.y), std::abs(scale.z) });
+		}
+#if USE_PHYSICS_3D
+		if (auto ragdoll = modelRenderer->obj->getComponent<ECS::RagdollComponent>(); ragdoll && ragdoll->state() == ECS::RagdollState::Simulated) {
+			auto skeletal = modelRenderer->obj->getComponent<ECS::SkeletalComponent>();
+			auto* pose = skeletal ? dynamic_cast<SKELETON::RagdollInstance*>(skeletal->finalPlayable(nullptr)) : nullptr;
+			if (pose) {
+				gbs.radius += pose->boundsRadius() + (gbs.position - modelRenderer->obj->mTransform->getWorldPosition()).magnitude();
+				gbs.position = modelRenderer->obj->mTransform->getWorldPosition();
+			}
+		}
+#endif
 		for (auto mesh : model->getMeshes()) {
 			auto node = std::make_shared<BVHData>(component->obj, mesh);
 			spatial().meshesTree.upsert(node, gbs);
@@ -903,6 +958,125 @@ struct ChunkContext {
 };
 }
 
+namespace {
+const RENDER::Frustum* SurfaceView(const RENDER::RenderChunk& output, const RENDER::Frustum* frustum) {
+	if (!frustum || !output.camera) {
+		return frustum;
+	}
+	const auto& camera = output.camera->getCamera();
+	return camera.isFrustumGeometryCulling() || camera.isFrustumGeometryBVHCulling() ? &camera.getFrustum() : nullptr;
+}
+void AppendSurfaceDrawables(Scene& scene, ChunkContext& ctx, const MATH::Vector3f& cameraPosition, const RENDER::Frustum* frustum,
+	const std::shared_ptr<RENDER::MaterialInterface>& defaultMaterial) {
+	auto cm = scene.getWorld().getComponentManager();
+	for (auto& modelRenderer : cm->getComponentsArray<ECS::ModelLODRenderer>()) {
+		if (modelRenderer.obj->isAlive() && modelRenderer.obj->getIsActive() && modelRenderer.obj->getIsVisible()) {
+			size_t chunkIdx = ctx.getChunkIdxForObj(modelRenderer.obj->getID());
+			auto& chunk = ctx.getChunk(chunkIdx);
+			const auto* localFrustum = SurfaceView(chunk, frustum);
+
+			MATH::Vector3f localCameraPos = cameraPosition;
+			if (chunk.camera) {
+				localCameraPos = chunk.camera->obj->mTransform->getWorldPosition();
+			}
+
+			float distanceToActor = MATH::Vector3f::Distance(modelRenderer.obj->getTransform()->getWorldPosition(), localCameraPos);
+			if (auto model = modelRenderer.getModelByDistance(distanceToActor)) {
+				if (auto materialRenderer = modelRenderer.obj->getComponent<ECS::MaterialRenderer>()) {
+					auto& transform = modelRenderer.obj->getTransform()->getTransform();
+					auto skeletonComp = modelRenderer.obj->getComponent<ECS::SkeletalComponent>();
+					auto animComp = modelRenderer.obj->getComponent<ECS::SkeletalAnimationComponent>();
+					auto skeleton = skeletonComp ? skeletonComp->getSkeleton() : nullptr;
+					auto animationPlayable = skeletonComp ? skeletonComp->finalPlayable(animComp ? animComp->getPlayable() : nullptr) : nullptr;
+					auto animOffset = skeletonComp ? skeletonComp->mAnimOffset.get() : nullptr;
+					auto animLocalTransform = skeletonComp ? skeletonComp->mAnimLocalTransform.get() : nullptr;
+					auto animGlobalTransform = skeletonComp ? skeletonComp->mAnimGlobalTransform.get() : nullptr;
+
+					const ECS::MaterialRenderer::MaterialList& materials = materialRenderer->getMaterials();
+
+					for (const auto mesh : model->getMeshes()) {
+						const auto behavior = modelRenderer.getFrustumBehaviour();
+						const auto& bounds = behavior == ECS::EFrustumBehaviour::CULL_CUSTOM ? modelRenderer.getCustomBoundingSphere()
+							: behavior == ECS::EFrustumBehaviour::CULL_MODEL				 ? model->getBoundingSphere()
+																							 : mesh->getBoundingSphere();
+						if (localFrustum && !skeletonComp && DeformationPadding(*materialRenderer) == 0
+							&& behavior != ECS::EFrustumBehaviour::DISABLED && !localFrustum->boundingSphereInFrustum(bounds, transform)) {
+							continue;
+						}
+						std::shared_ptr<RENDER::MaterialInterface> material;
+						if (mesh->getMaterialIndex() < MAX_MATERIAL_COUNT) {
+							material = materials.at(mesh->getMaterialIndex());
+							if (!material || (!material->getShader() && !material->isDeferred())) {
+								material = defaultMaterial;
+							}
+						}
+
+						if (material) {
+							RENDER::Drawable element = { transform.getPrevWorldMatrix(), transform.getWorldMatrix(), mesh, material, skeleton,
+								animationPlayable, animOffset, animLocalTransform, animGlobalTransform,
+								static_cast<int>(modelRenderer.obj->getID().getUniqueId()) };
+							if (auto facial = modelRenderer.obj->getComponent<ECS::FacialAnimationComponent>()) {
+								facial->bind(*model);
+								element.facialAnimation = facial.get();
+							}
+							transform.setPrevWorldMatrix(transform.getWorldMatrix());
+							if (material->isBlendable()) {
+								if (!material->isDeferred()) {
+									chunk.transparentDrawablesForward.emplace(distanceToActor, element);
+								}
+								else {
+									chunk.transparentDrawablesDeferred.emplace(distanceToActor, element);
+								}
+							}
+							else {
+								if (!material->isDeferred()) {
+									chunk.opaqueDrawablesForward.emplace(distanceToActor, element);
+								}
+								else {
+									chunk.opaqueDrawablesDeferred.emplace(distanceToActor, element);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	auto append = [&](auto& component) {
+		if (!component.obj->isAlive() || !component.obj->getIsActive() || !component.obj->getIsVisible()) {
+			return;
+		}
+		using T = std::remove_cvref_t<decltype(component)>;
+		auto target = component.obj->getID();
+		if constexpr (std::is_same_v<T, ECS::FoliageComponent>) {
+			component.bind(scene);
+			if (auto surface = component.surface()) {
+				target = surface->obj->getID();
+			}
+		}
+		auto& output = ctx.getChunk(ctx.getChunkIdxForObj(target));
+		auto camera = output.camera ? output.camera->obj->getTransform()->getWorldPosition() : cameraPosition;
+		const auto* view = SurfaceView(output, frustum);
+		if constexpr (std::is_same_v<T, ECS::FoliageComponent>) {
+			ECS::SurfaceSystem::append(scene, component, output, camera, view, defaultMaterial);
+		}
+		else {
+			ECS::SurfaceSystem::append(component, output, camera, view, defaultMaterial);
+		}
+	};
+	for (auto& component : cm->getComponentsArray<ECS::SurfaceComponent>()) {
+		append(component);
+	}
+	for (auto& component : cm->getComponentsArray<ECS::ChunkModelRenderer>()) {
+		append(component);
+	}
+	for (auto& component : cm->getComponentsArray<ECS::FoliageComponent>()) {
+		append(component);
+	}
+}
+}
+
 std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledBVHDrawables(
 	const MATH::Vector3f& cameraPosition, const RENDER::Frustum& frustum, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial) {
 	ChunkContext ctx;
@@ -920,7 +1094,8 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledBVHDrawa
 				auto skeletonComp = owner->getComponent<ECS::SkeletalComponent>();
 				auto animComp = owner->getComponent<ECS::SkeletalAnimationComponent>();
 				std::shared_ptr<SKELETON::Skeleton> skeleton = skeletonComp ? skeletonComp->getSkeleton() : nullptr;
-				SKELETON::IAnimationPlayable* animationPlayable = animComp ? animComp->getPlayable() : nullptr;
+				SKELETON::IAnimationPlayable* animationPlayable
+					= skeletonComp ? skeletonComp->finalPlayable(animComp ? animComp->getPlayable() : nullptr) : nullptr;
 				SKELETON::AnimOffset* animOffset = skeletonComp ? skeletonComp->mAnimOffset.get() : nullptr;
 				SKELETON::AnimLocalTransform* animLocalTransform = skeletonComp ? skeletonComp->mAnimLocalTransform.get() : nullptr;
 				SKELETON::AnimGlobalTransform* animGlobalTransform = skeletonComp ? skeletonComp->mAnimGlobalTransform.get() : nullptr;
@@ -946,7 +1121,13 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledBVHDrawa
 
 				if (material) {
 					RENDER::Drawable element = { transform.getPrevWorldMatrix(), transform.getWorldMatrix(), meshData->mesh, material, skeleton,
-						animationPlayable, animOffset, animLocalTransform, animGlobalTransform };
+						animationPlayable, animOffset, animLocalTransform, animGlobalTransform, static_cast<int>(owner->getID().getUniqueId()) };
+					if (auto facial = owner->getComponent<ECS::FacialAnimationComponent>()) {
+						if (auto modelRenderer = owner->getComponent<ECS::ModelRenderer>(); modelRenderer && modelRenderer->getModel()) {
+							facial->bind(*modelRenderer->getModel());
+						}
+						element.facialAnimation = facial.get();
+					}
 					transform.setPrevWorldMatrix(transform.getWorldMatrix());
 					if (material->isBlendable()) {
 						if (!material->isDeferred()) {
@@ -969,6 +1150,7 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledBVHDrawa
 		}
 	}
 
+	AppendSurfaceDrawables(*this, ctx, cameraPosition, &frustum, defaultMaterial);
 	return std::move(ctx.chunks);
 }
 
@@ -988,7 +1170,8 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledDrawable
 					auto skeletonComp = modelRenderer.obj.get().getComponent<ECS::SkeletalComponent>();
 					auto animComp = modelRenderer.obj.get().getComponent<ECS::SkeletalAnimationComponent>();
 					std::shared_ptr<SKELETON::Skeleton> skeleton = skeletonComp ? skeletonComp->getSkeleton() : nullptr;
-					SKELETON::IAnimationPlayable* animationPlayable = animComp ? animComp->getPlayable() : nullptr;
+					SKELETON::IAnimationPlayable* animationPlayable
+						= skeletonComp ? skeletonComp->finalPlayable(animComp ? animComp->getPlayable() : nullptr) : nullptr;
 					SKELETON::AnimOffset* animOffset = skeletonComp ? skeletonComp->mAnimOffset.get() : nullptr;
 					SKELETON::AnimLocalTransform* animLocalTransform = skeletonComp ? skeletonComp->mAnimLocalTransform.get() : nullptr;
 					SKELETON::AnimGlobalTransform* animGlobalTransform = skeletonComp ? skeletonComp->mAnimGlobalTransform.get() : nullptr;
@@ -1007,7 +1190,9 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledDrawable
 						? modelRenderer.getCustomBoundingSphere()
 						: model->getBoundingSphere();
 
-					auto meshes = getMeshesInFrustum(*model, modelBoundingSphere, transform, frustum, cullingOptions);
+					auto meshes = (skeletonComp && skeletonComp->finalPlayable(nullptr)) || DeformationPadding(*materialRenderer) > 0
+						? model->getMeshes()
+						: getMeshesInFrustum(*model, modelBoundingSphere, transform, frustum, cullingOptions);
 
 					if (!meshes.empty()) {
 						size_t chunkIdx = ctx.getChunkIdxForObj(owner->getID());
@@ -1031,8 +1216,13 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledDrawable
 							}
 
 							if (material) {
-								RENDER::Drawable element = { transform.getPrevWorldMatrix(), transform.getWorldMatrix(), mesh, material, skeleton,
-									animationPlayable, animOffset, animLocalTransform, animGlobalTransform };
+								RENDER::Drawable element
+									= { transform.getPrevWorldMatrix(), transform.getWorldMatrix(), mesh, material, skeleton, animationPlayable,
+										  animOffset, animLocalTransform, animGlobalTransform, static_cast<int>(owner->getID().getUniqueId()) };
+								if (auto facial = owner->getComponent<ECS::FacialAnimationComponent>()) {
+									facial->bind(*model);
+									element.facialAnimation = facial.get();
+								}
 								transform.setPrevWorldMatrix(transform.getWorldMatrix());
 								if (material->isBlendable()) {
 									if (!material->isDeferred()) {
@@ -1058,6 +1248,7 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledDrawable
 		}
 	}
 
+	AppendSurfaceDrawables(*this, ctx, cameraPosition, &frustum, defaultMaterial);
 	return std::move(ctx.chunks);
 }
 
@@ -1075,7 +1266,8 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(
 					auto skeletonComp = modelRenderer.obj->getComponent<ECS::SkeletalComponent>();
 					auto animComp = modelRenderer.obj->getComponent<ECS::SkeletalAnimationComponent>();
 					std::shared_ptr<SKELETON::Skeleton> skeleton = skeletonComp ? skeletonComp->getSkeleton() : nullptr;
-					SKELETON::IAnimationPlayable* animationPlayable = animComp ? animComp->getPlayable() : nullptr;
+					SKELETON::IAnimationPlayable* animationPlayable
+						= skeletonComp ? skeletonComp->finalPlayable(animComp ? animComp->getPlayable() : nullptr) : nullptr;
 					SKELETON::AnimOffset* animOffset = skeletonComp ? skeletonComp->mAnimOffset.get() : nullptr;
 					SKELETON::AnimLocalTransform* animLocalTransform = skeletonComp ? skeletonComp->mAnimLocalTransform.get() : nullptr;
 					SKELETON::AnimGlobalTransform* animGlobalTransform = skeletonComp ? skeletonComp->mAnimGlobalTransform.get() : nullptr;
@@ -1103,7 +1295,12 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(
 
 						if (material) {
 							RENDER::Drawable element = { transform.getPrevWorldMatrix(), transform.getWorldMatrix(), mesh, material, skeleton,
-								animationPlayable, animOffset, animLocalTransform, animGlobalTransform };
+								animationPlayable, animOffset, animLocalTransform, animGlobalTransform,
+								static_cast<int>(modelRenderer.obj->getID().getUniqueId()) };
+							if (auto facial = modelRenderer.obj->getComponent<ECS::FacialAnimationComponent>()) {
+								facial->bind(*model);
+								element.facialAnimation = facial.get();
+							}
 							transform.setPrevWorldMatrix(transform.getWorldMatrix());
 							if (material->isBlendable()) {
 								if (!material->isDeferred()) {
@@ -1128,67 +1325,7 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(
 		}
 	}
 
-	// TODO: refactor it
-	for (auto& modelRenderer : cm->getComponentsArray<ECS::ModelLODRenderer>()) {
-		if (modelRenderer.obj->getIsActive()) {
-			size_t chunkIdx = ctx.getChunkIdxForObj(modelRenderer.obj->getID());
-			auto& chunk = ctx.getChunk(chunkIdx);
-
-			MATH::Vector3f localCameraPos = cameraPosition;
-			if (chunk.camera) {
-				localCameraPos = chunk.camera->obj->mTransform->getWorldPosition();
-			}
-
-			float distanceToActor = MATH::Vector3f::Distance(modelRenderer.obj->getTransform()->getWorldPosition(), localCameraPos);
-			if (auto model = modelRenderer.getModelByDistance(distanceToActor)) {
-				if (auto materialRenderer = modelRenderer.obj->getComponent<ECS::MaterialRenderer>()) {
-					auto& transform = modelRenderer.obj->getTransform()->getTransform();
-					auto skeletonComp = modelRenderer.obj->getComponent<ECS::SkeletalComponent>();
-					auto animComp = modelRenderer.obj->getComponent<ECS::SkeletalAnimationComponent>();
-					auto skeleton = skeletonComp ? skeletonComp->getSkeleton() : nullptr;
-					auto animationPlayable = animComp ? animComp->getPlayable() : nullptr;
-					auto animOffset = skeletonComp ? skeletonComp->mAnimOffset.get() : nullptr;
-					auto animLocalTransform = skeletonComp ? skeletonComp->mAnimLocalTransform.get() : nullptr;
-					auto animGlobalTransform = skeletonComp ? skeletonComp->mAnimGlobalTransform.get() : nullptr;
-
-					const ECS::MaterialRenderer::MaterialList& materials = materialRenderer->getMaterials();
-
-					for (const auto mesh : model->getMeshes()) {
-						std::shared_ptr<RENDER::MaterialInterface> material;
-						if (mesh->getMaterialIndex() < MAX_MATERIAL_COUNT) {
-							material = materials.at(mesh->getMaterialIndex());
-							if (!material || (!material->getShader() && !material->isDeferred())) {
-								material = defaultMaterial;
-							}
-						}
-
-						if (material) {
-							RENDER::Drawable element = { transform.getPrevWorldMatrix(), transform.getWorldMatrix(), mesh, material, skeleton,
-								animationPlayable, animOffset, animLocalTransform, animGlobalTransform };
-							transform.setPrevWorldMatrix(transform.getWorldMatrix());
-							if (material->isBlendable()) {
-								if (!material->isDeferred()) {
-									chunk.transparentDrawablesForward.emplace(distanceToActor, element);
-								}
-								else {
-									chunk.transparentDrawablesDeferred.emplace(distanceToActor, element);
-								}
-							}
-							else {
-								if (!material->isDeferred()) {
-									chunk.opaqueDrawablesForward.emplace(distanceToActor, element);
-								}
-								else {
-									chunk.opaqueDrawablesDeferred.emplace(distanceToActor, element);
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
+	AppendSurfaceDrawables(*this, ctx, cameraPosition, nullptr, defaultMaterial);
 	return std::move(ctx.chunks);
 }
 

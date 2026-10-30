@@ -53,6 +53,7 @@ namespace RESOURCES {
 			const std::unordered_map<std::string, int>& boneMapping);
 		void processMesh(
 			void* transform, struct aiMesh* mesh, const struct aiScene* scene, std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices);
+		void importMorphAnimations(const struct aiScene* scene, RENDER::ModelInterface& model);
 		void loadBones(std::vector<Vertex>& vertices, aiMesh* mesh, const aiScene* scene, RESOURCES::ResourcePtr<RENDER::ModelInterface> model,
 			const std::unordered_map<std::string, int>& boneMapping);
 		void setVertexBoneData(Vertex& vertex, int boneID, float weight);

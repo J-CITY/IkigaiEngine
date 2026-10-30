@@ -77,6 +77,7 @@ public:
 	void lateUpdate(std::chrono::duration<double> dt);
 #if USE_PHYSICS_3D
 	PHYSICS::PhysicWorld& physics3d();
+	std::shared_ptr<PHYSICS::PhysicWorld> physics3dShared();
 	void stepPhysics3D(std::chrono::duration<double> dt);
 #ifdef USE_EDITOR
 	void drawPhysics3DDebug();

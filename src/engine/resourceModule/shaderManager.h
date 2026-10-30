@@ -6,7 +6,6 @@
 #include "utilsModule/event.h"
 #include <string>
 
-
 namespace IKIGAI {
 namespace RENDER {
 	class ShaderInterface;
@@ -17,6 +16,7 @@ namespace IKIGAI {
 namespace RESOURCES {
 	class ShaderLoader : public ResourceManager<RENDER::ShaderInterface, RENDER::ShaderResource> {
 	public:
+		ResourcePtr<RENDER::ShaderInterface> loadMaterialShader(const std::string& path, unsigned additionalLayers);
 		static RENDER::RayTracingProgramResource LoadProgramResource(const std::string& filePath);
 		static ResourcePtr<RENDER::ShaderInterface> Create(
 			const std::string& filePath, UTILS::IAllocator* allocator = nullptr, RENDER::ShaderDeleter deleter = nullptr);
