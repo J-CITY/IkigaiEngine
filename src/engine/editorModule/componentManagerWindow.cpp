@@ -1,4 +1,15 @@
 #include "componentManagerWindow.h"
+#include "coreModule/ecs/components/environmentComponent.h"
+#include "coreModule/ecs/components/facialAnimationComponent.h"
+#include "coreModule/ecs/components/foliageComponent.h"
+#include "coreModule/ecs/components/surfaceComponent.h"
+#include "coreModule/ecs/components/vegetationInteractorComponent.h"
+#include "environmentEditor.h"
+#include "surfaceEditor.h"
+#if USE_PHYSICS_3D
+#include "coreModule/ecs/components/destructibleMeshComponent.h"
+#include "coreModule/ecs/components/ragdollComponent.h"
+#endif
 #include "prefabEditor.h"
 
 #ifdef USE_EDITOR
@@ -704,10 +715,75 @@ void ComponentInspectorWindow::drawComponent(std::shared_ptr<ECS::Object> select
 		}
 
 		auto* typeInfo = UTILS::ReflectionManager::Instance().getType(typeIdName);
+		if (auto surface = dynamic_cast<ECS::SurfaceComponent*>(component.get())) {
+			DrawSurfaceEditor(*surface);
+		}
+		if (auto voxels = dynamic_cast<ECS::ChunkModelRenderer*>(component.get())) {
+			DrawSurfaceEditor(*voxels);
+		}
+		if (auto foliage = dynamic_cast<ECS::FoliageComponent*>(component.get())) {
+			DrawSurfaceEditor(*foliage);
+		}
+		if (auto environment = dynamic_cast<ECS::EnvironmentComponent*>(component.get())) {
+			DrawEnvironmentEditor(*environment);
+		}
+		if (auto interactor = dynamic_cast<ECS::VegetationInteractorComponent*>(component.get())) {
+			DrawVegetationInteractorEditor(*interactor);
+		}
+		if (auto facial = dynamic_cast<ECS::FacialAnimationComponent*>(component.get())) {
+			if (auto model = selectObject->getComponent<ECS::ModelRenderer>(); model && model->getModel()) {
+				facial->bind(*model->getModel());
+			}
+			for (const auto& target : facial->availableTargets()) {
+				float value = facial->weight(target);
+				if (ImGui::SliderFloat(target.c_str(), &value, 0.0f, 1.0f)) {
+					facial->setWeight(target, value);
+				}
+			}
+			if (!facial->availableTargets().empty() && ImGui::Button("Reset facial weights")) {
+				facial->clearWeights();
+			}
+			for (const auto& clip : facial->availableClips()) {
+				if (ImGui::Button(("Play " + clip).c_str())) {
+					facial->play(clip);
+				}
+			}
+		}
 		if (typeInfo && typeInfo->mMethods.contains("Configuration")) {
 			try {
 				auto value = typeInfo->mMethods.at("Configuration").invoke(component.get(), {});
 				const auto config = UTILS::any_cast<nlohmann::json>(value);
+#if USE_PHYSICS_3D
+				if (auto destructible = dynamic_cast<ECS::DestructibleMeshComponent*>(component.get())) {
+					ImGui::InputText("Definition", &destructible->settings.Definition);
+					ImGui::Checkbox("Impact damage", &destructible->settings.ImpactDamage);
+					ImGui::Text("Pieces: %zu, status: %d", destructible->pieces().size(), int(destructible->lastStatus()));
+					if (!destructible->lastError().empty()) {
+						ImGui::TextWrapped("%s", destructible->lastError().c_str());
+					}
+					if (ImGui::Button("Slice at root (X plane)")) {
+						destructible->slice(destructible->obj->mTransform->getWorldPosition(), { 1, 0, 0 });
+					}
+					ImGui::SameLine();
+					if (ImGui::Button("Reset destructible")) {
+						destructible->reset();
+					}
+				}
+				if (auto ragdoll = dynamic_cast<ECS::RagdollComponent*>(component.get())) {
+					ImGui::Text("State: %s", ragdoll->state() == ECS::RagdollState::Simulated ? "Simulated" : "Animated");
+					if (!ragdoll->lastError().empty()) {
+						ImGui::TextWrapped("%s", ragdoll->lastError().c_str());
+					}
+					ImGui::InputText("Definition", &ragdoll->settings.Definition);
+					if (ImGui::Button("Activate ragdoll")) {
+						ragdoll->activate();
+					}
+					ImGui::SameLine();
+					if (ImGui::Button("Reset ragdoll")) {
+						ragdoll->reset();
+					}
+				}
+#endif
 				for (const auto& [name, field] : config.items()) {
 					if (name.ends_with("Type")) {
 						continue;
@@ -725,8 +801,12 @@ void ComponentInspectorWindow::drawComponent(std::shared_ptr<ECS::Object> select
 				}
 				if (auto context = dynamic_cast<ECS::VariableContextComponent*>(component.get()); context && context->tick() > 0) {
 					if (ImGui::TreeNode("Context snapshot")) {
-						for (const auto& [name, entry] : context->settings.Variables) {
-							const auto& current = context->read(context->slot(name));
+						for (const auto& [name, slot] : context->runtime()->schema().names) {
+							const auto& current = context->runtime()->readSnapshot(slot);
+							if (!current) {
+								ImGui::Text("%s = Unset", name.c_str());
+								continue;
+							}
 							std::string text = std::visit(
 								[](const auto& v) -> std::string {
 									using V = std::decay_t<decltype(v)>;
@@ -736,11 +816,14 @@ void ComponentInspectorWindow::drawComponent(std::shared_ptr<ECS::Object> select
 									else if constexpr (std::is_same_v<V, bool>) {
 										return v ? "true" : "false";
 									}
+									else if constexpr (std::is_same_v<V, DATA::EntityRef>) {
+										return "Entity " + std::to_string(v.id) + (v.alive() ? "" : " (expired)");
+									}
 									else {
 										return std::to_string(v);
 									}
 								},
-								current);
+								*current);
 							ImGui::Text("%s = %s", name.c_str(), text.c_str());
 						}
 						ImGui::TreePop();

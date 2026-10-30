@@ -1,4 +1,6 @@
 #include "materialWindow.h"
+#include "pbrMaterialEditor.h"
+#include "renderModule/backends/interface/materialInterface.h"
 
 #include "utilsModule/log/loggerDefine.h"
 #ifdef USE_EDITOR
@@ -14,15 +16,19 @@
 #include "utilsModule/imguiHelper/imguiWidgets.h"
 
 bool isEngineUniform(const std::string& uniformName) {
-	return uniformName.rfind("EngineUBO", 0) == 0 ||
-		uniformName.rfind("engine_", 0) == 0 ||
-		uniformName.rfind("Engine", 0) == 0;
+	return uniformName.rfind("EngineUBO", 0) == 0 || uniformName.rfind("engine_", 0) == 0 || uniformName.rfind("Engine", 0) == 0;
 }
-#ifdef OPENGL_BACKEND
 void IKIGAI::EDITOR::MaterialWindow::draw() {
+	const auto selected = EditorRender::GlobalState.mSelectMaterial;
+	if (selected && selected->hasShader() && selected->getShader()->supportsPbrLayers()) {
+		ImGui::Begin("Material Editor");
+		DrawPbrMaterialEditor(*selected);
+		ImGui::End();
+		return;
+	}
+#ifdef OPENGL_BACKEND
 
-	auto material = std::static_pointer_cast<RENDER::MaterialGl>(
-		EditorRender::GlobalState.mSelectMaterial);
+	auto material = std::static_pointer_cast<RENDER::MaterialGl>(EditorRender::GlobalState.mSelectMaterial);
 	ImGui::Begin("Material Editor");
 
 	if (ImGui::Button("Save")) {
@@ -30,19 +36,18 @@ void IKIGAI::EDITOR::MaterialWindow::draw() {
 		auto dataRes = UTILS::ToJson(d);
 		if (dataRes.isErr()) {
 			LOG_ERROR << "Can not save: " << material->getPath();
-		} else {
-			//std::ofstream f(UTILS::GetRealPath(material->getPath()));
-			//f << dataRes.unwrap().dump(4) << std::endl;
-			//f.close();
+		}
+		else {
+			// std::ofstream f(UTILS::GetRealPath(material->getPath()));
+			// f << dataRes.unwrap().dump(4) << std::endl;
+			// f.close();
 		}
 	}
 	ImGui::SameLine();
 	if (ImGui::Button("Reload")) {
 		auto path = material->getPath();
 		// editMaterial = RESOURCES::MaterialLoader::Create(path);
-		EditorRender::GlobalState.mSelectMaterial =
-			RESOURCES::ServiceManager::Get<RESOURCES::MaterialLoader>()
-			.loadResource(path);
+		EditorRender::GlobalState.mSelectMaterial = RESOURCES::ServiceManager::Get<RESOURCES::MaterialLoader>().loadResource(path);
 	}
 	// ImGui::SameLine();
 	// if (ImGui::Button("Create new")) {
@@ -54,8 +59,8 @@ void IKIGAI::EDITOR::MaterialWindow::draw() {
 
 	static bool isMatSettingsOpen = true;
 	if (ImGui::CollapsingHeader("Material settings", &isMatSettingsOpen, ImGuiTreeNodeFlags_DefaultOpen)) {
-		bool valBool{};
-		int valInt{};
+		bool valBool {};
+		int valInt {};
 
 		valBool = material->isBlendable();
 		if (ImGui::Checkbox("Is Blendable", &valBool)) {
@@ -81,17 +86,13 @@ void IKIGAI::EDITOR::MaterialWindow::draw() {
 		if (ImGui::DragInt("GPU Instance", &valInt)) {
 			material->setGpuInstances(valInt);
 		}
-		//material->generateStateMask();
+		// material->generateStateMask();
 	}
 
 	std::string shaderVPath = material->mShader->mShaderPaths.at(RENDER::ShaderType::VERTEX);
 	std::string shaderFPath = material->mShader->mShaderPaths.at(RENDER::ShaderType::FRAGMENT);
-	if (ImGui::InputText("Shader Fragment:", &shaderVPath,
-		ImGuiInputTextFlags_EnterReturnsTrue)) {
-	}
-	if (ImGui::InputText("Shader Vertex:", &shaderFPath,
-		ImGuiInputTextFlags_EnterReturnsTrue)) {
-	}
+	if (ImGui::InputText("Shader Fragment:", &shaderVPath, ImGuiInputTextFlags_EnterReturnsTrue)) { }
+	if (ImGui::InputText("Shader Vertex:", &shaderFPath, ImGuiInputTextFlags_EnterReturnsTrue)) { }
 
 	auto shader = material->getShader();
 	if (!shader) {
@@ -106,10 +107,10 @@ void IKIGAI::EDITOR::MaterialWindow::draw() {
 			continue;
 		}
 		if (data.mType == RENDER::ShaderReflection::UniformType::SAMPLER_2D) {
-			//switch (data.mMembers[0].type) {
-			//case RENDER::UNIFORM_TYPE::MAT4: break;
-			//case RENDER::UNIFORM_TYPE::MAT3: break;
-			//case RENDER::UNIFORM_TYPE::VEC4: {
+			// switch (data.mMembers[0].type) {
+			// case RENDER::UNIFORM_TYPE::MAT4: break;
+			// case RENDER::UNIFORM_TYPE::MAT3: break;
+			// case RENDER::UNIFORM_TYPE::VEC4: {
 			//	if (!IMGUI::CombineVecEdit::Data.count(name)) {
 			//		IMGUI::CombineVecEdit::Data.insert({name,
 			//			IMGUI::CombineVecEdit(name, 4)});
@@ -120,8 +121,8 @@ void IKIGAI::EDITOR::MaterialWindow::draw() {
 			//		material->set(name, val);
 			//	}
 			//	break;
-			//}
-			//case RENDER::UNIFORM_TYPE::VEC3: {
+			// }
+			// case RENDER::UNIFORM_TYPE::VEC3: {
 			//	if (!IMGUI::CombineVecEdit::Data.count(name)) {
 			//		IMGUI::CombineVecEdit::Data.insert({name,
 			//			IMGUI::CombineVecEdit(name, 3)});
@@ -132,8 +133,8 @@ void IKIGAI::EDITOR::MaterialWindow::draw() {
 			//		material->set(name, val);
 			//	}
 			//	break;
-			//}
-			//case RENDER::UNIFORM_TYPE::VEC2: {
+			// }
+			// case RENDER::UNIFORM_TYPE::VEC2: {
 			//	if (!IMGUI::CombineVecEdit::Data.count(name)) {
 			//		IMGUI::CombineVecEdit::Data.insert({name,
 			//			IMGUI::CombineVecEdit(name, 2)});
@@ -144,8 +145,8 @@ void IKIGAI::EDITOR::MaterialWindow::draw() {
 			//		material->set(name, val);
 			//	}
 			//	break;
-			//}
-			//case RENDER::UNIFORM_TYPE::INT: {
+			// }
+			// case RENDER::UNIFORM_TYPE::INT: {
 			//	if (!IMGUI::ScalarEdit::Data.count(name)) {
 			//		IMGUI::ScalarEdit::Data.insert({name,
 			//			IMGUI::ScalarEdit(name, IMGUI::ScalarEdit::TYPE::INT)});
@@ -156,8 +157,8 @@ void IKIGAI::EDITOR::MaterialWindow::draw() {
 			//		material->set(name, val);
 			//	}
 			//	break;
-			//}
-			//case RENDER::UNIFORM_TYPE::FLOAT: {
+			// }
+			// case RENDER::UNIFORM_TYPE::FLOAT: {
 			//	if (!IMGUI::ScalarEdit::Data.count(name)) {
 			//		IMGUI::ScalarEdit::Data.insert({name,
 			//			IMGUI::ScalarEdit(name, IMGUI::ScalarEdit::TYPE::FLOAT)});
@@ -168,8 +169,8 @@ void IKIGAI::EDITOR::MaterialWindow::draw() {
 			//		material->set(name, val);
 			//	}
 			//	break;
-			//}
-			//case RENDER::UNIFORM_TYPE::BOOL: {
+			// }
+			// case RENDER::UNIFORM_TYPE::BOOL: {
 			//	if (!IMGUI::ScalarEdit::Data.count(name)) {
 			//		IMGUI::ScalarEdit::Data.insert({name,
 			//			IMGUI::ScalarEdit(name, IMGUI::ScalarEdit::TYPE::BOOL)});
@@ -180,8 +181,8 @@ void IKIGAI::EDITOR::MaterialWindow::draw() {
 			//		material->set(name, val);
 			//	}
 			//	break;
-			//}
-			//case RENDER::UNIFORM_TYPE::SAMPLER_2D: {
+			// }
+			// case RENDER::UNIFORM_TYPE::SAMPLER_2D: {
 			//	auto val =
 			//		std::get<std::shared_ptr<RENDER::TextureInterface>>(material->getUniforms().at(name));
 			//	ImGui::PushID(("##" + name).c_str());
@@ -239,101 +240,93 @@ void IKIGAI::EDITOR::MaterialWindow::draw() {
 			//	2,
 			//		//		ImGui::GetCursorScreenPos().y + size.y /
 			//		2), ImVec2(0, 1), ImVec2(1, 0)); break;
-			//}
-			//case RENDER::UNIFORM_TYPE::SAMPLER_3D: break;
-			//case RENDER::UNIFORM_TYPE::SAMPLER_CUBE: break;
-			//default: break;
-			//}
-		} else if (data.mType == RENDER::ShaderReflection::UniformType::UNIFORM_BUFFER) {
+			// }
+			// case RENDER::UNIFORM_TYPE::SAMPLER_3D: break;
+			// case RENDER::UNIFORM_TYPE::SAMPLER_CUBE: break;
+			// default: break;
+			// }
+		}
+		else if (data.mType == RENDER::ShaderReflection::UniformType::UNIFORM_BUFFER) {
 			for (const auto& mamber : data.mMembers) {
 				auto _name = mamber.mName;
 				switch (mamber.mType) {
-				case RENDER::ShaderReflection::UniformType::MAT4: break;
-				case RENDER::ShaderReflection::UniformType::MAT3: break;
+				case RENDER::ShaderReflection::UniformType::MAT4:
+					break;
+				case RENDER::ShaderReflection::UniformType::MAT3:
+					break;
 				case RENDER::ShaderReflection::UniformType::VEC4: {
 					if (!IMGUI::CombineVecEdit::Data.count(_name)) {
-						IMGUI::CombineVecEdit::Data.insert({_name, IMGUI::CombineVecEdit(_name,
-							4)});
+						IMGUI::CombineVecEdit::Data.insert({ _name, IMGUI::CombineVecEdit(_name, 4) });
 					}
-					auto val =
-						std::get<MATH::Vector4f>(material->get(name + "." + _name)); if
-						(IMGUI::CombineVecEdit::Data.at(_name).draw(val)) {
-						material->set(name + "." + _name,
-							val);
+					auto val = std::get<MATH::Vector4f>(material->get(name + "." + _name));
+					if (IMGUI::CombineVecEdit::Data.at(_name).draw(val)) {
+						material->set(name + "." + _name, val);
 					}
 					break;
 				}
 				case RENDER::ShaderReflection::UniformType::VEC3: {
 					if (!IMGUI::CombineVecEdit::Data.count(_name)) {
-						IMGUI::CombineVecEdit::Data.insert({_name, IMGUI::CombineVecEdit(_name,
-							3)});
+						IMGUI::CombineVecEdit::Data.insert({ _name, IMGUI::CombineVecEdit(_name, 3) });
 					}
-					auto val =
-						std::get<MATH::Vector3f>(material->get(name + "." + _name)); if
-						(IMGUI::CombineVecEdit::Data.at(_name).draw(val)) {
-						material->set(name + "." +
-							_name, val);
+					auto val = std::get<MATH::Vector3f>(material->get(name + "." + _name));
+					if (IMGUI::CombineVecEdit::Data.at(_name).draw(val)) {
+						material->set(name + "." + _name, val);
 					}
 					break;
 				}
 				case RENDER::ShaderReflection::UniformType::VEC2: {
 					if (!IMGUI::CombineVecEdit::Data.count(_name)) {
-						IMGUI::CombineVecEdit::Data.insert({_name, IMGUI::CombineVecEdit(_name,
-							2)});
+						IMGUI::CombineVecEdit::Data.insert({ _name, IMGUI::CombineVecEdit(_name, 2) });
 					}
-					auto val =
-						std::get<MATH::Vector2f>(material->get(name + "." + _name)); if
-						(IMGUI::CombineVecEdit::Data.at(_name).draw(val)) {
-						material->set(name + "." +
-							_name, val);
+					auto val = std::get<MATH::Vector2f>(material->get(name + "." + _name));
+					if (IMGUI::CombineVecEdit::Data.at(_name).draw(val)) {
+						material->set(name + "." + _name, val);
 					}
 					break;
 				}
 				case RENDER::ShaderReflection::UniformType::INT: {
 					if (!IMGUI::ScalarEdit::Data.count(name)) {
-						IMGUI::ScalarEdit::Data.insert({name,
-							IMGUI::ScalarEdit(name, IMGUI::ScalarEdit::TYPE::INT)});
+						IMGUI::ScalarEdit::Data.insert({ name, IMGUI::ScalarEdit(name, IMGUI::ScalarEdit::TYPE::INT) });
 					}
-					auto val =
-						std::get<int>(material->getUniforms().at(name)); if
-						(IMGUI::ScalarEdit::Data.at(name).draw(val)) {
+					auto val = std::get<int>(material->getUniforms().at(name));
+					if (IMGUI::ScalarEdit::Data.at(name).draw(val)) {
 						material->set(name, val);
 					}
 					break;
 				}
 				case RENDER::ShaderReflection::UniformType::FLOAT: {
 					if (!IMGUI::ScalarEdit::Data.count(name)) {
-						IMGUI::ScalarEdit::Data.insert({name,
-							IMGUI::ScalarEdit(name, IMGUI::ScalarEdit::TYPE::FLOAT)});
+						IMGUI::ScalarEdit::Data.insert({ name, IMGUI::ScalarEdit(name, IMGUI::ScalarEdit::TYPE::FLOAT) });
 					}
-					auto val =
-						std::get<float>(material->getUniforms().at(name)); if
-						(IMGUI::ScalarEdit::Data.at(name).draw(val)) {
+					auto val = std::get<float>(material->getUniforms().at(name));
+					if (IMGUI::ScalarEdit::Data.at(name).draw(val)) {
 						material->set(name, val);
 					}
 					break;
 				}
 				case RENDER::ShaderReflection::UniformType::BOOL: {
 					if (!IMGUI::ScalarEdit::Data.count(name)) {
-						IMGUI::ScalarEdit::Data.insert({name,
-							IMGUI::ScalarEdit(name, IMGUI::ScalarEdit::TYPE::BOOL)});
+						IMGUI::ScalarEdit::Data.insert({ name, IMGUI::ScalarEdit(name, IMGUI::ScalarEdit::TYPE::BOOL) });
 					}
-					auto val =
-						std::get<bool>(material->getUniforms().at(name)); if
-						(IMGUI::ScalarEdit::Data.at(name).draw(val)) {
+					auto val = std::get<bool>(material->getUniforms().at(name));
+					if (IMGUI::ScalarEdit::Data.at(name).draw(val)) {
 						material->set(name, val);
 					}
 					break;
 				}
-				case RENDER::ShaderReflection::UniformType::SAMPLER_2D: break;
-				case RENDER::ShaderReflection::UniformType::SAMPLER_3D: break;
-				case RENDER::ShaderReflection::UniformType::SAMPLER_CUBE: break;
-				default: break;
+				case RENDER::ShaderReflection::UniformType::SAMPLER_2D:
+					break;
+				case RENDER::ShaderReflection::UniformType::SAMPLER_3D:
+					break;
+				case RENDER::ShaderReflection::UniformType::SAMPLER_CUBE:
+					break;
+				default:
+					break;
 				}
 			}
 		}
 	}
 	ImGui::End();
-}
 #endif
+}
 #endif
