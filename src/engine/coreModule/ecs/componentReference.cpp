@@ -89,6 +89,8 @@ PropertyBinding PropertyRegistry::bind(SCENE_SYSTEM::Scene& scene, const Propert
 													 return UTILS::any_cast<bool>(value);
 												 case DATA::ValueType::Vector3:
 													 return UTILS::any_cast<MATH::Vector3f>(value);
+												 case DATA::ValueType::EntityRef:
+													 break;
 												 }
 												 throw std::runtime_error("Invalid reflected property type");
 											 } });
@@ -121,14 +123,30 @@ namespace {
 	}
 }
 void RegisterSceneComponentReflection() {
+	registerSceneComponent<BehaviorTreeComponent>();
+	registerSceneComponent<BlackboardComponent>();
 	registerSceneComponent<VariableContextComponent>();
 	registerSceneComponent<SkeletalStateGraphComponent>();
+	registerSceneComponent<FacialAnimationComponent>();
+	registerSceneComponent<SurfaceComponent>();
+	registerSceneComponent<FoliageComponent>();
+	registerSceneComponent<ChunkModelRenderer>();
+	UTILS::ReflectionManager::Instance().registerMethod("SetWeight", &FacialAnimationComponent::setWeight);
+	UTILS::ReflectionManager::Instance().registerMethod("Play", &FacialAnimationComponent::play);
+	UTILS::ReflectionManager::Instance().registerMethod("ClearWeights", &FacialAnimationComponent::clearWeights);
 #if USE_PHYSICS_3D
 	registerSceneComponent<CapsuleColliderComponent>();
 	registerSceneComponent<CharacterMotorComponent>();
 	registerSceneComponent<ThirdPersonController>();
 	registerSceneComponent<ThirdPersonCameraComponent>();
 	registerSceneComponent<TraversalComponent>();
+	registerSceneComponent<RagdollComponent>();
+	registerSceneComponent<DestructibleMeshComponent>();
+	UTILS::ReflectionManager::Instance().registerMethod("Slice", &DestructibleMeshComponent::slice);
+	UTILS::ReflectionManager::Instance().registerMethod("Reset", &DestructibleMeshComponent::reset);
+	UTILS::ReflectionManager::Instance().registerMethod("Activate", &RagdollComponent::activate);
+	UTILS::ReflectionManager::Instance().registerMethod("Reset", &RagdollComponent::reset);
+	UTILS::ReflectionManager::Instance().registerMethod("ApplyImpulse", &RagdollComponent::applyImpulse);
 #ifdef IKIGAI_TEST_MODULE
 	registerSceneComponent<CharacterDiagnosticsComponent>();
 #endif

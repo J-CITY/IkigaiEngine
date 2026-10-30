@@ -16,6 +16,21 @@ SkeletalComponent::SkeletalComponent(UTILS::Ref<ECS::Object> obj, const Descript
 
 SkeletalComponent::~SkeletalComponent() = default;
 
+SKELETON::IAnimationPlayable* SkeletalComponent::finalPlayable(SKELETON::IAnimationPlayable* animation) const {
+	return mPoseOverride ? mPoseOverride.get() : animation;
+}
+void SkeletalComponent::setPoseOverride(std::shared_ptr<SKELETON::IAnimationPlayable> pose) {
+	if (mPoseOverride && mPoseOverride != pose) {
+		throw std::logic_error("Skeleton already has a pose override owner");
+	}
+	mPoseOverride = std::move(pose);
+}
+void SkeletalComponent::clearPoseOverride(const SKELETON::IAnimationPlayable* owner) {
+	if (mPoseOverride.get() == owner) {
+		mPoseOverride.reset();
+	}
+}
+
 void SkeletalComponent::setSkeleton(const std::string& path) {
 	mSkeletonPath = path;
 	if (!path.empty()) {

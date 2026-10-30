@@ -2,6 +2,9 @@
 #include "utilsModule/time/loadTimer.h"
 #if USE_PHYSICS_3D
 #include "coreModule/ecs/components/physics3dComponent.h"
+#include "coreModule/ecs/components/ragdollComponent.h"
+#include "resourceModule/destructibleManager.h"
+#include "resourceModule/ragdollManager.h"
 #endif
 #if USE_PHYSICS_2D
 #include "coreModule/ecs/components/cloth2dComponent.h"
@@ -58,6 +61,8 @@
 #include "renderModule/backends/driverFactory.h"
 #include "renderModule/gameRenderer.h"
 #include "renderModule/render.h"
+#include "resourceModule/behaviorTreeManager.h"
+#include "resourceModule/blackboardManager.h"
 #include "resourceModule/skeletonAnimationManager.h"
 #include "resourceModule/skeletonBlendspaceManager.h"
 #include "resourceModule/skeletonManager.h"
@@ -101,8 +106,8 @@ Core::Core(
 	const auto mountLooseAssets = [&] {
 		if (Config::ROOT.empty()) {
 			std::cerr << "Content root not found (expected assets/engine/ near cwd or executable). "
-				<< "Run: python3 utils/sync_assets.py ensure. "
-				<< "For Xcode, set scheme Working Directory to mac/build_xcode (with assets symlink).\n";
+					  << "Run: python3 utils/sync_assets.py ensure. "
+					  << "For Xcode, set scheme Working Directory to mac/build_xcode (with assets symlink).\n";
 		}
 		// fileSystem->addNativeFileSystem(".", "/");
 #ifdef OCULUS
@@ -300,6 +305,8 @@ Core::Core(
 #if USE_PHYSICS_3D
 		compMgr->registerComponent<ECS::PhysicsComponent>(IKIGAI::ECS::StorageType::Sparse);
 		compMgr->registerComponent<ECS::Physics3DComponent>(ECS::StorageType::Sparse);
+		compMgr->registerComponent<ECS::RagdollComponent>(ECS::StorageType::Sparse);
+		compMgr->registerComponent<ECS::DestructibleMeshComponent>(ECS::StorageType::Sparse);
 		compMgr->registerComponent<ECS::ThirdPersonController>(ECS::StorageType::Sparse);
 		compMgr->registerComponent<ECS::CapsuleColliderComponent>(ECS::StorageType::Sparse);
 		compMgr->registerComponent<ECS::CharacterMotorComponent>(ECS::StorageType::Sparse);
@@ -328,7 +335,10 @@ Core::Core(
 
 		compMgr->registerComponent<ECS::SkeletalComponent>(IKIGAI::ECS::StorageType::Sparse);
 		compMgr->registerComponent<ECS::SkeletalAnimationComponent>(IKIGAI::ECS::StorageType::Sparse);
+		compMgr->registerComponent<ECS::FacialAnimationComponent>(ECS::StorageType::Sparse);
 		compMgr->registerComponent<ECS::VariableContextComponent>(ECS::StorageType::Sparse);
+		compMgr->registerComponent<ECS::BehaviorTreeComponent>(ECS::StorageType::Sparse);
+		compMgr->registerComponent<ECS::BlackboardComponent>(ECS::StorageType::Sparse);
 		compMgr->registerComponent<ECS::SkeletalStateGraphComponent>(ECS::StorageType::Sparse);
 		ECS::RegisterSceneComponentReflection();
 		// GUI
@@ -338,6 +348,10 @@ Core::Core(
 		compMgr->registerComponent<ECS::SpriteParticleComponent>(IKIGAI::ECS::StorageType::Sparse);
 		compMgr->registerComponent<ECS::ParticleSystem2DComponent>(ECS::StorageType::Sparse);
 		compMgr->registerComponent<ECS::ParticleSystem3DComponent>(ECS::StorageType::Sparse);
+		compMgr->registerComponent<ECS::EnvironmentComponent>(ECS::StorageType::Sparse);
+		compMgr->registerComponent<ECS::SurfaceComponent>(ECS::StorageType::Sparse);
+		compMgr->registerComponent<ECS::FoliageComponent>(ECS::StorageType::Sparse);
+		compMgr->registerComponent<ECS::VegetationInteractorComponent>(ECS::StorageType::Sparse);
 		compMgr->registerComponent<ECS::LabelComponent>(IKIGAI::ECS::StorageType::Sparse);
 		compMgr->registerComponent<ECS::SdfTextComponent>(IKIGAI::ECS::StorageType::Sparse);
 		compMgr->registerComponent<ECS::VectorShapeComponent>(IKIGAI::ECS::StorageType::Sparse);
@@ -379,11 +393,21 @@ Core::Core(
 
 	skeletonLoader = std::make_unique<RESOURCES::SkeletonLoader>();
 	skeletalStateGraphLoader = std::make_unique<RESOURCES::SkeletonStateGraphLoader>();
+	behaviorTreeLoader = std::make_unique<RESOURCES::BehaviorTreeLoader>();
+	blackboardLoader = std::make_unique<RESOURCES::BlackboardLoader>();
+#if USE_PHYSICS_3D
+	ragdollLoader = std::make_unique<RESOURCES::RagdollLoader>();
+	RESOURCES::ServiceManager::Set<RESOURCES::RagdollLoader>(ragdollLoader.get());
+	destructibleLoader = std::make_unique<RESOURCES::DestructibleLoader>();
+	RESOURCES::ServiceManager::Set<RESOURCES::DestructibleLoader>(destructibleLoader.get());
+#endif
 	skeletonBlendspaceLoader = std::make_unique<RESOURCES::SkeletonBlendspaceLoader>();
 	skeletonAnimationLoader = std::make_unique<RESOURCES::SkeletonAnimationLoader>();
 
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonLoader>(skeletonLoader.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonStateGraphLoader>(skeletalStateGraphLoader.get());
+	RESOURCES::ServiceManager::Set<RESOURCES::BehaviorTreeLoader>(behaviorTreeLoader.get());
+	RESOURCES::ServiceManager::Set<RESOURCES::BlackboardLoader>(blackboardLoader.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonBlendspaceLoader>(skeletonBlendspaceLoader.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonAnimationLoader>(skeletonAnimationLoader.get());
 

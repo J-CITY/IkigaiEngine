@@ -1,4 +1,5 @@
 #pragma once
+#include "chunkModelRenderer.h"
 #include "component.h"
 #include <renderModule/backends/interface/modelInterface.h>
 #include <utilsModule/event.h>
@@ -41,12 +42,12 @@ private:
 	std::string getModelPath() const;
 
 	std::shared_ptr<RENDER::ModelInterface> m_model = nullptr;
-	RENDER::BoundingSphere m_customBoundingSphere = { { }, 1.0f };
+	RENDER::BoundingSphere m_customBoundingSphere = { {}, 1.0f };
 	EFrustumBehaviour m_frustumBehaviour = EFrustumBehaviour::CULL_MODEL;
 
 public:
 	static auto GetMembers() {
-		return std::tuple { };
+		return std::tuple {};
 	}
 };
 
@@ -95,12 +96,12 @@ private:
 	std::vector<ModelLodRefl> getModelsPath() const;
 
 	std::vector<ModelLod> m_models;
-	RENDER::BoundingSphere m_customBoundingSphere = { { }, 1.0f };
+	RENDER::BoundingSphere m_customBoundingSphere = { {}, 1.0f };
 	EFrustumBehaviour m_frustumBehaviour = EFrustumBehaviour::CULL_MODEL;
 
 public:
 	static auto GetMembers() {
-		return std::tuple { };
+		return std::tuple {};
 	}
 };
 
@@ -118,50 +119,6 @@ template <> inline std::string IKIGAI::ECS::GetComponentName<ModelLODRenderer>()
 
 template <> inline std::string IKIGAI::ECS::GetComponentName<ModelRenderer>() {
 	return "ModelRenderer";
-}
-
-IKI_CLASS(Groups = [Component])
-class ChunkModelRenderer : public ComponentBase {
-	IKI_GENERATED_BODY(ChunkModelRenderer)
-public:
-	IKI_CLASS(Name = ChunkModelRenderer::Descriptor)
-	struct Descriptor : public ComponentBase::Descriptor {
-		IKI_GENERATED_BODY(ChunkModelRenderer::Descriptor)
-		IKI_PROPERTY(SEREALIZE(name = "ChunkModelRendererType"))
-		std::string Type;
-		IKI_PROPERTY(SEREALIZE(name = "Path"))
-		std::string Path;
-	};
-	ChunkModelRenderer(UTILS::Ref<ECS::Object> obj);
-	ChunkModelRenderer(UTILS::Ref<ECS::Object> obj, const Descriptor& _descriptor);
-	ChunkModelRenderer(UTILS::Ref<ECS::Object> obj, const ComponentBase::Descriptor& descriptor)
-		: ChunkModelRenderer(obj, static_cast<const Descriptor&>(descriptor)) { };
-	// void setModel(std::shared_ptr<RENDER::ModelInterface> model);
-	// std::shared_ptr<RENDER::ModelInterface> getModel() const;
-	// void setFrustumBehaviour(EFrustumBehaviour boundingMode);
-	// EFrustumBehaviour getFrustumBehaviour() const;
-	// const RENDER::BoundingSphere& getCustomBoundingSphere() const;
-	// void setCustomBoundingSphere(const RENDER::BoundingSphere& boundingSphere);
-	[[nodiscard]] Descriptor getDescriptor() const;
-	// private:
-	// void setModelByPath(std::string path);
-	// std::string getModelPath() const;
-
-	std::shared_ptr<superchunk> mModel = nullptr;
-	// RENDER::BoundingSphere m_customBoundingSphere = {{}, 1.0f};
-	// EFrustumBehaviour m_frustumBehaviour = EFrustumBehaviour::CULL_MODEL;
-public:
-	static auto GetMembers() {
-		return std::tuple { };
-	}
-};
-
-template <> inline std::string IKIGAI::ECS::GetComponentName<ChunkModelRenderer>() {
-	return "ChunkModelRenderer";
-}
-
-template <> inline std::string ECS::GetType<ChunkModelRenderer>() {
-	return "class IKIGAI::ECS::ChunkModelRenderer";
 }
 
 }

@@ -3,9 +3,9 @@
 #include "component.h"
 #include "skeletalModule/animationOffset.h"
 #include "skeletalModule/animationTransform.h"
+#include "skeletalModule/iAnimationPlayable.h"
 #include "skeletalModule/skeleton.h"
 #include "utilsModule/reflection/reflection_macros.h"
-
 
 namespace IKIGAI::ECS {
 IKI_CLASS(Groups = [Component])
@@ -30,6 +30,9 @@ public:
 	std::shared_ptr<SKELETON::Skeleton> getSkeleton() const {
 		return mSkeleton;
 	}
+	SKELETON::IAnimationPlayable* finalPlayable(SKELETON::IAnimationPlayable* animation) const;
+	void setPoseOverride(std::shared_ptr<SKELETON::IAnimationPlayable>);
+	void clearPoseOverride(const SKELETON::IAnimationPlayable*);
 	[[nodiscard]] Descriptor getDescriptor() const;
 
 	// template <class Context>
@@ -44,6 +47,7 @@ public:
 private:
 	std::string mSkeletonPath;
 	std::shared_ptr<SKELETON::Skeleton> mSkeleton;
+	std::shared_ptr<SKELETON::IAnimationPlayable> mPoseOverride {};
 
 public:
 	std::shared_ptr<SKELETON::AnimOffset> mAnimOffset;
@@ -51,7 +55,7 @@ public:
 	std::shared_ptr<SKELETON::AnimGlobalTransform> mAnimGlobalTransform;
 
 	static auto GetMembers() {
-		return std::tuple { };
+		return std::tuple {};
 	}
 };
 

@@ -5,7 +5,9 @@
 #include "materialRenderer.h"
 #include "resourceModule/modelManager.h"
 #include "utilsModule/log/loggerDefine.h"
-
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
 
 using namespace IKIGAI;
 using namespace IKIGAI::ECS;
@@ -90,13 +92,27 @@ ModelLODRenderer::ModelLODRenderer(UTILS::Ref<ECS::Object> _obj, const Descripto
 	setModelsByPath(_descriptor.Paths);
 }
 
-void ModelLODRenderer::setModel(const ModelLODRenderer::ModelLod& model) {
-	m_models.push_back(model);
-	obj->setModelEvent.run();
+void ModelLODRenderer::setModel(const ModelLod& model) {
+	auto models = m_models;
+	models.push_back(model);
+	setModels(models);
 }
 
-void ModelLODRenderer::setModels(const std::vector<ModelLODRenderer::ModelLod>& models) {
-	m_models = models;
+void ModelLODRenderer::setModels(const std::vector<ModelLod>& models) {
+	auto sorted = models;
+	for (const auto& model : sorted) {
+		if (!model.m_model || !std::isfinite(model.m_distance) || model.m_distance < 0) {
+			throw std::invalid_argument("LOD requires a model and a finite nonnegative distance");
+		}
+	}
+	std::stable_sort(sorted.begin(), sorted.end(), [](const auto& a, const auto& b) { return a.m_distance < b.m_distance; });
+	for (size_t index = 1; index < sorted.size(); ++index) {
+		if (sorted[index - 1].m_distance == sorted[index].m_distance) {
+			throw std::invalid_argument("LOD distances must be unique");
+		}
+	}
+	m_models = std::move(sorted);
+	obj->setModelEvent.run();
 }
 
 const std::vector<ModelLODRenderer::ModelLod>& ModelLODRenderer::getModels() const {
@@ -104,13 +120,15 @@ const std::vector<ModelLODRenderer::ModelLod>& ModelLODRenderer::getModels() con
 }
 
 std::shared_ptr<RENDER::ModelInterface> ModelLODRenderer::getModelByDistance(float distance) {
+	if (m_models.empty() || !std::isfinite(distance)) {
+		return nullptr;
+	}
 	for (const auto& model : m_models) {
-		if (model.m_distance > distance) {
+		if (distance < model.m_distance) {
 			return model.m_model;
 		}
 	}
-	LOG_ERROR << ("Can not find lod");
-	return nullptr;
+	return m_models.back().m_model;
 }
 
 void ModelLODRenderer::setFrustumBehaviour(EFrustumBehaviour mode) {
@@ -129,27 +147,19 @@ void ModelLODRenderer::setCustomBoundingSphere(const RENDER::BoundingSphere& bou
 	m_customBoundingSphere = boundingSphere;
 }
 
-void ModelLODRenderer::setModelsByPath(std::vector<ModelLODRenderer::ModelLodRefl> paths) {
-	for (auto path : paths) {
+void ModelLODRenderer::setModelsByPath(std::vector<ModelLodRefl> paths) {
+	std::vector<ModelLod> models;
+	for (const auto& path : paths) {
 		if (path.Path.empty()) {
-			continue;
+			throw std::invalid_argument("LOD model path must not be empty");
 		}
 		auto model = RESOURCES::ServiceManager::Get<RESOURCES::ModelLoader>().loadResource(
 			path.Path, path.Path.ends_with(".model") ? RESOURCES::ELoadingType::RESOURCE : RESOURCES::ELoadingType::FILE);
-		setFrustumBehaviour(IKIGAI::ECS::EFrustumBehaviour::CULL_MODEL);
-		auto bs = IKIGAI::RENDER::BoundingSphere();
-		bs.position = { 0.0f, 0.0f, 0.0f };
-		bs.radius = 1.0f;
-		setCustomBoundingSphere(bs);
-		// obj->setModelEvent.run();
-		// TODO:: remove this dependence
-		auto mat = obj->getComponent<MaterialRenderer>();
-		if (!mat) {
-			return;
-		}
-		mat->updateMaterialList();
-
-		m_models.push_back({ path.Distance, model });
+		models.push_back({ path.Distance, model });
+	}
+	setModels(models);
+	if (auto material = obj->getComponent<MaterialRenderer>()) {
+		material->updateMaterialList();
 	}
 }
 
@@ -205,23 +215,3 @@ ModelLODRenderer::Descriptor ModelLODRenderer::getDescriptor() const {
 // }
 
 //----------------------------------------------
-
-ChunkModelRenderer::ChunkModelRenderer(UTILS::Ref<ECS::Object> p_owner)
-	: ComponentBase(p_owner) {
-	__NAME__ = "ChunkModelRenderer";
-	mModel = std::make_shared<superchunk>();
-}
-
-ChunkModelRenderer::ChunkModelRenderer(UTILS::Ref<ECS::Object> _obj, const Descriptor& _descriptor)
-	: ComponentBase(_obj) {
-	__NAME__ = "ChunkModelRenderer";
-	mModel = std::make_shared<superchunk>();
-	// setModelByPath(_descriptor.Path);
-}
-
-ChunkModelRenderer::Descriptor ChunkModelRenderer::getDescriptor() const {
-	Descriptor descriptor;
-	descriptor.Type = GetType<ChunkModelRenderer>();
-	// descriptor.Path = getModelPath();
-	return descriptor;
-}

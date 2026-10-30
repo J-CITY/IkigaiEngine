@@ -1,4 +1,5 @@
 #pragma once
+#include "convexPolyhedron.h"
 #include "mathModule/geometry/aabb.h"
 #include "mathModule/math.h"
 #include "status.h"
@@ -9,17 +10,19 @@ namespace IKIGAI::COLLISION {
 using Vec3 = MATH::Vector3f;
 
 struct Shape3D {
-	enum class Kind { Sphere, Box };
+	enum class Kind { Sphere, Box, Convex };
 	Kind kind = Kind::Sphere;
 	float radius = 0.5f;
 	Vec3 halfSize { 0.5f, 0.5f, 0.5f };
+	std::shared_ptr<const ConvexPolyhedron> polyhedron {};
 	static Shape3D sphere(float radius);
 	static Shape3D box(Vec3 halfSize);
+	static Shape3D convex(std::shared_ptr<const ConvexPolyhedron> polyhedron);
 };
 
 struct ShapeView3D {
 	const Shape3D& shape;
-	Vec3 position { };
+	Vec3 position {};
 	std::array<Vec3, 3> axes { { { 1, 0, 0 }, { 0, 1, 0 }, { 0, 0, 1 } } };
 	Vec3 world(Vec3 p) const {
 		return position + axes[0] * p.x + axes[1] * p.y + axes[2] * p.z;
@@ -37,7 +40,7 @@ struct ManifoldPoint3D {
 
 struct Manifold3D {
 	Vec3 normal;
-	std::array<ManifoldPoint3D, 4> points { };
+	std::array<ManifoldPoint3D, 4> points {};
 	int count = 0;
 };
 
@@ -56,6 +59,6 @@ public:
 	Status collide(const ShapeView3D& a, const ShapeView3D& b, Manifold3D& out) const override;
 
 private:
-	std::array<Handler, 4> mHandlers;
+	std::array<Handler, 9> mHandlers;
 };
 }

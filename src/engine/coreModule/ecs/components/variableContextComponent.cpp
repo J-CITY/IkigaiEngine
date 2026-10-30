@@ -1,142 +1,192 @@
 #include "variableContextComponent.h"
 #include "coreModule/ecs/componentReference.inl"
-#include <serdepp/adaptor/nlohmann_json.hpp>
-
+#include <algorithm>
 namespace IKIGAI::ECS {
-VariableContextComponent::VariableContextComponent(UTILS::Ref<Object> o)
-	: ComponentBase(o) {
+VariableContextComponent::VariableContextComponent(UTILS::Ref<Object> object)
+	: ComponentBase(object) {
 	__NAME__ = "VariableContextComponent";
 	settings.Type = GetType<VariableContextComponent>();
 }
-VariableContextComponent::VariableContextComponent(UTILS::Ref<Object> o, const ComponentBase::Descriptor& d)
-	: VariableContextComponent(o) {
-	settings = static_cast<const Descriptor&>(d);
+VariableContextComponent::VariableContextComponent(UTILS::Ref<Object> object, const ComponentBase::Descriptor& descriptor)
+	: VariableContextComponent(object) {
+	settings = static_cast<const Descriptor&>(descriptor);
 }
 size_t VariableContextComponent::slot(const std::string& name) const {
-	auto i = symbols.find(name);
-	if (i == symbols.end()) {
-		throw std::runtime_error("Unknown context variable: " + name);
+	if (!mRuntime) {
+		throw std::runtime_error("Variable context is not prepared");
 	}
-	return i->second.slot;
+	return mRuntime->schema().key(name);
 }
-void VariableContextComponent::write(size_t i, const DATA::Value& value) {
-	if (entries.at(i).source != Entry::Source::Owned || entries[i].event) {
-		throw std::runtime_error("Context variable is read-only or event");
-	}
-	if (DATA::typeOf(value) != DATA::typeOf(owned.at(i))) {
-		throw std::runtime_error("Context variable type mismatch");
-	}
-	owned[i] = value;
+DATA::ValueType VariableContextComponent::type(size_t key) const {
+	return mRuntime->schema().keys.at(key).Type;
 }
-void VariableContextComponent::fire(size_t i) {
-	if (!entries.at(i).event || entries[i].source != Entry::Source::Owned) {
-		throw std::runtime_error("Not an owned event");
+const DATA::Value& VariableContextComponent::read(size_t key) const {
+	const auto& value = mRuntime->readSnapshot(key);
+	if (!value) {
+		throw std::runtime_error("Read of Unset context snapshot: " + mRuntime->schema().keys.at(key).Name);
 	}
-	owned[i] = true;
+	return *value;
+}
+const std::optional<DATA::Value>& VariableContextComponent::readCurrent(size_t key) const {
+	return mRuntime->readCurrent(key);
+}
+void VariableContextComponent::write(size_t key, const DATA::Value& value) {
+	mRuntime->write(key, value);
+}
+void VariableContextComponent::clear(size_t key) {
+	mRuntime->clear(key);
+}
+void VariableContextComponent::fire(size_t key) {
+	mRuntime->fire(key);
+}
+uint64_t VariableContextComponent::tick() const {
+	return mRuntime ? mRuntime->tick() : 0;
+}
+std::shared_ptr<DATA::VariableContext> VariableContextComponent::runtime() const {
+	return mRuntime;
 }
 void VariableContextComponent::prepare(SCENE_SYSTEM::Scene& scene) {
-	// Build locally, then publish a complete schema. Failed references can be retried after loading.
-	DATA::Symbols schema;
-	std::vector<DATA::Value> values;
-	std::vector<Entry> candidate;
-	for (const auto& [name, v] : settings.Variables) {
-		auto value = v.initialValue();
-		schema.emplace(name, DATA::Symbol { values.size(), DATA::typeOf(value) });
-		values.push_back(value);
-		candidate.emplace_back();
+	DATA::VariableSchemaDescriptor descriptor;
+	if (!settings.Schema.empty()) {
+		auto file = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().getFile(settings.Schema);
+		if (!file || !file->isValid()) {
+			throw std::runtime_error("Missing variable context schema: " + settings.Schema);
+		}
+		descriptor = DATA::readDescriptor<DATA::VariableSchemaDescriptor>(nlohmann::json::parse(file->readStr()));
 	}
-	for (const auto& [name, v] : settings.Variables) {
-		auto& entry = candidate[schema.at(name).slot];
-		entry.event = v.Type == VariableType::Event;
-		if (int(v.Property.has_value()) + int(v.Expression.has_value()) + int(v.Script.has_value()) > 1) {
+	for (const auto& [name, variable] : settings.Variables) {
+		const int sources = int(variable.Property.has_value()) + int(variable.Expression.has_value()) + int(variable.Script.has_value())
+			+ int(variable.ObjectId.has_value());
+		if (sources > 1) {
 			throw std::runtime_error("Context variable has multiple sources: " + name);
 		}
-		if (v.Property.has_value()) {
-			const auto& ref = *v.Property;
-			entry.property = PropertyRegistry::bind(scene, ref, schema.at(name).type);
-			entry.source = Entry::Source::Property;
+		auto existing = std::find_if(descriptor.Keys.begin(), descriptor.Keys.end(), [&](const auto& value) { return value.Name == name; });
+		const bool declared = existing != descriptor.Keys.end();
+		DATA::VariableKeyDescriptor key = declared ? *existing : DATA::VariableKeyDescriptor {};
+		if (declared && key.Type != variable.valueType()) {
+			throw std::runtime_error("Context override type mismatch: " + name);
 		}
-		else if (v.Script.has_value()) {
-			if (schema.at(name).type != DATA::ValueType::Bool) {
+		key.Name = name;
+		key.Type = variable.valueType();
+		if (sources > 0) {
+			key.Expression = variable.Expression;
+		}
+		key.Access = variable.Property || variable.ObjectId ? DATA::VariableAccess::Input
+			: key.Expression || variable.Script				? DATA::VariableAccess::Computed
+			: declared										? key.Access
+															: DATA::VariableAccess::Local;
+		key.Event = variable.Type == VariableType::Event && key.Access == DATA::VariableAccess::Local;
+		if (variable.Unset) {
+			key.Default.reset();
+		}
+		else if (variable.Default) {
+			key.Default = variable.Default;
+		}
+		else if (!declared && key.Type != DATA::ValueType::EntityRef) {
+			DATA::LiteralDescriptor initial;
+			initial.Type = key.Type;
+			key.Default = initial;
+		}
+		if (declared) {
+			*existing = std::move(key);
+		}
+		else {
+			descriptor.Keys.push_back(std::move(key));
+		}
+	}
+	auto schema = DATA::VariableSchema::compile(descriptor);
+	auto candidate = std::make_shared<DATA::VariableContext>(schema);
+	std::vector<Input> inputs;
+	for (const auto& [name, variable] : settings.Variables) {
+		const auto key = schema->key(name);
+		if (variable.Property) {
+			if (schema->keys[key].Type == DATA::ValueType::EntityRef) {
+				throw std::runtime_error("EntityRef requires an entity source: " + name);
+			}
+			Input input;
+			input.slot = key;
+			input.property = PropertyRegistry::bind(scene, *variable.Property, schema->keys[key].Type);
+			inputs.push_back(std::move(input));
+		}
+		else if (variable.ObjectId) {
+			if (schema->keys[key].Type != DATA::ValueType::EntityRef || *variable.ObjectId <= 0) {
+				throw std::runtime_error("Invalid context entity source: " + name);
+			}
+			auto object = scene.findObjectByID(Entity(Entity::ID(*variable.ObjectId)));
+			if (!object || !object->isAlive()) {
+				throw std::runtime_error("Missing context entity: " + name);
+			}
+			Input input;
+			input.slot = key;
+			input.entity = DATA::EntityRef { uint64_t(*variable.ObjectId), object,
+				+[](const std::shared_ptr<void>& handle) { return std::static_pointer_cast<Object>(handle)->isAlive(); } };
+			inputs.push_back(std::move(input));
+		}
+		else if (variable.Script) {
+			if (schema->keys[key].Type != DATA::ValueType::Bool) {
 				throw std::runtime_error("Script predicate output must be Bool");
 			}
-			const auto& script = *v.Script;
-			entry.script = std::make_shared<SCRIPTING::ContextPredicate>(script.Path, script.Function);
-			for (const auto& arg : script.Arguments) {
-				const auto symbol = schema.at(arg);
-				if (symbol.type == DATA::ValueType::Vector3) {
+			const auto& script = *variable.Script;
+			auto predicate = std::make_shared<SCRIPTING::ContextPredicate>(script.Path, script.Function);
+			std::vector<size_t> arguments;
+			for (const auto& name : script.Arguments) {
+				const auto argument = schema->key(name);
+				const auto type = schema->keys[argument].Type;
+				if (type == DATA::ValueType::Vector3 || type == DATA::ValueType::EntityRef) {
 					throw std::runtime_error("Predicate argument must be scalar");
 				}
-				entry.arguments.push_back(symbol.slot);
+				arguments.push_back(argument);
 			}
-			entry.source = Entry::Source::Script;
+			candidate->bindComputation(
+				key, arguments,
+				[predicate, arguments](const DATA::VariableContext& context) -> std::optional<DATA::Value> {
+					std::vector<DATA::Value> values;
+					for (auto argument : arguments) {
+						const auto& value = context.readCurrent(argument);
+						if (!value) {
+							return std::nullopt;
+						}
+						values.push_back(*value);
+					}
+					return predicate->evaluate(values);
+				},
+				true);
 		}
-		else if (v.Expression.has_value()) {
-			entry.expression = DATA::Expression::compile(*v.Expression, schema);
-			entry.source = Entry::Source::Expression;
-			if (entry.expression->type() != schema.at(name).type) {
-				throw std::runtime_error("Context expression type mismatch: " + name);
+	}
+	for (size_t key = 0; key < schema->keys.size(); ++key) {
+		if (schema->keys[key].Access == DATA::VariableAccess::Input
+			&& std::none_of(inputs.begin(), inputs.end(), [&](const auto& input) { return input.slot == key; })) {
+			throw std::runtime_error("Unbound context Input: " + schema->keys[key].Name);
+		}
+		if (schema->keys[key].Access == DATA::VariableAccess::Computed && !schema->expressions[key]) {
+			const auto found = settings.Variables.find(schema->keys[key].Name);
+			if (found == settings.Variables.end() || !found->second.Script) {
+				throw std::runtime_error("Unbound context computation: " + schema->keys[key].Name);
 			}
 		}
 	}
-	std::vector<int> marks(candidate.size());
-	std::vector<size_t> sorted;
-	std::function<void(size_t)> visit = [&](size_t i) {
-		if (marks[i] == 1) {
-			throw std::runtime_error("Cyclic variable context");
-		}
-		if (marks[i] == 2) {
-			return;
-		}
-		marks[i] = 1;
-		if (candidate[i].expression) {
-			for (auto dep : candidate[i].expression->dependencies()) {
-				visit(dep);
-			}
-		}
-		for (auto dep : candidate[i].arguments) {
-			visit(dep);
-		}
-		marks[i] = 2;
-		sorted.push_back(i);
-	};
-	for (size_t i = 0; i < candidate.size(); ++i) {
-		visit(i);
+	if (mRuntime) {
+		candidate->migrate(*mRuntime);
 	}
-	symbols = std::move(schema);
-	owned = values;
-	snapshot = std::move(values);
-	entries = std::move(candidate);
-	order = std::move(sorted);
-	prepared = true;
+	mRuntime = std::move(candidate);
+	mInputs = std::move(inputs);
 }
 void VariableContextComponent::update(SCENE_SYSTEM::Scene& scene) {
-	if (!prepared) {
+	if (!mRuntime) {
 		prepare(scene);
 	}
-	auto next = owned;
-	for (auto i : order) {
-		const auto& e = entries[i];
-		if (e.property) {
-			next[i] = e.property->read(scene);
+	std::vector<std::optional<DATA::Value>> values;
+	for (const auto& input : mInputs) {
+		if (input.property) {
+			values.push_back(input.property->read(scene));
 		}
-		else if (e.expression) {
-			next[i] = e.expression->evaluate([&](size_t slot) { return next.at(slot); });
-		}
-		else if (e.script) {
-			std::vector<DATA::Value> args;
-			for (auto slot : e.arguments) {
-				args.push_back(next.at(slot));
-			}
-			next[i] = e.script->evaluate(args);
+		else {
+			values.push_back(input.entity->alive() ? std::optional<DATA::Value>(*input.entity) : std::nullopt);
 		}
 	}
-	snapshot = std::move(next);
-	++sequence;
-	for (size_t i = 0; i < entries.size(); ++i) {
-		if (entries[i].event && entries[i].source == Entry::Source::Owned) {
-			owned[i] = false;
-		}
+	for (size_t index = 0; index < values.size(); ++index) {
+		mRuntime->setInput(mInputs[index].slot, std::move(values[index]));
 	}
+	mRuntime->publish();
 }
 }

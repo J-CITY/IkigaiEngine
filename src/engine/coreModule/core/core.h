@@ -48,6 +48,12 @@ namespace RESOURCES {
 	class SkeletonAnimationLoader;
 	class SkeletonBlendspaceLoader;
 	class SkeletonStateGraphLoader;
+	class BehaviorTreeLoader;
+	class BlackboardLoader;
+#if USE_PHYSICS_3D
+	class RagdollLoader;
+	class DestructibleLoader;
+#endif
 	class SkeletonLoader;
 	class ModelLoader;
 	class TextureLoader;
@@ -175,6 +181,12 @@ namespace CORE {
 
 		std::unique_ptr<RESOURCES::SkeletonLoader> skeletonLoader;
 		std::unique_ptr<RESOURCES::SkeletonStateGraphLoader> skeletalStateGraphLoader;
+		std::unique_ptr<RESOURCES::BehaviorTreeLoader> behaviorTreeLoader;
+		std::unique_ptr<RESOURCES::BlackboardLoader> blackboardLoader;
+#if USE_PHYSICS_3D
+		std::unique_ptr<RESOURCES::RagdollLoader> ragdollLoader {};
+		std::unique_ptr<RESOURCES::DestructibleLoader> destructibleLoader {};
+#endif
 		std::unique_ptr<RESOURCES::SkeletonBlendspaceLoader> skeletonBlendspaceLoader;
 		std::unique_ptr<RESOURCES::SkeletonAnimationLoader> skeletonAnimationLoader;
 	};

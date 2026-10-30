@@ -5,6 +5,9 @@
 #include "resourceModule/skeletonBlendspaceManager.h"
 #include "resourceModule/skeletonStateGraphManager.h"
 #include "skeletalComponent.h"
+#if USE_PHYSICS_3D
+#include "ragdollComponent.h"
+#endif
 #include "skeletalModule/animationInstance.h"
 #include "skeletalModule/blendspace.h"
 #include "skeletalModule/skeletalStateGraph.h"
@@ -37,8 +40,19 @@ void SkeletalAnimationComponent::onUpdate(std::chrono::duration<double> dt) {
 			setAnimation(mGraphPath);
 		}
 	}
-	if (mPlayable && !mPlaybackOwner) {
+	bool fixedPlayback = false;
+#if USE_PHYSICS_3D
+	if (auto ragdoll = obj->getComponent<RagdollComponent>()) {
+		fixedPlayback = !ragdoll->settings.Definition.empty();
+	}
+#endif
+	if (mPlayable && !mPlaybackOwner && !fixedPlayback) {
 		mPlayable->update(static_cast<float>(dt.count()));
+	}
+}
+void SkeletalAnimationComponent::advanceFixed(float dt) {
+	if (mPlayable && !mPlaybackOwner) {
+		mPlayable->update(dt);
 	}
 }
 

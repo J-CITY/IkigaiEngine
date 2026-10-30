@@ -3,6 +3,7 @@
 #include "coreModule/ecs/componentReference.h"
 #include "scriptModule/contextPredicate.h"
 #include "utilsModule/expressions/expression.h"
+#include "utilsModule/variables/variableContext.h"
 #include "variableDescriptor.h"
 #include <optional>
 
@@ -10,10 +11,15 @@ namespace IKIGAI::ECS {
 class VariableContextComponent : public ComponentBase {
 public:
 	struct Descriptor : ComponentBase::Descriptor {
-		std::string Type;
-		std::map<std::string, VariableDescriptor> Variables;
+		std::string Type {};
+		std::string Schema {};
+		std::map<std::string, VariableDescriptor> Variables {};
 		template <class C> static auto serde(C& c, Descriptor& v) {
-			serde::serde_struct(c, v).field(&Descriptor::Type, "VariableContextComponentType").field(&Descriptor::Variables, "Variables");
+			using namespace serde::attribute;
+			serde::serde_struct(c, v)
+				.field(&Descriptor::Type, "VariableContextComponentType")
+				.field(&Descriptor::Schema, "Schema", default_ { std::string {} })
+				.field(&Descriptor::Variables, "Variables", default_ { std::map<std::string, VariableDescriptor> {} });
 		}
 	};
 	explicit VariableContextComponent(UTILS::Ref<Object>);
@@ -25,36 +31,26 @@ public:
 		return std::tuple {};
 	}
 	size_t slot(const std::string&) const;
-	DATA::ValueType type(size_t i) const {
-		return DATA::typeOf(snapshot.at(i));
-	}
-	const DATA::Value& read(size_t i) const {
-		return snapshot.at(i);
-	}
+	DATA::ValueType type(size_t) const;
+	const DATA::Value& read(size_t) const;
+	const std::optional<DATA::Value>& readCurrent(size_t) const;
 	void write(size_t, const DATA::Value&);
+	void clear(size_t);
 	void fire(size_t);
-	uint64_t tick() const {
-		return sequence;
-	}
+	uint64_t tick() const;
 	void update(SCENE_SYSTEM::Scene&);
-	Descriptor settings;
+	void prepare(SCENE_SYSTEM::Scene&);
+	std::shared_ptr<DATA::VariableContext> runtime() const;
+	Descriptor settings {};
 
 private:
-	struct Entry {
-		enum class Source { Owned, Property, Expression, Script } source = Source::Owned;
-		bool event = false;
-		std::optional<PropertyBinding> property;
-		std::optional<DATA::Expression> expression;
-		std::shared_ptr<SCRIPTING::ContextPredicate> script;
-		std::vector<size_t> arguments;
+	struct Input {
+		size_t slot = 0;
+		std::optional<PropertyBinding> property {};
+		std::optional<DATA::EntityRef> entity {};
 	};
-	bool prepared = false;
-	uint64_t sequence = 0;
-	DATA::Symbols symbols;
-	std::vector<Entry> entries;
-	std::vector<DATA::Value> owned, snapshot;
-	std::vector<size_t> order;
-	void prepare(SCENE_SYSTEM::Scene&);
+	std::shared_ptr<DATA::VariableContext> mRuntime {};
+	std::vector<Input> mInputs {};
 };
 template <> inline std::string GetType<VariableContextComponent>() {
 	return "class IKIGAI::ECS::VariableContextComponent";

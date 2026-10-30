@@ -26,6 +26,7 @@ public:
 	~SkeletalAnimationComponent() override;
 
 	void onUpdate(std::chrono::duration<double> dt) override;
+	void advanceFixed(float dt);
 
 	void setPlayable(std::shared_ptr<SKELETON::IAnimationPlayable> playable);
 	void claimPlayback(ComponentBase& owner);
