@@ -67,6 +67,7 @@ render_assets/*
 cmake/tests/*
 script_assets/*
 testModule/
+material_assets/
 
 # Recreated by run.cmd / run.sh; only manifests and uv.lock belong in Git.
 /.venv/

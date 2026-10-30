@@ -14,7 +14,12 @@ function(ikigai_add_physics3d_library)
         "${root}/src/engine/physicsModule/contacts.cpp"
         "${root}/src/engine/physicsModule/narrowPhase.cpp"
         "${root}/src/engine/physicsModule/physicWorld.cpp"
+        "${root}/src/engine/physicsModule/rigidJoint.cpp"
+        "${root}/src/engine/physicsModule/rigidJointSolver.cpp"
         "${root}/src/engine/physicsModule/particles.cpp")
+    target_sources(ikigai_physics3d PRIVATE "${root}/src/engine/destructionModule/planeSlicer.cpp")
+    target_sources(ikigai_physics3d PRIVATE "${root}/src/engine/destructionModule/destructibleDefinition.cpp"
+        "${root}/src/engine/destructionModule/destructibleInstance.cpp")
     target_compile_features(ikigai_physics3d PUBLIC cxx_std_20)
     target_link_libraries(ikigai_physics3d PUBLIC ikigai_collision3d)
     target_include_directories(ikigai_physics3d PUBLIC "${root}/src/engine"
@@ -32,9 +37,12 @@ function(ikigai_configure_physics3d target)
     target_compile_definitions(${target} PRIVATE USE_PHYSICS_3D=$<BOOL:${USE_PHYSICS_3D}>)
     get_target_property(sources ${target} SOURCES)
     list(FILTER sources EXCLUDE REGEX "collisionModule/.*\\.cpp$")
-    list(FILTER sources EXCLUDE REGEX "physicsModule/(body|contacts|narrowPhase|physicWorld|particles)\\.cpp$")
+    list(FILTER sources EXCLUDE REGEX "destructionModule/.*\\.cpp$")
+    list(FILTER sources EXCLUDE REGEX "physicsModule/(body|contacts|narrowPhase|physicWorld|particles|rigidJoint|rigidJointSolver)\\.cpp$")
     list(FILTER sources EXCLUDE REGEX "(physics3dComponent|physicsComponent)\\.generated\\.cpp$")
     if(NOT USE_PHYSICS_3D)
+        list(FILTER sources EXCLUDE REGEX "(destructibleMeshComponent|destructionSystem|destructibleManager)\\.cpp$")
+        list(FILTER sources EXCLUDE REGEX "(ragdollComponent|ragdollSystem|ragdollDefinition|ragdollInstance|ragdollManager)\\.cpp$")
         list(FILTER sources EXCLUDE REGEX "physicsModule/.*\\.cpp$")
         list(FILTER sources EXCLUDE REGEX "(physics3dComponent|physicsComponent|physics3dSystem|deformableRenderer)\\.cpp$")
     endif()

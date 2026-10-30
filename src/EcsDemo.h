@@ -6,7 +6,15 @@
 #include <iostream>
 #include <string>
 
+namespace IKIGAI::ECS {
+class Object;
+}
+
 namespace Example {
+
+// Implementations live in EcsDemo.cpp. Register extensions before loading trees.
+void RegisterBehaviorTreeTaskExample();
+void ConfigureBehaviorTree(IKIGAI::ECS::Object& npc, int candidateObjectId, bool controlMotor = true);
 
 // 1. Components Definition
 // ------------------------
