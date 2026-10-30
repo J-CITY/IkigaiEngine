@@ -14,6 +14,9 @@ public:
 	PHYSICS::World& simulation() {
 		return *mSimulation;
 	}
+	std::shared_ptr<PHYSICS::World> sharedSimulation() const {
+		return mSimulation;
+	}
 	bool paused = false, singleStep = false;
 #ifdef USE_EDITOR
 	void drawDebug();

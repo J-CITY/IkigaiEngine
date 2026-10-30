@@ -3,6 +3,7 @@
 #include "coreModule/ecs/components/characterMotorComponent.h"
 #include "coreModule/ecs/components/thirdPersonCameraComponent.h"
 #include "coreModule/ecs/components/traversalComponent.h"
+#include "ragdollSystem.h"
 #include "traversalSystem.h"
 
 #if USE_PHYSICS_3D
@@ -44,6 +45,11 @@ void CharacterSystem::fixedUpdate(SCENE_SYSTEM::Scene& scene, float dt) {
 	for (auto& object : scene.getObjects()) {
 		if (object->getIsActive()) {
 			if (auto motor = object->getComponent<CharacterMotorComponent>()) {
+				if (RagdollSystem::controlsMotor(scene, *motor)) {
+					motor->wish = {};
+					motor->jump = false;
+					continue;
+				}
 				auto& m = *motor;
 				if (m.settings.Capsule.empty()) {
 					continue;
@@ -155,6 +161,9 @@ void CharacterSystem::update(SCENE_SYSTEM::Scene& scene, float dt) {
 	for (auto& o : scene.getObjects()) {
 		if (o->getIsActive()) {
 			if (auto m = o->getComponent<CharacterMotorComponent>()) {
+				if (RagdollSystem::controlsMotor(scene, *m)) {
+					continue;
+				}
 				if (!m->initialized) {
 					continue;
 				}
