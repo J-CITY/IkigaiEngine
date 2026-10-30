@@ -184,8 +184,8 @@ target_compile_definitions(soloud PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 # --- Main Application ---
 
 # Sources
-file(GLOB_RECURSE PROJECT_ABSOLUTE_HEADERS "${MAIN_SOURCE_DIR}/*.hpp" "${MAIN_SOURCE_DIR}/*.h")
-file(GLOB_RECURSE PROJECT_ABSOLUTE_SOURCES "${MAIN_SOURCE_DIR}/*.cpp" "${MAIN_SOURCE_DIR}/*.c" "${MAIN_SOURCE_DIR}/*.cxx")
+file(GLOB_RECURSE PROJECT_ABSOLUTE_HEADERS CONFIGURE_DEPENDS "${MAIN_SOURCE_DIR}/*.hpp" "${MAIN_SOURCE_DIR}/*.h")
+file(GLOB_RECURSE PROJECT_ABSOLUTE_SOURCES CONFIGURE_DEPENDS "${MAIN_SOURCE_DIR}/*.cpp" "${MAIN_SOURCE_DIR}/*.c" "${MAIN_SOURCE_DIR}/*.cxx")
 
 if(NOT USE_OPENGL)
     list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]gl[/\\\\]")
@@ -342,6 +342,8 @@ endif()
 
 target_link_libraries(${APP_NAME} PRIVATE ${LIBS_TO_LINK})
 include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/Upscalers.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/Materials.cmake")
+ikigai_attach_material_assets(${APP_NAME})
 
 # Some bundled dependencies cache their output directory. Keep alternate backend
 # builds runnable when ENGINE_RUNTIME_OUTPUT_DIRECTORY points at another folder.
