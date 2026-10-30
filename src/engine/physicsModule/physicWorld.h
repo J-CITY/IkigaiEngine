@@ -3,8 +3,10 @@
 #include "body.h"
 #include "collisionPipeline.h"
 #include "contacts.h"
+#include "impactEvent.h"
 #include "narrowPhase.h"
 #include "physicsCommon/constraints.h"
+#include "rigidJoint.h"
 #include <array>
 #include <map>
 #include <span>
@@ -92,6 +94,7 @@ struct Settings {
 	Vec3 gravity { 0, -9.81f, 0 };
 	float cellSize = 2;
 	int substeps = 2, velocityIterations = 12, positionIterations = 12, particleIterations = 6;
+	unsigned maximumContacts = 1024;
 };
 struct DebugDraw {
 	std::function<void(Vec3, Vec3, std::uint32_t)> line;
@@ -101,9 +104,9 @@ struct DebugDraw {
 class PhysicWorld {
 public:
 	explicit PhysicWorld(unsigned maxContacts = 1024, unsigned iterations = 0);
-	explicit PhysicWorld(Settings settings, CollisionPipeline pipeline = { }, unsigned maxContacts = 1024);
+	explicit PhysicWorld(Settings settings, CollisionPipeline pipeline = {}, unsigned maxContacts = 1024);
 	explicit PhysicWorld(CollisionPipeline pipeline)
-		: PhysicWorld(Settings { }, std::move(pipeline)) { }
+		: PhysicWorld(Settings {}, std::move(pipeline)) { }
 	const CollisionPipeline& collisionPipeline() const {
 		return mPipeline;
 	}
@@ -112,6 +115,10 @@ public:
 	Settings settings;
 	ForceFieldRegistry forces;
 	Id createBody(const BodyDef& def);
+	Id createJoint(const RigidJointDef& def);
+	void destroyJoint(Id id);
+	const std::map<Id, RigidJoint>& joints() const;
+	bool collisionEnabled(Id bodyA, Id bodyB) const;
 	Id createSoftBody(const SoftBodyDef& def);
 	Id createCloth(const ClothDef& def);
 	Id createFluid(const FluidDef& def);
@@ -146,13 +153,19 @@ public:
 	std::span<const Contact> contacts() const {
 		return { mContacts.data(), mContactCount };
 	}
+	std::span<const ImpactEvent> impacts() const {
+		return mImpacts;
+	}
+	std::uint64_t tick() const {
+		return mTick;
+	}
 	double simulationTime() const {
 		return mTime;
 	}
 	void applyForce(Id id, Vec3 force, Vec3 worldPoint);
 	void applyImpulse(Id id, Vec3 impulse, Vec3 worldPoint);
 	void teleport(Id id, Vec3 position, MATH::QuaternionF orientation);
-	void setVelocity(Id id, Vec3 velocity, Vec3 angular = { });
+	void setVelocity(Id id, Vec3 velocity, Vec3 angular = {});
 	void wake(Id id);
 	void step(float dt);
 	void debugDraw(const DebugDraw&) const;
@@ -167,13 +180,18 @@ private:
 	Id mNextId = 1;
 	double mTime = 0;
 	std::map<Id, Body> mBodies;
+	std::map<Id, RigidJoint> mJoints {};
+	std::map<std::pair<Id, Id>, std::size_t> mJointCollisionExclusions {};
 	std::map<Id, SoftBody> mSoft;
 	std::map<Id, Fluid> mFluids;
 	std::map<Id, Attachment> mAttachments;
 	std::vector<Contact> mContacts;
 	std::size_t mContactCount = 0;
 	ContactResolver mResolver;
-	void solveRigid(float dt);
+	std::vector<ImpactEvent> mImpacts {};
+	std::map<std::pair<Id, Id>, size_t> mImpactLookup {};
+	std::uint64_t mTick = 0;
+	void solveRigid(float dt, bool jointIteration = false);
 	void stepParticles(float dt);
 	void projectParticle(
 		Particle&, float radius, float friction, std::uint32_t layer, std::uint32_t mask, float dt, UTILS::SPATIAL::ISpatialIndex<3>& solids);

@@ -24,6 +24,8 @@ public:
 	MATH::Vector3f contactNormal;
 
 	float penetration;
+	float normalImpulse = 0;
+	float closingSpeed = 0;
 
 	void setBodyData(RigidBody* one, RigidBody* two, float friction, float restitution);
 

@@ -4,7 +4,6 @@
 #include <assert.h>
 #include <cmath>
 
-
 #include "mathModule/math.h"
 
 using namespace IKIGAI;
@@ -14,6 +13,8 @@ using namespace IKIGAI::MATH;
 // Contact implementation
 
 void Contact::setBodyData(RigidBody* one, RigidBody* two, float friction, float restitution) {
+	normalImpulse = 0;
+	closingSpeed = 0;
 	Contact::body[0] = one;
 	Contact::body[1] = two;
 	Contact::friction = friction;
@@ -22,18 +23,21 @@ void Contact::setBodyData(RigidBody* one, RigidBody* two, float friction, float 
 
 void Contact::matchAwakeState() {
 	// Collisions with the world never cause a body to wake up.
-	if (!body[1])
+	if (!body[1]) {
 		return;
+	}
 
 	bool body0awake = body[0]->getAwake();
 	bool body1awake = body[1]->getAwake();
 
 	// Wake up only the sleeping one
 	if (body0awake ^ body1awake) {
-		if (body0awake)
+		if (body0awake) {
 			body[1]->setAwake();
-		else
+		}
+		else {
 			body[0]->setAwake();
+		}
 	}
 }
 
@@ -138,8 +142,9 @@ void Contact::calculateDesiredDeltaVelocity(float duration) {
 
 void Contact::calculateInternals(float duration) {
 	// Check if the first object is NULL, and swap if it is.
-	if (!body[0])
+	if (!body[0]) {
 		swapBodies();
+	}
 	assert(body[0]);
 
 	// Calculate an set of axis at the contact point.
@@ -168,8 +173,9 @@ void Contact::applyVelocityChange(Vector3f velocityChange[2], Vector3f rotationC
 	inverseInertiaTensor[0] = MATH::Matrix3f(0.0f);
 	inverseInertiaTensor[1] = MATH::Matrix3f(0.0f);
 	body[0]->getInverseInertiaTensorWorld(&inverseInertiaTensor[0]);
-	if (body[1])
+	if (body[1]) {
 		body[1]->getInverseInertiaTensorWorld(&inverseInertiaTensor[1]);
+	}
 
 	// We will calculate the impulse for each contact axis
 	Vector3f impulseContact;
@@ -186,6 +192,7 @@ void Contact::applyVelocityChange(Vector3f velocityChange[2], Vector3f rotationC
 
 	// Convert impulse to world coordinates
 	Vector3f impulse = contactToWorld.transform(impulseContact);
+	normalImpulse += std::max(0.f, impulseContact.x);
 
 	// Split in the impulse into linear and rotational components
 	Vector3f impulsiveTorque = relativeContactPosition[0].cross(impulse);
@@ -325,7 +332,7 @@ void Contact::applyPositionChange(Vector3f linearChange[2], Vector3f angularChan
 
 	// We need to work out the inertia of each object in the direction
 	// of the contact normal, due to angular inertia only.
-	for (unsigned i = 0; i < 2; i++)
+	for (unsigned i = 0; i < 2; i++) {
 		if (body[i]) {
 			Matrix3f inverseInertiaTensor = MATH::Matrix3f(0.0f);
 			body[i]->getInverseInertiaTensorWorld(&inverseInertiaTensor);
@@ -347,9 +354,10 @@ void Contact::applyPositionChange(Vector3f linearChange[2], Vector3f angularChan
 			// completely calculated (by both iterations) before
 			// continuing.
 		}
+	}
 
 	// Loop through again calculating and applying the changes
-	for (unsigned i = 0; i < 2; i++)
+	for (unsigned i = 0; i < 2; i++) {
 		if (body[i]) {
 			// The linear and angular movements required are in proportion to
 			// the two inverse inertias.
@@ -418,9 +426,11 @@ void Contact::applyPositionChange(Vector3f linearChange[2], Vector3f angularChan
 			// data. Otherwise the resolution will not change the position
 			// of the object, and the next collision detection round will
 			// have the same penetration.
-			if (!body[i]->getAwake())
+			if (!body[i]->getAwake()) {
 				body[i]->calculateDerivedData();
+			}
 		}
+	}
 }
 
 // Contact resolver implementation
@@ -451,10 +461,12 @@ void ContactResolver::setEpsilon(float velocityEpsilon, float positionEpsilon) {
 
 void ContactResolver::resolveContacts(Contact* contacts, unsigned numContacts, float duration) {
 	// Make sure we have something to do.
-	if (numContacts == 0)
+	if (numContacts == 0) {
 		return;
-	if (!isValid())
+	}
+	if (!isValid()) {
 		return;
+	}
 
 	// Prepare the contacts for processing
 	prepareContacts(contacts, numContacts, duration);
@@ -491,8 +503,9 @@ void ContactResolver::adjustVelocities(Contact* c, unsigned numContacts, float d
 				index = i;
 			}
 		}
-		if (index == numContacts)
+		if (index == numContacts) {
 			break;
+		}
 
 		// Match the awake state at the contact
 		c[index].matchAwakeState();
@@ -505,7 +518,7 @@ void ContactResolver::adjustVelocities(Contact* c, unsigned numContacts, float d
 		// velocities need recomputing.
 		for (unsigned i = 0; i < numContacts; i++) {
 			// Check each body in the contact
-			for (unsigned b = 0; b < 2; b++)
+			for (unsigned b = 0; b < 2; b++) {
 				if (c[i].body[b]) {
 					// Check for a match with each body in the newly
 					// resolved contact
@@ -520,6 +533,7 @@ void ContactResolver::adjustVelocities(Contact* c, unsigned numContacts, float d
 						}
 					}
 				}
+			}
 		}
 		velocityIterationsUsed++;
 	}
@@ -543,8 +557,9 @@ void ContactResolver::adjustPositions(Contact* c, unsigned numContacts, float du
 				index = i;
 			}
 		}
-		if (index == numContacts)
+		if (index == numContacts) {
 			break;
+		}
 
 		// Match the awake state at the contact
 		c[index].matchAwakeState();
@@ -556,7 +571,7 @@ void ContactResolver::adjustPositions(Contact* c, unsigned numContacts, float du
 		// bodies, so we update contacts.
 		for (i = 0; i < numContacts; i++) {
 			// Check each body in the contact
-			for (unsigned b = 0; b < 2; b++)
+			for (unsigned b = 0; b < 2; b++) {
 				if (c[i].body[b]) {
 					// Check for a match with each body in the newly
 					// resolved contact
@@ -572,6 +587,7 @@ void ContactResolver::adjustPositions(Contact* c, unsigned numContacts, float du
 						}
 					}
 				}
+			}
 		}
 		positionIterationsUsed++;
 	}
