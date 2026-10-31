@@ -1,6 +1,7 @@
 #include "renderStatistics.h"
 
 #include <algorithm>
+#include <iomanip>
 #include <ostream>
 #include <utility>
 
@@ -21,9 +22,14 @@ namespace {
 	}
 
 	void PrintCounters(std::ostream& output, const RenderDrawCounters& counters, double frames) {
+		const auto flags = output.flags();
+		const auto precision = output.precision();
+		output << std::fixed << std::setprecision(2);
 		output << " draws=" << double(counters.DrawCalls) / frames << " indirect=" << double(counters.IndirectDraws) / frames
 			   << " instances=" << double(counters.Instances) / frames << " triangles=" << double(counters.Triangles) / frames
 			   << " dispatches=" << double(counters.Dispatches) / frames;
+		output.flags(flags);
+		output.precision(precision);
 	}
 }
 

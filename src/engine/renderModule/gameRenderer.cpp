@@ -787,6 +787,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		}
 		auto stageProfile = mGpuProfiler.measure(stage->mName);
 		auto stageStatistics = RenderStatistics::Get().measureStage(stage->mName);
+		auto stageCpuProfile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("Stage::" + stage->mName) : nullptr;
 		if (stage->mDrawContent == DrawContent::LIGHT_ACCUMULATION) {
 			auto& pass = mRenderPipeline->mLightPasses.at(stage->mDescriptor.LightPass);
 			bool rayShadows = false;

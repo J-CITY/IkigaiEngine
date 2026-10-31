@@ -50,8 +50,8 @@ bool DriverVk::readTimestamps(uint32_t first, uint32_t count, std::vector<uint64
 		return false;
 	}
 	ticks.resize(count);
-	const VkResult result = vkGetQueryPoolResults(*mDevice, *mTimestampPool, first, count, count * sizeof(uint64_t), ticks.data(),
-		sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
+	const VkResult result = vkGetQueryPoolResults(
+		*mDevice, *mTimestampPool, first, count, count * sizeof(uint64_t), ticks.data(), sizeof(uint64_t), VK_QUERY_RESULT_64_BIT);
 	if (result != VK_SUCCESS) {
 		return false;
 	}
