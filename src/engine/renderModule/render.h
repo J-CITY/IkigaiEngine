@@ -5,6 +5,7 @@
 #include "backends/interface/driverInterface.h"
 #include "backends/interface/frameBufferInterface.h"
 #include "backends/interface/meshInterface.h"
+#include "diagnostics/renderStatistics.h"
 
 namespace IKIGAI::RENDER {
 class MaterialInterface;
@@ -303,12 +304,15 @@ public:
 	}
 
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) {
+		RenderStatistics::Get().recordDispatch();
 		execute([driver = mDriver, x, y, z]() { driver->dispatch(x, y, z); });
 	}
 	void traceRays(RayTracingDispatch dispatch) {
+		RenderStatistics::Get().recordDispatch();
 		execute([driver = mDriver, dispatch = std::move(dispatch)]() { driver->traceRays(dispatch); });
 	}
 	void dispatchRayQueries(RayTracingDispatch dispatch) {
+		RenderStatistics::Get().recordDispatch();
 		execute([driver = mDriver, dispatch = std::move(dispatch)]() { driver->dispatchRayQueries(dispatch); });
 	}
 

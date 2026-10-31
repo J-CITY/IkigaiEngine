@@ -14,7 +14,7 @@ namespace {
 	constexpr std::size_t MaximumStages = 512;
 	constexpr std::size_t MaximumRetainedSamples = 4096;
 	constexpr std::uint64_t MinimumFrameDelay = 3;
-	bool supported() {
+	bool glSupported() {
 #if defined(OPENGL_BACKEND) && !defined(USING_GLES)
 		if (!RENDER::DriverInterface::Get() || RENDER::DriverInterface::settings.backend != RENDER::RenderSettings::Backend::OPENGL) {
 			return false;
@@ -30,6 +30,18 @@ namespace {
 #else
 		return false;
 #endif
+	}
+	// Vulkan/DX12 path: DriverInterface timestamp queries (gpuFeatures.h contract).
+	RENDER::DriverInterface* timestampDriver() {
+		auto* driver = RENDER::DriverInterface::Get();
+		if (!driver || RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL) {
+			return nullptr;
+		}
+		const auto features = driver->gpuFeatures();
+		if (!features.TimestampQueries || features.TimestampPeriodNanoseconds <= 0.0 || driver->timestampQueryCapacity() < 2) {
+			return nullptr;
+		}
+		return driver;
 	}
 }
 struct GpuStageProfiler::Impl {
@@ -49,6 +61,11 @@ struct GpuStageProfiler::Impl {
 	};
 	bool Supported = false;
 	bool Enabled = false;
+	RENDER::DriverInterface* Driver = nullptr;
+	double TimestampPeriodNanoseconds = 0.0;
+	std::size_t QueryPairCapacity = MaximumQueryPairs;
+	std::vector<std::uint64_t> Ticks = {};
+	void record(const std::string& name, double milliseconds);
 	std::uint64_t Frame = 0;
 	std::uint64_t Generation = 0;
 	std::uint64_t Dropped = 0;
@@ -57,6 +74,23 @@ struct GpuStageProfiler::Impl {
 	std::vector<std::size_t> Free = {};
 	std::map<std::string, Statistics, std::less<>> Stages = {};
 };
+void GpuStageProfiler::Impl::record(const std::string& name, double milliseconds) {
+	if (!Stages.contains(name) && Stages.size() >= MaximumStages) {
+		++Dropped;
+		return;
+	}
+	auto& statistics = Stages[name];
+	statistics.Sum += milliseconds;
+	statistics.Minimum = std::min(statistics.Minimum, milliseconds);
+	statistics.Maximum = std::max(statistics.Maximum, milliseconds);
+	if (statistics.Recent.size() < MaximumRetainedSamples) {
+		statistics.Recent.push_back(milliseconds);
+	}
+	else {
+		statistics.Recent[statistics.Count % MaximumRetainedSamples] = milliseconds;
+	}
+	++statistics.Count;
+}
 GpuStageProfiler::Scope::Scope() = default;
 GpuStageProfiler::Scope::Scope(GpuStageProfiler* owner, std::size_t slot)
 	: mOwner(owner)
@@ -73,13 +107,26 @@ GpuStageProfiler::GpuStageProfiler()
 	: mImpl(std::make_unique<Impl>()) { }
 GpuStageProfiler::~GpuStageProfiler() {
 #if defined(OPENGL_BACKEND) && !defined(USING_GLES)
+	// Driver timestamp slots own no GL query objects.
 	for (const auto& query : mImpl->Queries) {
-		glDeleteQueries(2, query.Ids.data());
+		if (!mImpl->Driver) {
+			glDeleteQueries(2, query.Ids.data());
+		}
 	}
 #endif
 }
 void GpuStageProfiler::setEnabled(bool enabled) {
-	mImpl->Supported = supported();
+	if (!mImpl->Queries.empty()) {
+		// Keep the backend chosen when the first query was allocated.
+		mImpl->Enabled = enabled && mImpl->Supported;
+		return;
+	}
+	mImpl->Driver = timestampDriver();
+	if (mImpl->Driver) {
+		mImpl->TimestampPeriodNanoseconds = mImpl->Driver->gpuFeatures().TimestampPeriodNanoseconds;
+		mImpl->QueryPairCapacity = std::min<std::size_t>(MaximumQueryPairs, mImpl->Driver->timestampQueryCapacity() / 2);
+	}
+	mImpl->Supported = mImpl->Driver || glSupported();
 	mImpl->Enabled = enabled && mImpl->Supported;
 }
 void GpuStageProfiler::reset() {
@@ -89,6 +136,31 @@ void GpuStageProfiler::reset() {
 }
 void GpuStageProfiler::beginFrame() {
 	++mImpl->Frame;
+	if (mImpl->Driver) {
+		// Results are read in submission order, at least MinimumFrameDelay frames
+		// after recording, and only once the driver reports them available.
+		while (!mImpl->Pending.empty()) {
+			const auto slot = mImpl->Pending.front();
+			auto& query = mImpl->Queries[slot];
+			if (!query.Ended || mImpl->Frame - query.Frame < MinimumFrameDelay) {
+				break;
+			}
+			if (!mImpl->Driver->readTimestamps(static_cast<std::uint32_t>(slot * 2), 2, mImpl->Ticks) || mImpl->Ticks.size() < 2) {
+				break;
+			}
+			if (query.Generation == mImpl->Generation) {
+				if (mImpl->Ticks[1] >= mImpl->Ticks[0]) {
+					mImpl->record(query.Name, double(mImpl->Ticks[1] - mImpl->Ticks[0]) * mImpl->TimestampPeriodNanoseconds * 1e-6);
+				}
+				else {
+					++mImpl->Dropped;
+				}
+			}
+			mImpl->Pending.pop_front();
+			mImpl->Free.push_back(slot);
+		}
+		return;
+	}
 #if defined(OPENGL_BACKEND) && !defined(USING_GLES)
 	while (!mImpl->Pending.empty()) {
 		const auto slot = mImpl->Pending.front();
@@ -102,29 +174,13 @@ void GpuStageProfiler::beginFrame() {
 			break;
 		}
 		if (query.Generation == mImpl->Generation) {
-			if (mImpl->Stages.contains(query.Name) || mImpl->Stages.size() < MaximumStages) {
-				// End availability guarantees the earlier start timestamp is ready.
-				GLuint64 start = 0;
-				GLuint64 finish = 0;
-				glGetQueryObjectui64v(query.Ids[0], GL_QUERY_RESULT, &start);
-				glGetQueryObjectui64v(query.Ids[1], GL_QUERY_RESULT, &finish);
-				if (finish >= start) {
-					const double milliseconds = double(finish - start) * 1e-6;
-					auto& statistics = mImpl->Stages[query.Name];
-					statistics.Sum += milliseconds;
-					statistics.Minimum = std::min(statistics.Minimum, milliseconds);
-					statistics.Maximum = std::max(statistics.Maximum, milliseconds);
-					if (statistics.Recent.size() < MaximumRetainedSamples) {
-						statistics.Recent.push_back(milliseconds);
-					}
-					else {
-						statistics.Recent[statistics.Count % MaximumRetainedSamples] = milliseconds;
-					}
-					++statistics.Count;
-				}
-				else {
-					++mImpl->Dropped;
-				}
+			// End availability guarantees the earlier start timestamp is ready.
+			GLuint64 start = 0;
+			GLuint64 finish = 0;
+			glGetQueryObjectui64v(query.Ids[0], GL_QUERY_RESULT, &start);
+			glGetQueryObjectui64v(query.Ids[1], GL_QUERY_RESULT, &finish);
+			if (finish >= start) {
+				mImpl->record(query.Name, double(finish - start) * 1e-6);
 			}
 			else {
 				++mImpl->Dropped;
@@ -138,6 +194,29 @@ void GpuStageProfiler::beginFrame() {
 GpuStageProfiler::Scope GpuStageProfiler::measure(std::string_view name) {
 	if (!mImpl->Enabled) {
 		return {};
+	}
+	if (mImpl->Driver) {
+		std::size_t slot = 0;
+		if (!mImpl->Free.empty()) {
+			slot = mImpl->Free.back();
+			mImpl->Free.pop_back();
+		}
+		else if (mImpl->Queries.size() < mImpl->QueryPairCapacity) {
+			slot = mImpl->Queries.size();
+			mImpl->Queries.emplace_back();
+		}
+		else {
+			++mImpl->Dropped;
+			return {};
+		}
+		auto& query = mImpl->Queries[slot];
+		query.Name = name;
+		query.Frame = mImpl->Frame;
+		query.Generation = mImpl->Generation;
+		query.Ended = false;
+		mImpl->Pending.push_back(slot);
+		mImpl->Driver->writeTimestamp(static_cast<std::uint32_t>(slot * 2));
+		return Scope(this, slot);
 	}
 #if defined(OPENGL_BACKEND) && !defined(USING_GLES)
 	std::size_t slot = 0;
@@ -167,6 +246,11 @@ GpuStageProfiler::Scope GpuStageProfiler::measure(std::string_view name) {
 #endif
 }
 void GpuStageProfiler::end(std::size_t slot) {
+	if (mImpl->Driver) {
+		mImpl->Driver->writeTimestamp(static_cast<std::uint32_t>(slot * 2 + 1));
+		mImpl->Queries[slot].Ended = true;
+		return;
+	}
 #if defined(OPENGL_BACKEND) && !defined(USING_GLES)
 	auto& query = mImpl->Queries[slot];
 	glQueryCounter(query.Ids[1], GL_TIMESTAMP);

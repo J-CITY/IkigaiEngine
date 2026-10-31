@@ -2,8 +2,11 @@
 #include "coreModule/ecs/components/facialAnimationComponent.h"
 #include "coreModule/ecs/systems/environmentSystem.h"
 #include "environmentModule/surfaceWeather.h"
+#include "diagnostics/renderStatistics.h"
 #include "instanceBatch.h"
 #include "particles/particleRenderer.h"
+#include "profilerModule/profiler.h"
+#include "profilerModule/profilerSpy.h"
 #include "utilsModule/time/loadTimer.h"
 #if USE_PHYSICS_3D
 #include "physics/deformableRenderer.h"
@@ -515,6 +518,8 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::CameraComponent& cameraComponent) {
 	mGpuProfiler.beginFrame();
 	auto frameProfile = mGpuProfiler.measure("Frame");
+	RenderStatistics::Get().beginFrame();
+	auto renderSceneCpuProfile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("GameRenderer::renderScene") : nullptr;
 #if USE_PHYSICS_3D
 	if (!mDeformableRenderer) {
 		mDeformableRenderer = std::make_shared<DeformableRenderer>();
@@ -780,6 +785,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			return;
 		}
 		auto stageProfile = mGpuProfiler.measure(stage->mName);
+		auto stageStatistics = RenderStatistics::Get().measureStage(stage->mName);
 		if (stage->mDrawContent == DrawContent::LIGHT_ACCUMULATION) {
 			auto& pass = mRenderPipeline->mLightPasses.at(stage->mDescriptor.LightPass);
 			bool rayShadows = false;
@@ -1114,6 +1120,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			std::cout << "Pipeline update: " << stage->mName << std::endl;
 		}
 	};
+	auto submitCpuProfile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("GameRenderer::submitStages") : nullptr;
 	if (!mRenderPipeline->mIsInitialized) {
 		for (auto& stage : mRenderPipeline->mStartStages) {
 			runStage(stage);
@@ -1123,6 +1130,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	for (auto& stage : mRenderPipeline->mStages) {
 		runStage(stage);
 	}
+	submitCpuProfile.reset();
 	auto& screenshot = CAPTURE::ScreenshotService::Get();
 	if (screenshot.pending() && !screenshot.textureName().empty()) {
 		const auto source = mRenderPipeline->mTextures.find(screenshot.textureName());

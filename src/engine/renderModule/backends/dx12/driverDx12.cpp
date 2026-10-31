@@ -334,6 +334,7 @@ void DriverDx12::init() {
 #endif
 
 	createCommandList();
+	createTimestampQueries();
 	createDescriptorHeaps();
 	auto& win = RESOURCES::ServiceManager::Get<WINDOW::Window>();
 	mWidth = win.getSize().x;
@@ -744,6 +745,10 @@ void DriverDx12::submit() {
         CAPTURE::ScreenshotService::Get().captureTexture(*this,getDefaultFrameBuffer()->getTextures().at(0));
     }
 	bool vsync = settings.frameGeneration.vsync;
+	if (settings.presentMode != RenderSettings::PresentMode::DEFAULT) {
+		// No tearing flag: MAILBOX and IMMEDIATE both present with sync interval 0.
+		vsync = settings.presentMode == RenderSettings::PresentMode::FIFO;
+	}
     latencySubmitEnd();
 #if defined(IKIGAI_USE_STREAMLINE) && (defined(DEBUG) || defined(_DEBUG))
     Microsoft::WRL::ComPtr<ID3D12InfoQueue> sdkDiagnostics;
@@ -783,7 +788,11 @@ void DriverDx12::begin() {
 
 void DriverDx12::end() {
 	std::static_pointer_cast<TextureDx12>(getDefaultFrameBuffer()->getTextures()[0])->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_PRESENT);
+	const bool timestamps = resolveTimestampQueries();
 	endCommandList(mCommandQueue.Get(), mCommandList.Get(), false);
+	if (timestamps) {
+		signalTimestampQueries();
+	}
 }
 
 void DriverDx12::beginCommandList(ID3D12CommandAllocator* cmdAlloc, ID3D12GraphicsCommandList* cmdList) {

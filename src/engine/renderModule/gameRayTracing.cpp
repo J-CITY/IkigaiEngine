@@ -46,6 +46,7 @@ namespace {
 		dispatch.Bindings = std::move(bindings);
 		dispatch.PushConstants.resize(sizeof(options));
 		std::memcpy(dispatch.PushConstants.data(), options.data(), sizeof(options));
+		RenderStatistics::Get().recordDispatch();
 		driver.dispatchComputeProgram(dispatch);
 	}
 }

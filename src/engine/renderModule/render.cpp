@@ -1,6 +1,7 @@
 #include "render.h"
 
 #include "backends/interface/textureInterface.h"
+#include "diagnostics/renderStatistics.h"
 
 namespace IKIGAI::RENDER {
 
@@ -60,16 +61,20 @@ struct PacketDispatcher {
 
 		case OpCode::DRAW: {
 			auto* cmd = reinterpret_cast<const CmdDraw*>(header);
+			RenderStatistics::Get().recordDraw(cmd->count, cmd->instance);
 			driver->draw(cmd->count, cmd->offset, cmd->instance);
 			break;
 		}
 		case OpCode::DRAW_INDEXED: {
 			auto* cmd = reinterpret_cast<const CmdDrawIndexed*>(header);
+			RenderStatistics::Get().recordDraw(cmd->count, cmd->instance);
 			driver->drawIndexed(cmd->count, cmd->offset, cmd->instance);
 			break;
 		}
 		case OpCode::DRAW_MESH: {
 			auto* cmd = reinterpret_cast<const CmdDrawMesh*>(header);
+			RenderStatistics::Get().recordDraw(
+				uint32_t(cmd->mesh->getIndexCount() > 0 ? cmd->mesh->getIndexCount() : cmd->mesh->getVertexCount()), cmd->instances, cmd->primitive);
 			driver->draw(*cmd->mesh, cmd->primitive, cmd->instances);
 			break;
 		}
@@ -85,6 +90,7 @@ struct PacketDispatcher {
 		}
 		case OpCode::SET_PRIMITIVE_MODE: {
 			auto* cmd = reinterpret_cast<const CmdSetPrimitiveMode*>(header);
+			RenderStatistics::Get().setPrimitiveMode(cmd->mode);
 			driver->setPrimitiveMode(cmd->mode);
 			break;
 		}
