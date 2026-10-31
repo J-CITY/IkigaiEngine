@@ -190,6 +190,9 @@ struct RenderGraphPipeline {
 		SizeBase Size = SizeBase::DISPLAY;
 		bool History = false;
 		bool Persistent = false;
+		// Allocates floor(log2(max(width, height))) + 1 mips for the resolved size (render-size pyramids such as HZB).
+		// Requires UseMipmap false: the chain is filled by compute stages, not by blitting.
+		bool FullMipChain = false;
 
 		template <class Context> constexpr static auto serde(Context& context, TextureDesc& value) {
 			using Self = TextureDesc;
@@ -201,7 +204,8 @@ struct RenderGraphPipeline {
 				.field(&Self::Scale, "Scale", default_ { 1.0f })
 				.field(&Self::Size, "Size", default_ { SizeBase::DISPLAY })
 				.field(&Self::History, "History", default_ { false })
-				.field(&Self::Persistent, "Persistent", default_ { false });
+				.field(&Self::Persistent, "Persistent", default_ { false })
+				.field(&Self::FullMipChain, "FullMipChain", default_ { false });
 		}
 	};
 

@@ -44,6 +44,7 @@
 #include "vectorGraphicsModule/render/vectorRenderer.h"
 #include "windowModule/window/window.h"
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <functional>
 #include <iostream>
@@ -2005,6 +2006,12 @@ void RenderGraphPipeline::resize(Renderer& renderer, int width, int height) {
 		}
 		if (!resource.height) {
 			resource.height = std::max(1, static_cast<int>(base.y * t.Scale));
+		}
+		if (t.FullMipChain) {
+			if (resource.useMipmap || resource.texType != TextureType::TEXTURE_2D || !t.Path.empty() || t.History) {
+				throw std::runtime_error("FullMipChain needs a 2D render texture with UseMipmap false: " + t.Name);
+			}
+			resource.mipMapCount = static_cast<int>(std::floor(std::log2(std::max(resource.width, resource.height)))) + 1;
 		}
 		auto create = [&]() {
 			return t.Path.empty() ? renderer.createTexture(resource)
