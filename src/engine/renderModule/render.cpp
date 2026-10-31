@@ -211,6 +211,31 @@ struct PacketDispatcher {
 			driver->setPushConstant(cmd->stage, cmd->offset, cmd->dataSize, cmd->data);
 			break;
 		}
+		case OpCode::FILL_BUFFER: {
+			auto* cmd = reinterpret_cast<const CmdFillBuffer*>(header);
+			driver->fillBuffer(cmd->buffer, cmd->offset, cmd->size, cmd->value);
+			break;
+		}
+		case OpCode::COPY_BUFFER: {
+			auto* cmd = reinterpret_cast<const CmdCopyBuffer*>(header);
+			driver->copyBuffer(cmd->source, cmd->sourceOffset, cmd->destination, cmd->destinationOffset, cmd->size);
+			break;
+		}
+		case OpCode::DRAW_INDEXED_INDIRECT: {
+			auto* cmd = reinterpret_cast<const CmdDrawIndexedIndirect*>(header);
+			driver->drawIndexedIndirect(cmd->arguments, cmd->offset, cmd->drawCount, cmd->stride);
+			break;
+		}
+		case OpCode::DRAW_INDEXED_INDIRECT_COUNT: {
+			auto* cmd = reinterpret_cast<const CmdDrawIndexedIndirectCount*>(header);
+			driver->drawIndexedIndirectCount(cmd->arguments, cmd->offset, cmd->count, cmd->countOffset, cmd->maxDrawCount, cmd->stride);
+			break;
+		}
+		case OpCode::DISPATCH_INDIRECT: {
+			auto* cmd = reinterpret_cast<const CmdDispatchIndirect*>(header);
+			driver->dispatchIndirect(cmd->arguments, cmd->offset);
+			break;
+		}
 
 		default:
 			break;
@@ -271,6 +296,30 @@ struct PacketDispatcher {
 		}
 		case OpCode::SET_FRAMEBUFFER: {
 			reinterpret_cast<CmdSetFrameBuffer*>(header)->frameBuffer.~shared_ptr();
+			break;
+		}
+		case OpCode::FILL_BUFFER: {
+			reinterpret_cast<CmdFillBuffer*>(header)->buffer.~shared_ptr();
+			break;
+		}
+		case OpCode::COPY_BUFFER: {
+			auto* cmd = reinterpret_cast<CmdCopyBuffer*>(header);
+			cmd->source.~shared_ptr();
+			cmd->destination.~shared_ptr();
+			break;
+		}
+		case OpCode::DRAW_INDEXED_INDIRECT: {
+			reinterpret_cast<CmdDrawIndexedIndirect*>(header)->arguments.~shared_ptr();
+			break;
+		}
+		case OpCode::DRAW_INDEXED_INDIRECT_COUNT: {
+			auto* cmd = reinterpret_cast<CmdDrawIndexedIndirectCount*>(header);
+			cmd->arguments.~shared_ptr();
+			cmd->count.~shared_ptr();
+			break;
+		}
+		case OpCode::DISPATCH_INDIRECT: {
+			reinterpret_cast<CmdDispatchIndirect*>(header)->arguments.~shared_ptr();
 			break;
 		}
 		default:
