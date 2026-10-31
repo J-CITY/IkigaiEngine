@@ -4,6 +4,7 @@
 #include "environmentModule/surfaceWeather.h"
 #include "instanceBatch.h"
 #include "particles/particleRenderer.h"
+#include "renderGraph/computeStage.h"
 #include "utilsModule/time/loadTimer.h"
 #if USE_PHYSICS_3D
 #include "physics/deformableRenderer.h"
@@ -883,6 +884,10 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			return;
 		}
 		if (stage->mDrawContent == DrawContent::COMPUTE) {
+			if (stage->mCompute) {
+				runComputeStage(*stage);
+				return;
+			}
 			if (!stage->mDescriptor.Program.empty()) {
 				runRayTracingStage(*stage);
 				return;
@@ -1679,17 +1684,7 @@ RenderGraphPipeline::RenderGraphPipeline(const Descriptor& descriptor, Renderer&
 	if (!descriptor.SettingsAsset.empty()) {
 		mSettingsWriteTime = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().lastWriteTime(descriptor.SettingsAsset);
 	}
-	for (const auto& b : mDescriptor.Buffers) {
-		if (!b.Size) {
-			throw std::runtime_error("Empty pipeline buffer: " + b.Name);
-		}
-		if (b.Type == BufferType::UNIFORM) {
-			mUniformBuffers.emplace(b.Name, renderer.createUniformBuffer(nullptr, b.Size));
-		}
-		else {
-			mStorageBuffers.emplace(b.Name, renderer.createStorageBuffer(nullptr, b.Size, b.Stride));
-		}
-	}
+	CreatePipelineBuffers(*this, renderer);
 	mStartStages = loadStages(mDescriptor.StartStages);
 	for (const auto& descriptor : mDescriptor.LightPasses) {
 		if (mLightPasses.contains(descriptor.Name)) {
@@ -2179,7 +2174,7 @@ RenderGraphPipeline::StagesArr RenderGraphPipeline::loadStages(const std::vector
 				throw std::runtime_error("UPSCALE fallback framebuffer must contain its output only");
 			}
 		}
-		if (desc.Draw == DrawContent::RAY_TRACE || (desc.Draw == DrawContent::COMPUTE && !desc.Program.empty())) {
+		if (desc.Draw == DrawContent::RAY_TRACE || (desc.Draw == DrawContent::COMPUTE && !desc.Program.empty() && !desc.Compute.usesExtensions())) {
 			if (desc.Program.empty() || !desc.Material.empty()) {
 				throw std::runtime_error("RAY_TRACE requires Program and does not accept Material: " + desc.Name);
 			}
@@ -2241,6 +2236,9 @@ RenderGraphPipeline::StagesArr RenderGraphPipeline::loadStages(const std::vector
 					}
 				}
 			}
+		}
+		if (desc.Compute.usesExtensions()) {
+			LoadComputeStage(*this, *stage);
 		}
 		result.push_back(std::move(stage));
 	}
