@@ -452,11 +452,15 @@ public:
 	}
 
 	template <typename T> std::shared_ptr<StorageBufferInterface> createStorageBuffer(const std::vector<T>& data) {
-		return mDriver->createStorageBuffer(data.data(), data.size() * sizeof(T), sizeof(T));
+		return mDriver->createStorageBuffer(data.data(), data.size(), sizeof(T));
 	}
 
+	// One T split into elements of stride bytes; stride must divide sizeof(T).
 	template <typename T> std::shared_ptr<StorageBufferInterface> createStorageBuffer(const T& data, size_t stride = sizeof(T)) {
-		return mDriver->createStorageBuffer(&data, sizeof(T), stride);
+		if (!stride || sizeof(T) % stride != 0) {
+			throw std::invalid_argument("Storage buffer stride must divide the element size");
+		}
+		return mDriver->createStorageBuffer(&data, sizeof(T) / stride, stride);
 	}
 
 	std::shared_ptr<TextureInterface> createTexture(
