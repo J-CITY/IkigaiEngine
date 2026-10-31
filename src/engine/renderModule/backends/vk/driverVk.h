@@ -355,6 +355,24 @@ public:
 	void setClearColor(const MATH::Vector4f& color) override;
 	void setClearColor(float r, float g, float b, float a) override;
 
+	// GPU-driven rendering contract (gpuFeatures.h); implemented in gpuDrivenVk.cpp.
+	GpuFeatures mGpuFeatures;
+	void configureGpuFeatures(std::vector<const char*>& extensions);
+	GpuFeatures gpuFeatures() const override;
+	std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void* data, size_t count, size_t stride, BufferUsage usage) override;
+	void fillBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size, uint32_t value) override;
+	void copyBuffer(const std::shared_ptr<StorageBufferInterface>& source, size_t sourceOffset,
+		const std::shared_ptr<StorageBufferInterface>& destination, size_t destinationOffset, size_t size) override;
+	std::vector<uint8_t> readBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size) override;
+	void drawIndexedIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset, uint32_t drawCount, uint32_t stride) override;
+	void drawIndexedIndirectCount(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset,
+		const std::shared_ptr<StorageBufferInterface>& count, size_t countOffset, uint32_t maxDrawCount, uint32_t stride) override;
+	void dispatchIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset) override;
+	void EnsureComputeState(vk::raii::CommandBuffer& cmdlist);
+	void beginTransferCommands(vk::raii::CommandBuffer& cmdlist);
+	void endTransferCommands(vk::raii::CommandBuffer& cmdlist);
+	void flushRecordedCommands();
+
 private:
 	void init() override;
 	bool checkValidationLayerSupport(const std::vector<const char*>& validationLayers);

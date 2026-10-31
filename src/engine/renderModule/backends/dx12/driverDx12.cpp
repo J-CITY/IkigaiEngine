@@ -300,6 +300,7 @@ void DriverDx12::init() {
     } catch (...) { mMemorySampler.reset(); }
 #endif
     configureRayTracing();
+	configureGpuFeatures();
 
 
 #if defined(DEBUG) || defined(_DEBUG) 
