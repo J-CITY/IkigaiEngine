@@ -36,6 +36,10 @@ static const std::unordered_map<IKIGAI::RENDER::PixelFormat, vk::Format> FormatM
 	{IKIGAI::RENDER::PixelFormat::DEPTH32_FLOAT, vk::Format::eD32Sfloat},
 	{IKIGAI::RENDER::PixelFormat::DEPTH32_FLOAT_S8X24_UINT, vk::Format::eX8D24UnormPack32},
 	{IKIGAI::RENDER::PixelFormat::DEPTH_32_FLOAT_STENCIL_8_UINT, vk::Format::eD32SfloatS8Uint},
+	{ IKIGAI::RENDER::PixelFormat::RGBA16_FLOAT, vk::Format::eR16G16B16A16Sfloat },
+	{ IKIGAI::RENDER::PixelFormat::RG16_FLOAT, vk::Format::eR16G16Sfloat },
+	{ IKIGAI::RENDER::PixelFormat::R16_FLOAT, vk::Format::eR16Sfloat },
+	{ IKIGAI::RENDER::PixelFormat::R11G11B10_FLOAT, vk::Format::eB10G11R11UfloatPack32 },
 };
 
 static const std::unordered_map<vk::Format, IKIGAI::RENDER::PixelFormat> FormatMap2 = {
@@ -52,7 +56,27 @@ static const std::unordered_map<vk::Format, IKIGAI::RENDER::PixelFormat> FormatM
 	{vk::Format::eX8D24UnormPack32, IKIGAI::RENDER::PixelFormat::DEPTH32_FLOAT_S8X24_UINT},
 	{vk::Format::eB8G8R8A8Unorm, IKIGAI::RENDER::PixelFormat::BGRA_INT},
 	{vk::Format::eD32SfloatS8Uint, IKIGAI::RENDER::PixelFormat::DEPTH_32_FLOAT_STENCIL_8_UINT},
+	{ vk::Format::eR16G16B16A16Sfloat, IKIGAI::RENDER::PixelFormat::RGBA16_FLOAT },
+	{ vk::Format::eR16G16Sfloat, IKIGAI::RENDER::PixelFormat::RG16_FLOAT },
+	{ vk::Format::eR16Sfloat, IKIGAI::RENDER::PixelFormat::R16_FLOAT },
+	{ vk::Format::eB10G11R11UfloatPack32, IKIGAI::RENDER::PixelFormat::R11G11B10_FLOAT },
 };
+
+// Optional formats (half-float storage, R11G11B10 storage) may lack some features: drop those usages
+// instead of creating an invalid image. Sampling and transfer are required.
+static vk::ImageUsageFlags SupportedColorUsage(vk::Format format, vk::ImageUsageFlags usage) {
+	const auto features = IKIGAI::RENDER::UtilityVk::GetDriver()->mPhysicalDevice.getFormatProperties(format).optimalTilingFeatures;
+	if (!(features & vk::FormatFeatureFlagBits::eSampledImage)) {
+		throw std::runtime_error("Vulkan device cannot sample texture format " + vk::to_string(format));
+	}
+	if (!(features & vk::FormatFeatureFlagBits::eStorageImage)) {
+		usage &= ~vk::ImageUsageFlags(vk::ImageUsageFlagBits::eStorage);
+	}
+	if (!(features & vk::FormatFeatureFlagBits::eColorAttachment)) {
+		usage &= ~vk::ImageUsageFlags(vk::ImageUsageFlagBits::eColorAttachment);
+	}
+	return usage;
+}
 
 IKIGAI::RENDER::TextureVk::TextureVk(const TextureResource& descriptor, const std::vector<void*>& data) {
 	init(descriptor, data);
@@ -75,6 +99,9 @@ void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const st
 		usage = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst;
 	}
 	mType = desc.texType;
+	if (desc.texType != TextureType::DEPTH) {
+		usage = SupportedColorUsage(FormatMap.at(desc.pixelType), usage);
+	}
 
 	std::map<TextureType, vk::ImageViewType> ToTextureType = {
 		{TextureType::TEXTURE_2D, vk::ImageViewType::e2D},
@@ -555,7 +582,11 @@ static uint32_t GetFormatChannelsCount(IKIGAI::RENDER::PixelFormat format) {
 		{IKIGAI::RENDER::PixelFormat::R_INT, 1},
 		{IKIGAI::RENDER::PixelFormat::RG_INT, 2},
 		{IKIGAI::RENDER::PixelFormat::RGB_INT, 3},
-		{IKIGAI::RENDER::PixelFormat::RGBA_INT, 4}
+		{IKIGAI::RENDER::PixelFormat::RGBA_INT, 4},
+		{IKIGAI::RENDER::PixelFormat::RGBA16_FLOAT, 4},
+		{IKIGAI::RENDER::PixelFormat::RG16_FLOAT, 2},
+		{IKIGAI::RENDER::PixelFormat::R16_FLOAT, 1},
+		{IKIGAI::RENDER::PixelFormat::R11G11B10_FLOAT, 1}
 	};
 	return FormatChannelsMap.at(format);
 }
@@ -569,7 +600,11 @@ static uint32_t GetFormatChannelSize(IKIGAI::RENDER::PixelFormat format) {
 		{IKIGAI::RENDER::PixelFormat::R_INT, 1},
 		{IKIGAI::RENDER::PixelFormat::RG_INT, 1},
 		{IKIGAI::RENDER::PixelFormat::RGB_INT, 1},
-		{IKIGAI::RENDER::PixelFormat::RGBA_INT, 1}
+		{IKIGAI::RENDER::PixelFormat::RGBA_INT, 1},
+		{IKIGAI::RENDER::PixelFormat::RGBA16_FLOAT, 2},
+		{IKIGAI::RENDER::PixelFormat::RG16_FLOAT, 2},
+		{IKIGAI::RENDER::PixelFormat::R16_FLOAT, 2},
+		{IKIGAI::RENDER::PixelFormat::R11G11B10_FLOAT, 4}
 	};
 	return FormatChannelSizeMap.at(format);
 }

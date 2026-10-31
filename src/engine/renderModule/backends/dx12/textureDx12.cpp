@@ -68,6 +68,10 @@ static const std::map<PixelFormat, DXGI_FORMAT> FormatMap = {
 	{ PixelFormat::DEPTH_24_UNORM_STENCIL_8_UINT, DXGI_FORMAT_D24_UNORM_S8_UINT },
 	{ PixelFormat::DEPTH32_FLOAT, DXGI_FORMAT_D32_FLOAT },
 	{ PixelFormat::DEPTH32_FLOAT_S8X24_UINT, DXGI_FORMAT_D32_FLOAT_S8X24_UINT },
+	{ PixelFormat::RGBA16_FLOAT, DXGI_FORMAT_R16G16B16A16_FLOAT },
+	{ PixelFormat::RG16_FLOAT, DXGI_FORMAT_R16G16_FLOAT },
+	{ PixelFormat::R16_FLOAT, DXGI_FORMAT_R16_FLOAT },
+	{ PixelFormat::R11G11B10_FLOAT, DXGI_FORMAT_R11G11B10_FLOAT },
 };
 
 static uint32_t GetFormatChannelsCount(PixelFormat format) {
@@ -83,6 +87,10 @@ static uint32_t GetFormatChannelsCount(PixelFormat format) {
 		{PixelFormat::DEPTH_24_UNORM_STENCIL_8_UINT, 1},
 		{PixelFormat::DEPTH32_FLOAT, 1},
 		{PixelFormat::DEPTH32_FLOAT_S8X24_UINT, 1},
+		{ PixelFormat::RGBA16_FLOAT, 4 },
+		{ PixelFormat::RG16_FLOAT, 2 },
+		{ PixelFormat::R16_FLOAT, 1 },
+		{ PixelFormat::R11G11B10_FLOAT, 1 },
 	};
 	return FormatChannelsMap.at(format);
 }
@@ -100,6 +108,10 @@ static uint32_t GetFormatChannelSize(PixelFormat format) {
 		{PixelFormat::DEPTH_24_UNORM_STENCIL_8_UINT, 4},
 		{PixelFormat::DEPTH32_FLOAT, 4},
 		{PixelFormat::DEPTH32_FLOAT_S8X24_UINT, 8},
+		{ PixelFormat::RGBA16_FLOAT, 2 },
+		{ PixelFormat::RG16_FLOAT, 2 },
+		{ PixelFormat::R16_FLOAT, 2 },
+		{ PixelFormat::R11G11B10_FLOAT, 4 },
 	};
 	return FormatChannelSizeMap.at(format);
 }

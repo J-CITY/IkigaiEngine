@@ -129,6 +129,10 @@ public:
 	void draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) override;
 	std::vector<float> readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) override;
+	// Texture infrastructure for GI/HZB (M1-4, M1-8); implemented in textureFeaturesDx12.cpp.
+	void setStorageImage(size_t binding, std::shared_ptr<TextureInterface> texture, uint32_t mip, uint32_t layer) override;
+	// Sets StorageImageMipViews, HalfFloatTextures and SamplerMinMaxReduction.
+	void fillTextureGpuFeatures(GpuFeatures& features) const;
 	BindlessCapabilities bindlessCapabilities() const override;
 	uint32_t maxFragmentSampledTextures() const override {
 		return 128;
@@ -139,7 +143,6 @@ public:
 	void draw(const DrawArguments& args) override;
 	void drawIndexed(uint32_t index_count, uint32_t index_offset, uint32_t instance_count) override;
 	// Timestamp queries for GpuStageProfiler (timestampQueriesDx12.cpp).
-	GpuFeatures gpuFeatures() const override;
 	uint32_t timestampQueryCapacity() const override;
 	void writeTimestamp(uint32_t index) override;
 	bool readTimestamps(uint32_t first, uint32_t count, std::vector<uint64_t>& ticks) override;
@@ -230,6 +233,17 @@ public:
 	unsigned getDescriptorIncSize() {
 		return mDescriptorIncSize;
 	}
+	// GPU-driven rendering contract (gpuFeatures.h); implemented in gpuDrivenDx12.cpp.
+	GpuFeatures gpuFeatures() const override;
+	std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void* data, size_t count, size_t stride, BufferUsage usage) override;
+	void fillBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size, uint32_t value) override;
+	void copyBuffer(const std::shared_ptr<StorageBufferInterface>& source, size_t sourceOffset,
+		const std::shared_ptr<StorageBufferInterface>& destination, size_t destinationOffset, size_t size) override;
+	std::vector<uint8_t> readBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size) override;
+	void drawIndexedIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset, uint32_t drawCount, uint32_t stride) override;
+	void drawIndexedIndirectCount(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset,
+		const std::shared_ptr<StorageBufferInterface>& count, size_t countOffset, uint32_t maxDrawCount, uint32_t stride) override;
+	void dispatchIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset) override;
 	void allocImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE* outCpu, D3D12_GPU_DESCRIPTOR_HANDLE* outGpu);
 	void freeImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIPTOR_HANDLE gpu);
 
@@ -248,6 +262,15 @@ private:
 	std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> bindlessSnapshot(
 		const ShaderReflection::Uniform&, uint32_t, const BindlessResourceTable* localTable = nullptr);
 	std::map<std::string, std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE>> mBindlessSnapshots;
+	struct StorageImageBinding {
+		std::shared_ptr<TextureDx12> Texture;
+		uint32_t Mip = 0;
+		uint32_t Layer = 0;
+	};
+	// Per-mip/per-layer storage image overrides; setTexture on the same binding removes the override.
+	std::map<size_t, StorageImageBinding> mStorageImageBindings;
+	// Per-frame UAV for one mip/layer, allocated from the transient bindless descriptor range.
+	D3D12_GPU_DESCRIPTOR_HANDLE storageImageUav(const StorageImageBinding& binding);
 	CD3DX12_CPU_DESCRIPTOR_HANDLE mDescriptorHeapCPUHandle {};
 	CD3DX12_GPU_DESCRIPTOR_HANDLE mDescriptorHeapGPUHandle {};
 	unsigned int mDescriptorIncSize = 0;
@@ -337,6 +360,13 @@ private:
 	void wait();
 
 	FrameInfo mFrameInfo;
+
+	GpuFeatures mGpuFeatures;
+	std::map<uint32_t, Microsoft::WRL::ComPtr<ID3D12CommandSignature>> mDrawIndexedSignatures;
+	Microsoft::WRL::ComPtr<ID3D12CommandSignature> mDispatchSignature;
+	void configureGpuFeatures();
+	ID3D12CommandSignature* drawIndexedSignature(uint32_t stride);
+	void flushRecordedCommands();
 
 public:
 	void cleanup() override { };

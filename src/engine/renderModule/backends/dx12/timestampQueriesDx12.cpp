@@ -101,14 +101,5 @@ bool DriverDx12::readTimestamps(uint32_t first, uint32_t count, std::vector<uint
 	std::fill(mTimestampResolveSerial.begin() + first, mTimestampResolveSerial.begin() + first + count, UINT64 { 0 });
 	return true;
 }
-
-// Minimal capability report for the timestamp fields only.
-// TODO(integration): agent A owns gpuFeatures(); merge these two lines into it.
-GpuFeatures DriverDx12::gpuFeatures() const {
-	GpuFeatures features;
-	features.TimestampQueries = mTimestampCapacity > 0;
-	features.TimestampPeriodNanoseconds = mTimestampPeriodNanoseconds;
-	return features;
-}
 }
 #endif

@@ -365,6 +365,22 @@ void GameRenderer::runRayTracingStage(PipelineStage& stage) {
 		}
 		return;
 	}
+	auto dispatch = buildProgramDispatch(stage);
+	auto& renderer = *mContext.render;
+	if (desc.Draw == DrawContent::COMPUTE) {
+		renderer.dispatchRayQueries(std::move(dispatch));
+	}
+	else {
+		renderer.traceRays(std::move(dispatch));
+	}
+	stage.mExecuted = true;
+	if (mFrameCount == 0) {
+		std::cout << (desc.Draw == DrawContent::COMPUTE ? "Pipeline ray query: " : "Pipeline ray trace: ") << stage.mName << "\n";
+	}
+}
+
+RayTracingDispatch GameRenderer::buildProgramDispatch(PipelineStage& stage) {
+	const auto& desc = stage.mDescriptor;
 	RayTracingDispatch dispatch;
 	dispatch.Program = stage.mRayTracingProgram;
 	dispatch.Extent = { static_cast<uint32_t>(desc.LaunchX), static_cast<uint32_t>(desc.LaunchY), static_cast<uint32_t>(desc.LaunchZ) };
@@ -459,15 +475,6 @@ void GameRenderer::runRayTracingStage(PipelineStage& stage) {
 			begin = end + 1;
 		} while (true);
 	}
-	if (desc.Draw == DrawContent::COMPUTE) {
-		renderer.dispatchRayQueries(std::move(dispatch));
-	}
-	else {
-		renderer.traceRays(std::move(dispatch));
-	}
-	stage.mExecuted = true;
-	if (mFrameCount == 0) {
-		std::cout << (desc.Draw == DrawContent::COMPUTE ? "Pipeline ray query: " : "Pipeline ray trace: ") << stage.mName << "\n";
-	}
+	return dispatch;
 }
 }

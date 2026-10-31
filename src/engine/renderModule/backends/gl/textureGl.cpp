@@ -4,6 +4,7 @@
 
 #include <array>
 #include <filesystem>
+#include <stdexcept>
 #include <vector>
 
 #include "utilsModule/jsonLoader.h"
@@ -30,6 +31,17 @@ TextureGl::TextureGl(const TextureResource &descriptor, const std::vector<void *
 }
 
 void TextureGl::create(const TextureResource &descriptor, const std::vector<void *> &data) {
+	switch (descriptor.pixelType) {
+	case PixelFormat::RGBA16_FLOAT:
+	case PixelFormat::RG16_FLOAT:
+	case PixelFormat::R16_FLOAT:
+	case PixelFormat::R11G11B10_FLOAT:
+		// Half-float and packed float formats are implemented for Vulkan and DirectX 12 only.
+		throw std::runtime_error("OpenGL backend does not support half-float/packed float PixelFormat (texture: "
+			+ (descriptor.pathTexture.empty() ? std::string("<memory>") : descriptor.pathTexture.front()) + ")");
+	default:
+		break;
+	}
 	int chanels = 4;
 #if IKIGAI_ENABLE_MEMORY_TRACKING
     unsigned memoryFormat = GL_RGBA;

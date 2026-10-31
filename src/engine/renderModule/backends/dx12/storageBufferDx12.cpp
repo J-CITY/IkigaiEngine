@@ -14,6 +14,12 @@ namespace IKIGAI::RENDER {
 		}
 	}
 
+	StorageBufferDx12::StorageBufferDx12(const void* data, size_t sz, size_t stride, BufferUsage usage)
+		: StorageBufferDx12(data, sz, stride) {
+		// Every DX12 storage buffer is a default-heap UAV buffer; the usage only gates driver validation.
+		mUsage = usage | BufferUsage::STORAGE | BufferUsage::TRANSFER_DST;
+	}
+
 	void StorageBufferDx12::init() {
 		if (mSizeByte == 0) {
 			return;

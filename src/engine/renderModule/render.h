@@ -81,6 +81,11 @@ enum class OpCode : uint8_t {
 	SET_FRAMEBUFFER,
 	RESET_FRAMEBUFFER,
 	SET_PUSH_CONSTANT,
+	FILL_BUFFER,
+	COPY_BUFFER,
+	DRAW_INDEXED_INDIRECT,
+	DRAW_INDEXED_INDIRECT_COUNT,
+	DISPATCH_INDIRECT,
 	EXIT
 };
 
@@ -200,6 +205,38 @@ struct CmdDrawMesh : CommandHeader {
 	uint32_t instances;
 };
 
+struct CmdFillBuffer : CommandHeader {
+	std::shared_ptr<StorageBufferInterface> buffer;
+	size_t offset;
+	size_t size;
+	uint32_t value;
+};
+struct CmdCopyBuffer : CommandHeader {
+	std::shared_ptr<StorageBufferInterface> source;
+	size_t sourceOffset;
+	std::shared_ptr<StorageBufferInterface> destination;
+	size_t destinationOffset;
+	size_t size;
+};
+struct CmdDrawIndexedIndirect : CommandHeader {
+	std::shared_ptr<StorageBufferInterface> arguments;
+	size_t offset;
+	uint32_t drawCount;
+	uint32_t stride;
+};
+struct CmdDrawIndexedIndirectCount : CommandHeader {
+	std::shared_ptr<StorageBufferInterface> arguments;
+	size_t offset;
+	std::shared_ptr<StorageBufferInterface> count;
+	size_t countOffset;
+	uint32_t maxDrawCount;
+	uint32_t stride;
+};
+struct CmdDispatchIndirect : CommandHeader {
+	std::shared_ptr<StorageBufferInterface> arguments;
+	size_t offset;
+};
+
 // String versions need care. We can store std::string but need destructor call
 // (CmdLambda mechanism or similar). Let's use specific structs that own the
 // std::string, and CommandBuffer destruction loop will handle them if we mark
@@ -304,16 +341,50 @@ public:
 	}
 
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) {
-		RenderStatistics::Get().recordDispatch();
-		execute([driver = mDriver, x, y, z]() { driver->dispatch(x, y, z); });
+		execute([driver = mDriver, x, y, z]() {
+			RenderStatistics::Get().recordDispatch();
+			driver->dispatch(x, y, z);
+		});
 	}
 	void traceRays(RayTracingDispatch dispatch) {
-		RenderStatistics::Get().recordDispatch();
-		execute([driver = mDriver, dispatch = std::move(dispatch)]() { driver->traceRays(dispatch); });
+		execute([driver = mDriver, dispatch = std::move(dispatch)]() {
+			RenderStatistics::Get().recordDispatch();
+			driver->traceRays(dispatch);
+		});
 	}
 	void dispatchRayQueries(RayTracingDispatch dispatch) {
-		RenderStatistics::Get().recordDispatch();
-		execute([driver = mDriver, dispatch = std::move(dispatch)]() { driver->dispatchRayQueries(dispatch); });
+		execute([driver = mDriver, dispatch = std::move(dispatch)]() {
+			RenderStatistics::Get().recordDispatch();
+			driver->dispatchRayQueries(dispatch);
+		});
+	}
+
+	// GPU-driven rendering (gpuFeatures.h). Vulkan and DirectX 12 only.
+	GpuFeatures gpuFeatures() const {
+		return mDriver->gpuFeatures();
+	}
+	void fillBuffer(std::shared_ptr<StorageBufferInterface> buffer, size_t offset, size_t size, uint32_t value) {
+		push<CmdFillBuffer>(OpCode::FILL_BUFFER, std::move(buffer), offset, size, value);
+	}
+	void copyBuffer(std::shared_ptr<StorageBufferInterface> source, size_t sourceOffset, std::shared_ptr<StorageBufferInterface> destination,
+		size_t destinationOffset, size_t size) {
+		push<CmdCopyBuffer>(OpCode::COPY_BUFFER, std::move(source), sourceOffset, std::move(destination), destinationOffset, size);
+	}
+	void drawIndexedIndirect(std::shared_ptr<StorageBufferInterface> arguments, size_t offset, uint32_t drawCount, uint32_t stride) {
+		push<CmdDrawIndexedIndirect>(OpCode::DRAW_INDEXED_INDIRECT, std::move(arguments), offset, drawCount, stride);
+	}
+	void drawIndexedIndirectCount(std::shared_ptr<StorageBufferInterface> arguments, size_t offset, std::shared_ptr<StorageBufferInterface> count,
+		size_t countOffset, uint32_t maxDrawCount, uint32_t stride) {
+		push<CmdDrawIndexedIndirectCount>(
+			OpCode::DRAW_INDEXED_INDIRECT_COUNT, std::move(arguments), offset, std::move(count), countOffset, maxDrawCount, stride);
+	}
+	void dispatchIndirect(std::shared_ptr<StorageBufferInterface> arguments, size_t offset) {
+		push<CmdDispatchIndirect>(OpCode::DISPATCH_INDIRECT, std::move(arguments), offset);
+	}
+	// Synchronous diagnostic readback: executes queued packets, then waits for the GPU.
+	std::vector<uint8_t> readBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size) {
+		flush();
+		return mDriver->readBuffer(buffer, offset, size);
 	}
 
 	void begin() {
@@ -455,12 +526,21 @@ public:
 		return mDriver->createStorageBuffer(data, size, stride);
 	}
 
-	template <typename T> std::shared_ptr<StorageBufferInterface> createStorageBuffer(const std::vector<T>& data) {
-		return mDriver->createStorageBuffer(data.data(), data.size() * sizeof(T), sizeof(T));
+	// count elements of stride bytes, like DriverInterface::createStorageBuffer.
+	std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void* data, size_t count, size_t stride, BufferUsage usage) {
+		return mDriver->createStorageBuffer(data, count, stride, usage);
 	}
 
+	template <typename T> std::shared_ptr<StorageBufferInterface> createStorageBuffer(const std::vector<T>& data) {
+		return mDriver->createStorageBuffer(data.data(), data.size(), sizeof(T));
+	}
+
+	// One T split into elements of stride bytes; stride must divide sizeof(T).
 	template <typename T> std::shared_ptr<StorageBufferInterface> createStorageBuffer(const T& data, size_t stride = sizeof(T)) {
-		return mDriver->createStorageBuffer(&data, sizeof(T), stride);
+		if (!stride || sizeof(T) % stride != 0) {
+			throw std::invalid_argument("Storage buffer stride must divide the element size");
+		}
+		return mDriver->createStorageBuffer(&data, sizeof(T) / stride, stride);
 	}
 
 	std::shared_ptr<TextureInterface> createTexture(
