@@ -2,15 +2,18 @@
 
 #ifdef VULKAN_BACKEND
 #include "helpers.h"
+#include "renderModule/backends/interface/gpuFeatures.h"
 #include "renderModule/backends/interface/storageBufferInterface.h"
 #include <vector>
 namespace IKIGAI::RENDER {
 class StorageBufferVk : public StorageBufferInterface {
 	VmaBuffer mBuffer;
 	size_t mCapacityByte = 0;
+	BufferUsage mUsage = BufferUsage::STORAGE | BufferUsage::TRANSFER_DST;
 
 public:
 	StorageBufferVk(void* data, size_t size, size_t stride);
+	StorageBufferVk(void* data, size_t size, size_t stride, BufferUsage usage);
 	~StorageBufferVk() override;
 
 	template <class T>
@@ -27,6 +30,10 @@ public:
 	const VmaBuffer& getBuffer() const {
 		return mBuffer;
 	}
+	BufferUsage getUsage() const {
+		return mUsage;
+	}
+	vk::BufferUsageFlags nativeUsage() const;
 };
 }
 #endif
