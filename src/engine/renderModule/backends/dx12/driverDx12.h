@@ -225,6 +225,17 @@ public:
 	unsigned getDescriptorIncSize() {
 		return mDescriptorIncSize;
 	}
+	// GPU-driven rendering contract (gpuFeatures.h); implemented in gpuDrivenDx12.cpp.
+	GpuFeatures gpuFeatures() const override;
+	std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void* data, size_t count, size_t stride, BufferUsage usage) override;
+	void fillBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size, uint32_t value) override;
+	void copyBuffer(const std::shared_ptr<StorageBufferInterface>& source, size_t sourceOffset,
+		const std::shared_ptr<StorageBufferInterface>& destination, size_t destinationOffset, size_t size) override;
+	std::vector<uint8_t> readBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size) override;
+	void drawIndexedIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset, uint32_t drawCount, uint32_t stride) override;
+	void drawIndexedIndirectCount(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset,
+		const std::shared_ptr<StorageBufferInterface>& count, size_t countOffset, uint32_t maxDrawCount, uint32_t stride) override;
+	void dispatchIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset) override;
 	void allocImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE* outCpu, D3D12_GPU_DESCRIPTOR_HANDLE* outGpu);
 	void freeImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIPTOR_HANDLE gpu);
 
@@ -320,6 +331,13 @@ private:
 	void wait();
 
 	FrameInfo mFrameInfo;
+
+	GpuFeatures mGpuFeatures;
+	std::map<uint32_t, Microsoft::WRL::ComPtr<ID3D12CommandSignature>> mDrawIndexedSignatures;
+	Microsoft::WRL::ComPtr<ID3D12CommandSignature> mDispatchSignature;
+	void configureGpuFeatures();
+	ID3D12CommandSignature* drawIndexedSignature(uint32_t stride);
+	void flushRecordedCommands();
 
 public:
 	void cleanup() override { };

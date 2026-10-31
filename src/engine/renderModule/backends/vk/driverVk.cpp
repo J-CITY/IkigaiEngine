@@ -485,6 +485,7 @@ void DriverVk::init() {
 		bindlessLimits.maxPerStageDescriptorSampledImages, bindlessLimits.maxDescriptorSetSamplers, bindlessLimits.maxDescriptorSetSampledImages });
 	mBindlessCapabilities.maxStorageBuffers
 		= std::min(bindlessLimits.maxPerStageDescriptorStorageBuffers, bindlessLimits.maxDescriptorSetStorageBuffers);
+	configureGpuFeatures(device_extensions);
 	configureUpscalerExtensions(device_extensions);
 	configureStreamlineExtensions(device_extensions, false);
 	VkPhysicalDeviceShaderImageAtomicInt64FeaturesEXT fgAtomics { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_IMAGE_ATOMIC_INT64_FEATURES_EXT };
@@ -541,7 +542,8 @@ void DriverVk::init() {
 	}
 #endif
 	if (mRayTracingCapabilities.AccelerationStructure || mRTCoreFeatures.shaderFloat16 || mRTCoreFeatures.timelineSemaphore
-		|| mRTCoreFeatures.shaderSampledImageArrayNonUniformIndexing || mRTCoreFeatures.shaderStorageBufferArrayNonUniformIndexing) {
+		|| mRTCoreFeatures.shaderSampledImageArrayNonUniformIndexing || mRTCoreFeatures.shaderStorageBufferArrayNonUniformIndexing
+		|| mRTCoreFeatures.drawIndirectCount || mRTCoreFeatures.shaderBufferInt64Atomics) {
 		deviceFeatures.get<vk::PhysicalDeviceExtendedDynamicState3FeaturesEXT>().pNext = &mRTCoreFeatures;
 	}
 
@@ -2134,8 +2136,16 @@ std::vector<float> DriverVk::readTexture(std::shared_ptr<TextureInterface> textu
 }
 
 void DriverVk::dispatch(uint32_t x, uint32_t y, uint32_t z) {
-	deactivateRenderPass();
 	auto& cmd = getCurrentFrame().mCommandBuffer;
+	EnsureComputeState(cmd);
+	cmd.dispatch(x, y, z);
+	UtilityVk::SetMemoryBarrier(cmd, vk::PipelineStageFlagBits2::eComputeShader, vk::PipelineStageFlagBits2::eAllCommands);
+}
+
+void DriverVk::EnsureComputeState(vk::raii::CommandBuffer& cmd) {
+	// Orders earlier graphics/transfer work (including indirect-argument reads) before compute writes.
+	EnsureMemoryState(cmd, vk::PipelineStageFlagBits2::eComputeShader);
+	deactivateRenderPass();
 	auto shader = mCurrentState.mShader;
 	if (!*shader->mComputeShaderModule) {
 		throw std::runtime_error("Dispatch requires compute shader");
@@ -2163,8 +2173,6 @@ void DriverVk::dispatch(uint32_t x, uint32_t y, uint32_t z) {
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, *mStates.at(key));
 	std::unordered_set<uint32_t> ignored;
 	PushDescriptors(cmd, vk::PipelineBindPoint::eCompute, shader->mPipelineLayout, shader->mRequiredDescriptorBindings, ignored);
-	cmd.dispatch(x, y, z);
-	UtilityVk::SetMemoryBarrier(cmd, vk::PipelineStageFlagBits2::eComputeShader, vk::PipelineStageFlagBits2::eAllCommands);
 	mBoundPipelineName.clear();
 	graphics_pipeline_ignore_bindings.clear();
 	setDirty(Dirty::PIPELINE);
