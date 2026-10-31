@@ -1,4 +1,5 @@
 #pragma once
+#include "backends/interface/gpuFeatures.h"
 #include "backends/interface/materialInterface.h"
 #include "backends/interface/rayTracingInterface.h"
 #include "backends/interface/resourceStruct.h"
@@ -12,6 +13,7 @@
 #include "light.h"
 #include "primitiveRender.h"
 #include "profilerModule/gpuStageProfiler.h"
+#include "renderGraph/computeStageDescriptor.h"
 #include <filesystem>
 
 // TODO move include to .cpp
@@ -52,6 +54,7 @@ class TextureInterface;
 class UniformBufferInterface;
 class StorageBufferInterface;
 class Renderer;
+struct ComputeStageState;
 
 enum class DrawContent {
 	FORWARD = 0,
@@ -110,6 +113,7 @@ struct PipelineStage {
 		std::string LightPass;
 		bool Additive = false;
 		std::map<std::string, std::string> Bypass;
+		ComputeStageDescriptor Compute;
 
 		std::map<std::string, std::string> BufferLinks; // ShaderBufferName -> Pipeline/GlobalBufferName
 		std::map<std::string, std::map<std::string, UniformTypeDescr>> BufferOverrides; // BufferName -> MemberName -> Value
@@ -154,13 +158,15 @@ struct PipelineStage {
 				.field(&Self::ShadowLightId, "ShadowLightId", default_ { -1 })
 				.field(&Self::LightPass, "LightPass", default_ { std::string {} })
 				.field(&Self::Additive, "Additive", default_ { false })
-				.field(&Self::Bypass, "Bypass", default_ { decltype(Bypass) {} });
+				.field(&Self::Bypass, "Bypass", default_ { decltype(Bypass) {} })
+				.field(&Self::Compute, "Compute", default_ { ComputeStageDescriptor {} });
 		}
 	};
 	PipelineStage() = default;
 	Descriptor mDescriptor;
 	bool mExecuted = false;
 	std::shared_ptr<RayTracingProgram> mRayTracingProgram;
+	std::shared_ptr<ComputeStageState> mCompute;
 
 	std::string mName;
 	std::shared_ptr<::IKIGAI::RENDER::FrameBufferInterface> mFrameBuffer;
@@ -224,7 +230,9 @@ struct RenderGraphPipeline {
 		std::string Name;
 		size_t Size = 0;
 		size_t Stride = 0; // Needed for SSBO
+		size_t Count = 0; // SSBO element count; alternative to the legacy Size
 		BufferType Type = BufferType::UNIFORM;
+		std::vector<PipelineBufferUsage> Usage;
 
 		template <class Context> constexpr static auto serde(Context& context, BufferDescriptor& value) {
 			using Self = BufferDescriptor;
@@ -233,7 +241,9 @@ struct RenderGraphPipeline {
 				.field(&Self::Name, "Name")
 				.field(&Self::Size, "Size", default_ { 0 })
 				.field(&Self::Stride, "Stride", default_ { 0 })
-				.field(&Self::Type, "Type", default_ { BufferType::UNIFORM });
+				.field(&Self::Type, "Type", default_ { BufferType::UNIFORM })
+				.field(&Self::Count, "Count", default_ { size_t { 0 } })
+				.field(&Self::Usage, "Usage", default_ { std::vector<PipelineBufferUsage> {} });
 		}
 	};
 
@@ -323,6 +333,7 @@ struct RenderGraphPipeline {
 	std::map<std::string, std::shared_ptr<RENDER::StorageBufferInterface>> mStorageBuffers;
 	std::map<std::string, std::shared_ptr<RENDER::UniformBufferInterface>> mUniformBuffers;
 	std::map<std::string, std::shared_ptr<AccelerationStructure>> mAccelerationStructures;
+	std::map<std::string, BufferUsage> mBufferUsages;
 
 	using StagesArr = std::list<std::unique_ptr<PipelineStage>>;
 
@@ -389,6 +400,8 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	std::shared_ptr<UniformBufferInterface> mRayFrameUbo;
 	void prepareRayTracingScene(const std::vector<RenderChunk>& chunks);
 	void runRayTracingStage(PipelineStage& stage);
+	RayTracingDispatch buildProgramDispatch(PipelineStage& stage);
+	void runComputeStage(PipelineStage& stage);
 	std::vector<LightOGL> mLights;
 	std::vector<int> mLightObjectIds;
 	std::vector<float> mEnvironmentSun;
