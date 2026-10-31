@@ -14,6 +14,8 @@
 #include "coreModule/ecs/components/skeletalStateGraphComponent.h"
 #include "coreModule/ecs/components/variableContextComponent.h"
 #include "scene.h"
+#include "profilerModule/profiler.h"
+#include "profilerModule/profilerSpy.h"
 #if USE_PHYSICS_3D
 #include "coreModule/ecs/components/ragdollComponent.h"
 #include "coreModule/ecs/systems/destructionSystem.h"
@@ -1351,6 +1353,7 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(
 
 std::vector<IKIGAI::RENDER::RenderChunk> Scene::findDrawables(const MATH::Vector3f& cameraPosition, const RENDER::Camera& camera,
 	const RENDER::Frustum* customFrustum, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial) {
+	auto cullingProfile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("Scene::findDrawables") : nullptr;
 	if (camera.isFrustumGeometryBVHCulling()) {
 		const auto& frustum = customFrustum ? *customFrustum : camera.getFrustum();
 		return findAndSortFrustumCulledBVHDrawables(cameraPosition, frustum, defaultMaterial);

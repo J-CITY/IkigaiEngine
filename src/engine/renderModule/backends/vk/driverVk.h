@@ -93,6 +93,17 @@ public:
 	void traceRays(const RayTracingDispatch&) override;
 	void dispatchRayQueries(const RayTracingDispatch&) override;
 	void executeRayProgram(const RayTracingDispatch&, bool rayQuery);
+	// Timestamp queries for GpuStageProfiler (timestampQueriesVk.cpp).
+	vk::raii::QueryPool mTimestampPool = nullptr;
+	uint32_t mTimestampCapacity = 0;
+	double mTimestampPeriodNanoseconds = 0.0;
+	uint64_t mTimestampMask = 0;
+	bool mTimestampPoolNeedsReset = false;
+	void createTimestampQueries();
+	void resetTimestampPoolIfNeeded();
+	uint32_t timestampQueryCapacity() const override;
+	void writeTimestamp(uint32_t index) override;
+	bool readTimestamps(uint32_t first, uint32_t count, std::vector<uint64_t>& ticks) override;
 	uint32_t mQueueFamilyIndex = -1;
 	vk::SurfaceFormatKHR mSurfaceFormat;
 

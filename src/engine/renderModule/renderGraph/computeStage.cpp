@@ -417,7 +417,10 @@ void GameRenderer::runComputeStage(PipelineStage& stage) {
 			const auto extent = textureExtent(state.DispatchTexture);
 			dispatch.Extent = { static_cast<uint32_t>(extent[0]), static_cast<uint32_t>(extent[1]), static_cast<uint32_t>(extent[2]) };
 		}
-		renderer.execute([driver, dispatch = std::move(dispatch)]() { driver->dispatchComputeProgram(dispatch); });
+		renderer.execute([driver, dispatch = std::move(dispatch)]() {
+			RenderStatistics::Get().recordDispatch();
+			driver->dispatchComputeProgram(dispatch);
+		});
 	}
 	else {
 		bindStage(stage);
@@ -431,7 +434,10 @@ void GameRenderer::runComputeStage(PipelineStage& stage) {
 		else if (state.Mode == ComputeDispatchMode::INDIRECT) {
 			auto buffer = mRenderPipeline->mStorageBuffers.at(state.DispatchBuffer);
 			const auto offset = state.DispatchOffset;
-			renderer.execute([driver, buffer, offset]() { driver->dispatchIndirect(buffer, offset); });
+			renderer.execute([driver, buffer, offset]() {
+				RenderStatistics::Get().recordDispatch();
+				driver->dispatchIndirect(buffer, offset);
+			});
 		}
 		else if (state.Mode == ComputeDispatchMode::MIP_CHAIN) {
 			auto texture = mRenderPipeline->mTextures.at(state.MipTexture);

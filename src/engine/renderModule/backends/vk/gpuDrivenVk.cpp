@@ -96,7 +96,7 @@ void DriverVk::configureGpuFeatures(std::vector<const char*>& extensions) {
 	result.StorageImageMipViews = false;
 	result.HalfFloatTextures = false;
 	result.SamplerMinMaxReduction = false;
-	// Owned by agent E (timestamps).
+	// Timestamp fields are filled in gpuFeatures() once the query pool exists.
 	result.TimestampQueries = false;
 	result.TimestampPeriodNanoseconds = 0.0;
 	mGpuFeatures = result;
@@ -106,6 +106,9 @@ void DriverVk::configureGpuFeatures(std::vector<const char*>& extensions) {
 GpuFeatures DriverVk::gpuFeatures() const {
 	auto features = mGpuFeatures;
 	fillTextureGpuFeatures(features);
+	// Timestamp queries are created after configureGpuFeatures() (timestampQueries*.cpp).
+	features.TimestampQueries = mTimestampCapacity > 0;
+	features.TimestampPeriodNanoseconds = mTimestampPeriodNanoseconds;
 	return features;
 }
 

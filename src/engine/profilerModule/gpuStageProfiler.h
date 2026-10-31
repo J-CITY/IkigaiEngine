@@ -26,7 +26,8 @@ struct GpuProfileSnapshot {
 	std::vector<GpuStageTiming> Stages = {};
 };
 
-// Render-thread API. Desktop GL timestamps allow nested frame/pass scopes.
+// Render-thread API. Desktop GL timestamps and Vulkan/DX12 driver timestamp
+// queries (DriverInterface::writeTimestamp) allow nested frame/pass scopes.
 // Other backends report unsupported and submit no queries.
 class GpuStageProfiler {
 public:

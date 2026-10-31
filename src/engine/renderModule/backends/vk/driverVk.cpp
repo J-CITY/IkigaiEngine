@@ -714,6 +714,7 @@ void DriverVk::init() {
 	commandPoolInfo.setQueueFamilyIndex(mQueueFamilyIndex);
 
 	mCommandPool = mDevice.createCommandPool(commandPoolInfo);
+	createTimestampQueries();
 
 	// mCurrentState.color_attachment_formats = {mSurfaceFormat.format};
 	// mCurrentState.depth_stencil_format = ContextVK::DefaultDepthStencilFormat;
@@ -804,6 +805,7 @@ void DriverVk::begin() {
 	vk::CommandBufferBeginInfo beginInfo;
 	beginInfo.setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 	getCurrentFrame().mCommandBuffer.begin(beginInfo);
+	resetTimestampPoolIfNeeded();
 
 	auto tex = std::static_pointer_cast<TextureVk>(getCurrentFrame().mFrameBuffer->getTextures()[0]);
 	// tex->setState(getCurrentFrame().mCommandBuffer, vk::ImageLayout::eColorAttachmentOptimal);
@@ -1382,6 +1384,28 @@ void DriverVk::wait() {
 	}
 }
 
+namespace {
+	vk::PresentModeKHR selectPresentMode(const vk::raii::PhysicalDevice& device, vk::SurfaceKHR surface) {
+		const auto requested = DriverInterface::settings.presentMode;
+		vk::PresentModeKHR mode = vk::PresentModeKHR::eFifo;
+		if (requested == RenderSettings::PresentMode::MAILBOX) {
+			mode = vk::PresentModeKHR::eMailbox;
+		}
+		else if (requested == RenderSettings::PresentMode::IMMEDIATE) {
+			mode = vk::PresentModeKHR::eImmediate;
+		}
+		if (mode != vk::PresentModeKHR::eFifo) {
+			const auto modes = device.getSurfacePresentModesKHR(surface);
+			if (std::find(modes.begin(), modes.end(), mode) == modes.end()) {
+				std::cout << "Vulkan present mode " << vk::to_string(mode) << " unsupported; using FIFO" << std::endl;
+				mode = vk::PresentModeKHR::eFifo;
+			}
+		}
+		std::cout << "Vulkan present mode: " << vk::to_string(mode) << std::endl;
+		return mode;
+	}
+}
+
 void DriverVk::createSwapchain(unsigned int windowID, uint32_t width, uint32_t height) {
 	auto& ctx = mSwapchains[windowID];
 	auto surface_capabilities = mPhysicalDevice.getSurfaceCapabilitiesKHR(*ctx.surface);
@@ -1426,7 +1450,7 @@ void DriverVk::createSwapchain(unsigned int windowID, uint32_t width, uint32_t h
 							  .setImageArrayLayers(1)
 							  .setImageSharingMode(vk::SharingMode::eExclusive)
 							  .setQueueFamilyIndices(mQueueFamilyIndex)
-							  .setPresentMode(vk::PresentModeKHR::eFifo)
+							  .setPresentMode(selectPresentMode(mPhysicalDevice, *ctx.surface))
 							  .setClipped(true)
 							  .setCompositeAlpha(vk::CompositeAlphaFlagBitsKHR::eOpaque)
 							  .setOldSwapchain(*ctx.swapchain);

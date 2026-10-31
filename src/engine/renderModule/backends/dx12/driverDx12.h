@@ -142,6 +142,10 @@ public:
 	}
 	void draw(const DrawArguments& args) override;
 	void drawIndexed(uint32_t index_count, uint32_t index_offset, uint32_t instance_count) override;
+	// Timestamp queries for GpuStageProfiler (timestampQueriesDx12.cpp).
+	uint32_t timestampQueryCapacity() const override;
+	void writeTimestamp(uint32_t index) override;
+	bool readTimestamps(uint32_t first, uint32_t count, std::vector<uint64_t>& ticks) override;
 	void draw(const MeshInterface& mesh, PrimitiveMode primitive, uint32_t instances) override;
 
 	void resize(size_t width, size_t height) override;
@@ -318,6 +322,18 @@ private:
 	HANDLE mFenceEvent = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12Fence> mFence;
 	UINT64 mFenceValue {};
+	Microsoft::WRL::ComPtr<ID3D12QueryHeap> mTimestampHeap;
+	Microsoft::WRL::ComPtr<ID3D12Resource> mTimestampReadback;
+	Microsoft::WRL::ComPtr<ID3D12Fence> mTimestampFence;
+	UINT64 mTimestampSerial = 0;
+	uint32_t mTimestampCapacity = 0;
+	double mTimestampPeriodNanoseconds = 0.0;
+	std::vector<uint32_t> mTimestampsWritten;
+	// Per query: timestamp fence value after which its resolved value is readable; 0 = none.
+	std::vector<UINT64> mTimestampResolveSerial;
+	void createTimestampQueries();
+	bool resolveTimestampQueries();
+	void signalTimestampQueries();
 
 	State mCurrentState;
 	std::map<std::string, Microsoft::WRL::ComPtr<ID3D12PipelineState>> mStates {};

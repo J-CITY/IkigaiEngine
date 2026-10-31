@@ -31,6 +31,7 @@ namespace {
 	std::optional<UpscalerQuality> gCliUpscalerQuality;
 	std::optional<FrameGenerationType> gCliFrameGeneration;
 	std::optional<unsigned> gCliFrameGenerationMultiplier;
+	std::optional<RenderSettings::PresentMode> gCliPresentMode;
 	std::string ToLower(std::string value) {
 		std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		return value;
@@ -175,7 +176,39 @@ void SetCliFrameGenerationMultiplier(unsigned multiplier) {
 	}
 	gCliFrameGenerationMultiplier = multiplier;
 }
+void SetCliPresentModeOverride(std::string_view name) {
+	if (name == "default") {
+		gCliPresentMode = RenderSettings::PresentMode::DEFAULT;
+	}
+	else if (name == "fifo" || name == "vsync") {
+		gCliPresentMode = RenderSettings::PresentMode::FIFO;
+	}
+	else if (name == "mailbox") {
+		gCliPresentMode = RenderSettings::PresentMode::MAILBOX;
+	}
+	else if (name == "immediate" || name == "novsync") {
+		gCliPresentMode = RenderSettings::PresentMode::IMMEDIATE;
+	}
+	else {
+		throw std::runtime_error("Invalid --present-mode; expected default/fifo/mailbox/immediate");
+	}
+}
+const char* PresentModeToString(RenderSettings::PresentMode mode) {
+	switch (mode) {
+	case RenderSettings::PresentMode::FIFO:
+		return "fifo";
+	case RenderSettings::PresentMode::MAILBOX:
+		return "mailbox";
+	case RenderSettings::PresentMode::IMMEDIATE:
+		return "immediate";
+	default:
+		return "default";
+	}
+}
 void ResolveRenderBackend(RenderSettings& settings) {
+	if (gCliPresentMode) {
+		settings.presentMode = *gCliPresentMode;
+	}
 	if (gCliFrameGeneration) {
 		settings.frameGeneration.technology = *gCliFrameGeneration;
 	}

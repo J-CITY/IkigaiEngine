@@ -53,7 +53,12 @@ std::shared_ptr<T> AllocateMaterial(UTILS::IAllocator* allocator, MaterialDelete
 
 struct RenderSettings {
 	enum class Backend { OPENGL, VULKAN, DIRECTX12, METAL };
+	// DEFAULT keeps each backend's historical behaviour (Vulkan FIFO, DX12
+	// frameGeneration.vsync). FIFO forces vsync; MAILBOX/IMMEDIATE disable it
+	// (DX12 presents with sync interval 0 for both). Unsupported Vulkan modes fall back to FIFO.
+	enum class PresentMode { DEFAULT, FIFO, MAILBOX, IMMEDIATE };
 	Backend backend = Backend::OPENGL;
+	PresentMode presentMode = PresentMode::DEFAULT;
 	std::string pipeline;
 	UpscalerSettings upscaler;
 	FrameGenerationSettings frameGeneration;
@@ -64,7 +69,8 @@ struct RenderSettings {
 			.field(&RenderSettings::backend, "backend", default_ { Backend::OPENGL })
 			.field(&RenderSettings::pipeline, "pipeline", default_ { std::string {} })
 			.field(&RenderSettings::upscaler, "upscaler", default_ { UpscalerSettings {} })
-			.field(&RenderSettings::frameGeneration, "frameGeneration", default_ { FrameGenerationSettings {} });
+			.field(&RenderSettings::frameGeneration, "frameGeneration", default_ { FrameGenerationSettings {} })
+			.field(&RenderSettings::presentMode, "presentMode", default_ { PresentMode::DEFAULT });
 	}
 };
 

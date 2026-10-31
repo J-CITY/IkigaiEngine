@@ -3,6 +3,7 @@
 #include "imgui.h"
 #include "utilsModule/imguiHelper/imgui_widget_flamegraph.h"
 #include "profilerModule/profiler.h"
+#include "renderModule/diagnostics/renderStatistics.h"
 #include <algorithm>
 #include <array>
 #include <cfloat>
@@ -82,6 +83,7 @@ void ProfillerWindow::draw() {
         if (ImGui::BeginTabBar("ProfilerTabs")) {
             if (ImGui::BeginTabItem("Memory")) { drawMemory(); ImGui::EndTabItem(); }
             if (ImGui::BeginTabItem("Frame time")) { drawFrameTime(); ImGui::EndTabItem(); }
+            if (ImGui::BeginTabItem("Draw statistics")) { drawRenderStatistics(); ImGui::EndTabItem(); }
             ImGui::EndTabBar();
         }
     }
@@ -111,6 +113,28 @@ void ProfillerWindow::drawFrameTime() {
             static_cast<int>(nodes.size()), 0, "CPU thread", FLT_MAX, FLT_MAX,
             ImVec2(std::max(1.0f, ImGui::GetContentRegionAvail().x - 40.0f), 0));
         break;
+    }
+}
+
+void ProfillerWindow::drawRenderStatistics() {
+    auto& statistics = RENDER::RenderStatistics::Get();
+    bool enabled = statistics.isEnabled();
+    if (ImGui::Checkbox("Collect draw statistics", &enabled)) statistics.setEnabled(enabled);
+    const auto& frame = statistics.lastFrame();
+    if (!enabled || frame.Frames == 0) { ImGui::TextUnformatted("No completed frame. Enable collection to record draw counts."); return; }
+    if (ImGui::BeginTable("RenderStatistics", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY)) {
+        for (const char* column : {"Stage", "Draws", "Indirect", "Instances", "Triangles", "Dispatches"}) ImGui::TableSetupColumn(column);
+        ImGui::TableHeadersRow();
+        const auto row = [](const char* name, const RENDER::RenderDrawCounters& counters) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn(); ImGui::TextUnformatted(name);
+            for (const auto value : {counters.DrawCalls, counters.IndirectDraws, counters.Instances, counters.Triangles, counters.Dispatches}) {
+                ImGui::TableNextColumn(); ImGui::Text("%llu", static_cast<unsigned long long>(value));
+            }
+        };
+        row("Frame total", frame.Total);
+        for (const auto& stage : frame.Stages) row(stage.Name.c_str(), stage.Counters);
+        ImGui::EndTable();
     }
 }
 

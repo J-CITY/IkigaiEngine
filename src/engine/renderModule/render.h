@@ -5,6 +5,7 @@
 #include "backends/interface/driverInterface.h"
 #include "backends/interface/frameBufferInterface.h"
 #include "backends/interface/meshInterface.h"
+#include "diagnostics/renderStatistics.h"
 
 namespace IKIGAI::RENDER {
 class MaterialInterface;
@@ -340,13 +341,22 @@ public:
 	}
 
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) {
-		execute([driver = mDriver, x, y, z]() { driver->dispatch(x, y, z); });
+		execute([driver = mDriver, x, y, z]() {
+			RenderStatistics::Get().recordDispatch();
+			driver->dispatch(x, y, z);
+		});
 	}
 	void traceRays(RayTracingDispatch dispatch) {
-		execute([driver = mDriver, dispatch = std::move(dispatch)]() { driver->traceRays(dispatch); });
+		execute([driver = mDriver, dispatch = std::move(dispatch)]() {
+			RenderStatistics::Get().recordDispatch();
+			driver->traceRays(dispatch);
+		});
 	}
 	void dispatchRayQueries(RayTracingDispatch dispatch) {
-		execute([driver = mDriver, dispatch = std::move(dispatch)]() { driver->dispatchRayQueries(dispatch); });
+		execute([driver = mDriver, dispatch = std::move(dispatch)]() {
+			RenderStatistics::Get().recordDispatch();
+			driver->dispatchRayQueries(dispatch);
+		});
 	}
 
 	// GPU-driven rendering (gpuFeatures.h). Vulkan and DirectX 12 only.
