@@ -216,6 +216,7 @@ DriverDx12::~DriverDx12() {
 	mUniformBuffers.clear();
 	mStorageBuffers.clear();
 	mTextures.clear();
+	mStorageImageBindings.clear();
 	mCurrentState = {};
 	mStates.clear();
 	mSwapchains.clear();

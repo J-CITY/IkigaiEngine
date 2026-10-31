@@ -231,6 +231,7 @@ DriverVk::~DriverVk() {
 	mUniformBuffers.clear();
 	mStorageBuffers.clear();
 	mTextures.clear();
+	mStorageImageBindings.clear();
 	mCurrentState = {};
 	mStates.clear();
 #if IKIGAI_ENABLE_MEMORY_TRACKING
