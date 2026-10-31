@@ -36,7 +36,6 @@ namespace RESOURCES {
 	private:
 		COROUTINE::Task<ResourcePtr<RENDER::ModelInterface>> createResourceTask(
 			std::string path, ELoadingType type, std::shared_ptr<ResourceLoadControl> control) override;
-		static AssimpParser _ASSIMP;
 
 		ResourcePtr<RENDER::ModelInterface> createResource(const std::string& path) override;
 		ResourcePtr<RENDER::ModelInterface> createResource(const std::string& path, ELoadingType type) override;
