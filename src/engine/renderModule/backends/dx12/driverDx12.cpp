@@ -418,6 +418,18 @@ void DriverDx12::freeImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIP
 	mImGuiFreeSrv.push_back(index);
 }
 
+void DriverDx12::executeRecordedCommands() {
+	ThrowIfFailed(mCommandList->Close());
+	ID3D12CommandList* lists[] = { mCommandList.Get() };
+	mCommandQueue->ExecuteCommandLists(1, lists);
+	// The allocator still backs the executed list; Reset on the list alone only reopens recording.
+	ThrowIfFailed(mCommandList->Reset(mCommandAllocator.Get(), nullptr));
+	for (auto flag :
+		{ Dirty::VIEWPORT, Dirty::SCISSOR, Dirty::PRIMITIVE_MODE, Dirty::RASTERIZATION_MODE, Dirty::VERTEX_BUFFER, Dirty::INDEX_BUFFER }) {
+		setDirty(flag);
+	}
+}
+
 void DriverDx12::createCommandList() {
 	D3D12_COMMAND_QUEUE_DESC descriptor{
 		.Type = D3D12_COMMAND_LIST_TYPE_DIRECT,

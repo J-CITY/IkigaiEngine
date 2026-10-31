@@ -92,6 +92,11 @@ namespace {
 			ImGui_ImplDX12_RenderDrawData(drawData, driverDx12->getCommandList().Get());
 			if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
 				ImGui::UpdatePlatformWindows();
+				// Platform windows execute their own command lists on the queue right away and may sample textures whose
+				// transitions to a shader-resource state were recorded in this frame's list. Run that list first.
+				if (ImGui::GetPlatformIO().Viewports.Size > 1) {
+					driverDx12->executeRecordedCommands();
+				}
 				ImGui::RenderPlatformWindowsDefault();
 			}
 		}
