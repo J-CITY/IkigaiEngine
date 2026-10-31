@@ -103,7 +103,9 @@ void DriverDx12::configureGpuFeatures() {
 }
 
 GpuFeatures DriverDx12::gpuFeatures() const {
-	return mGpuFeatures;
+	auto features = mGpuFeatures;
+	fillTextureGpuFeatures(features);
+	return features;
 }
 
 ID3D12CommandSignature* DriverDx12::drawIndexedSignature(uint32_t stride) {

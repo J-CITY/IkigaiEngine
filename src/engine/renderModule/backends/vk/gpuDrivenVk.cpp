@@ -104,7 +104,9 @@ void DriverVk::configureGpuFeatures(std::vector<const char*>& extensions) {
 }
 
 GpuFeatures DriverVk::gpuFeatures() const {
-	return mGpuFeatures;
+	auto features = mGpuFeatures;
+	fillTextureGpuFeatures(features);
+	return features;
 }
 
 std::shared_ptr<StorageBufferInterface> DriverVk::createStorageBuffer(const void* data, size_t count, size_t stride, BufferUsage usage) {

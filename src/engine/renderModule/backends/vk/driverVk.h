@@ -326,6 +326,17 @@ public:
 	void draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) override;
 	std::vector<float> readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) override;
+	// Texture infrastructure for GI/HZB (M1-4, M1-8); implemented in textureFeaturesVk.cpp.
+	void setStorageImage(size_t binding, std::shared_ptr<TextureInterface> texture, uint32_t mip, uint32_t layer) override;
+	// Sets StorageImageMipViews, HalfFloatTextures and SamplerMinMaxReduction.
+	void fillTextureGpuFeatures(GpuFeatures& features) const;
+	struct StorageImageBinding {
+		std::shared_ptr<TextureVk> Texture;
+		uint32_t Mip = 0;
+		uint32_t Layer = 0;
+	};
+	// Per-mip/per-layer storage image overrides; setTexture on the same binding removes the override.
+	std::map<size_t, StorageImageBinding> mStorageImageBindings;
 	BindlessCapabilities mBindlessCapabilities;
 	BindlessCapabilities bindlessCapabilities() const override;
 	uint32_t maxFragmentSampledTextures() const override;

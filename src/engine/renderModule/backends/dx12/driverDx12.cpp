@@ -22,6 +22,7 @@
 #include "backends/imgui_impl_dx12.h"
 #include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
 #include "d3dx12/DirectXHelpers.h"
+#include "renderModule/backends/interface/pixelFormatConversion.h"
 #include "renderModule/backends/interface/renderEnums.h"
 #include "renderModule/backends/interface/resourceStruct.h"
 #include "resourceModule/serviceManager.h"
@@ -648,9 +649,14 @@ void DriverDx12::draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t in
 
 std::vector<float> DriverDx12::readTexture(std::shared_ptr<TextureInterface> texture,unsigned mip,unsigned layer) {
     const bool unorm=texture->getFormat()==PixelFormat::RGBA_INT;
-    if(!unorm&&texture->getFormat()!=PixelFormat::RGBA_FLOAT && texture->getFormat()!=PixelFormat::RG_FLOAT && texture->getFormat()!=PixelFormat::R_FLOAT && texture->getType()!=TextureType::DEPTH) throw std::runtime_error("Unsupported DX12 readback format");
+	const bool packed = IsPackedFloatFormat(texture->getFormat());
+	if (!unorm && !packed && texture->getFormat() != PixelFormat::RGBA_FLOAT && texture->getFormat() != PixelFormat::RG_FLOAT
+		&& texture->getFormat() != PixelFormat::R_FLOAT && texture->getType() != TextureType::DEPTH) {
+		throw std::runtime_error("Unsupported DX12 readback format");
+	}
     auto t=std::static_pointer_cast<TextureDx12>(texture);auto resource=t->getResource().Get();auto desc=resource->GetDesc();
-    const UINT subresource=mip+(t->getType()==TextureType::TEXTURE_CUBE?layer*t->getMipCount():0);
+	const bool arrayed = t->getType() == TextureType::TEXTURE_CUBE || t->getType() == TextureType::TEXTURE_2D_ARRAY;
+	const UINT subresource = mip + (arrayed ? layer * t->getMipCount() : 0);
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT rows=0;UINT64 rowSize=0,bytes=0;
     mDevice->GetCopyableFootprints(&desc,subresource,1,0,&footprint,&rows,&rowSize,&bytes);
     auto buffer=d3dUtil::CreateBuffer(bytes,D3D12_HEAP_TYPE_READBACK);
@@ -662,13 +668,24 @@ std::vector<float> DriverDx12::readTexture(std::shared_ptr<TextureInterface> tex
         cmd->CopyTextureRegion(&destination,0,0,0,&source,nullptr);
         t->setState(cmd,previousState);
     });
-    const size_t channels=t->getType()==TextureType::DEPTH?1:t->getFormat()==PixelFormat::RG_FLOAT?2:4,w=std::max<size_t>(1,t->getWidth()>>mip),h=std::max<size_t>(1,t->getHeight()>>mip);
+	const size_t channels = packed				  ? PackedFloatReadbackChannels(t->getFormat())
+		: t->getType() == TextureType::DEPTH	  ? 1
+		: t->getFormat() == PixelFormat::RG_FLOAT ? 2
+												  : 4,
+				 w = std::max<size_t>(1, t->getWidth() >> mip), h = std::max<size_t>(1, t->getHeight() >> mip);
     std::vector<float> values(w*h*channels);void* mapped=nullptr;D3D12_RANGE range{0,static_cast<SIZE_T>(bytes)};
     ThrowIfFailed(buffer.Get()->Map(0,&range,&mapped));
     const auto* src=static_cast<const uint8_t*>(mapped)+footprint.Offset+(t->getType()==TextureType::TEXTURE_3D?layer*h*footprint.Footprint.RowPitch:0);
     const bool red=t->getFormat()==PixelFormat::R_FLOAT && t->getType()!=TextureType::DEPTH;
     for(size_t y=0;y<h;++y) {
-        if(unorm)for(size_t x=0;x<w*4;++x)values[y*w*4+x]=src[y*footprint.Footprint.RowPitch+x]/255.f;
+		if (packed) {
+			DecodePackedFloatTexels(t->getFormat(), src + y * footprint.Footprint.RowPitch, w, values.data() + y * w * channels);
+		}
+		else if (unorm) {
+			for (size_t x = 0; x < w * 4; ++x) {
+				values[y * w * 4 + x] = src[y * footprint.Footprint.RowPitch + x] / 255.f;
+			}
+		}
         else if(red) for(size_t x=0;x<w;++x) {
             float r;std::memcpy(&r,src+y*footprint.Footprint.RowPitch+x*sizeof(float),sizeof(float));
             values[(y*w+x)*4]=r;values[(y*w+x)*4+3]=1;
@@ -812,6 +829,7 @@ void DriverDx12::endCommandList(ID3D12CommandQueue* cmdQueue, ID3D12GraphicsComm
 
 void DriverDx12::setTexture(size_t bind, std::shared_ptr<TextureInterface> data) {
 	mTextures[bind] = std::static_pointer_cast<TextureDx12>(data);
+	mStorageImageBindings.erase(bind);
 }
 
 void DriverDx12::setUniformBuffer(size_t bind, std::shared_ptr<UniformBufferInterface> data) {
@@ -826,6 +844,7 @@ void DriverDx12::setTexture(const std::string& name, std::shared_ptr<TextureInte
 	const auto& reflection = mCurrentState.mShader->getReflection();
 	const auto bind = reflection.mUniforms[reflection.mNameToUniforms.at(name)].mBind;
 	mTextures[bind] = std::static_pointer_cast<TextureDx12>(data);
+	mStorageImageBindings.erase(bind);
 }
 
 void DriverDx12::setUniformBuffer(const std::string& name, std::shared_ptr<UniformBufferInterface> data) {
@@ -1118,6 +1137,10 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DriverDx12::createNewState(const Sta
 		{PixelFormat::DEPTH32_FLOAT, DXGI_FORMAT_D32_FLOAT},
 		{PixelFormat::DEPTH32_FLOAT_S8X24_UINT, DXGI_FORMAT_D32_FLOAT_S8X24_UINT},
 		{PixelFormat::DEPTH_32_FLOAT_STENCIL_8_UINT, DXGI_FORMAT_D32_FLOAT_S8X24_UINT},
+		{ PixelFormat::RGBA16_FLOAT, DXGI_FORMAT_R16G16B16A16_FLOAT },
+		{ PixelFormat::RG16_FLOAT, DXGI_FORMAT_R16G16_FLOAT },
+		{ PixelFormat::R16_FLOAT, DXGI_FORMAT_R16_FLOAT },
+		{ PixelFormat::R11G11B10_FLOAT, DXGI_FORMAT_R11G11B10_FLOAT },
 	};
     validateVertexInputs(*state.mShader);
     if (mVertexLayout) {
@@ -1332,7 +1355,11 @@ void DriverDx12::applyState() {
 		else if (uniform.mType == ShaderReflection::UniformType::IMAGE_3D || uniform.mType == ShaderReflection::UniformType::IMAGE_2D) {
             auto texture=mTextures.at(binding);
             texture->setState(mCommandList.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            mCommandList->SetComputeRootDescriptorTable(rootId,texture->getUavHandle());
+			const auto storageImage = mStorageImageBindings.find(binding);
+			const D3D12_GPU_DESCRIPTOR_HANDLE uav = storageImage != mStorageImageBindings.end()
+				? storageImageUav(storageImage->second)
+				: D3D12_GPU_DESCRIPTOR_HANDLE(texture->getUavHandle());
+			mCommandList->SetComputeRootDescriptorTable(rootId, uav);
         }
 		else if (uniform.mType == ShaderReflection::UniformType::UNIFORM_BUFFER) {
 			auto ubo = mUniformBuffers.at(binding);

@@ -36,6 +36,10 @@ namespace IKIGAI::RENDER {
 		case PixelFormat::DEPTH32_FLOAT_S8X24_UINT: return MTLPixelFormatDepth32Float_Stencil8;
 		case PixelFormat::DEPTH_32_FLOAT_STENCIL_8_UINT: return MTLPixelFormatDepth32Float_Stencil8;
 		case PixelFormat::BGRA_INT: return MTLPixelFormatBGRA8Unorm;
+		case PixelFormat::RGBA16_FLOAT: return MTLPixelFormatRGBA16Float;
+		case PixelFormat::RG16_FLOAT: return MTLPixelFormatRG16Float;
+		case PixelFormat::R16_FLOAT: return MTLPixelFormatR16Float;
+		case PixelFormat::R11G11B10_FLOAT: return MTLPixelFormatRG11B10Float;
 		}
 		return MTLPixelFormatRGBA8Unorm;
 	}
@@ -83,6 +87,10 @@ namespace IKIGAI::RENDER {
 			case MTLPixelFormatRG32Sint: return 8;
 			case MTLPixelFormatRGBA32Float:
 			case MTLPixelFormatRGBA32Sint: return 16;
+			case MTLPixelFormatR16Float: return 2;
+			case MTLPixelFormatRG16Float:
+			case MTLPixelFormatRG11B10Float: return 4;
+			case MTLPixelFormatRGBA16Float: return 8;
 			default: return 4;
 			}
 		}

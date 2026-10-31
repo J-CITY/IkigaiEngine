@@ -20,6 +20,7 @@
 #include <unordered_set>
 
 #include "backends/imgui_impl_vulkan.h"
+#include "renderModule/backends/interface/pixelFormatConversion.h"
 #include "renderModule/backends/interface/storageBufferInterface.h"
 #include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
 #include "utilsModule/log/loggerDefine.h"
@@ -132,6 +133,10 @@ static const std::unordered_map<PixelFormat, vk::Format> FormatMap = {
 	{ PixelFormat::DEPTH_24_UNORM_STENCIL_8_UINT, vk::Format::eD24UnormS8Uint },
 	{ PixelFormat::DEPTH32_FLOAT, vk::Format::eD32Sfloat },
 	{ PixelFormat::DEPTH_32_FLOAT_STENCIL_8_UINT, vk::Format::eD32SfloatS8Uint },
+	{ PixelFormat::RGBA16_FLOAT, vk::Format::eR16G16B16A16Sfloat },
+	{ PixelFormat::RG16_FLOAT, vk::Format::eR16G16Sfloat },
+	{ PixelFormat::R16_FLOAT, vk::Format::eR16Sfloat },
+	{ PixelFormat::R11G11B10_FLOAT, vk::Format::eB10G11R11UfloatPack32 },
 };
 
 std::string DriverVk::State::getName() {
@@ -476,6 +481,8 @@ void DriverVk::init() {
 	mRTCoreFeatures.runtimeDescriptorArray = bindlessFeatures.runtimeDescriptorArray;
 	mRTCoreFeatures.shaderSampledImageArrayNonUniformIndexing = bindlessFeatures.shaderSampledImageArrayNonUniformIndexing;
 	mRTCoreFeatures.shaderStorageBufferArrayNonUniformIndexing = bindlessFeatures.shaderStorageBufferArrayNonUniformIndexing;
+	// Min/max reduction samplers (HZB); reported by gpuFeatures().SamplerMinMaxReduction.
+	mRTCoreFeatures.samplerFilterMinmax = bindlessFeatures.samplerFilterMinmax;
 	const auto bindlessLimits = mPhysicalDevice.getProperties().limits;
 	mBindlessCapabilities.sampledTextures = bindlessFeatures.shaderSampledImageArrayNonUniformIndexing;
 	mBindlessCapabilities.storageBuffers = bindlessFeatures.shaderStorageBufferArrayNonUniformIndexing;
@@ -543,7 +550,7 @@ void DriverVk::init() {
 #endif
 	if (mRayTracingCapabilities.AccelerationStructure || mRTCoreFeatures.shaderFloat16 || mRTCoreFeatures.timelineSemaphore
 		|| mRTCoreFeatures.shaderSampledImageArrayNonUniformIndexing || mRTCoreFeatures.shaderStorageBufferArrayNonUniformIndexing
-		|| mRTCoreFeatures.drawIndirectCount || mRTCoreFeatures.shaderBufferInt64Atomics) {
+		|| mRTCoreFeatures.drawIndirectCount || mRTCoreFeatures.shaderBufferInt64Atomics || mRTCoreFeatures.samplerFilterMinmax) {
 		deviceFeatures.get<vk::PhysicalDeviceExtendedDynamicState3FeaturesEXT>().pNext = &mRTCoreFeatures;
 	}
 
@@ -1786,11 +1793,13 @@ void DriverVk::PushDescriptors(vk::raii::CommandBuffer& cmdlist, vk::PipelineBin
 		const uint32_t binding = required.binding;
 		if (required.descriptorType == vk::DescriptorType::eCombinedImageSampler || required.descriptorType == vk::DescriptorType::eStorageImage) {
 			auto texture = mTextures.at(binding);
+			vk::ImageView view = *texture->mImageView;
+			const auto storageImage = mStorageImageBindings.find(binding);
+			if (required.descriptorType == vk::DescriptorType::eStorageImage && storageImage != mStorageImageBindings.end()) {
+				view = storageImage->second.Texture->attachmentView(storageImage->second.Mip, storageImage->second.Layer);
+			}
 			images.push_back(ImageWrite { binding, 0, required.descriptorType,
-				vk::DescriptorImageInfo()
-					.setSampler(*texture->mSampler)
-					.setImageView(*texture->mImageView)
-					.setImageLayout(vk::ImageLayout::eGeneral) });
+				vk::DescriptorImageInfo().setSampler(*texture->mSampler).setImageView(view).setImageLayout(vk::ImageLayout::eGeneral) });
 		}
 		else if (required.descriptorType == vk::DescriptorType::eUniformBuffer) {
 			auto buffer = mUniformBuffers.at(binding);
@@ -1922,6 +1931,7 @@ void DriverVk::setScissor(const Scissor& scissor) {
 
 void DriverVk::setTexture(size_t binding, std::shared_ptr<TextureInterface> handle) {
 	mTextures[binding] = std::static_pointer_cast<TextureVk>(handle);
+	mStorageImageBindings.erase(binding);
 	graphics_pipeline_ignore_bindings.erase(binding);
 }
 
@@ -2082,7 +2092,8 @@ void DriverVk::draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t inst
 
 std::vector<float> DriverVk::readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) {
 	const bool unorm = texture->getFormat() == PixelFormat::RGBA_INT || texture->getFormat() == PixelFormat::BGRA_INT;
-	if (!unorm && texture->getFormat() != PixelFormat::RGBA_FLOAT && texture->getFormat() != PixelFormat::RG_FLOAT
+	const bool packed = IsPackedFloatFormat(texture->getFormat());
+	if (!unorm && !packed && texture->getFormat() != PixelFormat::RGBA_FLOAT && texture->getFormat() != PixelFormat::RG_FLOAT
 		&& texture->getFormat() != PixelFormat::R_FLOAT && texture->getType() != TextureType::DEPTH) {
 		throw std::runtime_error("Unsupported Vulkan readback format");
 	}
@@ -2090,17 +2101,21 @@ std::vector<float> DriverVk::readTexture(std::shared_ptr<TextureInterface> textu
 	const uint32_t w = std::max<size_t>(1, t->getWidth() >> mip), h = std::max<size_t>(1, t->getHeight() >> mip);
 	const bool depth = t->getType() == TextureType::DEPTH;
 	const bool red = t->getFormat() == PixelFormat::R_FLOAT && !depth;
-	const unsigned channels = depth || red ? 1 : texture->getFormat() == PixelFormat::RG_FLOAT ? 2 : 4;
+	const unsigned channels = packed					? static_cast<unsigned>(PackedFloatReadbackChannels(t->getFormat()))
+		: depth || red									? 1
+		: texture->getFormat() == PixelFormat::RG_FLOAT ? 2
+														: 4;
 	std::vector<float> values(static_cast<size_t>(w) * h * channels);
-	auto buffer = UtilityVk::CreateBuffer(
-		values.size() * (unorm ? 1 : sizeof(float)), vk::BufferUsageFlagBits::eTransferDst, UtilityVk::MemoryUsage::Staging);
+	const size_t stagingBytes
+		= packed ? static_cast<size_t>(w) * h * PackedFloatTexelBytes(t->getFormat()) : values.size() * (unorm ? 1 : sizeof(float));
+	auto buffer = UtilityVk::CreateBuffer(stagingBytes, vk::BufferUsageFlagBits::eTransferDst, UtilityVk::MemoryUsage::Staging);
 	const auto old = t->mCurrentState;
 	UtilityVk::OneTimeSubmit([&](const auto& cmd) {
 		t->setState(cmd, vk::ImageLayout::eTransferSrcOptimal);
 		auto layers = vk::ImageSubresourceLayers()
 						  .setAspectMask(depth ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor)
 						  .setMipLevel(mip)
-						  .setBaseArrayLayer(t->getType() == TextureType::TEXTURE_CUBE ? layer : 0)
+						  .setBaseArrayLayer(t->getType() == TextureType::TEXTURE_CUBE || t->getType() == TextureType::TEXTURE_2D_ARRAY ? layer : 0)
 						  .setLayerCount(1);
 		auto copy = vk::BufferImageCopy()
 						.setImageSubresource(layers)
@@ -2114,7 +2129,10 @@ std::vector<float> DriverVk::readTexture(std::shared_ptr<TextureInterface> textu
 		throw std::runtime_error("Readback map failed");
 	}
 	vmaInvalidateAllocation(mAllocator, buffer.allocation(), 0, VK_WHOLE_SIZE);
-	if (unorm) {
+	if (packed) {
+		DecodePackedFloatTexels(t->getFormat(), static_cast<const uint8_t*>(mapped), static_cast<size_t>(w) * h, values.data());
+	}
+	else if (unorm) {
 		const auto* bytes = static_cast<const uint8_t*>(mapped);
 		for (size_t i = 0; i < values.size(); ++i) {
 			values[i] = bytes[i] / 255.f;
