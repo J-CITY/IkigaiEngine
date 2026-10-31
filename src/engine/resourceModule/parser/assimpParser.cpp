@@ -23,6 +23,7 @@
 #include <renderModule/backends/meshFactory.h>
 #include <renderModule/vertex.h>
 #include <unordered_map>
+#include <unordered_set>
 
 using namespace IKIGAI;
 using namespace IKIGAI::RESOURCES;
@@ -132,180 +133,18 @@ const aiScene* ReadAssetScene(Assimp::Importer& importer, const std::string& fil
 }
 }
 
-unsigned int ID = 0;
+namespace {
+constexpr unsigned kMaxBoneWeights = 4;
 
-bool needSaveVerts = false;
-std::vector<std::vector<Vertex>>* globalVerticesPerMesh;
-std::vector<std::vector<uint32_t>>* globalIndicesPerMesh;
-// if batchin we use this vectors
-std::vector<Vertex> globalVertices;
-std::vector<uint32_t> globalIndices;
-
-bool AssimpParser::LoadModel(const std::string& fileName, RESOURCES::ResourcePtr<RENDER::ModelInterface> model, ModelParserFlags parserFlags) {
-
-	Assimp::Importer* import = new Assimp::Importer();
-	auto scene = import->ReadFile(fileName, static_cast<int>(parserFlags));
-
-	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-		return false;
-	}
-	processMaterials(scene, model->getMaterialsNames());
-
-	aiMatrix4x4 identity;
-
-	globalVertices.clear();
-	globalIndices.clear();
-	// if (scene->HasAnimations()) {
-	std::unordered_map<std::string, int> boneMapping;
-	SKELETON::Skeleton tempSkeleton;
-	if (buildSkeleton(scene, tempSkeleton)) {
-		for (int i = 0; i < tempSkeleton.getNumJolts(); ++i) {
-			boneMapping[tempSkeleton.joints()[i].name] = i;
-		}
-	}
-	processNode(&identity, scene->mRootNode, scene, model, boneMapping);
-	importMorphAnimations(scene, *model);
-	//}
-	if (model->getUseBatching()) {
-		model->createBuffers(globalVertices, globalIndices);
-	}
-
-	// std::shared_ptr<Assimp::Importer> imp = std::shared_ptr<Assimp::Importer>(import);
-	// for (auto m : meshes) {
-	//	m->imp = imp;
-	// }
-	delete import;
-	return true;
+MATH::Matrix4f ToMatrix(const aiMatrix4x4& m) {
+	return MATH::Matrix4f(m.a1, m.a2, m.a3, m.a4, m.b1, m.b2, m.b3, m.b4, m.c1, m.c2, m.c3, m.c4, m.d1, m.d2, m.d3, m.d4);
 }
 
-bool AssimpParser::LoadModel(const std::string& fileName, const std::vector<uint8_t>& data, RESOURCES::ResourcePtr<RENDER::ModelInterface> model,
-	ModelParserFlags parserFlags) {
-
-	Assimp::Importer* import = new Assimp::Importer();
-	auto scene = ReadAssetScene(*import, fileName, data, static_cast<unsigned int>(parserFlags));
-
-	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-		delete import;
-		return false;
-	}
-	processMaterials(scene, model->getMaterialsNames());
-
-	aiMatrix4x4 identity;
-
-	globalVertices.clear();
-	globalIndices.clear();
-	// if (scene->HasAnimations()) {
-	std::unordered_map<std::string, int> boneMapping;
-	SKELETON::Skeleton tempSkeleton;
-	if (buildSkeleton(scene, tempSkeleton)) {
-		for (int i = 0; i < tempSkeleton.getNumJolts(); ++i) {
-			boneMapping[tempSkeleton.joints()[i].name] = i;
-		}
-	}
-
-	processNode(&identity, scene->mRootNode, scene, model, boneMapping);
-	importMorphAnimations(scene, *model);
-	//}
-	if (model->getUseBatching()) {
-		model->createBuffers(globalVertices, globalIndices);
-	}
-
-	// std::shared_ptr<Assimp::Importer> imp = std::shared_ptr<Assimp::Importer>(import);
-	// for (auto m : meshes) {
-	//	m->imp = imp;
-	// }
-	delete import;
-	return true;
+bool IsSceneUsable(const aiScene* scene) {
+	return scene && !(scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) && scene->mRootNode;
 }
 
-bool AssimpParser::LoadVertexes(const std::string& fileName, RESOURCES::ResourcePtr<RENDER::ModelInterface> model, ModelParserFlags parserFlags,
-	std::vector<std::vector<Vertex>>& _globalVerticesPerMesh, std::vector<std::vector<uint32_t>>& _globalIndicesPerMesh) {
-	needSaveVerts = true;
-	globalVerticesPerMesh = &_globalVerticesPerMesh;
-	globalIndicesPerMesh = &_globalIndicesPerMesh;
-	Assimp::Importer* import = new Assimp::Importer();
-	auto scene = import->ReadFile(fileName, static_cast<int>(parserFlags));
-
-	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-		delete import;
-		needSaveVerts = false;
-		return false;
-	}
-	// processMaterials(scene, model->getMaterialsNames());
-
-	aiMatrix4x4 identity;
-
-	globalVertices.clear();
-	globalIndices.clear();
-	// if (scene->HasAnimations()) {
-	std::unordered_map<std::string, int> boneMapping;
-	SKELETON::Skeleton tempSkeleton;
-	if (buildSkeleton(scene, tempSkeleton)) {
-		for (int i = 0; i < tempSkeleton.getNumJolts(); ++i) {
-			boneMapping[tempSkeleton.joints()[i].name] = i;
-		}
-	}
-
-	// if (scene->HasAnimations()) {
-	processNode(&identity, scene->mRootNode, scene, model, boneMapping);
-	//}
-
-	// std::shared_ptr<Assimp::Importer> imp = std::shared_ptr<Assimp::Importer>(import);
-	// for (auto m : meshes) {
-	//	m->imp = imp;
-	// }
-	delete import;
-	needSaveVerts = false;
-	globalVerticesPerMesh = nullptr;
-	globalIndicesPerMesh = nullptr;
-	return true;
-}
-
-bool AssimpParser::LoadVertexes(const std::string& fileName, const std::vector<uint8_t>& data, RESOURCES::ResourcePtr<RENDER::ModelInterface> model,
-	ModelParserFlags parserFlags, std::vector<std::vector<Vertex>>& _globalVerticesPerMesh,
-	std::vector<std::vector<uint32_t>>& _globalIndicesPerMesh) {
-	needSaveVerts = true;
-	globalVerticesPerMesh = &_globalVerticesPerMesh;
-	globalIndicesPerMesh = &_globalIndicesPerMesh;
-	Assimp::Importer* import = new Assimp::Importer();
-	auto scene = ReadAssetScene(*import, fileName, data, static_cast<unsigned int>(parserFlags));
-
-	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-		delete import;
-		needSaveVerts = false;
-		return false;
-	}
-	// processMaterials(scene, model->getMaterialsNames());
-
-	aiMatrix4x4 identity;
-
-	globalVertices.clear();
-	globalIndices.clear();
-	// if (scene->HasAnimations()) {
-	std::unordered_map<std::string, int> boneMapping;
-	SKELETON::Skeleton tempSkeleton;
-	if (buildSkeleton(scene, tempSkeleton)) {
-		for (int i = 0; i < tempSkeleton.getNumJolts(); ++i) {
-			boneMapping[tempSkeleton.joints()[i].name] = i;
-		}
-	}
-
-	// if (scene->HasAnimations()) {
-	processNode(&identity, scene->mRootNode, scene, model, boneMapping);
-	//}
-
-	// std::shared_ptr<Assimp::Importer> imp = std::shared_ptr<Assimp::Importer>(import);
-	// for (auto m : meshes) {
-	//	m->imp = imp;
-	// }
-	delete import;
-	needSaveVerts = false;
-	globalVerticesPerMesh = nullptr;
-	globalIndicesPerMesh = nullptr;
-	return true;
-}
-
-void AssimpParser::processMaterials(const aiScene* scene, std::vector<std::string>& materials) {
+void ReadMaterials(const aiScene* scene, std::vector<std::string>& materials) {
 	for (uint32_t i = 0; i < scene->mNumMaterials; ++i) {
 		aiMaterial* material = scene->mMaterials[i];
 		if (material) {
@@ -315,180 +154,201 @@ void AssimpParser::processMaterials(const aiScene* scene, std::vector<std::strin
 		}
 	}
 }
-void AssimpParser::processNode(void* transform, aiNode* node, const aiScene* scene, ResourcePtr<RENDER::ModelInterface> model,
-	const std::unordered_map<std::string, int>& boneMapping) {
-	aiMatrix4x4 nodeTransformation = *reinterpret_cast<aiMatrix4x4*>(transform) * node->mTransformation;
 
-	auto boneSz = 0;
-	for (size_t i = 0; i < scene->mNumMeshes; i++) {
-		boneSz += scene->mMeshes[i]->mNumVertices;
+void ReadMeshGeometry(const aiMesh* mesh, std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices) {
+	for (uint32_t i = 0; i < mesh->mNumVertices; ++i) {
+		// Node transforms are intentionally not applied to vertices.
+		aiVector3D position = mesh->mVertices[i];
+		aiVector3D normal = mesh->mNormals ? mesh->mNormals[i] : aiVector3D(0.0f, 0.0f, 0.0f);
+		aiVector3D texCoords = mesh->mTextureCoords[0] ? mesh->mTextureCoords[0][i] : aiVector3D(0.0f, 0.0f, 0.0f);
+		aiVector3D tangent = mesh->mTangents ? mesh->mTangents[i] : aiVector3D(0.0f, 0.0f, 0.0f);
+		aiVector3D bitangent = mesh->mBitangents ? mesh->mBitangents[i] : aiVector3D(0.0f, 0.0f, 0.0f);
+
+		outVertices.push_back(Vertex(MATH::Vector3f { position.x, position.y, position.z }, MATH::Vector2f { texCoords.x, texCoords.y },
+			MATH::Vector3f { normal.x, normal.y, normal.z }, MATH::Vector3f { tangent.x, tangent.y, tangent.z },
+			MATH::Vector3f { bitangent.x, bitangent.y, bitangent.z }));
 	}
 
-	unsigned m_NumBones = 0;
-	// Process all the node's meshes (if any)
-	int bonesSz = 0;
-	for (uint32_t i = 0; i < node->mNumMeshes; ++i) {
-		bonesSz += scene->mMeshes[i]->mNumVertices;
-	}
-	// std::vector<VertexBoneData> bones;
-	// bones.resize(bonesSz/*scene->mMeshes[i]->mNumVertices*/);
-	auto NumVertices = 0;
-	auto NumIndices = 0;
-
-	for (uint32_t i = 0; i < node->mNumMeshes; ++i) {
-		m_NumBones = 0;
-		std::vector<Vertex> vertices;
-		std::vector<uint32_t> indices;
-
-		// std::map<std::string, unsigned> m_BoneMapping;
-		// std::vector<BoneInfo> m_BoneInfo;
-
-		MATH::Matrix4f m_GlobalInverseTransform(scene->mRootNode->mTransformation.a1, scene->mRootNode->mTransformation.a2,
-			scene->mRootNode->mTransformation.a3, scene->mRootNode->mTransformation.a4, scene->mRootNode->mTransformation.b1,
-			scene->mRootNode->mTransformation.b2, scene->mRootNode->mTransformation.b3, scene->mRootNode->mTransformation.b4,
-			scene->mRootNode->mTransformation.c1, scene->mRootNode->mTransformation.c2, scene->mRootNode->mTransformation.c3,
-			scene->mRootNode->mTransformation.c4, scene->mRootNode->mTransformation.d1, scene->mRootNode->mTransformation.d2,
-			scene->mRootNode->mTransformation.d3, scene->mRootNode->mTransformation.d4);
-		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-		processMesh(&nodeTransformation, mesh, scene, vertices, indices);
-
-		loadBones(vertices, mesh, scene, model, boneMapping);
-		// loadBones(NumVertices, mesh, bones, m_BoneMapping, m_NumBones, m_BoneInfo);'
-		std::shared_ptr<RENDER::MeshInterface> newMash;
-		if (needSaveVerts && RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL) {
-			globalVerticesPerMesh->push_back(vertices);
-			globalIndicesPerMesh->push_back(indices);
+	for (uint32_t faceID = 0; faceID < mesh->mNumFaces; ++faceID) {
+		auto& face = mesh->mFaces[faceID];
+		for (size_t indexID = 0; indexID < 3; ++indexID) {
+			outIndices.push_back(face.mIndices[indexID]);
 		}
-		if (model->getUseBatching()) {
-			newMash = RENDER::CreateMesh(vertices, indices, globalIndices.size(), mesh->mMaterialIndex);
-			globalVertices.insert(globalVertices.end(), vertices.begin(), vertices.end());
-			globalIndices.insert(globalIndices.end(), indices.begin(), indices.end());
-		}
-		else {
-			newMash = RENDER::CreateMesh(vertices, indices, mesh->mMaterialIndex);
-			if (newMash) {
-				newMash->unbind();
-			}
-		}
-		if (newMash && mesh->mNumAnimMeshes) {
-			if (model->getUseBatching()) {
-				throw std::runtime_error("Morph targets cannot use batched model geometry");
-			}
-			std::vector<RENDER::MorphTarget> targets;
-			targets.reserve(mesh->mNumAnimMeshes);
-			for (unsigned targetIndex = 0; targetIndex < mesh->mNumAnimMeshes; ++targetIndex) {
-				const auto* source = mesh->mAnimMeshes[targetIndex];
-				if (!source || source->mNumVertices != mesh->mNumVertices) {
-					throw std::runtime_error("Morph target vertex count does not match the base mesh");
-				}
-				RENDER::MorphTarget target;
-				target.Name = source->mName.length ? source->mName.C_Str() : "Target" + std::to_string(targetIndex);
-				target.DefaultWeight = source->mWeight;
-				target.Deltas.reserve(mesh->mNumVertices);
-				for (unsigned vertexIndex = 0; vertexIndex < mesh->mNumVertices; ++vertexIndex) {
-					RENDER::MorphVertexDelta delta;
-					if (source->mVertices) {
-						const auto value = source->mVertices[vertexIndex] - mesh->mVertices[vertexIndex];
-						delta.Position = { value.x, value.y, value.z, 0 };
-					}
-					if (source->mNormals && mesh->mNormals) {
-						const auto value = source->mNormals[vertexIndex] - mesh->mNormals[vertexIndex];
-						delta.Normal = { value.x, value.y, value.z, 0 };
-					}
-					if (source->mTangents && mesh->mTangents) {
-						const auto value = source->mTangents[vertexIndex] - mesh->mTangents[vertexIndex];
-						delta.Tangent = { value.x, value.y, value.z, 0 };
-					}
-					target.Deltas.push_back(delta);
-				}
-				targets.push_back(std::move(target));
-			}
-			newMash->setMorphTargets(std::move(targets));
-		}
-
-		// newMash->m_pScene = scene;
-		// newMash->m_BoneMapping = m_BoneMapping;
-		// newMash->m_BoneInfo = m_BoneInfo;
-		// newMash->bounseCount = bones.size();
-		// newMash->BaseVertex = NumVertices;// -mesh->mNumVertices;
-		// newMash->BaseIndex = NumIndices;// -mesh->mMaterialIndex;
-
-		NumVertices += mesh->mNumVertices;
-		NumIndices += mesh->mMaterialIndex;
-		// std::vector<float> vertexData;
-		// for (const auto& vertex : bones) {
-		//	vertexData.push_back(vertex.IDs[0]);
-		//	vertexData.push_back(vertex.IDs[1]);
-		//	vertexData.push_back(vertex.IDs[2]);
-		//	vertexData.push_back(vertex.IDs[3]);
-		//	vertexData.push_back(vertex.Weights[0]);
-		//	vertexData.push_back(vertex.Weights[1]);
-		//	vertexData.push_back(vertex.Weights[2]);
-		//	vertexData.push_back(vertex.Weights[3]);
-		// }
-
-		// TODO: move to init buffers
-		//  Create the buffers for the vertices attributes
-		// if (ID != 0) {
-		////	glDeleteBuffers(1, &ID);
-		//}
-		// glGenBuffers(1, &ID);
-		//
-		// glBindBuffer(GL_ARRAY_BUFFER, ID);
-		// glBufferData(GL_ARRAY_BUFFER, sizeof(bones[0]) * bones.size(), &bones[0], GL_STATIC_DRAW);
-		// glEnableVertexAttribArray(BONE_ID_LOCATION);
-		// glVertexAttribIPointer(BONE_ID_LOCATION, 4, GL_INT, sizeof(VertexBoneData), nullptr);
-		////glVertexAttribPointer(BONE_ID_LOCATION, 4, GL_FLOAT, GL_FALSE, sizeof(VertexBoneData), nullptr);
-		// glEnableVertexAttribArray(BONE_WEIGHT_LOCATION);
-		// glVertexAttribPointer(BONE_WEIGHT_LOCATION, 4, GL_FLOAT, GL_FALSE, sizeof(VertexBoneData), (const GLvoid*)16);
-		////newMash->bonesBuffre = std::make_unique<RENDER::VertexAttribBuffer<VertexBoneData>>(vertexData);
-		//
-		// newMash->m_GlobalInverseTransform = m_GlobalInverseTransform;
-		// newMash->m_NumBones = m_NumBones;
-		if (newMash && !newMash->morphTargets().empty()) {
-			model->addMorphNodeMesh(node->mName.C_Str(), model->getMeshes().size());
-		}
-		model->getMeshes().push_back(newMash); // The model will handle mesh destruction
-	}
-
-	// Then do the same for each of its children
-	for (uint32_t i = 0; i < node->mNumChildren; ++i) {
-		processNode(&nodeTransformation, node->mChildren[i], scene, model, boneMapping);
 	}
 }
 
-void AssimpParser::importMorphAnimations(const aiScene* scene, RENDER::ModelInterface& model) {
-	std::vector<RENDER::MorphAnimationClip> clips;
+void SetVertexBoneData(Vertex& vertex, int boneID, float weight) {
+	for (unsigned i = 0; i < kMaxBoneWeights; ++i) {
+		if (vertex.m_BoneIDs[i] < 0) {
+			vertex.m_Weights[i] = weight;
+			vertex.m_BoneIDs[i] = boneID;
+			break;
+		}
+	}
+}
+
+struct ImportContext {
+	const aiScene* Scene = nullptr;
+	std::unordered_map<std::string, int> BoneMapping {};
+	std::unordered_set<std::string> KnownBones {};
+	ImportedModel* Output = nullptr;
+};
+
+void ReadMeshBones(ImportContext& context, const aiMesh* mesh, std::vector<Vertex>& vertices) {
+	for (unsigned boneIndex = 0; boneIndex < mesh->mNumBones; ++boneIndex) {
+		const aiBone* bone = mesh->mBones[boneIndex];
+		std::string boneName = IKIGAI::SKELETON::trimmedName(bone->mName.C_Str());
+
+		const auto mapping = context.BoneMapping.find(boneName);
+		if (mapping == context.BoneMapping.end()) {
+			continue; // If bone is not in skeleton, skip
+		}
+		const int boneID = mapping->second;
+
+		if (context.KnownBones.insert(boneName).second) {
+			ImportedBone imported;
+			imported.Name = boneName;
+			imported.Info.mId = boneID;
+			imported.Info.mOffset = ToMatrix(bone->mOffsetMatrix);
+			context.Output->Bones.push_back(std::move(imported));
+		}
+
+		for (unsigned weightIndex = 0; weightIndex < bone->mNumWeights; ++weightIndex) {
+			const unsigned vertexId = bone->mWeights[weightIndex].mVertexId;
+			const float weight = bone->mWeights[weightIndex].mWeight;
+			assert(vertexId <= vertices.size());
+			SetVertexBoneData(vertices[vertexId], boneID, weight);
+		}
+	}
+}
+
+std::vector<RENDER::MorphTarget> ReadMorphTargets(const aiMesh* mesh) {
+	std::vector<RENDER::MorphTarget> targets;
+	if (!mesh->mNumAnimMeshes) {
+		return targets;
+	}
+	targets.reserve(mesh->mNumAnimMeshes);
+	for (unsigned targetIndex = 0; targetIndex < mesh->mNumAnimMeshes; ++targetIndex) {
+		const auto* source = mesh->mAnimMeshes[targetIndex];
+		if (!source || source->mNumVertices != mesh->mNumVertices) {
+			throw std::runtime_error("Morph target vertex count does not match the base mesh");
+		}
+		RENDER::MorphTarget target;
+		target.Name = source->mName.length ? source->mName.C_Str() : "Target" + std::to_string(targetIndex);
+		target.DefaultWeight = source->mWeight;
+		target.Deltas.reserve(mesh->mNumVertices);
+		for (unsigned vertexIndex = 0; vertexIndex < mesh->mNumVertices; ++vertexIndex) {
+			RENDER::MorphVertexDelta delta;
+			if (source->mVertices) {
+				const auto value = source->mVertices[vertexIndex] - mesh->mVertices[vertexIndex];
+				delta.Position = { value.x, value.y, value.z, 0 };
+			}
+			if (source->mNormals && mesh->mNormals) {
+				const auto value = source->mNormals[vertexIndex] - mesh->mNormals[vertexIndex];
+				delta.Normal = { value.x, value.y, value.z, 0 };
+			}
+			if (source->mTangents && mesh->mTangents) {
+				const auto value = source->mTangents[vertexIndex] - mesh->mTangents[vertexIndex];
+				delta.Tangent = { value.x, value.y, value.z, 0 };
+			}
+			target.Deltas.push_back(delta);
+		}
+		targets.push_back(std::move(target));
+	}
+	return targets;
+}
+
+void ComputeBounds(ImportedMesh& mesh) {
+	if (mesh.Vertices.empty()) {
+		return;
+	}
+	mesh.BoundsMin = mesh.Vertices.front().position;
+	mesh.BoundsMax = mesh.Vertices.front().position;
+	for (const auto& vertex : mesh.Vertices) {
+		mesh.BoundsMin.x = std::min(mesh.BoundsMin.x, vertex.position.x);
+		mesh.BoundsMin.y = std::min(mesh.BoundsMin.y, vertex.position.y);
+		mesh.BoundsMin.z = std::min(mesh.BoundsMin.z, vertex.position.z);
+		mesh.BoundsMax.x = std::max(mesh.BoundsMax.x, vertex.position.x);
+		mesh.BoundsMax.y = std::max(mesh.BoundsMax.y, vertex.position.y);
+		mesh.BoundsMax.z = std::max(mesh.BoundsMax.z, vertex.position.z);
+	}
+}
+
+void ReadNode(ImportContext& context, const aiMatrix4x4& parentTransform, const aiNode* node) {
+	const aiMatrix4x4 nodeTransformation = parentTransform * node->mTransformation;
+	for (uint32_t i = 0; i < node->mNumMeshes; ++i) {
+		const aiMesh* mesh = context.Scene->mMeshes[node->mMeshes[i]];
+		ImportedMesh imported;
+		imported.NodeName = node->mName.C_Str();
+		imported.NodeTransform = ToMatrix(nodeTransformation);
+		imported.MaterialIndex = mesh->mMaterialIndex;
+		ReadMeshGeometry(mesh, imported.Vertices, imported.Indices);
+		ReadMeshBones(context, mesh, imported.Vertices);
+		imported.MorphTargets = ReadMorphTargets(mesh);
+		ComputeBounds(imported);
+		context.Output->Meshes.push_back(std::move(imported));
+	}
+	for (uint32_t i = 0; i < node->mNumChildren; ++i) {
+		ReadNode(context, nodeTransformation, node->mChildren[i]);
+	}
+}
+
+void ReadMorphAnimations(const aiScene* scene, std::vector<ImportedMorphAnimation>& outAnimations) {
 	for (unsigned animationIndex = 0; animationIndex < scene->mNumAnimations; ++animationIndex) {
 		const auto* animation = scene->mAnimations[animationIndex];
 		if (!animation || animation->mNumMorphMeshChannels == 0) {
 			continue;
 		}
-		RENDER::MorphAnimationClip clip;
-		clip.Name = animation->mName.length ? animation->mName.C_Str() : "Animation" + std::to_string(animationIndex);
-		clip.Duration = animation->mTicksPerSecond > 0 ? float(animation->mDuration / animation->mTicksPerSecond) : 0;
+		ImportedMorphAnimation imported;
+		imported.Name = animation->mName.length ? animation->mName.C_Str() : "Animation" + std::to_string(animationIndex);
+		imported.Duration = animation->mDuration;
+		imported.TicksPerSecond = animation->mTicksPerSecond;
 		for (unsigned channelIndex = 0; channelIndex < animation->mNumMorphMeshChannels; ++channelIndex) {
 			const auto* channel = animation->mMorphMeshChannels[channelIndex];
 			if (!channel || !channel->mNumKeys) {
 				continue;
 			}
-			for (const auto meshIndex : model.morphMeshesForNode(channel->mName.C_Str())) {
+			ImportedMorphChannel importedChannel;
+			importedChannel.NodeName = channel->mName.C_Str();
+			importedChannel.Keys.reserve(channel->mNumKeys);
+			for (unsigned keyIndex = 0; keyIndex < channel->mNumKeys; ++keyIndex) {
+				const auto& source = channel->mKeys[keyIndex];
+				ImportedMorphKey key;
+				key.Time = source.mTime;
+				key.Values.assign(source.mValues, source.mValues + source.mNumValuesAndWeights);
+				key.Weights.assign(source.mWeights, source.mWeights + source.mNumValuesAndWeights);
+				importedChannel.Keys.push_back(std::move(key));
+			}
+			imported.Channels.push_back(std::move(importedChannel));
+		}
+		outAnimations.push_back(std::move(imported));
+	}
+}
+
+std::vector<RENDER::MorphAnimationClip> ResolveMorphAnimations(
+	const std::vector<ImportedMorphAnimation>& animations, const RENDER::ModelInterface& model) {
+	std::vector<RENDER::MorphAnimationClip> clips;
+	for (const auto& animation : animations) {
+		RENDER::MorphAnimationClip clip;
+		clip.Name = animation.Name;
+		clip.Duration = animation.TicksPerSecond > 0 ? float(animation.Duration / animation.TicksPerSecond) : 0;
+		for (const auto& channel : animation.Channels) {
+			for (const auto meshIndex : model.morphMeshesForNode(channel.NodeName)) {
 				const auto& targets = model.getMeshes()[meshIndex]->morphTargets();
 				for (std::size_t targetIndex = 0; targetIndex < targets.size(); ++targetIndex) {
 					RENDER::MorphAnimationTrack track;
 					track.MeshIndex = meshIndex;
 					track.TargetIndex = targetIndex;
-					track.Keys.reserve(channel->mNumKeys);
-					for (unsigned keyIndex = 0; keyIndex < channel->mNumKeys; ++keyIndex) {
-						const auto& source = channel->mKeys[keyIndex];
+					track.Keys.reserve(channel.Keys.size());
+					for (const auto& source : channel.Keys) {
 						float weight = 0;
-						for (unsigned valueIndex = 0; valueIndex < source.mNumValuesAndWeights; ++valueIndex) {
-							if (source.mValues[valueIndex] == targetIndex) {
-								weight = float(source.mWeights[valueIndex]);
+						for (std::size_t valueIndex = 0; valueIndex < source.Values.size(); ++valueIndex) {
+							if (source.Values[valueIndex] == targetIndex) {
+								weight = float(source.Weights[valueIndex]);
 								break;
 							}
 						}
-						const float time = animation->mTicksPerSecond > 0 ? float(source.mTime / animation->mTicksPerSecond) : 0;
+						const float time = animation.TicksPerSecond > 0 ? float(source.Time / animation.TicksPerSecond) : 0;
 						if (!std::isfinite(time) || !std::isfinite(weight) || time < 0 || weight < 0 || weight > 1
 							|| (!track.Keys.empty() && time <= track.Keys.back().Time)) {
 							throw std::runtime_error("Invalid morph animation key in " + clip.Name);
@@ -505,54 +365,148 @@ void AssimpParser::importMorphAnimations(const aiScene* scene, RENDER::ModelInte
 			clips.push_back(std::move(clip));
 		}
 	}
-	model.setMorphAnimations(std::move(clips));
+	return clips;
+}
 }
 
-void AssimpParser::loadBones(std::vector<Vertex>& vertices, aiMesh* mesh, const aiScene* scene, ResourcePtr<RENDER::ModelInterface> model,
-	const std::unordered_map<std::string, int>& boneMapping) {
-	for (int boneIndex = 0; boneIndex < mesh->mNumBones; ++boneIndex) {
-		std::string boneName = IKIGAI::SKELETON::trimmedName(mesh->mBones[boneIndex]->mName.C_Str());
+bool AssimpParser::ReadImportedModel(const aiScene* scene, ImportedModel& outModel) {
+	if (!IsSceneUsable(scene)) {
+		return false;
+	}
+	ImportedModel imported;
+	ReadMaterials(scene, imported.MaterialNames);
+	ImportContext context;
+	context.Scene = scene;
+	context.Output = &imported;
+	SKELETON::Skeleton tempSkeleton;
+	if (buildSkeleton(scene, tempSkeleton)) {
+		for (int i = 0; i < tempSkeleton.getNumJolts(); ++i) {
+			context.BoneMapping[tempSkeleton.joints()[i].name] = i;
+		}
+	}
+	ReadNode(context, aiMatrix4x4(), scene->mRootNode);
+	ReadMorphAnimations(scene, imported.MorphAnimations);
+	outModel = std::move(imported);
+	return true;
+}
 
-		int boneID = -1;
-		if (boneMapping.find(boneName) != boneMapping.end()) {
-			boneID = boneMapping.at(boneName);
+bool AssimpParser::ImportModel(const std::string& fileName, ModelParserFlags parserFlags, ImportedModel& outModel) {
+	Assimp::Importer importer;
+	return ReadImportedModel(importer.ReadFile(fileName, static_cast<int>(parserFlags)), outModel);
+}
+
+bool AssimpParser::ImportModel(const std::string& fileName, const std::vector<uint8_t>& data, ModelParserFlags parserFlags, ImportedModel& outModel) {
+	Assimp::Importer importer;
+	return ReadImportedModel(ReadAssetScene(importer, fileName, data, static_cast<unsigned int>(parserFlags)), outModel);
+}
+
+void AssimpParser::CreateModelResources(ImportedModel&& imported, RENDER::ModelInterface& model, const ModelBuildOptions& options) {
+	if (options.ImportMaterials) {
+		auto& materials = model.getMaterialsNames();
+		materials.insert(materials.end(), imported.MaterialNames.begin(), imported.MaterialNames.end());
+	}
+	for (auto& bone : imported.Bones) {
+		if (!model.isBoneExist(bone.Name)) {
+			model.addBone(bone.Name, bone.Info);
+		}
+	}
+
+	const bool batching = model.getUseBatching();
+	std::vector<Vertex> batchedVertices;
+	std::vector<uint32_t> batchedIndices;
+	for (auto& mesh : imported.Meshes) {
+		std::shared_ptr<RENDER::MeshInterface> newMesh;
+		if (batching) {
+			newMesh = RENDER::CreateMesh(mesh.Vertices, mesh.Indices, batchedIndices.size(), mesh.MaterialIndex);
+			batchedVertices.insert(batchedVertices.end(), mesh.Vertices.begin(), mesh.Vertices.end());
+			batchedIndices.insert(batchedIndices.end(), mesh.Indices.begin(), mesh.Indices.end());
 		}
 		else {
-			continue; // If bone is not in skeleton, skip
+			newMesh = RENDER::CreateMesh(mesh.Vertices, mesh.Indices, mesh.MaterialIndex);
+			if (newMesh) {
+				newMesh->unbind();
+			}
 		}
-
-		if (!model->isBoneExist(boneName)) {
-			RENDER::BoneInfo newBoneInfo;
-			newBoneInfo.mId = boneID;
-			newBoneInfo.mOffset = MATH::Matrix4f(mesh->mBones[boneIndex]->mOffsetMatrix.a1, mesh->mBones[boneIndex]->mOffsetMatrix.a2,
-				mesh->mBones[boneIndex]->mOffsetMatrix.a3, mesh->mBones[boneIndex]->mOffsetMatrix.a4, mesh->mBones[boneIndex]->mOffsetMatrix.b1,
-				mesh->mBones[boneIndex]->mOffsetMatrix.b2, mesh->mBones[boneIndex]->mOffsetMatrix.b3, mesh->mBones[boneIndex]->mOffsetMatrix.b4,
-				mesh->mBones[boneIndex]->mOffsetMatrix.c1, mesh->mBones[boneIndex]->mOffsetMatrix.c2, mesh->mBones[boneIndex]->mOffsetMatrix.c3,
-				mesh->mBones[boneIndex]->mOffsetMatrix.c4, mesh->mBones[boneIndex]->mOffsetMatrix.d1, mesh->mBones[boneIndex]->mOffsetMatrix.d2,
-				mesh->mBones[boneIndex]->mOffsetMatrix.d3, mesh->mBones[boneIndex]->mOffsetMatrix.d4);
-			model->addBone(boneName, newBoneInfo);
+		if (newMesh && !mesh.MorphTargets.empty()) {
+			if (batching) {
+				throw std::runtime_error("Morph targets cannot use batched model geometry");
+			}
+			newMesh->setMorphTargets(std::move(mesh.MorphTargets));
 		}
-
-		auto weights = mesh->mBones[boneIndex]->mWeights;
-		int numWeights = mesh->mBones[boneIndex]->mNumWeights;
-
-		for (int weightIndex = 0; weightIndex < numWeights; ++weightIndex) {
-			int vertexId = weights[weightIndex].mVertexId;
-			float weight = weights[weightIndex].mWeight;
-			assert(vertexId <= vertices.size());
-			setVertexBoneData(vertices[vertexId], boneID, weight);
+		if (newMesh && !newMesh->morphTargets().empty()) {
+			model.addMorphNodeMesh(mesh.NodeName, model.getMeshes().size());
 		}
+		model.getMeshes().push_back(newMesh); // The model will handle mesh destruction
+	}
+
+	if (options.ImportMorphAnimations) {
+		model.setMorphAnimations(ResolveMorphAnimations(imported.MorphAnimations, model));
+	}
+	if (batching) {
+		model.createBuffers(batchedVertices, batchedIndices);
 	}
 }
 
-void AssimpParser::setVertexBoneData(Vertex& vertex, int boneID, float weight) {
-	for (unsigned i = 0; i < MAX_BONE_WEIGHTS; ++i) {
-		if (vertex.m_BoneIDs[i] < 0) {
-			vertex.m_Weights[i] = weight;
-			vertex.m_BoneIDs[i] = boneID;
-			break;
-		}
+bool AssimpParser::LoadModel(const std::string& fileName, RESOURCES::ResourcePtr<RENDER::ModelInterface> model, ModelParserFlags parserFlags) {
+	ImportedModel imported;
+	if (!ImportModel(fileName, parserFlags, imported)) {
+		return false;
 	}
+	CreateModelResources(std::move(imported), *model);
+	return true;
+}
+
+bool AssimpParser::LoadModel(const std::string& fileName, const std::vector<uint8_t>& data, RESOURCES::ResourcePtr<RENDER::ModelInterface> model,
+	ModelParserFlags parserFlags) {
+	ImportedModel imported;
+	if (!ImportModel(fileName, data, parserFlags, imported)) {
+		return false;
+	}
+	CreateModelResources(std::move(imported), *model);
+	return true;
+}
+
+namespace {
+void CollectOpenGlVertices(
+	const ImportedModel& imported, std::vector<std::vector<Vertex>>& verticesPerMesh, std::vector<std::vector<uint32_t>>& indicesPerMesh) {
+	// The per-mesh CPU copies are only consumed by the OpenGL batching path.
+	if (RENDER::DriverInterface::settings.backend != RENDER::RenderSettings::Backend::OPENGL) {
+		return;
+	}
+	for (const auto& mesh : imported.Meshes) {
+		verticesPerMesh.push_back(mesh.Vertices);
+		indicesPerMesh.push_back(mesh.Indices);
+	}
+}
+
+ModelBuildOptions VertexOnlyBuildOptions() {
+	ModelBuildOptions options;
+	options.ImportMaterials = false;
+	options.ImportMorphAnimations = false;
+	return options;
+}
+}
+
+bool AssimpParser::LoadVertexes(const std::string& fileName, RESOURCES::ResourcePtr<RENDER::ModelInterface> model, ModelParserFlags parserFlags,
+	std::vector<std::vector<Vertex>>& globalVerticesPerMesh, std::vector<std::vector<uint32_t>>& globalIndicesPerMesh) {
+	ImportedModel imported;
+	if (!ImportModel(fileName, parserFlags, imported)) {
+		return false;
+	}
+	CollectOpenGlVertices(imported, globalVerticesPerMesh, globalIndicesPerMesh);
+	CreateModelResources(std::move(imported), *model, VertexOnlyBuildOptions());
+	return true;
+}
+
+bool AssimpParser::LoadVertexes(const std::string& fileName, const std::vector<uint8_t>& data, RESOURCES::ResourcePtr<RENDER::ModelInterface> model,
+	ModelParserFlags parserFlags, std::vector<std::vector<Vertex>>& globalVerticesPerMesh, std::vector<std::vector<uint32_t>>& globalIndicesPerMesh) {
+	ImportedModel imported;
+	if (!ImportModel(fileName, data, parserFlags, imported)) {
+		return false;
+	}
+	CollectOpenGlVertices(imported, globalVerticesPerMesh, globalIndicesPerMesh);
+	CreateModelResources(std::move(imported), *model, VertexOnlyBuildOptions());
+	return true;
 }
 
 // ============================================================
@@ -787,28 +741,4 @@ bool AssimpParser::LoadAnimation(const std::string& fileName, const std::vector<
 		return false;
 	}
 	return fillAnimation(scene, skeleton, outAnimation, additive, additiveReference);
-}
-
-void AssimpParser::processMesh(
-	void* transform, aiMesh* mesh, const aiScene* scene, std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices) {
-	aiMatrix4x4 meshTransformation = *reinterpret_cast<aiMatrix4x4*>(transform);
-
-	for (uint32_t i = 0; i < mesh->mNumVertices; ++i) {
-		aiVector3D position = /*meshTransformation * */ mesh->mVertices[i];
-		aiVector3D normal = /*meshTransformation * */ (mesh->mNormals ? mesh->mNormals[i] : aiVector3D(0.0f, 0.0f, 0.0f));
-		aiVector3D texCoords = mesh->mTextureCoords[0] ? mesh->mTextureCoords[0][i] : aiVector3D(0.0f, 0.0f, 0.0f);
-		aiVector3D tangent = mesh->mTangents ? /*meshTransformation * */ mesh->mTangents[i] : aiVector3D(0.0f, 0.0f, 0.0f);
-		aiVector3D bitangent = mesh->mBitangents ? /*meshTransformation * */ mesh->mBitangents[i] : aiVector3D(0.0f, 0.0f, 0.0f);
-
-		outVertices.push_back(Vertex(MATH::Vector3f { position.x, position.y, position.z }, MATH::Vector2f { texCoords.x, texCoords.y },
-			MATH::Vector3f { normal.x, normal.y, normal.z }, MATH::Vector3f { tangent.x, tangent.y, tangent.z },
-			MATH::Vector3f { bitangent.x, bitangent.y, bitangent.z }));
-	}
-
-	for (uint32_t faceID = 0; faceID < mesh->mNumFaces; ++faceID) {
-		auto& face = mesh->mFaces[faceID];
-		for (size_t indexID = 0; indexID < 3; ++indexID) {
-			outIndices.push_back(face.mIndices[indexID]);
-		}
-	}
 }
