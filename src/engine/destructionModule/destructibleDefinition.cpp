@@ -1,4 +1,5 @@
 #include "destructibleDefinition.h"
+#include "fracturePreparation.h"
 #include <cmath>
 #include <stdexcept>
 namespace IKIGAI::DESTRUCTION {
@@ -25,7 +26,7 @@ std::shared_ptr<const DestructibleDefinition> compileDefinition(DestructibleDesc
 	definition->settings = std::move(settings);
 	const auto& s = definition->settings;
 	definition->slicing = { s.RelativeEpsilon, s.MinimumVolume, s.InteriorUvScale, static_cast<unsigned>(s.Materials.size()), s.MaximumTriangles };
-	definition->hull = validateMesh(mesh, definition->slicing);
+	definition->hull = centerMesh(mesh, definition->slicing, definition->center);
 	if (definition->hull->volume < s.MinimumVolume) {
 		throw std::invalid_argument("Destructible source volume below MinimumVolume");
 	}

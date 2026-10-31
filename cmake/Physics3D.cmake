@@ -18,6 +18,8 @@ function(ikigai_add_physics3d_library)
         "${root}/src/engine/physicsModule/rigidJointSolver.cpp"
         "${root}/src/engine/physicsModule/particles.cpp")
     target_sources(ikigai_physics3d PRIVATE "${root}/src/engine/destructionModule/planeSlicer.cpp")
+    target_sources(ikigai_physics3d PRIVATE "${root}/src/engine/destructionModule/fracturePreparation.cpp"
+        "${root}/src/engine/destructionModule/destructionRuntime.cpp")
     target_sources(ikigai_physics3d PRIVATE "${root}/src/engine/destructionModule/destructibleDefinition.cpp"
         "${root}/src/engine/destructionModule/destructibleInstance.cpp")
     target_compile_features(ikigai_physics3d PUBLIC cxx_std_20)

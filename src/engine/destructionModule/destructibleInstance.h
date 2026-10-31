@@ -1,5 +1,6 @@
 #pragma once
 #include "destructibleDefinition.h"
+#include "fracturePreparation.h"
 #include <functional>
 namespace IKIGAI::DESTRUCTION {
 enum class StaticCutMode { BothDynamic, KeepNegativeStatic, KeepPositiveStatic };
@@ -9,6 +10,7 @@ struct SliceRequest {
 	MATH::Vector3f normal { 1, 0, 0 };
 	MATH::Vector3f impulse {};
 	StaticCutMode mode = StaticCutMode::BothDynamic;
+	bool localSpace = false;
 };
 struct DestructiblePiece {
 	std::uint64_t id = 0;
@@ -24,9 +26,13 @@ public:
 	~DestructibleInstance();
 	DestructibleInstance(const DestructibleInstance&) = delete;
 	DestructibleInstance& operator=(const DestructibleInstance&) = delete;
-	void initialize(std::shared_ptr<PHYSICS::World> world, MATH::Vector3f position, MATH::QuaternionF rotation);
+	void initialize(std::shared_ptr<PHYSICS::World> world, MATH::Vector3f position, MATH::QuaternionF rotation, unsigned maximumBodies = 2048);
 	void clear();
 	SliceStatus slice(const SliceRequest& request, const std::function<void(std::span<const DestructiblePiece>)>& prepareRender = {});
+	SliceStatus bind(SliceRequest& request) const;
+	FractureSnapshot snapshot(const SliceRequest& localRequest) const;
+	SliceStatus commit(PreparedFracture prepared, const SliceRequest& localRequest,
+		const std::function<void(std::span<const DestructiblePiece>)>& prepareRender = {}, unsigned maximumBodies = 2048);
 	void advance(float dt);
 	bool valid() const;
 	const std::vector<DestructiblePiece>& pieces() const;
@@ -38,6 +44,7 @@ private:
 	std::weak_ptr<PHYSICS::World> mWorld {};
 	std::vector<DestructiblePiece> mPieces {};
 	std::uint64_t mNextId = 1;
+	std::uint64_t mRevision = 0;
 	std::string mError {};
 };
 }

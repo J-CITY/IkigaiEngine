@@ -6,6 +6,9 @@
 #include "coreModule/ecs/componentTypes.h"
 #include "coroutineModule/scheduler.h"
 #include "ecsModule/world.h"
+#if USE_PHYSICS_3D
+#include "coreModule/ecs/systems/destructionSystem.h"
+#endif
 #include "editorModule/editorRender.h"
 #include "networkModule/networkRuntime.h"
 #include "profilerModule/profiler.h"
@@ -174,6 +177,11 @@ void App::update(std::chrono::duration<double> dt) {
 	}
 	constexpr int kMaxFixedStepsPerFrame = 8;
 	int fixedSteps = 0;
+#if USE_PHYSICS_3D
+	if (simulate) {
+		ECS::DestructionSystem::beginFrame(core.sceneManager->getCurrentScene());
+	}
+#endif
 	while (m_fixedTimeAccumulator >= fixedDt && fixedSteps < kMaxFixedStepsPerFrame) {
 		m_fixedTimeAccumulator -= fixedDt;
 		++fixedSteps;
@@ -189,7 +197,7 @@ void App::update(std::chrono::duration<double> dt) {
 			systemManager->runFixedUpdate(fixedDt);
 
 #if USE_PHYSICS_3D
-			currentScene.stepPhysics3D(fixedDt);
+			currentScene.stepPhysics3D(fixedDt, false);
 #endif
 #if USE_PHYSICS_2D
 			currentScene.stepPhysics2D(fixedDt);
@@ -221,6 +229,9 @@ void App::update(std::chrono::duration<double> dt) {
 		systemManager->runUpdate(dt);
 
 		currentScene.update(dt);
+#if USE_PHYSICS_3D
+		currentScene.presentDestructibles(float(m_fixedTimeAccumulator.count() / fixedDt.count()));
+#endif
 
 		systemManager->runLateUpdate(dt);
 	}

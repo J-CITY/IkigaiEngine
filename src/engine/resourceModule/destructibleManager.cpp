@@ -1,6 +1,8 @@
 #include "destructibleManager.h"
 #if USE_PHYSICS_3D
 #include "materialManager.h"
+#include "modelManager.h"
+#include "renderModule/backends/interface/resourceStruct.h"
 #include "utilsModule/serialization/typedDescriptor.h"
 #include <assimp/Importer.hpp>
 #include <assimp/postprocess.h>
@@ -17,15 +19,39 @@ namespace {
 				throw std::runtime_error("Missing descriptor");
 			}
 			auto settings = DATA::readDescriptor<DESTRUCTION::DestructibleDescriptor>(nlohmann::json::parse(file->readStr()));
-			auto source = fs.getFile(settings.Model);
+			std::unordered_set<std::string> dependencies { path, settings.Model };
+			std::string modelPath = settings.Model;
+			unsigned flags = static_cast<unsigned>(ModelLoader::getDefaultFlag());
+			if (settings.Model.ends_with(".model")) {
+				auto modelFile = fs.getFile(settings.Model);
+				if (!modelFile || !modelFile->isValid()) {
+					throw std::runtime_error("Missing Model descriptor: " + settings.Model);
+				}
+				const auto model = DATA::readDescriptor<RENDER::ModelResource>(nlohmann::json::parse(modelFile->readStr()));
+				modelPath = model.pathModel;
+				flags = 0;
+				for (const auto flag : model.flags) {
+					flags |= static_cast<unsigned>(flag);
+				}
+				dependencies.insert(modelPath);
+			}
+			// Inspect deformers before any operation capable of removing their evidence.
+			if (flags & (aiProcess_Debone | aiProcess_RemoveComponent)) {
+				throw std::runtime_error("Model Flags cannot remove bones/components before destructible validation");
+			}
+			flags &= ~unsigned(aiProcess_PreTransformVertices);
+			flags |= aiProcess_Triangulate;
+			if (!(flags & (aiProcess_GenNormals | aiProcess_GenSmoothNormals))) {
+				flags |= aiProcess_GenNormals;
+			}
+			auto source = fs.getFile(modelPath);
 			if (!source || !source->isValid()) {
-				throw std::runtime_error("Missing Model: " + settings.Model);
+				throw std::runtime_error("Missing Model: " + modelPath);
 			}
 			auto bytes = source->read();
 			Assimp::Importer importer;
-			auto extension = settings.Model.substr(settings.Model.find_last_of('.') + 1);
-			const aiScene* scene = importer.ReadFileFromMemory(bytes.data(), bytes.size(),
-				aiProcess_Triangulate | aiProcess_GenNormals | aiProcess_CalcTangentSpace | aiProcess_FlipUVs, extension.c_str());
+			auto extension = modelPath.substr(modelPath.find_last_of('.') + 1);
+			const aiScene* scene = importer.ReadFileFromMemory(bytes.data(), bytes.size(), flags, extension.c_str());
 			if (!scene || !scene->HasMeshes()) {
 				throw std::runtime_error("Cannot import Model: " + std::string(importer.GetErrorString()));
 			}
@@ -77,6 +103,7 @@ namespace {
 			}
 			auto resource = std::make_shared<DestructibleResource>();
 			resource->definition = DESTRUCTION::compileDefinition(settings, std::move(mesh));
+			resource->dependencies = std::move(dependencies);
 			auto& materials = ServiceManager::Get<MaterialLoader>();
 			for (const auto& material : settings.Materials) {
 				resource->materials.push_back(materials.loadResource(material));
@@ -93,6 +120,12 @@ namespace {
 		}
 	}
 }
+void DestructibleLoader::addFileWatchSubscribe(
+	const std::string& path, const std::unordered_set<std::string>&, std::weak_ptr<DestructibleResource> weak) {
+	if (auto resource = weak.lock()) {
+		ResourceManager<DestructibleResource>::addFileWatchSubscribe(path, resource->dependencies, weak);
+	}
+}
 ResourcePtr<DestructibleResource> DestructibleLoader::createResource(const std::string& path) {
 	auto result = load(path);
 	addFileWatchSubscribe(path, { path, result->definition->settings.Model }, result);
@@ -104,6 +137,7 @@ bool DestructibleLoader::reloadResource(std::weak_ptr<DestructibleResource> weak
 			auto candidate = load(path);
 			resource->definition = std::move(candidate->definition);
 			resource->materials = std::move(candidate->materials);
+			resource->dependencies = std::move(candidate->dependencies);
 			++resource->revision;
 			return true;
 		} catch (const std::exception& error) {

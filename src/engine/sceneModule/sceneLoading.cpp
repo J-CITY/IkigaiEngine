@@ -11,6 +11,7 @@
 #include "resourceModule/skeletonManager.h"
 #include "resourceModule/skeletonStateGraphManager.h"
 #include "resourceModule/textureManager.h"
+#include "utilsModule/serialization/typedDescriptor.h"
 #if USE_PHYSICS_3D
 #include "resourceModule/destructibleManager.h"
 #include "resourceModule/ragdollManager.h"
@@ -237,6 +238,10 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 	state->control->check();
 	auto json = nlohmann::json::parse(bytes);
 	const auto pipeline = json.value("RenderPipeline", std::string {});
+#if USE_PHYSICS_3D
+	const auto destruction = DATA::readDescriptor<DESTRUCTION::RuntimeSettings>(json.value("Destruction", nlohmann::json::object()));
+	destruction.validate();
+#endif
 	state->phase = "Expanding prefabs";
 	DOCUMENT::Resolver resolver(json.at("Objects"));
 	DOCUMENT::Expanded expanded;
@@ -349,6 +354,9 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 	state->phase = "Creating objects";
 	context.scene = std::make_unique<Scene>(context.world.get(), mPhysicsFactories);
 	context.scene->renderPipelineAsset = pipeline;
+#if USE_PHYSICS_3D
+	context.scene->destructionSettings = destruction;
+#endif
 	for (const auto& descriptor : context.descriptors) {
 		state->control->check();
 		context.scene->createDeferredObject(descriptor);

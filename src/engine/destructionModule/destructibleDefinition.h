@@ -50,6 +50,7 @@ struct DestructibleDefinition {
 	DestructibleDescriptor settings {};
 	SliceSettings slicing {};
 	FractureMesh mesh {};
+	MATH::Vector3f center {};
 	std::shared_ptr<const COLLISION::ConvexPolyhedron> hull {};
 };
 std::shared_ptr<const DestructibleDefinition> compileDefinition(DestructibleDescriptor settings, FractureMesh mesh);

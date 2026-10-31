@@ -10,6 +10,9 @@
 #include "resourceModule/serializerInterface.h"
 #include "sceneDocument.h"
 #include "utilsModule/ref.h"
+#if USE_PHYSICS_3D
+#include "destructionModule/destructionRuntime.h"
+#endif
 
 namespace IKIGAI::GUI {
 class GuiObject;
@@ -78,7 +81,10 @@ public:
 #if USE_PHYSICS_3D
 	PHYSICS::PhysicWorld& physics3d();
 	std::shared_ptr<PHYSICS::PhysicWorld> physics3dShared();
-	void stepPhysics3D(std::chrono::duration<double> dt);
+	void stepPhysics3D(std::chrono::duration<double> dt, bool beginDestructionFrame = true);
+	void presentDestructibles(float alpha);
+	DESTRUCTION::RuntimeSettings destructionSettings {};
+	std::shared_ptr<DESTRUCTION::DestructionRuntime> destructionRuntime {};
 #ifdef USE_EDITOR
 	void drawPhysics3DDebug();
 #endif
@@ -168,6 +174,7 @@ public:
 	// Empty means the renderer's startup pipeline. Environment is supplied
 	// by the selected pipeline's SettingsAsset.
 	std::string renderPipelineAsset;
+	std::uint64_t renderTopologyRevision = 0;
 	const DOCUMENT::Instance* prefabFor(int objectId) const;
 	bool isPrefabRoot(int objectId) const;
 	nlohmann::json serializeObjects() const;

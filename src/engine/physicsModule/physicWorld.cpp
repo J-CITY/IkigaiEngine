@@ -124,6 +124,36 @@ Id PhysicWorld::createBody(const BodyDef& d) {
 	mBodies.emplace(b.id, b);
 	return b.id;
 }
+std::vector<Id> PhysicWorld::createBodies(std::span<const BodyDef> definitions) {
+	std::vector<Id> result {};
+	result.reserve(definitions.size());
+	try {
+		for (const auto& definition : definitions) {
+			result.push_back(createBody(definition));
+		}
+	} catch (...) {
+		// createBody does not insert into broad phase or constraints; candidates were never simulated.
+		for (auto id : result) {
+			mBodies.erase(id);
+		}
+		throw;
+	}
+	return result;
+}
+std::vector<Id> PhysicWorld::queryBodies(const MATH::GEOMETRY::Aabb<3>& bounds) {
+	bounds.validate();
+	// Queries may follow teleport/create/projection. Refresh proxies from authoritative poses.
+	auto& broad = *mPipeline.broadPhase;
+	broad.reset(settings.cellSize);
+	for (const auto& [id, body] : mBodies) {
+		broad.upsert(id, COLLISION::bounds(geometry(body)));
+	}
+	std::vector<Id> result {};
+	broad.query(bounds, result);
+	std::sort(result.begin(), result.end());
+	result.erase(std::unique(result.begin(), result.end()), result.end());
+	return result;
+}
 Id PhysicWorld::createJoint(const RigidJointDef& definition) {
 	definition.validate();
 	require(body(definition.bodyA) && body(definition.bodyB), "Rigid joint requires existing bodies");

@@ -1,5 +1,6 @@
 #include "sceneManager.h"
 #include "sceneLoadingContext.h"
+#include "utilsModule/serialization/typedDescriptor.h"
 
 #include <coreModule/ecs/components/ambientSphereLight.h>
 #include <coreModule/ecs/components/cameraComponent.h>
@@ -130,6 +131,10 @@ void SceneManager::loadFromFile(const std::string& sceneFilePath) {
 	};
 	const auto document = read(sceneFilePath);
 	const auto pipeline = document.value("RenderPipeline", std::string {});
+#if USE_PHYSICS_3D
+	const auto destruction = DATA::readDescriptor<DESTRUCTION::RuntimeSettings>(document.value("Destruction", nlohmann::json::object()));
+	destruction.validate();
+#endif
 	auto expanded = DOCUMENT::Expand(document, read);
 	// Parse component descriptors before replacing the current scene as well.
 	for (auto value : expanded.objects) {
@@ -142,6 +147,9 @@ void SceneManager::loadFromFile(const std::string& sceneFilePath) {
 	unloadCurrentScene();
 	m_currentScene = std::make_unique<Scene>(nullptr, mPhysicsFactories);
 	m_currentScene->renderPipelineAsset = pipeline;
+#if USE_PHYSICS_3D
+	m_currentScene->destructionSettings = destruction;
+#endif
 	m_currentScene->appendDocument(expanded);
 	m_currentScene->isSceneReady = true;
 	m_currentSceneSourcePath = sceneFilePath;
@@ -160,6 +168,9 @@ nlohmann::json SceneManager::serializeScene() const {
 	if (!m_currentScene->renderPipelineAsset.empty()) {
 		document["RenderPipeline"] = m_currentScene->renderPipelineAsset;
 	}
+#if USE_PHYSICS_3D
+	document["Destruction"] = serde::serialize<nlohmann::json>(m_currentScene->destructionSettings);
+#endif
 	return document;
 }
 

@@ -199,6 +199,10 @@ void GameRenderer::renderScene() {
 		mPreviousCamera = nullptr;
 		mRenderedScene = scene.lifetime;
 	}
+	if (mRenderedTopologyRevision != scene.renderTopologyRevision) {
+		resetTemporalHistory();
+		mRenderedTopologyRevision = scene.renderTopologyRevision;
+	}
 
 	if (auto mainCameraComponent = mContext.sceneManager->getCurrentScene().findMainCamera()) {
 

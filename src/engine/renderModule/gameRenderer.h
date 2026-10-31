@@ -372,6 +372,7 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	std::unique_ptr<RenderGraphPipeline> mRenderPipeline;
 	std::string mStartupPipelineAsset, mActivePipelineAsset;
 	std::weak_ptr<void> mRenderedScene;
+	std::uint64_t mRenderedTopologyRevision = 0;
 
 	std::shared_ptr<StorageBufferInterface> mLightSSBO;
 	struct RayScene;

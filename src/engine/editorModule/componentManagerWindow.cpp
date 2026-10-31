@@ -4,6 +4,7 @@
 #include "coreModule/ecs/components/foliageComponent.h"
 #include "coreModule/ecs/components/surfaceComponent.h"
 #include "coreModule/ecs/components/vegetationInteractorComponent.h"
+#include "destructionEditor.h"
 #include "environmentEditor.h"
 #include "surfaceEditor.h"
 #if USE_PHYSICS_3D
@@ -755,19 +756,7 @@ void ComponentInspectorWindow::drawComponent(std::shared_ptr<ECS::Object> select
 				const auto config = UTILS::any_cast<nlohmann::json>(value);
 #if USE_PHYSICS_3D
 				if (auto destructible = dynamic_cast<ECS::DestructibleMeshComponent*>(component.get())) {
-					ImGui::InputText("Definition", &destructible->settings.Definition);
-					ImGui::Checkbox("Impact damage", &destructible->settings.ImpactDamage);
-					ImGui::Text("Pieces: %zu, status: %d", destructible->pieces().size(), int(destructible->lastStatus()));
-					if (!destructible->lastError().empty()) {
-						ImGui::TextWrapped("%s", destructible->lastError().c_str());
-					}
-					if (ImGui::Button("Slice at root (X plane)")) {
-						destructible->slice(destructible->obj->mTransform->getWorldPosition(), { 1, 0, 0 });
-					}
-					ImGui::SameLine();
-					if (ImGui::Button("Reset destructible")) {
-						destructible->reset();
-					}
+					DrawDestructionEditor(*destructible);
 				}
 				if (auto ragdoll = dynamic_cast<ECS::RagdollComponent*>(component.get())) {
 					ImGui::Text("State: %s", ragdoll->state() == ECS::RagdollState::Simulated ? "Simulated" : "Animated");

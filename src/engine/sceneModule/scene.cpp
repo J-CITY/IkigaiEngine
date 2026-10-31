@@ -95,8 +95,11 @@ PHYSICS::PhysicWorld& Scene::physics3d() {
 	}
 	return mPhysics3D->simulation();
 }
-void Scene::stepPhysics3D(std::chrono::duration<double> dt) {
+void Scene::stepPhysics3D(std::chrono::duration<double> dt, bool beginDestructionFrame) {
 	physics3d();
+	if (beginDestructionFrame) {
+		ECS::DestructionSystem::beginFrame(*this);
+	}
 	const bool destructionStep = !mPhysics3D->paused || mPhysics3D->singleStep;
 	if (destructionStep) {
 		ECS::DestructionSystem::beforePhysics(*this, float(dt.count()));
@@ -109,6 +112,12 @@ void Scene::stepPhysics3D(std::chrono::duration<double> dt) {
 	if (destructionStep) {
 		ECS::DestructionSystem::afterPhysics(*this, float(dt.count()));
 	}
+	if (beginDestructionFrame) {
+		presentDestructibles(1);
+	}
+}
+void Scene::presentDestructibles(float alpha) {
+	ECS::DestructionSystem::present(*this, mPhysics3D && mPhysics3D->paused ? 1.f : alpha);
 }
 std::shared_ptr<PHYSICS::PhysicWorld> Scene::physics3dShared() {
 	physics3d();
@@ -650,7 +659,12 @@ bool Scene::destroyObject(std::shared_ptr<ECS::Object> p_target) {
 		= std::ranges::find_if(objects.begin(), objects.end(), [p_target](std::shared_ptr<ECS::Object> element) { return element == p_target; });
 
 	if (found != objects.end()) {
+		if (auto renderer = p_target->getComponent<ECS::ModelRenderer>()) {
+			removeFromBVH(renderer.get());
+		}
 		objects.erase(found);
+		// External references must not keep removed scene components or physics/render resources active.
+		p_target->dispose();
 		return true;
 	}
 	else {
@@ -915,6 +929,12 @@ void MapChildrenToChunk(IKIGAI::ECS::Object* obj, size_t chunkIdx, std::unordere
 struct ChunkContext {
 	std::vector<IKIGAI::RENDER::RenderChunk> chunks;
 	std::unordered_map<IKIGAI::ECS::Entity, size_t> objToChunk;
+	std::unordered_map<const ECS::Transform*, MATH::Matrix4f> previousWorlds {};
+
+	const MATH::Matrix4f& previousWorld(ECS::Transform& transform) {
+		// Each material batch must see the same history even when another batch already advanced the transform.
+		return previousWorlds.try_emplace(&transform, transform.getPrevWorldMatrix()).first->second;
+	}
 
 	void init(ECS::World& world) {
 		chunks.push_back({ nullptr, nullptr }); // Main chunk (index 0)
@@ -1012,9 +1032,9 @@ void AppendSurfaceDrawables(Scene& scene, ChunkContext& ctx, const MATH::Vector3
 						}
 
 						if (material) {
-							RENDER::Drawable element = { transform.getPrevWorldMatrix(), transform.getWorldMatrix(), mesh, material, skeleton,
-								animationPlayable, animOffset, animLocalTransform, animGlobalTransform,
-								static_cast<int>(modelRenderer.obj->getID().getUniqueId()) };
+							RENDER::Drawable element
+								= { ctx.previousWorld(transform), transform.getWorldMatrix(), mesh, material, skeleton, animationPlayable, animOffset,
+									  animLocalTransform, animGlobalTransform, static_cast<int>(modelRenderer.obj->getID().getUniqueId()) };
 							if (auto facial = modelRenderer.obj->getComponent<ECS::FacialAnimationComponent>()) {
 								facial->bind(*model);
 								element.facialAnimation = facial.get();
@@ -1120,7 +1140,7 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledBVHDrawa
 				}
 
 				if (material) {
-					RENDER::Drawable element = { transform.getPrevWorldMatrix(), transform.getWorldMatrix(), meshData->mesh, material, skeleton,
+					RENDER::Drawable element = { ctx.previousWorld(transform), transform.getWorldMatrix(), meshData->mesh, material, skeleton,
 						animationPlayable, animOffset, animLocalTransform, animGlobalTransform, static_cast<int>(owner->getID().getUniqueId()) };
 					if (auto facial = owner->getComponent<ECS::FacialAnimationComponent>()) {
 						if (auto modelRenderer = owner->getComponent<ECS::ModelRenderer>(); modelRenderer && modelRenderer->getModel()) {
@@ -1217,7 +1237,7 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledDrawable
 
 							if (material) {
 								RENDER::Drawable element
-									= { transform.getPrevWorldMatrix(), transform.getWorldMatrix(), mesh, material, skeleton, animationPlayable,
+									= { ctx.previousWorld(transform), transform.getWorldMatrix(), mesh, material, skeleton, animationPlayable,
 										  animOffset, animLocalTransform, animGlobalTransform, static_cast<int>(owner->getID().getUniqueId()) };
 								if (auto facial = owner->getComponent<ECS::FacialAnimationComponent>()) {
 									facial->bind(*model);
@@ -1294,9 +1314,9 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(
 						}
 
 						if (material) {
-							RENDER::Drawable element = { transform.getPrevWorldMatrix(), transform.getWorldMatrix(), mesh, material, skeleton,
-								animationPlayable, animOffset, animLocalTransform, animGlobalTransform,
-								static_cast<int>(modelRenderer.obj->getID().getUniqueId()) };
+							RENDER::Drawable element
+								= { ctx.previousWorld(transform), transform.getWorldMatrix(), mesh, material, skeleton, animationPlayable, animOffset,
+									  animLocalTransform, animGlobalTransform, static_cast<int>(modelRenderer.obj->getID().getUniqueId()) };
 							if (auto facial = modelRenderer.obj->getComponent<ECS::FacialAnimationComponent>()) {
 								facial->bind(*model);
 								element.facialAnimation = facial.get();

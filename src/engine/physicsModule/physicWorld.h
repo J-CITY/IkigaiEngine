@@ -115,6 +115,9 @@ public:
 	Settings settings;
 	ForceFieldRegistry forces;
 	Id createBody(const BodyDef& def);
+	// Creates candidates between simulation steps. Failure publishes none and does not wake contact islands.
+	std::vector<Id> createBodies(std::span<const BodyDef> definitions);
+	std::vector<Id> queryBodies(const MATH::GEOMETRY::Aabb<3>& bounds);
 	Id createJoint(const RigidJointDef& def);
 	void destroyJoint(Id id);
 	const std::map<Id, RigidJoint>& joints() const;
