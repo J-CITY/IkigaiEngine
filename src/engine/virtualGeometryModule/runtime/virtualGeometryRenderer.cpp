@@ -270,6 +270,9 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 			SelectLodCut(asset->clusters(), instance, input.View, threshold, mScratchClusters);
 		}
 		mStatistics.LodClusters += static_cast<uint32_t>(mScratchClusters.size());
+		for (const uint32_t clusterIndex : mScratchClusters) {
+			mStatistics.LodTriangles += asset->clusters()[clusterIndex].IndexCount / 3;
+		}
 		CullClusters(asset->clusters(), instance, input.View, selection, mScratchClusters, selectionStatistics);
 		if (mScratchClusters.empty()) {
 			continue;

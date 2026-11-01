@@ -64,6 +64,8 @@ struct VirtualGeometryFrameStatistics {
 	uint32_t FallbackInstances = 0;
 	uint32_t InstancesCulled = 0;
 	uint32_t LodClusters = 0;
+	// Triangles of the LOD cut before frustum/cone culling.
+	uint32_t LodTriangles = 0;
 	uint32_t VisibleClusters = 0;
 	uint32_t VisibleTriangles = 0;
 	uint32_t FrustumCulledClusters = 0;
