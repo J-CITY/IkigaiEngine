@@ -26,6 +26,7 @@
 #include "components/transform.h"
 #include "components/variableContextComponent.h"
 #include "components/vegetationInteractorComponent.h"
+#include "components/virtualMeshRenderer.h"
 #include "utilsModule/serialization/typedDescriptor.h"
 #include <serdepp/adaptor/nlohmann_json.hpp>
 #include <unordered_map>
@@ -114,7 +115,8 @@ namespace IKIGAI::ECS {
 		IKIGAI_PHYSICS3D_LEGACY_COMPONENT AudioListenerComponent, VrCameraComponent, BatchComponent, RootGuiComponent, SpriteComponent,              \
 		SpriteAnimateComponent, SpriteParticleComponent, ParticleSystem2DComponent, ParticleSystem3DComponent, SpineComponent, LabelComponent,       \
 		InteractionComponent, ClipComponent, ScrollComponent, LayoutComponent, ChunkModelRenderer, SdfTextComponent, VectorShapeComponent,           \
-		VectorPathComponent, VectorCanvasComponent, EnvironmentComponent, VegetationInteractorComponent, SurfaceComponent, FoliageComponent
+		VectorPathComponent, VectorCanvasComponent, EnvironmentComponent, VegetationInteractorComponent, SurfaceComponent, FoliageComponent,         \
+		VirtualMeshRenderer
 
 #define COMPONENTS_DESCRIPTOR_DEF                                                                                                                    \
 	IKIGAI_TEST_DESCRIPTORS BehaviorTreeComponent::Descriptor, BlackboardComponent::Descriptor, VariableContextComponent::Descriptor,                \
@@ -130,7 +132,7 @@ namespace IKIGAI::ECS {
 		InteractionComponent::Descriptor, ClipComponent::Descriptor, ScrollComponent::Descriptor, LayoutComponent::Descriptor,                       \
 		ChunkModelRenderer::Descriptor, SdfTextComponent::Descriptor, VectorShapeComponent::Descriptor, VectorPathComponent::Descriptor,             \
 		VectorCanvasComponent::Descriptor, EnvironmentComponent::Descriptor, VegetationInteractorComponent::Descriptor,                              \
-		SurfaceComponent::Descriptor, FoliageComponent::Descriptor
+		SurfaceComponent::Descriptor, FoliageComponent::Descriptor, VirtualMeshRenderer::Descriptor
 
 //ArCameraComponent,\
 
@@ -153,7 +155,7 @@ template <> struct serde_adaptor<nlohmann::json, IKIGAI::ECS::ComponentsDescript
 		return std::unordered_map<std::string, Reader> { { IKIGAI::ECS::GetComponentName<Components>() + "Type",
 			+[](nlohmann::json& json, Variant& value) {
 				if constexpr (std::is_same_v<Components, IKIGAI::ECS::SurfaceComponent> || std::is_same_v<Components, IKIGAI::ECS::FoliageComponent>
-					|| std::is_same_v<Components, IKIGAI::ECS::ChunkModelRenderer>) {
+					|| std::is_same_v<Components, IKIGAI::ECS::ChunkModelRenderer> || std::is_same_v<Components, IKIGAI::ECS::VirtualMeshRenderer>) {
 					value = IKIGAI::DATA::readDescriptor<typename Components::Descriptor>(json);
 				}
 				else {

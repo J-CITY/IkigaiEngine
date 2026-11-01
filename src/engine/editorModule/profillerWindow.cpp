@@ -4,6 +4,9 @@
 #include "utilsModule/imguiHelper/imgui_widget_flamegraph.h"
 #include "profilerModule/profiler.h"
 #include "renderModule/diagnostics/renderStatistics.h"
+#include "renderModule/gameRenderer.h"
+#include "resourceModule/serviceManager.h"
+#include "virtualGeometryModule/runtime/virtualGeometryRenderer.h"
 #include <algorithm>
 #include <array>
 #include <cfloat>
@@ -116,10 +119,32 @@ void ProfillerWindow::drawFrameTime() {
     }
 }
 
+void ProfillerWindow::drawVirtualGeometry() {
+    if (!RESOURCES::ServiceManager::Check<RENDER::GameRendererInterface>()) return;
+    auto* game = dynamic_cast<RENDER::GameRenderer*>(&RESOURCES::ServiceManager::Get<RENDER::GameRendererInterface>());
+    if (!game) return;
+    auto& renderer = game->virtualGeometry();
+    auto settings = renderer.settings();
+    bool changed = ImGui::Checkbox("Virtual geometry", &settings.Enabled);
+    ImGui::SameLine(); changed |= ImGui::Checkbox("Freeze LOD", &settings.FreezeLod);
+    int mode = static_cast<int>(settings.DebugOverride);
+    if (ImGui::Combo("VG debug colours", &mode, "Per component\0Cluster\0LOD level\0Group\0")) {
+        settings.DebugOverride = static_cast<ECS::VirtualMeshDebugMode>(mode);
+        changed = true;
+    }
+    changed |= ImGui::SliderFloat("VG threshold scale", &settings.ThresholdScale, 0.0f, 16.0f);
+    if (changed) renderer.setSettings(settings);
+    const auto& frame = renderer.lastFrame();
+    ImGui::Text("VG: %u instances (%u clusters, %u fallback, %u culled), %u visible clusters, %u triangles, %u indirect calls, CPU %.2f ms",
+        frame.Instances, frame.ClusterInstances, frame.FallbackInstances, frame.InstancesCulled, frame.VisibleClusters,
+        frame.VisibleTriangles, frame.IndirectCalls, frame.SelectionMilliseconds);
+}
+
 void ProfillerWindow::drawRenderStatistics() {
     auto& statistics = RENDER::RenderStatistics::Get();
     bool enabled = statistics.isEnabled();
     if (ImGui::Checkbox("Collect draw statistics", &enabled)) statistics.setEnabled(enabled);
+    drawVirtualGeometry();
     const auto& frame = statistics.lastFrame();
     if (!enabled || frame.Frames == 0) { ImGui::TextUnformatted("No completed frame. Enable collection to record draw counts."); return; }
     if (ImGui::BeginTable("RenderStatistics", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY)) {
@@ -135,6 +160,12 @@ void ProfillerWindow::drawRenderStatistics() {
         row("Frame total", frame.Total);
         for (const auto& stage : frame.Stages) row(stage.Name.c_str(), stage.Counters);
         ImGui::EndTable();
+    }
+    const auto& vg = frame.VirtualGeometry;
+    if (vg.ClusterInstances || vg.FallbackInstances) {
+        ImGui::Text("Virtual geometry: %llu cluster instances, %llu fallback instances, %llu visible clusters, %llu triangles",
+            static_cast<unsigned long long>(vg.ClusterInstances), static_cast<unsigned long long>(vg.FallbackInstances),
+            static_cast<unsigned long long>(vg.VisibleClusters), static_cast<unsigned long long>(vg.VisibleTriangles));
     }
 }
 

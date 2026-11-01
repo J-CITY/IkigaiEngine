@@ -66,6 +66,9 @@ namespace RESOURCES {
 	class PlayerProfileService;
 	class ContentService;
 }
+namespace VG {
+	class VirtualMeshLoader;
+}
 }
 
 namespace IKIGAI {
@@ -189,6 +192,7 @@ namespace CORE {
 #endif
 		std::unique_ptr<RESOURCES::SkeletonBlendspaceLoader> skeletonBlendspaceLoader;
 		std::unique_ptr<RESOURCES::SkeletonAnimationLoader> skeletonAnimationLoader;
+		std::unique_ptr<VG::VirtualMeshLoader> virtualMeshLoader;
 	};
 }
 }
