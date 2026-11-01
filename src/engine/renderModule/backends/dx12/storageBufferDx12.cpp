@@ -2,6 +2,7 @@
 #ifdef DX12_BACKEND
 #include "d3dUtil.h"
 #include "driverDx12.h"
+#include "uploadRingDx12.h"
 #include "d3dx12/DirectXHelpers.h"
 
 namespace IKIGAI::RENDER {
@@ -100,18 +101,14 @@ namespace IKIGAI::RENDER {
 			return;
 		}
 
-		auto buffer = d3dUtil::CreateBuffer(sz, D3D12_HEAP_TYPE_UPLOAD);
-		void* mapBuffer = nullptr;
-		buffer->Map(0, nullptr, &mapBuffer);
-		memcpy(mapBuffer, data, sz);
-		buffer->Unmap(0, nullptr);
+		const auto staging = d3dUtil::GetDriver()->getUploadRing().allocate(sz, D3D12_STANDARD_MAXIMUM_ELEMENT_ALIGNMENT_BYTE_MULTIPLE);
+		memcpy(staging.Cpu, data, sz);
 
 		auto barrier = DirectX::ScopedBarrier(d3dUtil::GetDriver()->getCommandList().Get(), {
 			CD3DX12_RESOURCE_BARRIER::Transition(mBuffer.Get(), mState, D3D12_RESOURCE_STATE_COPY_DEST)
 		});
 
-		d3dUtil::GetDriver()->getCommandList()->CopyBufferRegion(mBuffer.Get(), offset, buffer.Get(), 0, sz);
-		d3dUtil::GetDriver()->destroyDeferred(buffer);
+		d3dUtil::GetDriver()->getCommandList()->CopyBufferRegion(mBuffer.Get(), offset, staging.Resource, staging.Offset, sz);
 
 		DirectX::ScopedBarrier(d3dUtil::GetDriver()->getCommandList().Get(), {
 			CD3DX12_RESOURCE_BARRIER::Transition(mBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, mState)
@@ -136,18 +133,14 @@ namespace IKIGAI::RENDER {
 			return;
 		}
 
-		auto buffer = d3dUtil::CreateBuffer(newSizeByte, D3D12_HEAP_TYPE_UPLOAD);
-		void* mapBuffer = nullptr;
-		buffer->Map(0, nullptr, &mapBuffer);
-		memcpy(mapBuffer, data, newSizeByte);
-		buffer->Unmap(0, nullptr);
+		const auto staging = d3dUtil::GetDriver()->getUploadRing().allocate(newSizeByte, D3D12_STANDARD_MAXIMUM_ELEMENT_ALIGNMENT_BYTE_MULTIPLE);
+		memcpy(staging.Cpu, data, newSizeByte);
 
 		auto barrier = DirectX::ScopedBarrier(d3dUtil::GetDriver()->getCommandList().Get(), {
 			CD3DX12_RESOURCE_BARRIER::Transition(mBuffer.Get(), mState, D3D12_RESOURCE_STATE_COPY_DEST)
 		});
 
-		d3dUtil::GetDriver()->getCommandList()->CopyBufferRegion(mBuffer.Get(), 0, buffer.Get(), 0, newSizeByte);
-		d3dUtil::GetDriver()->destroyDeferred(buffer);
+		d3dUtil::GetDriver()->getCommandList()->CopyBufferRegion(mBuffer.Get(), 0, staging.Resource, staging.Offset, newSizeByte);
 
 		auto barrier2 = DirectX::ScopedBarrier(d3dUtil::GetDriver()->getCommandList().Get(), {
 			CD3DX12_RESOURCE_BARRIER::Transition(mBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, mState)
