@@ -2,6 +2,7 @@
 #ifdef DX12_BACKEND
 #include "d3dUtil.h"
 #include "driverDx12.h"
+#include "uploadRingDx12.h"
 #include "d3dx12/d3dx12.h"
 #include "d3dx12/DirectXHelpers.h"
 
@@ -42,17 +43,13 @@ void IKIGAI::RENDER::IndexBufferDx12::setData(const void* data, size_t sz, size_
 		SetGpuMemoryKindDx12(mBuffer.Get(), PROFILER::GpuResourceKind::IndexBuffer);
 	}
 
-	auto buffer = d3dUtil::CreateBuffer(sz * stride, D3D12_HEAP_TYPE_UPLOAD);
-	void* mapBuffer = nullptr;
-	buffer->Map(0, nullptr, &mapBuffer);
-	memcpy(mapBuffer, data, sz * stride);
-	buffer->Unmap(0, nullptr);
+	const auto staging = d3dUtil::GetDriver()->getUploadRing().allocate(sz * stride, D3D12_STANDARD_MAXIMUM_ELEMENT_ALIGNMENT_BYTE_MULTIPLE);
+	memcpy(staging.Cpu, data, sz * stride);
 
 	auto barrier = DirectX::ScopedBarrier(d3dUtil::GetDriver()->getCommandList().Get(), {
 		CD3DX12_RESOURCE_BARRIER::Transition(mBuffer.Get(), mState, D3D12_RESOURCE_STATE_COPY_DEST)
 	});
-	d3dUtil::GetDriver()->getCommandList()->CopyBufferRegion(mBuffer.Get(), 0, buffer.Get(), 0, sz * stride);
-	d3dUtil::GetDriver()->destroyDeferred(buffer);
+	d3dUtil::GetDriver()->getCommandList()->CopyBufferRegion(mBuffer.Get(), 0, staging.Resource, staging.Offset, sz * stride);
 }
 
 const IKIGAI::RENDER::Dx12Resource& IKIGAI::RENDER::IndexBufferDx12::getBuffer() const {

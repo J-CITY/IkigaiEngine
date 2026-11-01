@@ -19,6 +19,8 @@
 #include "textureDx12.h"
 #include "vertexBufferDx12.h"
 #include "uniformBufferDx12.h"
+#include "uploadRingDx12.h"
+#include "immediateSubmitDx12.h"
 #include "backends/imgui_impl_dx12.h"
 #include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
 #include "d3dx12/DirectXHelpers.h"
@@ -221,6 +223,8 @@ DriverDx12::~DriverDx12() {
 	mStates.clear();
 	mSwapchains.clear();
 	clearForDestroy();
+	mUploadRing.reset();
+	mImmediateSubmit.reset();
     mDlssRuntime.reset();
     D3D12MA::TotalStatistics rtStats{};mAllocator->CalculateStatistics(&rtStats);
     std::cout<<"D3D12MA shutdown: allocations="<<rtStats.Total.Stats.AllocationCount<<" bytes="<<rtStats.Total.Stats.AllocationBytes<<"\n";
@@ -269,6 +273,7 @@ void DriverDx12::init() {
 	allocatorDesc.pAdapter = adapter.Get();
 	allocatorDesc.Flags = static_cast<D3D12MA::ALLOCATOR_FLAGS>(D3D12MA_RECOMMENDED_ALLOCATOR_FLAGS);
 	ThrowIfFailed(D3D12MA::CreateAllocator(&allocatorDesc, mAllocator.GetAddressOf()));
+	mUploadRing = std::make_unique<UploadRingDx12>();
 #if IKIGAI_ENABLE_MEMORY_TRACKING
     try {
         Microsoft::WRL::ComPtr<IDXGIAdapter3> budgetAdapter; adapter.As(&budgetAdapter);
@@ -398,6 +403,17 @@ void DriverDx12::createDescriptorHeaps() {
 	for (UINT index = engineDescriptors + imguiDescriptors; index > engineDescriptors; --index) {
 		mImGuiFreeSrv.push_back(index - 1);
 	}
+}
+
+UploadRingDx12& DriverDx12::getUploadRing() {
+	return *mUploadRing;
+}
+
+void DriverDx12::immediateSubmit(const std::function<void(ID3D12GraphicsCommandList*)>& record) {
+	if (!mImmediateSubmit) {
+		mImmediateSubmit = std::make_unique<ImmediateSubmitDx12>(mDevice.Get());
+	}
+	mImmediateSubmit->submit(record);
 }
 
 void DriverDx12::allocImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE* outCpu, D3D12_GPU_DESCRIPTOR_HANDLE* outGpu) {
@@ -807,6 +823,7 @@ void DriverDx12::submit() {
 void DriverDx12::begin() {
     mBindlessSnapshots.clear();mBindlessFrameResources.clear();
     mBindlessDescriptorCursor=1064;mBindlessSamplerCursor=0;
+	mUploadRing->beginFrame(mFence ? mFence->GetCompletedValue() : 0);
 	beginCommandList(mCommandAllocator.Get(), mCommandList.Get());
 
 	setDirty(Dirty::VIEWPORT);
@@ -821,6 +838,8 @@ void DriverDx12::end() {
 	std::static_pointer_cast<TextureDx12>(getDefaultFrameBuffer()->getTextures()[0])->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_PRESENT);
 	const bool timestamps = resolveTimestampQueries();
 	endCommandList(mCommandQueue.Get(), mCommandList.Get(), false);
+	// Every later signal of mFence on this queue follows the submission above.
+	mUploadRing->retireFrame(mFenceValue);
 	if (timestamps) {
 		signalTimestampQueries();
 	}
@@ -846,6 +865,7 @@ void DriverDx12::endCommandList(ID3D12CommandQueue* cmdQueue, ID3D12GraphicsComm
 		ThrowIfFailed(fence->SetEventOnCompletion(1ULL, event));
 
 		WaitForSingleObject(event, INFINITE);
+		CloseHandle(event);
 	}
 }
 
@@ -1385,7 +1405,7 @@ void DriverDx12::applyState() {
         }
 		else if (uniform.mType == ShaderReflection::UniformType::UNIFORM_BUFFER) {
 			auto ubo = mUniformBuffers.at(binding);
-			const auto address = ubo->getBuffer()->GetGPUVirtualAddress();
+			const auto address = ubo->getGpuAddress();
 			if (isCompute) {
 				mCommandList->SetComputeRootConstantBufferView(rootId, address);
 			} else {

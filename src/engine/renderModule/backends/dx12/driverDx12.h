@@ -12,6 +12,8 @@
 #include "shaderDx12.h"
 #include <array>
 #include <d3d12.h>
+#include <functional>
+#include <memory>
 #include <vector>
 #include <wrl/client.h>
 
@@ -34,6 +36,8 @@ class FrameBufferDx12;
 class IndexBufferDx12;
 class VertexBufferDx12;
 class ShaderDx12;
+class UploadRingDx12;
+class ImmediateSubmitDx12;
 
 class DriverDx12 : public IKIGAI::RENDER::DriverInterface {
 	friend class FsrFrameGenerationDx12;
@@ -249,6 +253,10 @@ public:
 	void executeRecordedCommands();
 	void allocImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE* outCpu, D3D12_GPU_DESCRIPTOR_HANDLE* outGpu);
 	void freeImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIPTOR_HANDLE gpu);
+	// Transient upload memory for constant buffer snapshots and staging copies recorded in the current frame.
+	UploadRingDx12& getUploadRing();
+	// Records, submits and waits for a one-off command list on the reusable immediate queue.
+	void immediateSubmit(const std::function<void(ID3D12GraphicsCommandList*)>& record);
 
 private:
 	void begin() override;
@@ -281,6 +289,9 @@ private:
 
 	std::vector<Microsoft::WRL::ComPtr<ID3D12DeviceChild>> mDestroyDeffered {};
 	std::vector<Dx12Resource> mDestroyDeferredResources {};
+	// Upload pages are retired with mFenceValue in end() and recycled in begin() once the fence passed it.
+	std::unique_ptr<UploadRingDx12> mUploadRing;
+	std::unique_ptr<ImmediateSubmitDx12> mImmediateSubmit;
 
 	struct SwapchainContextDx12 {
 		Microsoft::WRL::ComPtr<IDXGISwapChain3> mSwapChain;
