@@ -74,6 +74,12 @@ add_library(spirv-reflect STATIC ${SPIRV_REFLECT_SRC})
 target_include_directories(spirv-reflect PUBLIC "${THIRD_PARTY_DIR}/SPIRV-Reflect")
 set_property(TARGET spirv-reflect PROPERTY FOLDER "3rd/SPIRV-Reflect")
 
+# 5b. meshoptimizer (virtual geometry cooker: clustering, simplification, cluster LOD)
+file(GLOB MESHOPTIMIZER_SRC "${THIRD_PARTY_DIR}/meshoptimizer/src/*.cpp" "${THIRD_PARTY_DIR}/meshoptimizer/src/meshoptimizer.h")
+add_library(meshoptimizer STATIC ${MESHOPTIMIZER_SRC})
+target_include_directories(meshoptimizer PUBLIC "${THIRD_PARTY_DIR}/meshoptimizer/src" "${THIRD_PARTY_DIR}/meshoptimizer")
+set_property(TARGET meshoptimizer PROPERTY FOLDER "3rd/meshoptimizer")
+
 # 6. ImGUI
 set(IMGUI_DIR "${THIRD_PARTY_DIR}/imgui")
 file(GLOB IMGUI_SOURCES 
@@ -271,6 +277,8 @@ endif()
 
 # Additional definitions
 target_compile_definitions(${APP_NAME} PRIVATE USE_CHEATS)
+target_compile_definitions(${APP_NAME} PRIVATE IKIGAI_VG_COOKER)
+target_link_libraries(${APP_NAME} PRIVATE meshoptimizer)
 if(USE_EDITOR)
     target_compile_definitions(${APP_NAME} PRIVATE USE_EDITOR)
 endif()
