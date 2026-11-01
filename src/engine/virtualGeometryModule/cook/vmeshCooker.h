@@ -36,8 +36,12 @@ struct VMeshCookReport {
 	uint32_t WeldedVertexCount = 0;
 	uint32_t DegenerateTriangleCount = 0; // removed during preparation
 	uint32_t CrossMaterialLockedVertexCount = 0;
+	uint32_t NonManifoldLockedVertexCount = 0; // pinch vertices and endpoints of edges with more than two triangles
 	uint32_t StuckGroupCount = 0; // groups that could not be simplified enough and became roots
+	uint32_t DeferredGroupCount = 0; // stuck groups whose clusters were carried to the next level for regrouping
 	uint32_t SloppyGroupCount = 0; // groups that needed the sloppy simplifier
+	uint32_t RetriedGroupCount = 0; // groups accepted after a gentler retry because the first result broke the topology
+	uint32_t TopologyRejectedGroupCount = 0; // groups that became roots because no simplification kept the topology
 	double PrepareSeconds = 0.0;
 	double ClusterSeconds = 0.0;
 	double HierarchySeconds = 0.0;

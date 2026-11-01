@@ -133,7 +133,9 @@ int RunVMeshCookCommand(const VMeshCookCommand& command) {
 				  << "[vmesh-cook] input vertices " << report.InputVertexCount << ", input triangles " << report.InputTriangleCount
 				  << ", welded vertices " << report.WeldedVertexCount << ", degenerate triangles removed " << report.DegenerateTriangleCount
 				  << ", cross-material locked vertices " << report.CrossMaterialLockedVertexCount << ", stuck groups " << report.StuckGroupCount
-				  << ", sloppy groups " << report.SloppyGroupCount << "\n"
+				  << ", deferred groups " << report.DeferredGroupCount << ", sloppy groups " << report.SloppyGroupCount << ", retried groups "
+				  << report.RetriedGroupCount << ", topology-rejected attempts " << report.TopologyRejectedGroupCount
+				  << ", non-manifold locked vertices " << report.NonManifoldLockedVertexCount << "\n"
 				  << "[vmesh-cook] file " << fileSize << " bytes, material slots " << verify.Header.MaterialSlotCount << ", vertices "
 				  << statistics.VertexCount << ", indices " << statistics.IndexCount << ", clusters " << statistics.ClusterCount << " (leaf "
 				  << statistics.LeafClusterCount << ", root " << statistics.RootClusterCount << "), groups " << statistics.GroupCount << ", levels "

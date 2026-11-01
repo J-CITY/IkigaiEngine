@@ -38,6 +38,10 @@ struct VMeshCookSettings {
 	float WeldPositionEpsilon = 0.0f;
 	// false: only level 0 clusters (every cluster is a root) and a simplified fallback mesh.
 	bool BuildLodHierarchy = true;
+	// Reject simplified groups that pinch edges (more than two triangles), open holes or add chords between locked
+	// border vertices; the offending vertices are locked and the group is simplified again. Keeps every DAG cut of a
+	// closed model watertight and edge-manifold, at the cost of more root clusters around thin features.
+	bool PreserveTopology = true;
 
 	template <class Context> constexpr static auto serde(Context& context, VMeshCookSettings& value) {
 		using Self = VMeshCookSettings;
@@ -56,7 +60,8 @@ struct VMeshCookSettings {
 			.field(&Self::FallbackTriangleRatio, "FallbackTriangleRatio", default_ { 0.02f })
 			.field(&Self::MinFallbackTriangles, "MinFallbackTriangles", default_ { 64u })
 			.field(&Self::WeldPositionEpsilon, "WeldPositionEpsilon", default_ { 0.0f })
-			.field(&Self::BuildLodHierarchy, "BuildLodHierarchy", default_ { true });
+			.field(&Self::BuildLodHierarchy, "BuildLodHierarchy", default_ { true })
+			.field(&Self::PreserveTopology, "PreserveTopology", default_ { true });
 	}
 };
 
