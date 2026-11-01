@@ -97,6 +97,10 @@ void RenderStatistics::beginFrame() {
 		}
 		++mSummary.Frames;
 		Accumulate(mSummary.Total, mCurrent.Total);
+		mSummary.VirtualGeometry.ClusterInstances += mCurrent.VirtualGeometry.ClusterInstances;
+		mSummary.VirtualGeometry.FallbackInstances += mCurrent.VirtualGeometry.FallbackInstances;
+		mSummary.VirtualGeometry.VisibleClusters += mCurrent.VirtualGeometry.VisibleClusters;
+		mSummary.VirtualGeometry.VisibleTriangles += mCurrent.VirtualGeometry.VisibleTriangles;
 		for (const auto& stage : mCurrent.Stages) {
 			auto found = std::find_if(mSummary.Stages.begin(), mSummary.Stages.end(), [&](const auto& value) { return value.Name == stage.Name; });
 			if (found == mSummary.Stages.end()) {
@@ -184,6 +188,17 @@ void RenderStatistics::recordDispatch() {
 	}
 }
 
+void RenderStatistics::recordVirtualGeometry(
+	std::uint64_t clusterInstances, std::uint64_t fallbackInstances, std::uint64_t visibleClusters, std::uint64_t visibleTriangles) {
+	if (!mEnabled || !mFrameOpen) {
+		return;
+	}
+	mCurrent.VirtualGeometry.ClusterInstances += clusterInstances;
+	mCurrent.VirtualGeometry.FallbackInstances += fallbackInstances;
+	mCurrent.VirtualGeometry.VisibleClusters += visibleClusters;
+	mCurrent.VirtualGeometry.VisibleTriangles += visibleTriangles;
+}
+
 const RenderFrameStatistics& RenderStatistics::lastFrame() const {
 	return mLastFrame;
 }
@@ -197,6 +212,17 @@ void RenderStatistics::print(std::ostream& output) const {
 	output << "RENDER_STATS frames=" << mSummary.Frames;
 	PrintCounters(output, mSummary.Total, frames);
 	output << '\n';
+	const auto& virtualGeometry = mSummary.VirtualGeometry;
+	if (virtualGeometry.ClusterInstances || virtualGeometry.FallbackInstances) {
+		const auto flags = output.flags();
+		const auto precision = output.precision();
+		output << std::fixed << std::setprecision(2) << "RENDER_STATS_VG clusterInstances=" << double(virtualGeometry.ClusterInstances) / frames
+			   << " fallbackInstances=" << double(virtualGeometry.FallbackInstances) / frames
+			   << " clusters=" << double(virtualGeometry.VisibleClusters) / frames
+			   << " triangles=" << double(virtualGeometry.VisibleTriangles) / frames << '\n';
+		output.flags(flags);
+		output.precision(precision);
+	}
 	for (const auto& stage : mSummary.Stages) {
 		// Per-stage values are means over the frames in which the stage ran.
 		output << "RENDER_STATS_STAGE " << stage.Name << " frames=" << stage.Frames;

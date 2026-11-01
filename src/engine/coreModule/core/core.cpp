@@ -56,6 +56,7 @@
 
 #include "coreModule/ecs/components/batchComponent.h"
 #include "coreModule/ecs/components/renderTargetComponent.h"
+#include "coreModule/ecs/components/virtualMeshRenderer.h"
 #include "ecsModule/world.h"
 #include "editorModule/editorRender.h"
 #include "renderModule/backends/driverFactory.h"
@@ -67,6 +68,7 @@
 #include "resourceModule/skeletonBlendspaceManager.h"
 #include "resourceModule/skeletonManager.h"
 #include "resourceModule/skeletonStateGraphManager.h"
+#include "virtualGeometryModule/runtime/virtualMeshLoader.h"
 #include <coreModule/ecs/components/scriptComponent.h>
 #include <renderModule/gameRenderer.h>
 
@@ -330,6 +332,7 @@ Core::Core(
 		compMgr->registerComponent<ECS::Cloth2DComponent>(ECS::StorageType::Sparse);
 #endif
 		compMgr->registerComponent<ECS::ModelLODRenderer>(IKIGAI::ECS::StorageType::Sparse);
+		compMgr->registerComponent<ECS::VirtualMeshRenderer>(IKIGAI::ECS::StorageType::Sparse);
 		compMgr->registerComponent<ECS::BatchComponent>(IKIGAI::ECS::StorageType::Sparse);
 		compMgr->registerComponent<ECS::RenderTargetComponent>(IKIGAI::ECS::StorageType::Sparse);
 
@@ -403,6 +406,8 @@ Core::Core(
 #endif
 	skeletonBlendspaceLoader = std::make_unique<RESOURCES::SkeletonBlendspaceLoader>();
 	skeletonAnimationLoader = std::make_unique<RESOURCES::SkeletonAnimationLoader>();
+	virtualMeshLoader = std::make_unique<VG::VirtualMeshLoader>();
+	RESOURCES::ServiceManager::Set<VG::VirtualMeshLoader>(virtualMeshLoader.get());
 
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonLoader>(skeletonLoader.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonStateGraphLoader>(skeletalStateGraphLoader.get());

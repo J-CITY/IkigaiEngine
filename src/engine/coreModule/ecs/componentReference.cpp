@@ -131,6 +131,7 @@ void RegisterSceneComponentReflection() {
 	registerSceneComponent<SurfaceComponent>();
 	registerSceneComponent<FoliageComponent>();
 	registerSceneComponent<ChunkModelRenderer>();
+	registerSceneComponent<VirtualMeshRenderer>();
 	UTILS::ReflectionManager::Instance().registerMethod("SetWeight", &FacialAnimationComponent::setWeight);
 	UTILS::ReflectionManager::Instance().registerMethod("Play", &FacialAnimationComponent::play);
 	UTILS::ReflectionManager::Instance().registerMethod("ClearWeights", &FacialAnimationComponent::clearWeights);

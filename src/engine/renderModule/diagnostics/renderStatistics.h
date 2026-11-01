@@ -24,10 +24,19 @@ struct RenderStageStatistics {
 	RenderDrawCounters Counters = {};
 };
 
+// Virtual geometry selection results (indirect draws carry no CPU-visible triangle counts).
+struct RenderVirtualGeometryCounters {
+	std::uint64_t ClusterInstances = 0;
+	std::uint64_t FallbackInstances = 0;
+	std::uint64_t VisibleClusters = 0;
+	std::uint64_t VisibleTriangles = 0;
+};
+
 struct RenderFrameStatistics {
 	std::uint64_t Frames = 0;
 	RenderDrawCounters Total = {};
 	std::vector<RenderStageStatistics> Stages = {};
+	RenderVirtualGeometryCounters VirtualGeometry = {};
 };
 
 // CPU-side draw/dispatch counters fed by the render command dispatcher.
@@ -66,6 +75,8 @@ public:
 	void recordDraw(std::uint32_t elementCount, std::uint32_t instanceCount, PrimitiveMode mode);
 	void recordIndirectDraw(std::uint32_t maximumDrawCount);
 	void recordDispatch();
+	void recordVirtualGeometry(
+		std::uint64_t clusterInstances, std::uint64_t fallbackInstances, std::uint64_t visibleClusters, std::uint64_t visibleTriangles);
 
 	const RenderFrameStatistics& lastFrame() const;
 	// Sums over all frames since reset(); divide by Frames for per-frame means.

@@ -9,6 +9,7 @@
 #include "profilerModule/profilerSpy.h"
 #include "renderGraph/computeStage.h"
 #include "utilsModule/time/loadTimer.h"
+#include "virtualGeometryModule/runtime/virtualGeometryRenderer.h"
 #if USE_PHYSICS_3D
 #include "physics/deformableRenderer.h"
 #endif
@@ -94,6 +95,13 @@ namespace {
 GameRenderer::GameRenderer(CORE::Core& context)
 	: mContext(context) {
 	Init();
+}
+
+VG::VirtualGeometryRenderer& GameRenderer::virtualGeometry() {
+	if (!mVirtualGeometry) {
+		mVirtualGeometry = std::make_shared<VG::VirtualGeometryRenderer>();
+	}
+	return *mVirtualGeometry;
 }
 
 void GameRenderer::Init() {
@@ -652,6 +660,22 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	const auto& cameraPosition = cameraComponent.obj->getTransform()->getWorldPosition();
 	auto chunks = scene.findDrawables(cameraPosition, cameraComponent.getCamera(), nullptr, mEmptyMaterial);
 	auto shadowChunks = scene.findAndSortDrawables(cameraPosition, mEmptyMaterial);
+	{
+		// Virtual geometry: CPU LOD selection and uploads before any stage; fallback meshes join the regular
+		// drawables (shadows/RT always, the view when the cluster path is unavailable).
+		VG::VirtualGeometryFrameInput virtualGeometryInput;
+		virtualGeometryInput.View.CameraPosition = cameraPosition;
+		virtualGeometryInput.View.Frustum = &cameraComponent.getCamera().getFrustum();
+		virtualGeometryInput.View.Orthographic = cameraComponent.getProjectionMode() == Camera::ProjectionMode::ORTHOGRAPHIC;
+		virtualGeometryInput.View.ProjectionScale = float(renderSize.y) * unjitteredProjection.getData()[1 * 4 + 1] * 0.5f;
+		virtualGeometryInput.View.ZNear = cameraComponent.getNear();
+		virtualGeometryInput.Frame = mFrameCount;
+		virtualGeometryInput.GeometryStageActive
+			= std::any_of(mRenderPipeline->mStages.begin(), mRenderPipeline->mStages.end(), [](const auto& stage) {
+				  return stage->mDescriptor.Enabled && stage->mDrawContent == DrawContent::DEFERRED && stage->mName == "Geometry";
+			  });
+		virtualGeometry().prepareFrame(*mContext.render, scene, virtualGeometryInput, chunks, shadowChunks);
+	}
 	for (auto i = mSkinningPoses.begin(); i != mSkinningPoses.end();) {
 		if (i->second.Frame + 1 < mFrameCount) {
 			i = mSkinningPoses.erase(i);
@@ -1103,6 +1127,9 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 					}
 				}
 			}
+			if (stage->mDrawContent == DrawContent::DEFERRED && stage->mName == "Geometry" && mVirtualGeometry) {
+				mVirtualGeometry->drawGeometry(render, { mEngineUbo, mFrameUbo, mEmptyTexture });
+			}
 		}
 		if (stage->mDrawContent == DrawContent::TRANSPARENT_GEOMETRY || stage->mDrawContent == DrawContent::FORWARD) {
 			if (!mParticleRenderer) {
@@ -1136,6 +1163,9 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	}
 	for (auto& stage : mRenderPipeline->mStages) {
 		runStage(stage);
+	}
+	if (mVirtualGeometry) {
+		mVirtualGeometry->endFrame();
 	}
 	submitCpuProfile.reset();
 	auto& screenshot = CAPTURE::ScreenshotService::Get();

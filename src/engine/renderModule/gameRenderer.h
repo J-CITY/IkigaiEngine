@@ -35,6 +35,9 @@ class VectorRenderer;
 namespace IKIGAI::RENDER {
 class ParticleRenderer;
 }
+namespace IKIGAI::VG {
+class VirtualGeometryRenderer;
+}
 #if USE_PHYSICS_3D
 namespace IKIGAI::RENDER {
 class DeformableRenderer;
@@ -467,6 +470,7 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	std::shared_ptr<VECTOR::VectorRenderer> mVectorRenderer;
 	PrimitiveRender mPrimitives;
 	std::shared_ptr<ParticleRenderer> mParticleRenderer;
+	std::shared_ptr<VG::VirtualGeometryRenderer> mVirtualGeometry;
 #if USE_PHYSICS_3D
 	std::shared_ptr<DeformableRenderer> mDeformableRenderer;
 #endif
@@ -525,6 +529,8 @@ public:
 	PrimitiveRender& primitives() {
 		return mPrimitives;
 	}
+	// Cluster renderer for VirtualMeshRenderer components (settings, statistics, tests).
+	VG::VirtualGeometryRenderer& virtualGeometry();
 	void Init();
 	void renderScene() override;
 	void renderLoadingScene(SCENE_SYSTEM::Scene* scene);
