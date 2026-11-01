@@ -5,7 +5,6 @@
 #include <optional>
 #include <shared_mutex>
 
-
 namespace IKIGAI {
 namespace TASK {
 	template <typename T> class ThreadSafeQueue {
@@ -21,6 +20,17 @@ namespace TASK {
 			}
 			auto out = std::move(mQueue.front());
 			mQueue.pop_front();
+			return out;
+		}
+
+		// Owner pops the front; a thief takes the back so the two ends do not fight over the same item.
+		std::optional<T> tryPopBack() {
+			std::lock_guard<std::shared_mutex> lock { mMutex };
+			if (mQueue.empty() || !mValid) {
+				return std::nullopt;
+			}
+			auto out = std::move(mQueue.back());
+			mQueue.pop_back();
 			return out;
 		}
 
