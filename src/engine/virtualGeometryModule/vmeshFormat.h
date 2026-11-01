@@ -19,8 +19,10 @@
 // Cluster LOD DAG (error-bounded, crack-free, see docs/rendering/m2-virtual-geometry-spec.md):
 //   Level 0 clusters hold the original triangles. Higher levels are built by merging and simplifying
 //   groups of clusters; simplified clusters only reference original vertices, so the Vertices section
-//   is never duplicated. All clusters of one group share Error, LodBounds, ParentError and
-//   ParentLodBounds. A cluster is drawn when
+//   is never duplicated. Clusters produced by one simplification group (same GroupId) share Error
+//   and LodBounds. Clusters merged into one parent group at the next level share ParentError and
+//   ParentLodBounds; siblings of one GroupId may be merged into different parent groups. Always
+//   ParentError >= Error and ParentLodBounds contains LodBounds. A cluster is drawn when
 //       ProjectedError(Error, LodBounds) <= Threshold < ProjectedError(ParentError, ParentLodBounds)
 //   where ProjectedError(e, s) is the screen-space size in pixels of an object-space error e at the
 //   closest point of sphere s. Roots have ParentError = VMeshRootError.

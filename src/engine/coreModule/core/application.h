@@ -20,6 +20,10 @@ struct ApplicationOptions {
 	std::string screenshot;
 	std::string screenshotTexture;
 	bool profileLoading = false;
+	// Offline virtual mesh cooking (IKIGAI_VG_COOKER builds): cook cookVmesh into cookOutput and exit.
+	std::string cookVmesh;
+	std::string cookOutput;
+	std::string cookSettings;
 	std::optional<int> width;
 	std::optional<int> height;
 	std::optional<bool> fullscreen;
