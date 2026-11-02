@@ -732,10 +732,25 @@ namespace ECS {
 	class LayoutComponent : public ComponentBase {
 	public:
 		enum class Type { HORIZONTAL, VERTICAL };
+		// Cross-axis alignment of children inside the layout's content box.
+		enum class Alignment { START, CENTER, END };
 		Type mType = Type::HORIZONTAL;
+		Alignment mAlignment = Alignment::START;
 
+		// Gap between consecutive children on the main axis (horizontal layout -> horizontal offset, vertical -> vertical offset).
+		// The other offset shifts the whole stack on the cross axis.
 		float mHorizontalOffset = 0.0f;
 		float mVerticalOffset = 0.0f;
+
+		// Solver outputs / state. Not serialized.
+		MATH::Vector2f mContentSize { 0.0f, 0.0f };
+		bool mDirty = true;
+		std::size_t mLastSignature = 0;
+
+		// Forces the solver to re-run on the next GuiLayoutSystem update (e.g. after changing offsets or child sizes).
+		void markDirty() {
+			mDirty = true;
+		}
 
 		LayoutComponent(Object& obj)
 			: ComponentBase(obj) { }
@@ -746,10 +761,18 @@ namespace ECS {
 		struct Descriptor : public ComponentBase::Descriptor {
 			std::string Type;
 			LayoutComponent::Type Layout;
+			LayoutComponent::Alignment Alignment = LayoutComponent::Alignment::START;
+			float HorizontalOffset = 0.0f;
+			float VerticalOffset = 0.0f;
 			template <class Context> constexpr static auto serde(Context& context, Descriptor& value) {
 				using Self = Descriptor;
 				using namespace serde::attribute;
-				serde::serde_struct(context, value).field(&Self::Type, "LayoutComponentType").field(&Self::Layout, "Layout");
+				serde::serde_struct(context, value)
+					.field(&Self::Type, "LayoutComponentType")
+					.field(&Self::Layout, "Layout")
+					.field(&Self::Alignment, "Alignment", default_ { LayoutComponent::Alignment::START })
+					.field(&Self::HorizontalOffset, "HorizontalOffset", default_ { 0.0f })
+					.field(&Self::VerticalOffset, "VerticalOffset", default_ { 0.0f });
 			}
 		};
 		[[nodiscard]] Descriptor getDescriptor() const;

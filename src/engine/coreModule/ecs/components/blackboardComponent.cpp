@@ -53,3 +53,11 @@ void BlackboardComponent::onDestroy() {
 	mPrepared.reset();
 }
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::BlackboardComponent>();
+	return true;
+}();
+}

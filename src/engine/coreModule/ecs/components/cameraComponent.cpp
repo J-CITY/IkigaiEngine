@@ -386,3 +386,12 @@ void ArCameraComponent::onUpdate(std::chrono::duration<double> dt) {
 //		rttr::metadata(EditorMetaInfo::EDIT_WIDGET, EditorMetaInfo::WidgetType::BOOL)
 //	);
 // }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::CameraComponent>(IKIGAI::ECS::StorageType::Sparse, true);
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::VrCameraComponent>();
+	return true;
+}();
+}

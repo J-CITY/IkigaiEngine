@@ -1,8 +1,11 @@
 #pragma once
 
 #include "../window/window.h"
+#include "inputGestures.h"
+#include <chrono>
 #include <unordered_set>
 #include <utilsModule/event.h>
+#include <vector>
 
 namespace IKIGAI::INPUT_SYSTEM {
 #ifdef USE_SDL
@@ -288,10 +291,14 @@ enum class EMouseButton {
 
 enum class EMouseButtonState { MOUSE_UP = 0, MOUSE_DOWN = 1 };
 
+inline constexpr std::int64_t kMousePointerId = 0;
+
 class InputManager {
 public:
 	InputManager(WINDOW::Window& p_window);
 	~InputManager();
+
+	void beginInputFrame(std::chrono::duration<double> dt);
 
 	[[nodiscard]] bool isKeyPressed(EKey p_key) const;
 	[[nodiscard]] bool isKeyReleased(EKey p_key) const;
@@ -314,7 +321,29 @@ public:
 	void endFrame();
 	const INPUT::Gamepad* getGamepad(int id) const;
 
+	[[nodiscard]] const std::vector<PointerEvent>& pointerEventsThisFrame() const {
+		return mPointerEvents;
+	}
+	[[nodiscard]] const std::vector<SwipeEvent>& swipesThisFrame() const {
+		return mSwipeRecognizer.swipesThisFrame();
+	}
+	[[nodiscard]] bool tryCapturePointer(std::int64_t pointerId);
+	void releasePointerCapture(std::int64_t pointerId);
+	[[nodiscard]] bool isPointerCaptured(std::int64_t pointerId) const;
+	void configureVirtualStick(MATH::Vector2f center, float hitRadius, float deadzone);
+	[[nodiscard]] MATH::Vector2f getVirtualStickValue() const;
+	[[nodiscard]] DragCapture& dragCapture() {
+		return mDragCapture;
+	}
+	[[nodiscard]] VirtualStick& virtualStick() {
+		return mVirtualStick;
+	}
+
 private:
+	void pushPointerEvent(PointerEvent event);
+#ifdef USE_SDL
+	void onTouchFinger(const WINDOW::TouchFingerEvent& event);
+#endif
 	void onKeyPressed(int val);
 	void onKeyReleased(int val);
 	void onMouseButtonPressed(int val);
@@ -344,6 +373,7 @@ private:
 
 	EVENT::Event<>::ID mGamepadAddListener = EVENT::Event<>::ID(0);
 	EVENT::Event<>::ID mGamepadRemoveListener = EVENT::Event<>::ID(0);
+	EVENT::Event<>::ID mTouchFingerListener = EVENT::Event<>::ID(0);
 
 	std::unordered_map<EKey, EKeyState> mKeyEvents;
 	std::unordered_map<EMouseButton, EMouseButtonState> mMouseButtonEvents;
@@ -355,5 +385,11 @@ private:
 	std::unordered_set<uint64_t> mGamepadReleasedThisFrame;
 	MATH::Vector2f mMouseDelta;
 	std::vector<INPUT::Gamepad> mGamepads;
+	std::vector<PointerEvent> mPointerEvents;
+	SwipeRecognizer mSwipeRecognizer;
+	DragCapture mDragCapture;
+	VirtualStick mVirtualStick;
+	float mFrameDeltaSeconds = 0.0f;
+	bool mMousePointerDown = false;
 };
 }

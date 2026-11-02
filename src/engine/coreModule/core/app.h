@@ -3,25 +3,12 @@
 
 #include "core.h"
 #include <utilsModule/ref.h>
-#ifdef OCULUS
-#include <android_native_app_glue.h>
-#endif
-#ifdef DX12_BACKEND
-#include <Windows.h>
-#endif
 
 namespace IKIGAI {
 namespace CORE {
 	class App {
 	public:
-#ifdef DX12_BACKEND
-		inline static HINSTANCE hInstance;
-#endif
-		App(
-#ifdef OCULUS
-			android_app* app
-#endif
-		);
+		explicit App(const PlatformStartup& platform);
 		~App();
 		void run();
 		bool runMainLoop();

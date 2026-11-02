@@ -1,18 +1,11 @@
 #include "object.h"
 
-#include <algorithm>
-#include <execution>
-
-#include "../gui/components/spriteComponent.h"
-#include "components/ambientLight.h"
-#include "components/ambientSphereLight.h"
-#include "components/directionalLight.h"
-#include "components/inputComponent.h"
-#include "components/pointLight.h"
-#include "components/spotLight.h"
+#include "componentCatalog.h"
 #include "sceneModule/sceneManager.h"
 #include "utilsModule/log/loggerDefine.h"
-#include "utilsModule/visitorHelper.h"
+
+#include <algorithm>
+#include <execution>
 
 using namespace IKIGAI;
 using namespace IKIGAI::ECS;
@@ -27,21 +20,6 @@ EVENT::Event<Object&> Object::dettachEvent;
 //	//createdEvent.run(*this);
 // }
 
-template <typename T> void WriteComponentDescriptorImpl(std::vector<ComponentsDescriptorType>& components, const ECS::Object* obj) {
-	if (auto comp = obj->getComponent<T>()) {
-		components.push_back(comp->getDescriptor());
-	}
-}
-
-template <template <typename...> class Container, typename... ComponentType>
-void WriteComponentDescriptor(std::vector<ComponentsDescriptorType>& components, const ECS::Object* obj, Container<ComponentType...> opt) {
-	(WriteComponentDescriptorImpl<ComponentType>(components, obj), ...);
-}
-
-void WriteComponentDescriptor(std::vector<ComponentsDescriptorType>& components, const ECS::Object* obj) {
-	WriteComponentDescriptor(components, obj, ECS::ComponentsTypeProviderType {});
-}
-
 Object::Descriptor Object::getDescriptor() const {
 	Descriptor d;
 	d.Name = getName();
@@ -50,7 +28,22 @@ Object::Descriptor Object::getDescriptor() const {
 	d.ParentId = getParentId();
 	d.IsActive = mIsActive;
 	d.IsVisible = mIsVisible;
-	WriteComponentDescriptor(d.Components, this);
+	std::vector<std::pair<std::string, nlohmann::json>> components;
+	const auto& catalog = ComponentCatalog::instance();
+	for (const auto& [_, component] : mComponents) {
+		if (!component) {
+			continue;
+		}
+		const auto* record = catalog.findByName(component->getName());
+		if (!record) {
+			continue;
+		}
+		components.emplace_back(record->name, record->write(*component));
+	}
+	std::sort(components.begin(), components.end(), [](const auto& left, const auto& right) { return left.first < right.first; });
+	for (auto& component : components) {
+		d.Components.push_back(std::move(component.second));
+	}
 	return d;
 }
 
@@ -63,21 +56,6 @@ Object::Object(ECS::Entity actorID, const std::string& name, const std::string& 
 	createdEvent.run(*this);
 }
 
-template <class Desc, typename T> void AddComponentImpl(const Desc& data, ECS::Object* obj) {
-	if (data.Type == ECS::GetType<T>()) {
-		auto c = obj->addComponent<T>(static_cast<const ComponentBase::Descriptor&>(data));
-	}
-}
-
-template <class Desc, template <typename...> class Container, typename... ComponentType>
-void AddComponent(const Desc& data, ECS::Object* obj, Container<ComponentType...> opt) {
-	(AddComponentImpl<Desc, ComponentType>(data, obj), ...);
-}
-
-template <class Desc> void AddComponent(const Desc& data, ECS::Object* obj) {
-	AddComponent(data, obj, ECS::ComponentsTypeProviderType {});
-}
-
 // TODO: set mParent? when call this
 Object::Object(const Descriptor& _descriptor, ECS::World* world, bool deferred)
 	: mWorld(world ? world : &RESOURCES::ServiceManager::Get<ECS::World>())
@@ -88,8 +66,8 @@ Object::Object(const Descriptor& _descriptor, ECS::World* world, bool deferred)
 	setActive(_descriptor.IsActive);
 	setVisible(_descriptor.IsVisible);
 	getWorld().registerEntity(mEntity);
-	for (auto& component : _descriptor.Components) {
-		std::visit(overloaded { [this](auto& arg) { AddComponent(arg, this); } }, component);
+	for (const auto& component : _descriptor.Components) {
+		ComponentCatalog::instance().read(*this, component);
 		mTransform = getComponent<TransformComponent>();
 	}
 }
@@ -98,8 +76,31 @@ Object::~Object() {
 	dispose();
 }
 
+std::shared_ptr<Object> Object::sharedFromThisOrNull() {
+	try {
+		return weak_from_this().lock();
+	} catch (const std::bad_weak_ptr&) {
+		return nullptr;
+	}
+}
+
 void Object::dispose() {
 	if (mDisposed || mDisposing) {
+		return;
+	}
+	if (CommandBuffer* commands = activeCommandBuffer()) {
+		const Entity entity = mEntity;
+		if (std::shared_ptr<Object> self = sharedFromThisOrNull()) {
+			mDisposing = true;
+			commands->addCommand([self, entity]() { self->disposeImmediate(entity); });
+			return;
+		}
+	}
+	disposeImmediate(mEntity);
+}
+
+void Object::disposeImmediate(Entity entity) {
+	if (mDisposed) {
 		return;
 	}
 	mDisposing = true;
@@ -131,7 +132,7 @@ void Object::dispose() {
 			componentRemovedEvent.run(val.get());
 		}
 	}
-	getWorld().destroyEntity(mEntity);
+	getWorld().getComponentManager()->destroyEntity(entity);
 	mComponents.clear();
 	mTransform = nullptr;
 	mDisposed = true;
@@ -156,8 +157,8 @@ void Object::setTag(const std::string& val) {
 	mTag = val;
 }
 
-void Object::addSerializedComponent(const ComponentsDescriptorType& descriptor) {
-	std::visit([this](const auto& data) { AddComponent(data, this); }, descriptor);
+void Object::addSerializedComponent(const nlohmann::json& descriptor) {
+	ComponentCatalog::instance().read(*this, descriptor);
 	mTransform = getComponent<TransformComponent>();
 }
 

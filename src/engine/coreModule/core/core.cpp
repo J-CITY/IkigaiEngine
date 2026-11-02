@@ -11,6 +11,7 @@
 #include "coreModule/ecs/components/forceField2dComponent.h"
 #endif
 #include "captureModule/screenshot.h"
+#include "coreModule/ecs/componentCatalog.h"
 #include "coreModule/ecs/components/particleSystemComponent.h"
 #include "coroutineModule/scheduler.h"
 #include "resourceModule/particleManager.h"
@@ -28,6 +29,7 @@
 
 #include "../config.h"
 #include "../ecs/systems/audioSystem.h"
+#include "../ecs/systems/guiLayoutSystem.h"
 #include "../ecs/systems/inputSystem.h"
 #include "../ecs/systems/logicSystem.h"
 #include "../ecs/systems/scriptSystem.h"
@@ -54,6 +56,7 @@
 #include <taskModule/taskSystem.h>
 #include <utilsModule/pathGetter.h>
 
+#include "aiModule/navigation/pathQuery.h"
 #include "coreModule/ecs/components/batchComponent.h"
 #include "coreModule/ecs/components/renderTargetComponent.h"
 #include "ecsModule/world.h"
@@ -73,21 +76,9 @@
 using namespace IKIGAI;
 using namespace IKIGAI::CORE;
 
-Core::Core(
-#ifdef DX12_BACKEND
-	HINSTANCE hInstance
-#endif
-#ifdef OCULUS
-	android_app* app
-#endif
-	)
-#ifdef DX12_BACKEND
-	: hInstance(hInstance)
-#endif
-#ifdef OCULUS
-	: androidApp(app)
-#endif
-{
+Core::Core(const PlatformStartup& platform)
+	: nativeInstance(platform.nativeInstance)
+	, androidApp(platform.android) {
 	UTILS::LoadTimer coreTiming("core");
 	UTILS::InitContentRoot();
 	if (!Config::ROOT.empty()) {
@@ -222,7 +213,7 @@ Core::Core(
 
 	windowManager = std::make_unique<WINDOW::WindowManager>();
 #ifdef OCULUS
-	windowManager->setAndroidApp(app);
+	windowManager->setAndroidApp(platform.android);
 #endif
 	window = windowManager->createMainWindow(windowSettings);
 
@@ -237,6 +228,7 @@ Core::Core(
 	inputManager = std::make_unique<INPUT_SYSTEM::InputManager>(*window);
 	inputActions = std::make_unique<INPUT_SYSTEM::InputActions>(*inputManager);
 	inputActions->load(INPUT_SYSTEM::DefaultInputResourcePath);
+	inputActions->loadBindingOverrides();
 	RESOURCES::ServiceManager::Set<WINDOW::Window>(window.get());
 
 	{
@@ -277,97 +269,18 @@ Core::Core(
 
 	RESOURCES::ServiceManager::Set<ECS::World>(world.get());
 
-	auto compMgr = world->getComponentManager();
 	auto sysMgr = world->getSystemManager();
 	{
-		compMgr->registerComponent<ECS::TransformComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::AmbientLight>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::AmbientSphereLight>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::AudioComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::AudioListenerComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::CameraComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::VrCameraComponent>(IKIGAI::ECS::StorageType::Sparse);
-		// compMgr->registerComponent<ECS::ArCameraComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::DirectionalLight>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::InputComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::LogicComponent>(IKIGAI::ECS::StorageType::Sparse);
-#if USE_IKIGAI_SCRIPT
-		compMgr->registerComponent<ECS::IkigaiScriptComponent>(IKIGAI::ECS::StorageType::Sparse);
-#endif
-		compMgr->registerComponent<ECS::MaterialRenderer>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::ModelRenderer>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::PointLight>(IKIGAI::ECS::StorageType::Sparse);
-
-#if USE_LUA
-		compMgr->registerComponent<ECS::ScriptComponent>(IKIGAI::ECS::StorageType::Sparse);
-#endif
-		compMgr->registerComponent<ECS::SpotLight>(IKIGAI::ECS::StorageType::Sparse);
+		ECS::ComponentCatalog::instance().applyStorage(*world);
 #if USE_PHYSICS_3D
-		compMgr->registerComponent<ECS::PhysicsComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::Physics3DComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::RagdollComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::DestructibleMeshComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::ThirdPersonController>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::CapsuleColliderComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::CharacterMotorComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::ThirdPersonCameraComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::TraversalComponent>(ECS::StorageType::Sparse);
-#ifdef IKIGAI_TEST_MODULE
-		compMgr->registerComponent<ECS::CharacterDiagnosticsComponent>(ECS::StorageType::Sparse);
-#endif
 		ECS::CharacterSystem::registerProperties();
-		compMgr->registerComponent<ECS::SoftBody3DComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::Cloth3DComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::Fluid3DComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::ForceField3DComponent>(ECS::StorageType::Sparse);
 #endif
-#if USE_PHYSICS_2D
-		compMgr->registerComponent<ECS::Physics2DComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::SoftBody2DComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::Fluid2DComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::Joint2DComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::ForceField2DComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::Cloth2DComponent>(ECS::StorageType::Sparse);
-#endif
-		compMgr->registerComponent<ECS::ModelLODRenderer>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::BatchComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::RenderTargetComponent>(IKIGAI::ECS::StorageType::Sparse);
-
-		compMgr->registerComponent<ECS::SkeletalComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::SkeletalAnimationComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::FacialAnimationComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::VariableContextComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::BehaviorTreeComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::BlackboardComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::SkeletalStateGraphComponent>(ECS::StorageType::Sparse);
 		ECS::RegisterSceneComponentReflection();
-		// GUI
-		compMgr->registerComponent<ECS::RootGuiComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::SpriteComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::SpriteAnimateComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::SpriteParticleComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::ParticleSystem2DComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::ParticleSystem3DComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::EnvironmentComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::SurfaceComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::FoliageComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::VegetationInteractorComponent>(ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::LabelComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::SdfTextComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::VectorShapeComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::VectorPathComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::VectorCanvasComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::InteractionComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::ClipComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::ScrollComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::LayoutComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::SpineComponent>(IKIGAI::ECS::StorageType::Sparse);
-		compMgr->registerComponent<ECS::ChunkModelRenderer>(IKIGAI::ECS::StorageType::Sparse);
-
 #if USE_LUA
 
 		sysMgr->registerSystem<ECS::ScriptSystem>();
 #endif
+		sysMgr->registerSystem<ECS::GuiLayoutSystem>();
 		sysMgr->registerSystem<ECS::LogicSystem>();
 		sysMgr->registerSystem<ECS::InputSystem>();
 		sysMgr->registerSystem<ECS::AudioSystem>();
@@ -408,6 +321,7 @@ Core::Core(
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonStateGraphLoader>(skeletalStateGraphLoader.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::BehaviorTreeLoader>(behaviorTreeLoader.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::BlackboardLoader>(blackboardLoader.get());
+	AI::registerDefaultPathQuery();
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonBlendspaceLoader>(skeletonBlendspaceLoader.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonAnimationLoader>(skeletonAnimationLoader.get());
 

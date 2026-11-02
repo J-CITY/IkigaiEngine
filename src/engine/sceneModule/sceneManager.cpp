@@ -78,45 +78,6 @@ void SceneManager::loadDefaultScene() {
 	m_currentScene->postLoad();
 }
 
-template <typename T> void addComponentImpl(const std::string& typeNameStr, std::shared_ptr<ECS::Object> obj, nlohmann::json& data) {
-	if (typeNameStr == ECS::GetType<T>()) {
-		auto c = obj->addComponent<T>();
-		// auto result = IKIGAI::UTILS::FromJson<T>(*c, data);
-		// if (result.isErr()) {
-		//	LOG_ERROR << (result.unwrapErr().text);
-		// }
-	}
-}
-
-template <template <typename...> class Container, typename... ComponentType>
-void addComponent(const std::string& typeNameStr, std::shared_ptr<ECS::Object> obj, nlohmann::json& data, Container<ComponentType...> opt) {
-	(addComponentImpl<ComponentType>(typeNameStr, obj, data), ...);
-}
-
-void addComponent(const std::string& typeNameStr, std::shared_ptr<ECS::Object> obj, nlohmann::json& data) {
-	addComponent(typeNameStr, obj, data, ECS::ComponentsTypeProviderType {});
-}
-
-//----------------------------
-
-template <typename T> void saveComponentImpl(const std::string& typeNameStr, UTILS::WeakPtr<ECS::ComponentBase> component, nlohmann::json& data) {
-	if (typeNameStr == ECS::GetType<T>()) {
-		auto _p = std::static_pointer_cast<T>(component);
-		// data = IKIGAI::UTILS::ToJson(*_p);
-		// data["Type"] = typeid(T).name();
-	}
-}
-
-template <template <typename...> class Container, typename... ComponentType>
-void saveComponent(
-	const std::string& typeNameStr, UTILS::WeakPtr<ECS::ComponentBase> component, nlohmann::json& data, Container<ComponentType...> opt) {
-	(saveComponentImpl<ComponentType>(typeNameStr, component, data), ...);
-}
-
-void saveComponent(UTILS::WeakPtr<ECS::ComponentBase> component, nlohmann::json& data) {
-	saveComponent(component->getTypeidName(), component, data, ECS::ComponentsTypeProviderType {});
-}
-
 void SceneManager::loadFromFile(const std::string& sceneFilePath) {
 	if (isPrefabLoading() || (mTransitionTask && !mTransitionTask.done())) {
 		throw std::logic_error("A scene operation is already running");
@@ -219,10 +180,23 @@ void SceneManager::createPrefab(int rootId, const std::string& path) {
 	DOCUMENT::IdMap ids;
 	auto asset = DOCUMENT::MakePrefab(objects, rootId, ids);
 	DOCUMENT::ValidatePrefab(asset);
-	DOCUMENT::Instance instance;
-	instance.entry = { { "Id", rootId }, { "ParentId", root->getParentId() }, { "Prefab", normalized }, { "IdMap", DOCUMENT::WriteMap(ids) },
-		{ "RootOverrides", DOCUMENT::RootValues(objects.front()) } };
-	instance.baseline = objects;
+	nlohmann::json entry { { "Id", rootId }, { "ParentId", root->getParentId() }, { "Prefab", normalized }, { "IdMap", DOCUMENT::WriteMap(ids) } };
+	std::map<std::string, nlohmann::json> prefabCache;
+	prefabCache[normalized] = asset;
+	std::vector<std::string> prefabStack;
+	const auto readPrefab = [&](const std::string& path) -> nlohmann::json {
+		if (path != normalized) {
+			throw std::runtime_error("Unexpected prefab path: " + path);
+		}
+		return asset;
+	};
+	DOCUMENT::Resolver resolver(nlohmann::json::array({ entry }));
+	auto expanded = resolver.Expand(entry, asset, readPrefab, prefabCache, prefabStack);
+	DOCUMENT::Instance instance = std::move(expanded.instances.front());
+	nlohmann::json overrides = nlohmann::json::object();
+	overrides["1"] = DOCUMENT::RootValues(objects.front());
+	instance.entry["Overrides"] = overrides;
+	instance.entry.erase("RootOverrides");
 	// Allocate metadata before writing; failure never leaves the scene linked.
 	scene.prefabInstances.reserve(scene.prefabInstances.size() + 1);
 	fs.writeTextAtomic(normalized, asset.dump(2));

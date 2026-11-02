@@ -1,6 +1,6 @@
 #include "cheatRender.h"
 
-#ifdef USE_CHEATS
+#if USE_CHEATS
 IKIGAI::CHEATS::CheatRender::CheatRender() { }
 
 void IKIGAI::CHEATS::CheatRender::draw() { }

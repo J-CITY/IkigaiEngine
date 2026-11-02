@@ -148,4 +148,35 @@ Pose* AnimBlend::blendPartialAdditiveWithReference(Pose* reference, Pose* second
 
 	return &mPose;
 }
+
+Pose* AnimBlend::blendMasked(Pose* base, Pose* secondary, float t, uint32_t boneMask) {
+	mPose.numKeyframes = base->numKeyframes;
+	for (uint32_t i = 0; i < base->numKeyframes; ++i) {
+		if (boneMask & (1u << i)) {
+			mPose.keyframes[i].translation = MATH::Vector3f::Lerp(base->keyframes[i].translation, secondary->keyframes[i].translation, t);
+			mPose.keyframes[i].rotation = MATH::QuaternionF::Slerp(base->keyframes[i].rotation, secondary->keyframes[i].rotation, t);
+			mPose.keyframes[i].scale = MATH::Vector3f::Lerp(base->keyframes[i].scale, secondary->keyframes[i].scale, t);
+		}
+		else {
+			mPose.keyframes[i] = base->keyframes[i];
+		}
+	}
+	return &mPose;
+}
+
+Pose* AnimBlend::blendMaskedAdditive(Pose* base, Pose* secondary, float t, uint32_t boneMask) {
+	mPose.numKeyframes = base->numKeyframes;
+	for (uint32_t i = 0; i < base->numKeyframes; ++i) {
+		if (boneMask & (1u << i)) {
+			mPose.keyframes[i].translation = base->keyframes[i].translation + secondary->keyframes[i].translation * t;
+			mPose.keyframes[i].rotation = base->keyframes[i].rotation
+				* MATH::QuaternionF::Slerp(MATH::QuaternionF(1.0f, 0.0f, 0.0f, 0.0f), secondary->keyframes[i].rotation, t);
+			mPose.keyframes[i].scale = base->keyframes[i].scale + secondary->keyframes[i].scale * t;
+		}
+		else {
+			mPose.keyframes[i] = base->keyframes[i];
+		}
+	}
+	return &mPose;
+}
 }

@@ -4,7 +4,11 @@
 #include <map>
 #include <mutex>
 #include <ranges>
-
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "idGenerator.h"
 
@@ -81,29 +85,57 @@ public:
 	}
 
 	void run(const std::string_view msg, const Payload& payload, ExecutionPolicy policy = ExecutionPolicy::IMMEDIATELY) {
-		std::lock_guard lock(m);
-		const auto _msg = std::string(msg);
-		if (!mEventMap.contains(_msg)) {
-			return;
-		}
-		if (policy == ExecutionPolicy::IMMEDIATELY) {
-			for (auto& cb : mEventMap[_msg] | std::views::values) {
-				cb(_msg, payload);
+		std::vector<Handler> handlers;
+		const auto message = std::string(msg);
+		{
+			std::lock_guard lock(m);
+			const auto found = mEventMap.find(message);
+			if (found == mEventMap.end()) {
+				return;
+			}
+			if (policy != ExecutionPolicy::IMMEDIATELY) {
+				mDeferredEventsMsgs.push_back({ message, payload });
+				return;
+			}
+			handlers.reserve(found->second.size());
+			for (const auto& callback : found->second | std::views::values) {
+				handlers.push_back(callback);
 			}
 		}
-		else {
-			mDeferredEventsMsgs.push_back({ _msg, payload });
+		for (const auto& callback : handlers) {
+			callback(message, payload);
 		}
 	}
 
 	void runDeferred() {
-		std::lock_guard lock(m);
-		for (auto& [msg, payload] : mDeferredEventsMsgs) {
-			for (auto& cb : mEventMap[msg] | std::views::values) {
-				cb(msg, payload);
+		struct Pending {
+			std::string message;
+			Payload payload;
+			std::vector<Handler> handlers;
+		};
+		std::vector<Pending> pending;
+		{
+			std::lock_guard lock(m);
+			pending.reserve(mDeferredEventsMsgs.size());
+			for (auto& entry : mDeferredEventsMsgs) {
+				Pending item;
+				item.message = std::move(entry.first);
+				item.payload = std::move(entry.second);
+				if (const auto found = mEventMap.find(item.message); found != mEventMap.end()) {
+					item.handlers.reserve(found->second.size());
+					for (const auto& callback : found->second | std::views::values) {
+						item.handlers.push_back(callback);
+					}
+				}
+				pending.push_back(std::move(item));
+			}
+			mDeferredEventsMsgs.clear();
+		}
+		for (const auto& item : pending) {
+			for (const auto& callback : item.handlers) {
+				callback(item.message, item.payload);
 			}
 		}
-		mDeferredEventsMsgs.clear();
 	}
 };
 }

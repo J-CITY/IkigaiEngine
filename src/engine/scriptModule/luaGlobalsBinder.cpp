@@ -11,7 +11,6 @@
 #include <windowModule/inputManager/inputActions.h>
 #include <windowModule/inputManager/inputManager.h>
 
-
 #include "utilsModule/log/loggerDefine.h"
 #include "windowModule/window/window.h"
 
@@ -105,6 +104,7 @@ void LuaGlobalsBinder::BindGlobals(sol::state& p_luaState) {
 
 	p_luaState["Debug"]["Log"] = [](const std::string& p_message) { LOG_INFO << (p_message); };
 	p_luaState["Debug"]["LogIngo"] = [](const std::string& p_message) { LOG_INFO << (p_message); };
+	p_luaState["Debug"]["LogInfo"] = [](const std::string& p_message) { LOG_INFO << (p_message); };
 	p_luaState["Debug"]["LogWarning"] = [](const std::string& p_message) { LOG_WARNING << (p_message); };
 	p_luaState["Debug"]["LogError"] = [](const std::string& p_message) { LOG_ERROR << (p_message); };
 

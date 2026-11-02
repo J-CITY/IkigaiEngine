@@ -14,6 +14,8 @@ public:
 		ComponentReference Animator;
 		std::map<std::string, std::string> Bindings;
 		std::string PoseOffset;
+		ComponentReference RootMotionMotor;
+		bool ApplyRootMotion = false;
 		template <class C> static auto serde(C& c, Descriptor& v) {
 			serde::serde_struct(c, v)
 				.field(&Descriptor::Type, "SkeletalStateGraphComponentType")
@@ -21,7 +23,9 @@ public:
 				.field(&Descriptor::Context, "Context")
 				.field(&Descriptor::Animator, "Animator")
 				.field(&Descriptor::Bindings, "Bindings")
-				.field(&Descriptor::PoseOffset, "PoseOffset", serde::attribute::default_ { std::string {} });
+				.field(&Descriptor::PoseOffset, "PoseOffset", serde::attribute::default_ { std::string {} })
+				.field(&Descriptor::RootMotionMotor, "RootMotionMotor", serde::attribute::default_ { ComponentReference {} })
+				.field(&Descriptor::ApplyRootMotion, "ApplyRootMotion", serde::attribute::default_ { false });
 		}
 	};
 	explicit SkeletalStateGraphComponent(UTILS::Ref<Object>);

@@ -1,13 +1,16 @@
 #pragma once
 
 #include <memory>
+#include <nlohmann/json.hpp>
 #include <span>
 #include <string>
+#include <typeindex>
 #include <vector>
 
 #include "componentTypes.h"
 #include "components/scriptComponent.h"
 #include "components/transform.h"
+#include "ecsModule/commandBuffer.h"
 #include "ecsModule/world.h"
 #include <scriptModule/scriptInterpreter.h>
 #include <utilsModule/event.h>
@@ -26,7 +29,7 @@ public:
 		int ParentId;
 		bool IsActive = false;
 		bool IsVisible = true;
-		std::vector<ComponentsDescriptorType> Components;
+		std::vector<nlohmann::json> Components;
 
 		template <class Context> constexpr static auto serde(Context& context, Descriptor& value) {
 			using Self = Descriptor;
@@ -53,7 +56,7 @@ public:
 	ECS::World& getWorld() const {
 		return *mWorld;
 	}
-	void addSerializedComponent(const ComponentsDescriptorType& descriptor);
+	void addSerializedComponent(const nlohmann::json& descriptor);
 	void setPendingActive(bool active) {
 		mIsActive = active;
 	}
@@ -138,33 +141,21 @@ public:
 
 	template <typename T> inline bool removeComponent() {
 		static_assert(std::is_base_of_v<ComponentBase, T>, "T should derive from Component");
-		// create method in rteflection genereted file
-		// static_assert(!std::is_same_v<TransformComponent, T>, "You can't remove a Transform from an actor");
 		if constexpr (std::is_same<T, TransformComponent>::value) {
 			return false;
 		}
-
-		auto result = getComponent<T>();
-		if (!result) {
-			return false;
+		if (CommandBuffer* commands = activeCommandBuffer()) {
+			if (!getComponent<T>()) {
+				return false;
+			}
+			const Entity entity = mEntity;
+			const std::type_index type = typeid(T);
+			if (std::shared_ptr<Object> self = sharedFromThisOrNull()) {
+				commands->addCommand([self, entity, type]() { self->template removeComponentNow<T>(entity, type); });
+				return true;
+			}
 		}
-		// TODO: move it to ScriptComponent::onStart()
-#if USE_LUA
-
-		if constexpr (std::is_same<T, ScriptComponent>::value) {
-			ScriptComponentEvents::destroyedEvent.run(result);
-		}
-#endif
-		// Removal must run lifecycle callbacks while the component and its
-		// dependencies are still alive (e.g. an animator playback lease).
-		if (getIsActive()) {
-			result->onDisable();
-		}
-		result->onDestroy();
-		componentRemovedEvent.run(result);
-		getWorld().getComponentManager()->removeComponents<T>(getID());
-		mComponents.erase(std::type_index(typeid(T)));
-		return true;
+		return removeComponentNow<T>(mEntity, std::type_index(typeid(T)));
 	}
 
 	template <typename T> inline UTILS::WeakPtr<T> getComponent() const {
@@ -202,6 +193,37 @@ public:
 
 private:
 	void recursiveActiveUpdate();
+	void disposeImmediate(Entity entity);
+	std::shared_ptr<Object> sharedFromThisOrNull();
+
+	template <typename T> bool removeComponentNow(Entity entity, std::type_index type) {
+		static_assert(std::is_base_of_v<ComponentBase, T>, "T should derive from Component");
+		if constexpr (std::is_same<T, TransformComponent>::value) {
+			return false;
+		}
+
+		auto result = getComponent<T>();
+		if (!result) {
+			return false;
+		}
+		// TODO: move it to ScriptComponent::onStart()
+#if USE_LUA
+
+		if constexpr (std::is_same<T, ScriptComponent>::value) {
+			ScriptComponentEvents::destroyedEvent.run(result);
+		}
+#endif
+		// Removal must run lifecycle callbacks while the component and its
+		// dependencies are still alive (e.g. an animator playback lease).
+		if (getIsActive()) {
+			result->onDisable();
+		}
+		result->onDestroy();
+		componentRemovedEvent.run(result);
+		getWorld().getComponentManager()->removeComponents<T>(entity);
+		mComponents.erase(type);
+		return true;
+	}
 
 public:
 	EVENT::Event<UTILS::WeakPtr<ComponentBase>> componentAddedEvent;

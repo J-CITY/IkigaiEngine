@@ -1,3 +1,5 @@
+#include "aiModule/navigation/pathQuery.h"
+#include "resourceModule/serviceManager.h"
 #include "taskParameters.h"
 #include <cmath>
 
@@ -52,6 +54,33 @@ namespace {
 		BlackboardKeyId mKey = 0;
 		std::optional<BlackboardValue> mValue;
 	};
+	std::optional<MATH::Vector3f> movementTarget(TaskContext& context, BlackboardKeyId target) {
+		if (!context.host) {
+			return std::nullopt;
+		}
+		const auto& value = context.blackboard.read(target);
+		if (!value) {
+			return std::nullopt;
+		}
+		if (const auto* vector = std::get_if<MATH::Vector3f>(&*value)) {
+			return *vector;
+		}
+		if (const auto* entity = std::get_if<EntityRef>(&*value); entity && entity->alive()) {
+			return context.host->position(*entity);
+		}
+		return std::nullopt;
+	}
+	const PathQuery* movementNavigation(const TaskContext& context) {
+		if (context.host) {
+			if (const auto* local = context.host->navigation()) {
+				return local;
+			}
+		}
+		if (RESOURCES::ServiceManager::Check<PathQuery>()) {
+			return &RESOURCES::ServiceManager::Get<PathQuery>();
+		}
+		return nullptr;
+	}
 	class MoveTask final : public BehaviorTask {
 	public:
 		MoveTask(BlackboardKeyId target, MoveParameters parameters, bool faceOnly)
@@ -70,22 +99,19 @@ namespace {
 				return TaskResult::Failure;
 			}
 			const auto owner = context.host->ownerPosition();
-			const auto& value = context.blackboard.read(mTarget);
-			if (!owner || !value) {
+			const auto destination = movementTarget(context, mTarget);
+			if (!owner || !destination) {
 				return TaskResult::Failure;
 			}
-			std::optional<MATH::Vector3f> destination;
-			if (const auto* vector = std::get_if<MATH::Vector3f>(&*value)) {
-				destination = *vector;
-			}
-			else if (const auto* entity = std::get_if<EntityRef>(&*value); entity && entity->alive()) {
-				destination = context.host->position(*entity);
-			}
-			if (!destination) {
-				return TaskResult::Failure;
-			}
-			const float x = destination->x - owner->x;
-			const float z = destination->z - owner->z;
+			return moveToward(context, *owner, *destination);
+		}
+
+	protected:
+		MoveParameters mParameters {};
+		double mDeadline = 0;
+		TaskResult moveToward(TaskContext& context, MATH::Vector3f owner, MATH::Vector3f destination) {
+			const float x = destination.x - owner.x;
+			const float z = destination.z - owner.z;
 			const float distance = std::sqrt(x * x + z * z);
 			if (distance <= mParameters.AcceptanceRadius) {
 				return TaskResult::Success;
@@ -105,11 +131,54 @@ namespace {
 			return context.host->move(context.token, velocity, heading) ? TaskResult::Running : TaskResult::Failure;
 		}
 
-	private:
 		BlackboardKeyId mTarget = 0;
-		MoveParameters mParameters;
-		double mDeadline = 0;
 		bool mFaceOnly = false;
+	};
+	class MoveToTask final : public MoveTask {
+	public:
+		using MoveTask::MoveTask;
+		TaskResult enter(TaskContext& context) override {
+			mDeadline = context.time + mParameters.Timeout;
+			const auto owner = context.host ? context.host->ownerPosition() : std::nullopt;
+			const auto destination = movementTarget(context, mTarget);
+			if (!owner || !destination) {
+				return TaskResult::Failure;
+			}
+			if (const auto* navigation = movementNavigation(context)) {
+				mWaypoints = navigation->findPath(*owner, *destination);
+			}
+			if (!mWaypoints || mWaypoints->empty()) {
+				mWaypoints = StraightLinePathQuery {}.findPath(*owner, *destination);
+			}
+			if (!mWaypoints || mWaypoints->size() < 2) {
+				return TaskResult::Failure;
+			}
+			mWaypoint = 1;
+			return tick(context);
+		}
+		TaskResult tick(TaskContext& context) override {
+			if (!context.host || context.time >= mDeadline) {
+				return TaskResult::Failure;
+			}
+			const auto owner = context.host->ownerPosition();
+			if (!owner || !mWaypoints || mWaypoint >= mWaypoints->size()) {
+				return TaskResult::Failure;
+			}
+			const auto& destination = mWaypoints->at(mWaypoint);
+			const float x = destination.x - owner->x;
+			const float z = destination.z - owner->z;
+			const float distance = std::sqrt(x * x + z * z);
+			if (distance <= mParameters.AcceptanceRadius) {
+				if (++mWaypoint >= mWaypoints->size()) {
+					return TaskResult::Success;
+				}
+			}
+			return moveToward(context, *owner, mWaypoints->at(mWaypoint));
+		}
+
+	private:
+		std::optional<std::vector<MATH::Vector3f>> mWaypoints;
+		size_t mWaypoint = 0;
 	};
 	BlackboardKeyId writableKey(const BlackboardSchema& schema, const std::string& name) {
 		const auto key = schema.key(name);
@@ -147,8 +216,8 @@ void registerBuiltinTasks(BehaviorRegistry& registry) {
 		const auto key = writableKey(schema, parameters.Key);
 		return [key] { return std::make_unique<WriteTask>(key, std::nullopt); };
 	});
-	for (const auto& [name, faceOnly] : { std::pair { "MoveDirectlyTo", false }, { "FaceTarget", true } }) {
-		registry.addTask(name, [faceOnly](const auto& json, const BlackboardSchema& schema) -> TaskFactory {
+	auto registerMoveTask = [&](const char* name, bool faceOnly, bool pathAware) {
+		registry.addTask(name, [=](const auto& json, const BlackboardSchema& schema) -> TaskFactory {
 			const auto parameters = readDescriptor<MoveParameters>(json);
 			const auto key = schema.key(parameters.Target);
 			const auto type = schema.keys[key].Type;
@@ -157,8 +226,16 @@ void registerBuiltinTasks(BehaviorRegistry& registry) {
 				|| parameters.Timeout <= 0) {
 				throw std::runtime_error("Invalid movement target, Speed, AcceptanceRadius or Timeout");
 			}
-			return [key, parameters, faceOnly] { return std::make_unique<MoveTask>(key, parameters, faceOnly); };
+			return [=] {
+				if (pathAware) {
+					return std::make_unique<MoveToTask>(key, parameters, faceOnly);
+				}
+				return std::make_unique<MoveTask>(key, parameters, faceOnly);
+			};
 		});
-	}
+	};
+	registerMoveTask("MoveDirectlyTo", false, false);
+	registerMoveTask("MoveTo", false, true);
+	registerMoveTask("FaceTarget", true, false);
 }
 }

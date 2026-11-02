@@ -13,4 +13,13 @@ ForceField2DComponent::ForceField2DComponent(UTILS::Ref<Object> object, const De
 	settings = descriptor;
 	settings.Type = GetType<ForceField2DComponent>();
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::ForceField2DComponent>();
+	return true;
+}();
+}
+
 #endif

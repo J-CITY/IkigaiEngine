@@ -74,3 +74,12 @@ template <int D> void ParticleSystemComponent<D>::setParameter(const std::string
 template class ParticleSystemComponent<2>;
 template class ParticleSystemComponent<3>;
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::ParticleSystem2DComponent>();
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::ParticleSystem3DComponent>();
+	return true;
+}();
+}

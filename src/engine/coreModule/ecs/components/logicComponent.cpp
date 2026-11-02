@@ -20,3 +20,11 @@ LogicComponent::Descriptor LogicComponent::getDescriptor() const {
 	descriptor.Type = GetType<LogicComponent>();
 	return descriptor;
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::LogicComponent>();
+	return true;
+}();
+}

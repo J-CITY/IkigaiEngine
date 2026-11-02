@@ -1,22 +1,10 @@
+#include "componentCatalog.h"
 #include "componentReference.inl"
-#include "componentTypes.h"
 #include "utilsModule/reflection/reflection.h"
 #include <map>
 
 namespace IKIGAI::ECS {
 namespace {
-	using Resolver = UTILS::WeakPtr<ComponentBase> (*)(Object&);
-	template <class... T> auto resolvers(ComponentsTypeProvider<T...>) {
-		return std::map<std::string, Resolver> { { GetComponentName<T>(), +[](Object& o) -> UTILS::WeakPtr<ComponentBase> {
-													  auto component = o.getComponent<T>();
-													  return component ? UTILS::WeakPtr<ComponentBase>(static_cast<ComponentBase*>(component.get()))
-																	   : nullptr;
-												  } }... };
-	}
-	auto& types() {
-		static auto r = resolvers(ComponentsTypeProviderType {});
-		return r;
-	}
 	auto& properties() {
 		static std::map<std::pair<std::string, std::string>, PropertyRegistry::Accessor> r;
 		return r;
@@ -26,12 +14,11 @@ UTILS::WeakPtr<ComponentBase> ResolveComponent(SCENE_SYSTEM::Scene& scene, const
 	if (r.empty()) {
 		return nullptr;
 	}
-	auto it = types().find(r.Component);
-	if (it == types().end()) {
+	if (!ComponentCatalog::instance().findByName(r.Component)) {
 		throw std::runtime_error("Unknown component reference type: " + r.Component);
 	}
 	auto object = scene.findObjectByID(ECS::Entity(ECS::Entity::ID(r.ObjectId)));
-	return object ? it->second(*object) : nullptr;
+	return object ? ComponentCatalog::instance().resolveOnObject(*object, r.Component) : nullptr;
 }
 DATA::Value PropertyBinding::read(SCENE_SYSTEM::Scene& scene) const {
 	if (!handle) {
@@ -101,55 +88,17 @@ PropertyBinding PropertyRegistry::bind(SCENE_SYSTEM::Scene& scene, const Propert
 	}
 	return { r.Target, type, it->second.get, handle };
 }
-namespace {
-	template <class T> void registerSceneComponent() {
-		auto& reflection = UTILS::ReflectionManager::Instance();
-		reflection.registerType<T>();
-		reflection.addTypeToGroup<T>("Component");
-		reflection.registerStaticField<T, std::string>("ClassName", std::function<std::string()>([] { return GetComponentName<T>(); }), {});
-		reflection.registerStaticMethod<T>("AddComponent", +[](std::shared_ptr<Object> object) { object->addComponent<T>(); });
-		reflection.registerStaticMethod<T>("RemoveComponent", +[](std::shared_ptr<Object> object) { object->removeComponent<T>(); });
-		auto* type = reflection.getType<T>();
-		UTILS::MethodInfo configuration;
-		configuration.name = "Configuration";
-		configuration.invoke = [](void* instance, const std::vector<UTILS::Any>&) -> UTILS::Any {
-			auto json = UTILS::ToJson(static_cast<T*>(instance)->getDescriptor());
-			if (!json.isOk()) {
-				throw std::runtime_error("Component configuration serialization failed");
-			}
-			return json.unwrap();
-		};
-		type->mMethods[configuration.name] = std::move(configuration);
-	}
-}
 void RegisterSceneComponentReflection() {
-	registerSceneComponent<BehaviorTreeComponent>();
-	registerSceneComponent<BlackboardComponent>();
-	registerSceneComponent<VariableContextComponent>();
-	registerSceneComponent<SkeletalStateGraphComponent>();
-	registerSceneComponent<FacialAnimationComponent>();
-	registerSceneComponent<SurfaceComponent>();
-	registerSceneComponent<FoliageComponent>();
-	registerSceneComponent<ChunkModelRenderer>();
-	UTILS::ReflectionManager::Instance().registerMethod("SetWeight", &FacialAnimationComponent::setWeight);
-	UTILS::ReflectionManager::Instance().registerMethod("Play", &FacialAnimationComponent::play);
-	UTILS::ReflectionManager::Instance().registerMethod("ClearWeights", &FacialAnimationComponent::clearWeights);
+	auto& reflection = UTILS::ReflectionManager::Instance();
+	reflection.registerMethod("SetWeight", &FacialAnimationComponent::setWeight);
+	reflection.registerMethod("Play", &FacialAnimationComponent::play);
+	reflection.registerMethod("ClearWeights", &FacialAnimationComponent::clearWeights);
 #if USE_PHYSICS_3D
-	registerSceneComponent<CapsuleColliderComponent>();
-	registerSceneComponent<CharacterMotorComponent>();
-	registerSceneComponent<ThirdPersonController>();
-	registerSceneComponent<ThirdPersonCameraComponent>();
-	registerSceneComponent<TraversalComponent>();
-	registerSceneComponent<RagdollComponent>();
-	registerSceneComponent<DestructibleMeshComponent>();
-	UTILS::ReflectionManager::Instance().registerMethod("Slice", &DestructibleMeshComponent::slice);
-	UTILS::ReflectionManager::Instance().registerMethod("Reset", &DestructibleMeshComponent::reset);
-	UTILS::ReflectionManager::Instance().registerMethod("Activate", &RagdollComponent::activate);
-	UTILS::ReflectionManager::Instance().registerMethod("Reset", &RagdollComponent::reset);
-	UTILS::ReflectionManager::Instance().registerMethod("ApplyImpulse", &RagdollComponent::applyImpulse);
-#ifdef IKIGAI_TEST_MODULE
-	registerSceneComponent<CharacterDiagnosticsComponent>();
-#endif
+	reflection.registerMethod("Slice", &DestructibleMeshComponent::slice);
+	reflection.registerMethod("Reset", &DestructibleMeshComponent::reset);
+	reflection.registerMethod("Activate", &RagdollComponent::activate);
+	reflection.registerMethod("Reset", &RagdollComponent::reset);
+	reflection.registerMethod("ApplyImpulse", &RagdollComponent::applyImpulse);
 #endif
 }
 

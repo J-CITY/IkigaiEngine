@@ -1,19 +1,17 @@
+#include "scene.h"
 #include "coreModule/ecs/components/capsuleColliderComponent.h"
 #include "coreModule/ecs/components/characterMotorComponent.h"
+#include "coreModule/ecs/components/skeletalStateGraphComponent.h"
 #include "coreModule/ecs/components/thirdPersonCameraComponent.h"
 #include "coreModule/ecs/components/traversalComponent.h"
+#include "coreModule/ecs/components/variableContextComponent.h"
 #include "coreModule/ecs/systems/behaviorTreeSystem.h"
 #include "coreModule/ecs/systems/characterSystem.h"
 #include "coreModule/ecs/systems/environmentSystem.h"
 #include "coreModule/ecs/systems/skeletalStateGraphSystem.h"
 #include "coreModule/ecs/systems/surfaceSystem.h"
 #include "coreModule/ecs/systems/variableContextSystem.h"
-#ifdef IKIGAI_TEST_MODULE
-#include "sceneModule/characterDiagnostics.h"
-#endif
-#include "coreModule/ecs/components/skeletalStateGraphComponent.h"
-#include "coreModule/ecs/components/variableContextComponent.h"
-#include "scene.h"
+#include "coreModule/testHooks.h"
 #if USE_PHYSICS_3D
 #include "coreModule/ecs/components/ragdollComponent.h"
 #include "coreModule/ecs/systems/destructionSystem.h"
@@ -223,9 +221,9 @@ void Scene::update(std::chrono::duration<double> dt) {
 #if USE_PHYSICS_3D
 	ECS::RagdollSystem::update(*this, std::clamp(float(dt.count()), 0.f, .1f));
 	ECS::CharacterSystem::update(*this, std::clamp(float(dt.count()), 0.f, .1f));
-#ifdef IKIGAI_TEST_MODULE
-	CharacterDiagnostics::waitForFrame(*this);
-#endif
+	if (TESTHOOK::waitForFrame) {
+		TESTHOOK::waitForFrame(*this);
+	}
 #endif
 	for (auto& o : objects) {
 		o->onUpdate(dt);
@@ -266,9 +264,9 @@ void Scene::finishFixedUpdate(std::chrono::duration<double> dt) {
 	ECS::RagdollSystem::afterAnimation(*this, float(dt.count()));
 #endif
 #if USE_PHYSICS_3D
-#ifdef IKIGAI_TEST_MODULE
-	CharacterDiagnostics::afterAnimation(*this, float(dt.count()));
-#endif
+	if (TESTHOOK::afterAnimation) {
+		TESTHOOK::afterAnimation(*this, float(dt.count()));
+	}
 #endif
 }
 
@@ -518,13 +516,15 @@ nlohmann::json Scene::serializeObjects() const {
 	return result;
 }
 void Scene::capturePrefabBaselines() {
-	const auto descriptors = serializeObjects();
 	for (auto& instance : prefabInstances) {
+		if (!instance.baseline.empty()) {
+			continue;
+		}
+		const auto descriptors = serializeObjects();
 		std::unordered_set<int> owned;
 		for (auto [local, id] : DOCUMENT::ReadMap(instance.entry)) {
 			owned.insert(id);
 		}
-		instance.baseline = nlohmann::json::array();
 		for (const auto& object : descriptors) {
 			if (owned.contains(DOCUMENT::Id(object.at("Id")))) {
 				instance.baseline.push_back(object);
@@ -571,12 +571,13 @@ std::shared_ptr<ECS::Object> Scene::appendDocument(const DOCUMENT::Expanded& doc
 		}
 		for (const auto& source : document.instances) {
 			auto instance = source;
-			instance.baseline = nlohmann::json::array();
-			const auto ids = DOCUMENT::ReadMap(instance.entry);
-			for (auto value : serializeObjects()) {
-				const int id = DOCUMENT::Id(value.at("Id"));
-				if (std::any_of(ids.begin(), ids.end(), [id](auto pair) { return pair.second == id; })) {
-					instance.baseline.push_back(std::move(value));
+			if (instance.baseline.empty()) {
+				const auto ids = DOCUMENT::ReadMap(instance.entry);
+				for (auto value : serializeObjects()) {
+					const int id = DOCUMENT::Id(value.at("Id"));
+					if (std::any_of(ids.begin(), ids.end(), [id](auto pair) { return pair.second == id; })) {
+						instance.baseline.push_back(std::move(value));
+					}
 				}
 			}
 			prefabInstances.push_back(std::move(instance));

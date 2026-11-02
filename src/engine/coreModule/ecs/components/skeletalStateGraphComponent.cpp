@@ -1,10 +1,14 @@
 #include "skeletalStateGraphComponent.h"
 #include "coreModule/ecs/componentReference.inl"
+#include "coreModule/testHooks.h"
 #include "resourceModule/serviceManager.h"
 #include "resourceModule/skeletonStateGraphManager.h"
 #include "skeletalAnimationComponent.h"
 #include "skeletalComponent.h"
 #include "variableContextComponent.h"
+#if USE_PHYSICS_3D
+#include "characterMotorComponent.h"
+#endif
 #include <iostream>
 
 namespace IKIGAI::ECS {
@@ -38,16 +42,19 @@ void SkeletalStateGraphComponent::update(SCENE_SYSTEM::Scene& scene, float dt) {
 	auto animator = Resolve<SkeletalAnimationComponent>(scene, settings.Animator);
 	auto context = Resolve<VariableContextComponent>(scene, settings.Context);
 	if (!animator || !context) {
-		throw std::runtime_error("State graph context/animator reference is missing");
+		std::cerr << "State graph context/animator reference is missing on " << obj->getName() << std::endl;
+		return;
 	}
 	auto resource = RESOURCES::ServiceManager::Get<RESOURCES::SkeletonStateGraphLoader>().loadResource(settings.Graph);
 	if (!resource || !resource->definition) {
-		throw std::runtime_error("State graph component requires a compiled graph");
+		std::cerr << "State graph component requires a compiled graph: " << settings.Graph << std::endl;
+		return;
 	}
 	if (!instance) {
 		auto skeleton = animator->obj->getComponent<SkeletalComponent>();
 		if (!skeleton || !skeleton->getSkeleton()) {
-			throw std::runtime_error("State graph animator has no skeleton");
+			std::cerr << "State graph animator has no skeleton on " << obj->getName() << std::endl;
+			return;
 		}
 		environment = std::make_shared<UTILS::Environment>();
 		// The instance keeps the loader resource alive (the loader cache is weak).
@@ -90,9 +97,9 @@ void SkeletalStateGraphComponent::update(SCENE_SYSTEM::Scene& scene, float dt) {
 				throw std::runtime_error(error);
 			}
 			bindings = std::move(candidate);
-#ifdef IKIGAI_TEST_MODULE
-			std::cout << "STATE_GRAPH_RELOAD_OK state=" << instance->runtime()->state() << std::endl;
-#endif
+			if (TESTHOOK::stateGraphReloaded) {
+				TESTHOOK::stateGraphReloaded(instance->runtime()->state());
+			}
 		} catch (const std::exception& e) {
 			std::cerr << "State graph component reload rejected: " << e.what() << std::endl;
 		}
@@ -128,6 +135,33 @@ void SkeletalStateGraphComponent::update(SCENE_SYSTEM::Scene& scene, float dt) {
 		instance->runtime()->setPoseOffset(std::get<MATH::Vector3f>(context->read(context->slot(settings.PoseOffset))));
 	}
 	instance->update(dt);
+#if USE_PHYSICS_3D
+	if (settings.ApplyRootMotion) {
+		const auto& motion = instance->rootMotion();
+		if (motion.valid) {
+			if (TESTHOOK::rootMotionSampled) {
+				TESTHOOK::rootMotionSampled(motion);
+			}
+			if (auto motor = Resolve<CharacterMotorComponent>(scene, settings.RootMotionMotor)) {
+				const auto delta = MATH::QuaternionF(MATH::Vector3f { 0, motor->heading, 0 }) * motion.translationDeltaMeters;
+				motor->motor.capsule.feet += delta;
+			}
+		}
+	}
+#endif
+	for (const auto& event : instance->consumeAnimationEvents()) {
+		if (TESTHOOK::animationEvent) {
+			TESTHOOK::animationEvent(event.clip, event.name, event.timeSeconds);
+		}
+	}
 	lastTick = context->tick();
 }
+}
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::SkeletalStateGraphComponent>();
+	return true;
+}();
 }

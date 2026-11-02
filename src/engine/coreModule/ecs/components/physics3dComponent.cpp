@@ -54,4 +54,17 @@ ForceField3DComponent::ForceField3DComponent(UTILS::Ref<Object> object, const De
 	settings.Type = GetType<ForceField3DComponent>();
 }
 
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::Physics3DComponent>();
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::SoftBody3DComponent>();
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::Cloth3DComponent>();
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::Fluid3DComponent>();
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::ForceField3DComponent>();
+	return true;
+}();
+}
+
 #endif // USE_PHYSICS_3D

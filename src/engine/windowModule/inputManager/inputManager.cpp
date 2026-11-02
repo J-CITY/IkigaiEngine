@@ -29,6 +29,9 @@ InputManager::InputManager(IKIGAI::WINDOW::Window& _window)
 		std::bind(&InputManager::onGamepadTrigger, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 	mGamepadAddListener = mWindow.gamepadAddEvent.add(std::bind(&InputManager::addGamepad, this, std::placeholders::_1));
 	mGamepadRemoveListener = mWindow.gamepadRemoveEvent.add(std::bind(&InputManager::removeGamepad, this, std::placeholders::_1));
+#ifdef USE_SDL
+	mTouchFingerListener = mWindow.touchFingerEvent.add(std::bind(&InputManager::onTouchFinger, this, std::placeholders::_1));
+#endif
 }
 
 InputManager::~InputManager() {
@@ -43,6 +46,69 @@ InputManager::~InputManager() {
 	mWindow.gamepadTriggerEvent.removeListener(mGamepadTriggerListener);
 	mWindow.gamepadAddEvent.removeListener(mGamepadAddListener);
 	mWindow.gamepadRemoveEvent.removeListener(mGamepadRemoveListener);
+#ifdef USE_SDL
+	mWindow.touchFingerEvent.removeListener(mTouchFingerListener);
+#endif
+}
+
+void InputManager::beginInputFrame(std::chrono::duration<double> dt) {
+	mFrameDeltaSeconds = static_cast<float>(dt.count());
+	mSwipeRecognizer.beginFrame();
+}
+
+void InputManager::pushPointerEvent(PointerEvent event) {
+	if (mDragCapture.hasCapture() && !mDragCapture.ownsPointer(event.pointerId) && event.phase != PointerPhase::Ended
+		&& event.phase != PointerPhase::Cancelled) {
+		return;
+	}
+	mPointerEvents.push_back(event);
+	mSwipeRecognizer.onPointer(event, mFrameDeltaSeconds);
+	mVirtualStick.onPointer(event);
+}
+
+#ifdef USE_SDL
+void InputManager::onTouchFinger(const WINDOW::TouchFingerEvent& event) {
+	PointerEvent pointer;
+	pointer.pointerId = event.fingerId;
+	pointer.source = PointerSource::Touch;
+	pointer.position = { event.x, event.y };
+	pointer.delta = { event.dx, event.dy };
+	switch (event.phase) {
+	case WINDOW::TouchFingerEvent::Phase::Down:
+		pointer.phase = PointerPhase::Began;
+		break;
+	case WINDOW::TouchFingerEvent::Phase::Move:
+		pointer.phase = PointerPhase::Moved;
+		break;
+	case WINDOW::TouchFingerEvent::Phase::Up:
+		pointer.phase = PointerPhase::Ended;
+		break;
+	case WINDOW::TouchFingerEvent::Phase::Cancel:
+		pointer.phase = PointerPhase::Cancelled;
+		break;
+	}
+	pushPointerEvent(pointer);
+}
+#endif
+
+bool InputManager::tryCapturePointer(std::int64_t pointerId) {
+	return mDragCapture.tryCapture(pointerId);
+}
+
+void InputManager::releasePointerCapture(std::int64_t pointerId) {
+	mDragCapture.release(pointerId);
+}
+
+bool InputManager::isPointerCaptured(std::int64_t pointerId) const {
+	return mDragCapture.ownsPointer(pointerId);
+}
+
+void InputManager::configureVirtualStick(MATH::Vector2f center, float hitRadius, float deadzone) {
+	mVirtualStick.configure(center, hitRadius, deadzone);
+}
+
+MATH::Vector2f InputManager::getVirtualStickValue() const {
+	return mVirtualStick.value();
 }
 
 bool InputManager::isKeyPressed(EKey p_key) const {
@@ -159,7 +225,8 @@ void InputManager::endFrame() {
 	mMouseReleasedThisFrame.clear();
 	mGamepadPressedThisFrame.clear();
 	mGamepadReleasedThisFrame.clear();
-	mMouseDelta = { };
+	mMouseDelta = {};
+	mPointerEvents.clear();
 }
 
 void InputManager::onKeyPressed(int p_key) {
@@ -178,17 +245,35 @@ void InputManager::onMouseButtonPressed(int p_button) {
 	const auto button = static_cast<EMouseButton>(p_button);
 	mMouseButtonEvents[button] = EMouseButtonState::MOUSE_DOWN;
 	mMousePressedThisFrame.insert(button);
+	if (button == EMouseButton::MOUSE_BUTTON_LEFT) {
+		mMousePointerDown = true;
+		const auto pos = getMousePosition();
+		pushPointerEvent(
+			{ kMousePointerId, PointerPhase::Began, PointerSource::Mouse, { static_cast<float>(pos.x), static_cast<float>(pos.y) }, {} });
+	}
 }
 
 void InputManager::onMouseButtonReleased(int p_button) {
 	const auto button = static_cast<EMouseButton>(p_button);
 	mMouseButtonEvents[button] = EMouseButtonState::MOUSE_UP;
 	mMouseReleasedThisFrame.insert(button);
+	if (button == EMouseButton::MOUSE_BUTTON_LEFT) {
+		mMousePointerDown = false;
+		const auto pos = getMousePosition();
+		pushPointerEvent(
+			{ kMousePointerId, PointerPhase::Ended, PointerSource::Mouse, { static_cast<float>(pos.x), static_cast<float>(pos.y) }, {} });
+		mDragCapture.release(kMousePointerId);
+	}
 }
 
 void InputManager::onMouseMoved(float dx, float dy) {
 	mMouseDelta.x += dx;
 	mMouseDelta.y += dy;
+	if (mMousePointerDown) {
+		const auto pos = getMousePosition();
+		pushPointerEvent(
+			{ kMousePointerId, PointerPhase::Moved, PointerSource::Mouse, { static_cast<float>(pos.x), static_cast<float>(pos.y) }, { dx, dy } });
+	}
 }
 
 void InputManager::onGamepadButtonPressed(int id, INPUT::Gamepad::GAMEPAD_BUTTON key) {

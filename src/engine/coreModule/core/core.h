@@ -116,32 +116,15 @@ namespace WINDOW {
 }
 }
 
-#ifdef DX12_BACKEND
-#include <Windows.h>
-#endif
-#ifdef OCULUS
-#include <android_native_app_glue.h>
-#endif
+#include "platformStartup.h"
 namespace IKIGAI {
 namespace CORE {
 	class Core final {
 	public:
-#ifdef DX12_BACKEND
-		HINSTANCE hInstance;
-#endif
-		Core(
-#ifdef DX12_BACKEND
-			HINSTANCE hInstance
-#endif
-#ifdef OCULUS
-			android_app* app
-#endif
-		);
-		~Core();
-
-#ifdef OCULUS
+		void* nativeInstance = nullptr;
 		android_app* androidApp = nullptr;
-#endif
+		explicit Core(const PlatformStartup& platform);
+		~Core();
 
 		std::unique_ptr<WINDOW::WindowManager> windowManager;
 		std::shared_ptr<WINDOW::Window> window;

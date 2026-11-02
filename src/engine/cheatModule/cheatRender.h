@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef USE_CHEATS
+#if USE_CHEATS
 namespace IKIGAI::CHEATS {
 class CheatRender {
 public:

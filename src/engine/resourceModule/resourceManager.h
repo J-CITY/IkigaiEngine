@@ -3,13 +3,18 @@
 #include "resourceConfigCache.h"
 #include "resourceRequest.h"
 #include <any>
+#include <chrono>
 #include <future>
 #include <mutex>
+#include <thread>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #include "fileSystem/fileSystem.h"
 #include "fileWatcher.h"
 #include "serviceManager.h"
+#include "taskModule/taskSystem.h"
 #include "utilsModule/assertion.h"
 #include "utilsModule/event.h"
 #include "utilsModule/idGenerator.h"
@@ -45,6 +50,10 @@ namespace RESOURCES {
 		}
 
 		static std::string NormalizePath(std::string path) {
+			if (!path.empty() && path.front() == '/' && path.find('\\') == std::string::npos && path.find("assets/engine/") == std::string::npos
+				&& path.find("assets/game/") == std::string::npos) {
+				return path;
+			}
 			path = UTILS::ReplaceSubstrings(path, "\\", "/");
 			for (const auto prefix : { "assets/engine/", "assets/game/" }) {
 				if (const auto pos = path.find(prefix); pos != std::string::npos) {
@@ -79,52 +88,88 @@ namespace RESOURCES {
 
 		ResourcePtr<ResourceT> loadResource(const std::string& path, ELoadingType type, std::any data) {
 			const auto _path = NormalizePath(path);
-
-			{
-				std::lock_guard<std::recursive_mutex> lock(mMutex);
-				if (auto resource = getResource(_path)) {
-					return resource;
-				}
-			}
-
-			static thread_local std::unordered_set<std::string> creating;
 			const auto creationKey = std::to_string(static_cast<int>(type)) + ":" + _path;
-			if (!creating.insert(creationKey).second) {
-				throw std::runtime_error("Resource dependency cycle: " + _path);
-			}
-			struct CreationGuard {
+			static thread_local std::unordered_set<std::string> creating;
+			struct CycleGuard {
 				std::unordered_set<std::string>& set;
 				std::string key;
-				~CreationGuard() {
-					set.erase(key);
+				bool active = false;
+				~CycleGuard() {
+					if (active) {
+						set.erase(key);
+					}
 				}
-			} guard { creating, creationKey };
-			auto newResource = createResource(_path, type, data);
-			if (newResource) {
-				return registerResource(_path, newResource);
+			} cycle { creating, creationKey };
+
+			// One normalized path has a single creator. Other threads wait on that
+			// attempt without holding mMutex. Same-thread reentry uses the cycle set
+			// and must not wait on its own promise.
+			std::promise<ResourcePtr<ResourceT>> promise;
+			std::shared_future<ResourcePtr<ResourceT>> pending;
+			bool creator = false;
+			{
+				std::lock_guard<std::recursive_mutex> lock(mCache->mutex);
+				if (auto resource = findNormalized(_path)) {
+					return resource;
+				}
+				const auto self = std::this_thread::get_id();
+				if (creating.contains(creationKey)) {
+					throw std::runtime_error("Resource dependency cycle: " + _path);
+				}
+				if (const auto inFlight = mCache->inFlight.find(_path); inFlight != mCache->inFlight.end()) {
+					if (inFlight->second.creator == self) {
+						throw std::runtime_error("Resource dependency cycle: " + _path);
+					}
+					pending = inFlight->second.future;
+				}
+				else {
+					creating.insert(creationKey);
+					cycle.active = true;
+					pending = promise.get_future().share();
+					mCache->inFlight.emplace(_path, InFlightLoad { pending, self });
+					creator = true;
+				}
 			}
-			return nullptr;
+			if (!creator) {
+				return pending.get();
+			}
+
+			InFlightGuard slot(this, _path);
+			try {
+				auto created = createResource(_path, type, data);
+				ResourcePtr<ResourceT> result;
+				if (created) {
+					result = storeNormalized(_path, std::move(created));
+				}
+				promise.set_value(result);
+				return result;
+			} catch (...) {
+				try {
+					promise.set_exception(std::current_exception());
+				} catch (...) { }
+				throw;
+			}
 		}
 
 		[[deprecated("Use requestResource or loadResourceTask on the main thread")]]
 		std::future<ResourcePtr<ResourceT>> loadResourceAsync(const std::string& path, ELoadingType type) {
-			// TODO: use task system or corutines
-			return std::async(std::launch::async, [this, path, type]() { return this->loadResource(path, type); });
+			return scheduleAsyncLoad(path, type, std::any());
 		}
 
 		[[deprecated("Use requestResource or loadResourceTask on the main thread")]]
 		std::future<ResourcePtr<ResourceT>> loadResourceAsync(const std::string& path, ELoadingType type, std::any data) {
-			// TODO: use task system or corutines
-			return std::async(std::launch::async, [this, path, type, data]() { return this->loadResource(path, type, data); });
+			return scheduleAsyncLoad(path, type, std::move(data));
 		}
 
 		void unloadResource(const std::string& path) override {
-			std::lock_guard<std::recursive_mutex> lock(mMutex);
-			resources.erase(NormalizePath(path));
+			const auto key = NormalizePath(path);
+			std::lock_guard<std::recursive_mutex> lock(mCache->mutex);
+			mCache->resources.erase(key);
 		}
 
-		std::unordered_map<std::string, std::weak_ptr<ResourceT>>& getResources() {
-			return resources;
+		std::unordered_map<std::string, std::weak_ptr<ResourceT>> getResources() const {
+			std::lock_guard<std::recursive_mutex> lock(mCache->mutex);
+			return mCache->resources;
 		}
 
 		virtual ResourcePtr<ResourceT> createResource(const std::string& p_path) = 0;
@@ -148,29 +193,39 @@ namespace RESOURCES {
 			control->check();
 			co_await COROUTINE::YieldIfBudgetExceeded();
 			control->check();
+			// Loaders that create GPU objects override this and stay on the coroutine thread.
+			// The default path is file/CPU work: run it on the pool and yield the scheduler.
+			if (ServiceManager::Check<IKIGAI::TASK::TaskSystem>()) {
+				auto& tasks = ServiceManager::Get<IKIGAI::TASK::TaskSystem>();
+				if (tasks.isReady()) {
+					auto promise = std::make_shared<std::promise<ResourcePtr<ResourceT>>>();
+					auto future = promise->get_future();
+					auto handle = tasks.submit("createResourceTask", -1, nullptr, [this, path, type, promise]() {
+						try {
+							promise->set_value(this->loadResource(path, type));
+						} catch (...) {
+							promise->set_exception(std::current_exception());
+						}
+					});
+					if (handle.mTask) {
+						handle.mTask->continueWith([handle]() mutable { handle = {}; });
+						while (future.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+							control->check();
+							co_await COROUTINE::NextFrame();
+						}
+						co_return future.get();
+					}
+				}
+			}
 			co_return loadResource(path, type);
 		}
 		ResourceRequests<ResourceT> mRequests;
 		ResourcePtr<ResourceT> getResource(const std::string& path) {
-			// Assumes lock is held by caller if called internally,
-			// but let's use recursive_mutex so we can lock again just in case
-			std::lock_guard<std::recursive_mutex> lock(mMutex);
-			const auto generation = ServiceManager::Get<FileSystem>().generation();
-			if (mGeneration != generation) {
-				resources.clear();
-				this->ClearConfigCache();
-				mGeneration = generation;
-			}
-			if (auto resource = resources.find(NormalizePath(path)); resource != resources.end()) {
-				return resource->second.lock();
-			}
-			return nullptr;
+			return findNormalized(NormalizePath(path));
 		}
 
 		ResourcePtr<ResourceT> registerResource(const std::string& path, std::shared_ptr<ResourceT> res) {
-			std::lock_guard<std::recursive_mutex> lock(mMutex);
-			resources[NormalizePath(path)] = res;
-			return res;
+			return storeNormalized(NormalizePath(path), std::move(res));
 		}
 
 		virtual void addFileWatchSubscribe(
@@ -182,7 +237,8 @@ namespace RESOURCES {
 			return;
 #endif
 			auto fwCb = [this, mainPath, watchPaths, weakRes, lifetime = std::weak_ptr<int>(mLifetime)](RESOURCES::FileWatcher::FileStatus status) {
-				if (lifetime.expired()) {
+				const auto alive = lifetime.lock();
+				if (!alive) {
 					return;
 				}
 				if (status == RESOURCES::FileWatcher::FileStatus::MODIFIED) {
@@ -217,32 +273,114 @@ namespace RESOURCES {
 		virtual bool reloadResource(std::weak_ptr<ResourceT> weakRes, const std::string& config) = 0;
 
 		virtual ResourceDeleter createCacheDeleter(const std::string& path) {
-			return [this, path, lifetime = std::weak_ptr<int>(mLifetime)](ResourceT* ptr) {
-				// Render targets/materials may outlive the resource loader during shutdown.
-				if (!lifetime.expired()) {
-					// An older generation may die after a replacement was
-					// registered under the same key. Keep the live replacement.
-					std::lock_guard<std::recursive_mutex> lock(mMutex);
-					auto it = resources.find(NormalizePath(path));
-					if (it != resources.end() && it->second.expired()) {
-						resources.erase(it);
-					}
+			const auto key = NormalizePath(path);
+			return [key, lifetime = std::weak_ptr<int>(mLifetime), cache = std::weak_ptr<Cache>(mCache)](ResourceT* ptr) {
+				// Hold both tokens for the whole erase. expired() then using the manager was a race.
+				const auto alive = lifetime.lock();
+				const auto state = cache.lock();
+				if (!alive || !state) {
+					return;
 				}
+				std::lock_guard<std::recursive_mutex> lock(state->mutex);
+				const auto it = state->resources.find(key);
+				if (it == state->resources.end()) {
+					return;
+				}
+				const auto live = it->second.lock();
+				if (live && live.get() != ptr) {
+					return;
+				}
+				state->resources.erase(it);
 			};
 		}
-
-		mutable std::recursive_mutex mMutex;
 
 		// FW ids
 		inline static std::unordered_map<std::string, std::vector<std::pair<std::string, IdGenerator<EVENT::Event<>>::ID>>> sFWSubscribersIds;
 
 	private:
-		uint64_t mGeneration = ~uint64_t { 0 };
+		struct InFlightLoad {
+			std::shared_future<ResourcePtr<ResourceT>> future;
+			std::thread::id creator;
+		};
+
+		class InFlightGuard {
+		public:
+			InFlightGuard(ResourceManager* manager, std::string key)
+				: mManager(manager)
+				, mKey(std::move(key)) { }
+			~InFlightGuard() {
+				if (mManager) {
+					mManager->clearInFlight(mKey);
+				}
+			}
+			InFlightGuard(const InFlightGuard&) = delete;
+			InFlightGuard& operator=(const InFlightGuard&) = delete;
+
+		private:
+			ResourceManager* mManager = nullptr;
+			std::string mKey;
+		};
+
+		ResourcePtr<ResourceT> findNormalized(const std::string& path) {
+			std::lock_guard<std::recursive_mutex> lock(mCache->mutex);
+			const auto generation = ServiceManager::Get<FileSystem>().generation();
+			if (mCache->generation != generation) {
+				mCache->resources.clear();
+				this->ClearConfigCache();
+				mCache->generation = generation;
+			}
+			if (const auto resource = mCache->resources.find(path); resource != mCache->resources.end()) {
+				return resource->second.lock();
+			}
+			return nullptr;
+		}
+
+		ResourcePtr<ResourceT> storeNormalized(const std::string& path, std::shared_ptr<ResourceT> resource) {
+			std::lock_guard<std::recursive_mutex> lock(mCache->mutex);
+			mCache->resources[path] = resource;
+			return resource;
+		}
+
+		void clearInFlight(const std::string& path) {
+			std::lock_guard<std::recursive_mutex> lock(mCache->mutex);
+			mCache->inFlight.erase(path);
+		}
+
+		std::future<ResourcePtr<ResourceT>> scheduleAsyncLoad(const std::string& path, ELoadingType type, std::any data) {
+			if (ServiceManager::Check<IKIGAI::TASK::TaskSystem>()) {
+				auto& tasks = ServiceManager::Get<IKIGAI::TASK::TaskSystem>();
+				if (tasks.isReady()) {
+					auto promise = std::make_shared<std::promise<ResourcePtr<ResourceT>>>();
+					auto future = promise->get_future();
+					auto handle = tasks.submit("loadResourceAsync", -1, nullptr, [this, path, type, data, promise]() {
+						try {
+							promise->set_value(this->loadResource(path, type, data));
+						} catch (...) {
+							promise->set_exception(std::current_exception());
+						}
+					});
+					// Keep the task handle alive until the pool task finishes. Dropping it
+					// here would wait inside Future's destructor and make this call synchronous.
+					if (handle.mTask) {
+						handle.mTask->continueWith([handle]() mutable { handle = {}; });
+						return future;
+					}
+				}
+			}
+			return std::async(std::launch::async, [this, path, type, data]() { return this->loadResource(path, type, data); });
+		}
+
+		struct Cache {
+			mutable std::recursive_mutex mutex;
+			std::unordered_map<std::string, std::weak_ptr<ResourceT>> resources;
+			std::unordered_map<std::string, InFlightLoad> inFlight;
+			uint64_t generation = ~uint64_t { 0 };
+		};
+
+		std::shared_ptr<Cache> mCache = std::make_shared<Cache>();
 		std::shared_ptr<int> mLifetime = std::make_shared<int>(0);
 		inline static std::string PROJECT_ASSETS_PATH = "";
 		inline static std::string ENGINE_ASSETS_PATH = "";
-
-		std::unordered_map<std::string, std::weak_ptr<ResourceT>> resources;
 	};
 };
 };

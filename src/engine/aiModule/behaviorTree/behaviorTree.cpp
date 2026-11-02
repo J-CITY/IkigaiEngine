@@ -43,6 +43,9 @@ bool ExecutionHost::move(const TaskToken&, MATH::Vector3f, std::optional<float>)
 	return false;
 }
 void ExecutionHost::release(const TaskToken&) { }
+const PathQuery* ExecutionHost::navigation() const {
+	return nullptr;
+}
 TaskResult BehaviorTask::tick(TaskContext&) {
 	return TaskResult::Running;
 }
@@ -150,10 +153,19 @@ std::shared_ptr<const BehaviorTreeDefinition> BehaviorTreeDefinition::compile(
 			}
 			BehaviorNode node;
 			node.id = source.Id;
-			if (source.Type == "Sequence" || source.Type == "Selector") {
-				node.kind = source.Type == "Sequence" ? NodeKind::Sequence : NodeKind::Selector;
-				if (source.Children.empty() || !source.Parameters.document.empty()) {
-					throw std::runtime_error("Composite requires children and has no parameters");
+			if (source.Type == "Sequence" || source.Type == "Selector" || source.Type == "Parallel") {
+				if (source.Children.empty()) {
+					throw std::runtime_error("Composite requires children");
+				}
+				if (source.Type == "Parallel") {
+					node.kind = NodeKind::Parallel;
+					node.parallelPolicy = readDescriptor<ParallelParameters>(source.Parameters.document).Policy;
+				}
+				else {
+					node.kind = source.Type == "Sequence" ? NodeKind::Sequence : NodeKind::Selector;
+					if (!source.Parameters.document.empty()) {
+						throw std::runtime_error("Sequence and Selector cannot have parameters");
+					}
 				}
 			}
 			else {

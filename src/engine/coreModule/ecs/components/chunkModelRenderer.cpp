@@ -44,3 +44,11 @@ void ChunkModelRenderer::setBlock(int x, int y, int z, SURFACE::Block block) {
 	mModel->set(x, y, z, block);
 }
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::ChunkModelRenderer>();
+	return true;
+}();
+}

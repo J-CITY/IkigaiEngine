@@ -2,6 +2,8 @@
 #include "ikigaiScriptComponent.h"
 #include "coreModule/ecs/object.h"
 #include "scriptModule/ikigaiScriptRuntime.h"
+#include "scriptModule/scriptFileWatcher.h"
+#include "scriptModule/scriptVfsPath.h"
 namespace IKIGAI::ECS {
 IkigaiScriptComponent::IkigaiScriptComponent(UTILS::Ref<Object> object)
 	: ComponentBase(object) {
@@ -39,79 +41,153 @@ IkigaiScriptComponent::Descriptor IkigaiScriptComponent::getDescriptor() const {
 bool IkigaiScriptComponent::isScriptOk() const {
 	return runtime && runtime->isOk();
 }
+void IkigaiScriptComponent::attachFileWatch() {
+#if defined(USE_FILE_WATCHER)
+	if (fileWatchHandle != 0 || path.empty()) {
+		return;
+	}
+	const auto vfsPath = SCRIPTING::IkigaiScriptVfsPath(path);
+	const auto weak = getWeak<IkigaiScriptComponent>();
+	fileWatchHandle = SCRIPTING::ScriptFileWatcher::watch(vfsPath, [weak]() {
+		if (weak) {
+			weak->reloadScript();
+		}
+	});
+#endif
+}
+
+void IkigaiScriptComponent::detachFileWatch() {
+#if defined(USE_FILE_WATCHER)
+	if (fileWatchHandle != 0) {
+		SCRIPTING::ScriptFileWatcher::unwatch(fileWatchHandle);
+		fileWatchHandle = 0;
+	}
+#endif
+}
+
 void IkigaiScriptComponent::ensureRuntime() {
 	if (!runtime && !path.empty() && !obj.get().weak_from_this().expired()) {
 		runtime = std::make_unique<SCRIPTING::IkigaiScriptRuntime>(obj.get(), path);
-		if (awake)
+		attachFileWatch();
+		if (awake) {
 			runtime->call("OnAwake");
-		if (enabled)
+		}
+		if (enabled) {
 			runtime->call("OnEnable");
-		if (started)
+		}
+		if (started) {
 			runtime->call("OnStart");
+		}
 	}
 }
-void IkigaiScriptComponent::setScript(const std::string& script) {
-	if (path == script)
+
+void IkigaiScriptComponent::reloadScript() {
+	if (path.empty() || obj.get().weak_from_this().expired()) {
 		return;
+	}
+	if (!runtime) {
+		ensureRuntime();
+		return;
+	}
+	runtime->reload(obj.get());
+	if (awake) {
+		runtime->call("OnAwake");
+	}
+	if (enabled) {
+		runtime->call("OnEnable");
+	}
+	if (started) {
+		runtime->call("OnStart");
+	}
+}
+
+void IkigaiScriptComponent::setScript(const std::string& script) {
+	if (path == script) {
+		reloadScript();
+		return;
+	}
 	if (runtime) {
-		if (enabled)
+		if (enabled) {
 			runtime->call("OnDisable");
+		}
 		runtime->call("OnDestroy");
+		detachFileWatch();
 		runtime.reset();
 	}
 	path = script;
-	if (awake)
+	if (awake) {
 		ensureRuntime();
+	}
 }
 void IkigaiScriptComponent::onAwake() {
-	if (awake)
+	if (awake) {
 		return;
+	}
 	awake = true;
 	ensureRuntime();
 }
 void IkigaiScriptComponent::onEnable() {
 	onAwake();
-	if (enabled)
+	if (enabled) {
 		return;
+	}
 	enabled = true;
-	if (runtime)
+	if (runtime) {
 		runtime->call("OnEnable");
+	}
 }
 void IkigaiScriptComponent::onStart() {
 	onAwake();
-	if (started)
+	if (started) {
 		return;
+	}
 	started = true;
-	if (runtime)
+	if (runtime) {
 		runtime->call("OnStart");
+	}
 }
 void IkigaiScriptComponent::onDisable() {
-	if (!enabled)
+	if (!enabled) {
 		return;
+	}
 	enabled = false;
-	if (runtime)
+	if (runtime) {
 		runtime->call("OnDisable");
+	}
 }
 void IkigaiScriptComponent::onDestroy() {
 	if (runtime) {
 		onDisable();
 		runtime->call("OnDestroy");
+		detachFileWatch();
 		runtime.reset();
 	}
 	awake = started = false;
 }
 void IkigaiScriptComponent::onUpdate(std::chrono::duration<double> dt) {
 	ensureRuntime();
-	if (runtime)
+	if (runtime) {
 		runtime->call("OnUpdate", dt.count());
+	}
 }
 void IkigaiScriptComponent::onFixedUpdate(std::chrono::duration<double> dt) {
-	if (runtime)
+	if (runtime) {
 		runtime->call("OnFixedUpdate", dt.count());
+	}
 }
 void IkigaiScriptComponent::onLateUpdate(std::chrono::duration<double> dt) {
-	if (runtime)
+	if (runtime) {
 		runtime->call("OnLateUpdate", dt.count());
+	}
 }
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::IkigaiScriptComponent>();
+	return true;
+}();
+}
+
 #endif

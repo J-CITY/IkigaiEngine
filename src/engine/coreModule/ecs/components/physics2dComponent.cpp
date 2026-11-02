@@ -117,4 +117,16 @@ void Physics2DComponent::setVelocity(MATH::Vector2f v, float angular) {
 	settings.Velocity = v;
 	settings.AngularVelocity = angular;
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::Physics2DComponent>();
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::SoftBody2DComponent>();
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::Fluid2DComponent>();
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::Joint2DComponent>();
+	return true;
+}();
+}
+
 #endif

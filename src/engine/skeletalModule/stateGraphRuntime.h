@@ -1,19 +1,20 @@
 #pragma once
 #include "animationBlend.h"
 #include "animationInstance.h"
+#include "stateGraphIr.h"
 #include "utilsModule/environment.h"
 #include "utilsModule/expressions/expression.h"
 #include "utilsModule/expressions/stateMachine.h"
 #include <functional>
 #include <map>
 #include <nlohmann/json.hpp>
+#include <vector>
 
 namespace IKIGAI::SKELETON {
 // Immutable, validated and preloaded. Instances own all clocks and samplers.
 struct StateGraphDefinition {
 	using Json = nlohmann::json;
 	Json document;
-	Json executable;
 	DATA::Symbols symbols;
 	std::vector<DATA::Expression> expressions;
 	struct Binding {
@@ -24,7 +25,7 @@ struct StateGraphDefinition {
 	std::vector<Binding> bindings;
 	size_t parameterCount = 0, builtinStart = 0;
 	std::vector<std::string> parameters;
-	DATA::StateMachineDefinition machine;
+	StateGraphIR ir;
 	std::shared_ptr<Skeleton> skeleton;
 	std::map<std::string, std::shared_ptr<Animation>> clips;
 	std::vector<std::string> dependencies;
@@ -41,6 +42,10 @@ public:
 	Pose* getPose() {
 		return &mOutput;
 	}
+	const RootMotionSample& rootMotion() const {
+		return mRootMotion;
+	}
+	std::vector<AnimationEventDispatch> consumeAnimationEvents();
 	const std::string& state() const {
 		return mState;
 	}
@@ -60,7 +65,13 @@ public:
 		return mBlendDuration > 0 ? std::min(1.f, mBlendTime / mBlendDuration) : 1.f;
 	}
 	const Json& definition() const {
-		return mDefinition->executable;
+		return mDefinition->document;
+	}
+	const StateGraphIR& ir() const {
+		return mDefinition->ir;
+	}
+	const CompiledState& activeState() const {
+		return mDefinition->ir.states.at(mStateIndex);
 	}
 	const Json& metadata() const;
 	std::shared_ptr<UTILS::Environment> environment() const {
@@ -71,14 +82,17 @@ public:
 		mPoseOffset = offset;
 	}
 	bool replace(std::shared_ptr<const StateGraphDefinition>, std::string& error);
-	float evaluate(const Json&) const;
+	float evaluateProgram(uint16_t program) const;
 
 private:
-	const Json& stateResource(const std::string&) const;
-	void enter(const std::string&, float);
-	Pose sampleNode(const Json&, float time, float dt);
-	float sampleTime(const std::string&, float time) const;
+	const CompiledState& stateResource() const;
+	void enter(size_t stateIndex, float blend);
+	Pose sampleNode(uint16_t nodeIndex, float time, float dt);
+	float sampleTime(uint16_t clipIndex, float time) const;
 	void updateBindings(float dt);
+	void dispatchClockEvents(float previousTime, float currentTime, float rate);
+	void applyRootMotionExtraction(Pose& pose);
+	void applyLayerStack(Pose& pose, float time, float dt);
 	std::shared_ptr<const StateGraphDefinition> mDefinition;
 	std::shared_ptr<UTILS::Environment> mEnvironment;
 	std::map<std::string, std::shared_ptr<AnimSample>> mSamples;
@@ -89,8 +103,15 @@ private:
 	DATA::Value readExpressionSlot(size_t) const;
 	std::map<std::string, std::pair<float, float>> mSavedTimes;
 	float mPlaybackTime = 0, mPreviousPlaybackTime = 0;
+	size_t mStateIndex = 0;
+	std::vector<uint8_t> mFiredEvents;
+	Keyframe mBindRootPose {};
+	Keyframe mLastRootPose {};
+	bool mHasBindRoot = false;
+	RootMotionSample mRootMotion {};
+	std::vector<AnimationEventDispatch> mPendingEvents;
 	bool mSnapshotBlend = false;
-	Pose mOutput {}, mPreviousPose {};
+	Pose mOutput {}, mPreviousPose {}, mLayerScratch {};
 	Json mLastTransition;
 	MATH::Vector3f mPoseOffset {};
 	AnimBlend mBlend;

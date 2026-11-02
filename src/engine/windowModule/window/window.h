@@ -1,10 +1,11 @@
 #pragma once
+#include "windowModule/inputManager/gamepad/gamepad.h"
+#include <cstdint>
+#include <mathModule/math.h>
 #include <memory>
 #include <string>
-#include <vector>
-#include <mathModule/math.h>
 #include <utilsModule/event.h>
-#include "windowModule/inputManager/gamepad/gamepad.h"
+#include <vector>
 #ifdef OCULUS
 #include "util_egl.h"
 #include "util_oxr.h"
@@ -55,6 +56,16 @@ struct WindowSettings {
 };
 
 #ifdef USE_SDL
+struct TouchFingerEvent {
+	enum class Phase { Down, Move, Up, Cancel };
+	Phase phase = Phase::Move;
+	std::int64_t fingerId = 0;
+	float x = 0.0f;
+	float y = 0.0f;
+	float dx = 0.0f;
+	float dy = 0.0f;
+};
+
 class Window {
 public:
 	EVENT::Event<int> keyPressedEvent;
@@ -62,6 +73,7 @@ public:
 	EVENT::Event<int> mouseButtonPressedEvent;
 	EVENT::Event<int> mouseButtonReleasedEvent;
 	EVENT::Event<float, float> mouseMovedEvent;
+	EVENT::Event<TouchFingerEvent> touchFingerEvent;
 
 	EVENT::Event<int, INPUT::Gamepad::GAMEPAD_BUTTON> gamepadButtonPressedEvent;
 	EVENT::Event<int, INPUT::Gamepad::GAMEPAD_BUTTON> gamepadButtonReleasedEvent;

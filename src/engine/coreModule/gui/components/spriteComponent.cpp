@@ -13,14 +13,12 @@
 #include <stdexcept>
 #include <utilsModule/pathGetter.h>
 
-
 #include "renderModule/backends/gl/shaderGl.h"
 #include "renderModule/backends/gl/vertexBufferGl.h"
 #include "renderModule/vertex.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/textureManager.h"
 #include "utilsModule/time/time.h"
-
 
 using namespace IKIGAI;
 using namespace IKIGAI::ECS;
@@ -98,8 +96,9 @@ void SpriteBatcher::Flush() {
 	renderer.setCull(RENDER::CullFace::NONE);
 	renderer.setBlending({ RENDER::BlendMode::SRC_ALPHA, RENDER::BlendMode::ONE_MINUS_SRC_ALPHA });
 	std::vector<unsigned> indices;
-	for (unsigned i = 0; i < mVertexBuffer.size(); ++i)
+	for (unsigned i = 0; i < mVertexBuffer.size(); ++i) {
 		indices.push_back(i);
+	}
 	renderer.draw(RENDER::CreateMesh(mVertexBuffer, indices), RENDER::PrimitiveMode::TRIANGLES, 1);
 	mVertexBuffer.clear();
 }
@@ -219,8 +218,9 @@ int SpriteAnimateComponent::getFrameCount() const {
 }
 
 void SpriteAnimateComponent::updateAnim() {
-	if (!mTexture || mGridSize.x <= 0 || mGridSize.y <= 0)
+	if (!mTexture || mGridSize.x <= 0 || mGridSize.y <= 0) {
 		return;
+	}
 	mCutTime -= TIME::Timer::GetInstance().getDeltaTime().count() * mTimeScale;
 	if (mCutTime < 0.0f) {
 		mCutTime = mTime;
@@ -307,22 +307,28 @@ void SpriteParticleComponent::setEmmiters(std::vector<Emmiter> e) {
 		auto& emitter = e[i];
 		emitter.curSpawnTime = emitter.pause;
 		emitter.curParticleCount = 0;
-		if (emitter.count <= 0)
+		if (emitter.count <= 0) {
 			continue;
-		if (emitter.spawnTime <= 0)
+		}
+		if (emitter.spawnTime <= 0) {
 			throw std::invalid_argument("Legacy particle SpawnTime must be positive; choose an explicit interval");
+		}
 		J render { { "Type", "sprite2D" }, { "RenderSpace", mIs3D ? "world" : "screen" },
 			{ "Piece", emitter.piece.empty() ? mTexturePiece : emitter.piece } };
-		if (mExplicitAtlas)
+		if (mExplicitAtlas) {
 			render["Atlas"] = mPath;
-		else if (!mPath.empty())
+		}
+		else if (!mPath.empty()) {
 			render["Texture"] = mPath;
+		}
 		J acceleration { { "Mode", "uniform" }, { "Min", { emitter.gravity.x * emitter.weight.x, emitter.gravity.y * emitter.weight.x } },
 			{ "Max", { emitter.gravity.x * emitter.weight.y, emitter.gravity.y * emitter.weight.y } } };
 		// Negative gravity reverses a numeric interval; linked channels preserve one weight.
-		for (int c = 0; c < 2; ++c)
-			if (acceleration["Min"][c].get<float>() > acceleration["Max"][c].get<float>())
+		for (int c = 0; c < 2; ++c) {
+			if (acceleration["Min"][c].get<float>() > acceleration["Max"][c].get<float>()) {
 				std::swap(acceleration["Min"][c], acceleration["Max"][c]);
+			}
+		}
 		effect["Emitters"].push_back({ { "Id", "legacy-" + std::to_string(i) }, { "SimulationSpace", "local" }, { "Capacity", emitter.count },
 			{ "Timing", { { "Duration", emitter.spawnTime }, { "Loops", 0 }, { "Delay", emitter.pause } } },
 			{ "Emission", { { "Bursts", J::array({ { { "Time", 0 }, { "Count", emitter.spawnCount } } }) } } },
@@ -344,12 +350,13 @@ void SpriteParticleComponent::setEmmiters(std::vector<Emmiter> e) {
 		auto definition = std::make_shared<PARTICLES::Definition>(*PARTICLES::parse(effect, "legacy particles"));
 		for (auto& converted : definition->emitters) {
 			const auto& original = e[std::stoi(converted.id.substr(7))];
-			for (auto& m : converted.update)
+			for (auto& m : converted.update) {
 				if (m.type == PARTICLES::ModuleType::Acceleration) {
 					// Preserve one shared random weight, including opposite signs of gravity axes.
 					m.value.min = { original.gravity.x * original.weight.x, original.gravity.y * original.weight.x, 0, 0 };
 					m.value.max = { original.gravity.x * original.weight.y, original.gravity.y * original.weight.y, 0, 0 };
 				}
+			}
 		}
 		asset = RESOURCES::ServiceManager::Get<RESOURCES::ParticleLoader>().createInline(std::move(definition));
 		runtime = std::make_unique<PARTICLES::Runtime<2>>(asset->definition, 1);
@@ -364,24 +371,28 @@ std::vector<SpriteParticleComponent::Emmiter> SpriteParticleComponent::getEmmite
 	return emmiters;
 }
 void SpriteParticleComponent::spawnParticle(Emmiter& emitter, int id) {
-	if (!mRuntime)
+	if (!mRuntime) {
 		return;
-	for (size_t i = 0; i < mRuntime->definition().emitters.size(); ++i)
+	}
+	for (size_t i = 0; i < mRuntime->definition().emitters.size(); ++i) {
 		if (mRuntime->definition().emitters[i].id == "legacy-" + std::to_string(id)) {
 			mRuntime->emit(i, uint32_t(std::max(0, emitter.spawnCount)));
 			return;
 		}
+	}
 }
 void SpriteParticleComponent::update() {
 	tick(TIME::Timer::GetInstance().getDeltaTime().count());
 }
 void SpriteParticleComponent::tick(double dt) {
-	if (!mRuntime)
+	if (!mRuntime) {
 		return;
+	}
 	mRuntime->update(dt, obj->getTransform()->getTransform().getWorldMatrix());
 	particles.clear();
-	for (auto& e : emmiters)
+	for (auto& e : emmiters) {
 		e.curParticleCount = 0;
+	}
 	for (size_t i = 0; i < mRuntime->emitters().size(); ++i) {
 		const int id = std::stoi(mRuntime->definition().emitters[i].id.substr(7));
 		const auto& current = mRuntime->emitters()[i];
@@ -414,8 +425,9 @@ SpriteParticleComponent::Descriptor SpriteParticleComponent::getDescriptor() con
 SpriteParticleComponent::SpriteParticleComponent(UTILS::Ref<ECS::Object> obj, const Descriptor& descriptor)
 	: SpriteComponent(obj) {
 	mIs3D = descriptor.Is3D;
-	if (!descriptor.TexturePath.empty())
+	if (!descriptor.TexturePath.empty()) {
 		setTexture(descriptor.TexturePath);
+	}
 	else if (!descriptor.TextureAtlasPath.empty()) {
 		setTextureAtlas(descriptor.TextureAtlasPath);
 		setAtlasPiece(descriptor.TexturePiece);
@@ -477,8 +489,9 @@ LabelComponent::LabelComponent(UTILS::Ref<ECS::Object> obj, const Descriptor& de
 	mLabel = descriptor.Label;
 	auto& fs = IKIGAI::RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>();
 	auto path = fs.getFilePath(descriptor.Font.empty() ? "/fonts/a_AlternaSw.TTF" : descriptor.Font);
-	if (!path)
+	if (!path) {
 		throw std::runtime_error("Label font not found: " + descriptor.Font);
+	}
 	mFont = std::make_shared<IKIGAI::GUI::Font>(*path, 42);
 }
 
@@ -577,7 +590,7 @@ SpineComponent::SpineComponent(UTILS::Ref<ECS::Object> obj, const ComponentBase:
 //		glDrawArrays(GL_TRIANGLES, 0, 6);
 //
 //		// ������ ���������� �������� ��� ����������� ���������� ����� (�������� ��������, ��� ������ �������� ���������� � ��������, ������������
-//1/64 �������) 		x += (ch.Advance >> 6) * obj.transform->globalScale.x; // ��������� ����� �� 6, ����� �������� �������� � �������� (2^6 = 64)
+// 1/64 �������) 		x += (ch.Advance >> 6) * obj.transform->globalScale.x; // ��������� ����� �� 6, ����� �������� �������� � �������� (2^6 = 64)
 //	}
 //	glBindVertexArray(0);
 //	glBindTexture(GL_TEXTURE_2D, 0);
@@ -716,11 +729,18 @@ LayoutComponent::Descriptor LayoutComponent::getDescriptor() const {
 	Descriptor d;
 	d.Type = GetType<LayoutComponent>();
 	d.Layout = mType;
+	d.Alignment = mAlignment;
+	d.HorizontalOffset = mHorizontalOffset;
+	d.VerticalOffset = mVerticalOffset;
 	return d;
 }
 
 LayoutComponent::LayoutComponent(UTILS::Ref<ECS::Object> obj, const Descriptor& descriptor)
-	: LayoutComponent(obj, descriptor.Layout) { }
+	: LayoutComponent(obj, descriptor.Layout) {
+	mAlignment = descriptor.Alignment;
+	mHorizontalOffset = descriptor.HorizontalOffset;
+	mVerticalOffset = descriptor.VerticalOffset;
+}
 
 LayoutComponent::LayoutComponent(UTILS::Ref<ECS::Object> obj, const ComponentBase::Descriptor& descriptor)
 	: LayoutComponent(obj, static_cast<const Descriptor&>(descriptor)) { }
@@ -908,3 +928,20 @@ LayoutComponent::LayoutComponent(UTILS::Ref<ECS::Object> obj, const ComponentBas
 //		.property("X", &IKIGAI::MATHGL::Vector2i::x)
 //		.property("Y", &IKIGAI::MATHGL::Vector2i::y);
 // }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::RootGuiComponent>(IKIGAI::ECS::StorageType::Sparse, true);
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::SpriteComponent>(IKIGAI::ECS::StorageType::Sparse, true);
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::SpriteAnimateComponent>(IKIGAI::ECS::StorageType::Sparse, true);
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::SpriteParticleComponent>();
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::LabelComponent>(IKIGAI::ECS::StorageType::Sparse, true);
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::SpineComponent>();
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::InteractionComponent>(IKIGAI::ECS::StorageType::Sparse, true);
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::ClipComponent>(IKIGAI::ECS::StorageType::Sparse, true);
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::ScrollComponent>(IKIGAI::ECS::StorageType::Sparse, true);
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::LayoutComponent>(IKIGAI::ECS::StorageType::Sparse, true);
+	return true;
+}();
+}

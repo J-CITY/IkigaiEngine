@@ -3,4 +3,5 @@
 using namespace IKIGAI;
 using namespace IKIGAI::RESOURCES;
 
-std::map<size_t, ServiceType> ServiceManager::SERVICES;
+std::mutex ServiceManager::MUTEX;
+std::map<std::type_index, ServiceType> ServiceManager::SERVICES;

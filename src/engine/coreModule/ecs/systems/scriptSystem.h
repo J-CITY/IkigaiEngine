@@ -5,6 +5,11 @@
 #include "ecsModule/systemManager.h"
 #include "utilsModule/log/loggerDefine.h"
 
+namespace sol {
+class state;
+class table;
+}
+
 namespace IKIGAI::ECS {
 class Object;
 }
@@ -22,8 +27,9 @@ public:
 	void onFixedUpdate(ECS::World& world, ECS::CommandBuffer& cb, std::chrono::duration<double> dt) override;
 	void onLateUpdate(ECS::World& world, ECS::CommandBuffer& cb, std::chrono::duration<double> dt) override;
 
-	bool registerToLuaContext(ScriptComponent& component, sol::state& luaState, const std::string& scriptFolder);
+	bool registerToLuaContext(ScriptComponent& component, sol::state& luaState, const sol::table& sharedBindings);
 	void unregisterFromLuaContext(ScriptComponent& component);
+	void invokeOnReload(ScriptComponent& component);
 
 private:
 	template <typename... Args> inline void luaCall(ScriptComponent& component, const std::string& functionName, Args&&... args) {

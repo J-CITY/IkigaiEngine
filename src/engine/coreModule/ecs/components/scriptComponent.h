@@ -1,6 +1,7 @@
 #if USE_LUA
 #pragma once
 
+#include <cstdint>
 #include <sol/sol.hpp>
 
 #include "component.h"
@@ -9,12 +10,20 @@
 
 namespace IKIGAI::ECS {
 class Object;
+class ScriptSystem;
+}
+
+namespace IKIGAI::SCRIPTING {
+class ScriptInterpreter;
 }
 
 namespace IKIGAI::ECS {
 IKI_CLASS(Groups = [Component])
 class ScriptComponent : public ComponentBase {
 	IKI_GENERATED_BODY(ScriptComponent)
+	friend class ScriptSystem;
+	friend class SCRIPTING::ScriptInterpreter;
+
 public:
 	IKI_CLASS(Name = ScriptComponent::Descriptor)
 	struct Descriptor : public ComponentBase::Descriptor {
@@ -41,6 +50,11 @@ private:
 
 	std::string name;
 	sol::table object = sol::lua_nil;
+	sol::environment scriptEnvironment;
+	std::string loadedVfsPath;
+#if defined(USE_FILE_WATCHER)
+	std::uint64_t fileWatchHandle = 0;
+#endif
 
 public:
 	IKI_PROPERTY(

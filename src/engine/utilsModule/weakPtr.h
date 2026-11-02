@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include <functional>
+#include <memory>
 
 namespace IKIGAI::ECS {
 class Component;
@@ -21,11 +22,9 @@ class ControlBlockHandler {
 public:
 	ControlBlockHandler();
 	ControlBlockHandler(ECS::Component* ptr);
-	// TODO: delete copy constructor
+	// Copy shares the block and retargets it at the copy. Arrays relocate components by copy.
 	ControlBlockHandler(const ControlBlockHandler& obj);
 	ControlBlockHandler& operator=(const ControlBlockHandler& obj);
-	// ControlBlockHandler(const ControlBlockHandler& obj) = delete;
-	// ControlBlockHandler& operator=(const ControlBlockHandler& obj) = delete;
 	ControlBlockHandler(ControlBlockHandler&& obj) noexcept;
 	ControlBlockHandler& operator=(ControlBlockHandler&& obj) noexcept;
 	virtual ~ControlBlockHandler();
@@ -85,7 +84,15 @@ template <typename T>
 concept ComponentT = requires(T t) { std::is_base_of_v<ECS::Component, decltype(t)>; };
 
 template <ComponentT T> class WeakPtr {
+	template <ComponentT U> friend class WeakPtr;
+
 	ControlBlock* mCb = nullptr;
+
+	void retain() {
+		if (mCb) {
+			mCb->mRC.fetch_add(1, std::memory_order_relaxed);
+		}
+	}
 
 public:
 	using element_type = std::remove_extent_t<T>;
@@ -95,14 +102,15 @@ public:
 
 	explicit WeakPtr(ControlBlockHandler& component) {
 		mCb = component.getControlBlock();
-		mCb->mRC += 1;
+		retain();
 	}
 
 	explicit WeakPtr(T* component) {
-		mCb = component->getControlBlock();
-		if (mCb) {
-			mCb->mRC += 1;
+		if (!component) {
+			return;
 		}
+		mCb = component->getControlBlock();
+		retain();
 	}
 
 	~WeakPtr() {
@@ -111,34 +119,30 @@ public:
 
 	WeakPtr(const WeakPtr& obj) {
 		mCb = obj.mCb;
-		if (mCb) {
-			mCb->mRC += 1;
-		}
+		retain();
 	}
 
-	template <class T1> explicit WeakPtr(const WeakPtr& obj, T1* component) {
-		mCb = component->getControlBlock();
-		mCb->mRC += 1;
+	template <class T1> explicit WeakPtr(const WeakPtr& obj, T1*) {
+		mCb = obj.mCb;
+		retain();
 	}
 
-	template <class T1> explicit WeakPtr(WeakPtr&& obj, T1* component) {
-		mCb = component->getControlBlock();
-		mCb->mRC += 1;
-		obj = WeakPtr();
+	template <class T1> explicit WeakPtr(WeakPtr&& obj, T1*) noexcept {
+		mCb = obj.mCb;
+		obj.mCb = nullptr;
 	}
 
 	template <typename U, typename = std::enable_if_t<std::is_convertible<U*, T*>::value>> constexpr WeakPtr(U* ptr_) noexcept {
-		mCb = ptr_->getControlBlock();
-		if (mCb) {
-			mCb->mRC += 1;
+		if (!ptr_) {
+			return;
 		}
+		mCb = ptr_->getControlBlock();
+		retain();
 	}
 
 	template <typename Ptr, typename = std::enable_if_t<std::is_convertible<Ptr, T>::value>> constexpr WeakPtr(const WeakPtr<Ptr>& other) noexcept {
-		mCb = other->getControlBlock();
-		if (mCb) {
-			mCb->mRC += 1;
-		}
+		mCb = other.mCb;
+		retain();
 	}
 
 	WeakPtr& operator=(const WeakPtr& obj) {
@@ -147,9 +151,7 @@ public:
 		}
 		cleanup();
 		mCb = obj.mCb;
-		if (mCb) {
-			mCb->mRC += 1;
-		}
+		retain();
 		return *this;
 	}
 
@@ -197,34 +199,35 @@ public:
 	}
 
 	T& operator*() const {
-		return *static_cast<T*>(mCb->mPtr);
+		return *alivePointer();
 	}
 
 	T* operator->() const {
-		return static_cast<T*>(mCb->mPtr);
+		return alivePointer();
 	}
 
 	T* get() {
-		if (!isAlive()) {
-			throw;
-		}
-		return static_cast<T*>(mCb->mPtr);
+		return alivePointer();
 	}
 
 	const T* get() const {
+		return alivePointer();
+	}
+
+private:
+	T* alivePointer() const {
 		if (!isAlive()) {
-			throw;
+			throw std::bad_weak_ptr();
 		}
 		return static_cast<T*>(mCb->mPtr);
 	}
 
-private:
 	void cleanup() const {
-		if (mCb && mCb->mRC > 0) {
-			mCb->mRC -= 1;
-			if (mCb->mRC == 0) {
-				delete mCb;
-			}
+		if (!mCb) {
+			return;
+		}
+		if (mCb->mRC.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+			delete mCb;
 		}
 	}
 };
@@ -232,8 +235,11 @@ private:
 
 namespace std {
 template <typename T> struct hash<IKIGAI::UTILS::WeakPtr<T>> {
-	constexpr size_t operator()(IKIGAI::UTILS::WeakPtr<T> const& p) const noexcept {
-		return hash<T*>()(p.get());
+	size_t operator()(IKIGAI::UTILS::WeakPtr<T> const& p) const noexcept {
+		if (!p.isAlive()) {
+			return 0;
+		}
+		return hash<T*>()(p.operator->());
 	}
 };
 

@@ -15,7 +15,7 @@
 #include <emscripten.h>
 #include <iostream>
 #endif
-#if defined(USE_EDITOR) || defined(USE_CHEATS)
+#if defined(USE_EDITOR) || USE_CHEATS
 #include "imgui.h"
 #include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
 #endif
@@ -56,7 +56,7 @@ struct Window::Internal {
 	SDL_GLContext mContext = nullptr;
 	bool mIsFocus = true;
 	std::set<SDL_Gamepad*> mGamepads;
-#if defined(USE_EDITOR) || defined(USE_CHEATS)
+#if defined(USE_EDITOR) || USE_CHEATS
 	std::unique_ptr<IMGUI::IImGuiBackend> mImGuiBackend;
 #endif
 
@@ -135,16 +135,18 @@ MATH::Vector2i Window::getMousePos() const {
 }
 
 void Window::setSize(unsigned width, unsigned height) {
-	if (mIsMainWindow)
+	if (mIsMainWindow) {
 		if (auto* driver = RENDER::DriverInterface::Get(); driver && driver->mFrameGeneration) {
-			if (driver->mFrameGeneration->status().Technology == RENDER::FrameGenerationType::DLSS)
+			if (driver->mFrameGeneration->status().Technology == RENDER::FrameGenerationType::DLSS) {
 				driver->stopPresentation();
+			}
 			else {
 				driver->mFrameGeneration->suspend();
 				driver->mFrameGeneration->waitForPresents();
 				driver->mFrameGenerationStatus = driver->mFrameGeneration->status();
 			}
 		}
+	}
 	switch (GetCurrentPlatform()) {
 	case Platform::IOS:
 	case Platform::ANDROIDOS:
@@ -248,8 +250,9 @@ std::string Window::getTitle() const {
 }
 
 void Window::setDepthBits(int val) {
-	if (mContext->mWindow)
+	if (mContext->mWindow) {
 		return;
+	}
 	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, val);
 	mWindowSettings.depthBits = val;
 }
@@ -261,8 +264,9 @@ int Window::getDepathBits() const {
 }
 
 void Window::setStencilBits(int val) {
-	if (mContext->mWindow)
+	if (mContext->mWindow) {
 		return;
+	}
 	SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, val);
 	mWindowSettings.stencilBits = val;
 }
@@ -274,8 +278,9 @@ int Window::getStencilBits() const {
 }
 
 void Window::setMajorVersion(int val) {
-	if (mContext->mWindow)
+	if (mContext->mWindow) {
 		return;
+	}
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, val);
 	mWindowSettings.majorVersion = val;
 }
@@ -287,8 +292,9 @@ int Window::getMajorVersion() const {
 }
 
 void Window::setMinorVersion(int val) {
-	if (mContext->mWindow)
+	if (mContext->mWindow) {
 		return;
+	}
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, val);
 	mWindowSettings.minorVersion = val;
 }
@@ -300,8 +306,9 @@ int Window::getMinorVersion() const {
 }
 
 void Window::setAntialiasingLevel(int val) {
-	if (mContext->mWindow)
+	if (mContext->mWindow) {
 		return;
+	}
 	SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, val);
 	mWindowSettings.antialiasingLevel = val;
 }
@@ -319,16 +326,18 @@ int Window::getRefreshRate() const {
 }
 
 void Window::setFullscreen(bool val) {
-	if (mIsMainWindow)
+	if (mIsMainWindow) {
 		if (auto* driver = RENDER::DriverInterface::Get(); driver && driver->mFrameGeneration) {
-			if (driver->mFrameGeneration->status().Technology == RENDER::FrameGenerationType::DLSS)
+			if (driver->mFrameGeneration->status().Technology == RENDER::FrameGenerationType::DLSS) {
 				driver->stopPresentation();
+			}
 			else {
 				driver->mFrameGeneration->suspend();
 				driver->mFrameGeneration->waitForPresents();
 				driver->mFrameGenerationStatus = driver->mFrameGeneration->status();
 			}
 		}
+	}
 	switch (GetCurrentPlatform()) {
 	case Platform::IOS:
 	case Platform::ANDROIDOS: {
@@ -399,7 +408,7 @@ bool Window::hasFocus() const {
 void Window::pollEvent() {
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
-#if defined(USE_EDITOR) || defined(USE_CHEATS)
+#if defined(USE_EDITOR) || USE_CHEATS
 		if (mContext->mImGuiBackend) {
 			mContext->mImGuiBackend->processEvent(&event);
 		}
@@ -433,6 +442,32 @@ void Window::pollEvent() {
 		case SDL_EVENT_MOUSE_MOTION:
 			mouseMovedEvent.run(event.motion.xrel, event.motion.yrel);
 			break;
+		case SDL_EVENT_FINGER_DOWN:
+		case SDL_EVENT_FINGER_UP:
+		case SDL_EVENT_FINGER_MOTION:
+		case SDL_EVENT_FINGER_CANCELED: {
+			const auto size = getSize();
+			TouchFingerEvent touch;
+			touch.fingerId = static_cast<std::int64_t>(event.tfinger.fingerID);
+			touch.x = event.tfinger.x * static_cast<float>(size.x);
+			touch.y = event.tfinger.y * static_cast<float>(size.y);
+			touch.dx = event.tfinger.dx * static_cast<float>(size.x);
+			touch.dy = event.tfinger.dy * static_cast<float>(size.y);
+			if (event.type == SDL_EVENT_FINGER_DOWN) {
+				touch.phase = TouchFingerEvent::Phase::Down;
+			}
+			else if (event.type == SDL_EVENT_FINGER_UP) {
+				touch.phase = TouchFingerEvent::Phase::Up;
+			}
+			else if (event.type == SDL_EVENT_FINGER_CANCELED) {
+				touch.phase = TouchFingerEvent::Phase::Cancel;
+			}
+			else {
+				touch.phase = TouchFingerEvent::Phase::Move;
+			}
+			touchFingerEvent.run(touch);
+			break;
+		}
 		case SDL_EVENT_GAMEPAD_ADDED: {
 			auto gp = SDL_OpenGamepad(event.gdevice.which);
 			if (!gp) {
@@ -497,10 +532,12 @@ void Window::pollEvent() {
 				static float lystick = 0.0f;
 				float x = (float)SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTX) / (float)INT16_MAX;
 				float y = (float)SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFTY) / (float)INT16_MAX;
-				if (!MATH::CMP(lxstick, x))
+				if (!MATH::CMP(lxstick, x)) {
 					gamepadAxisEvent.run(id, INPUT::Gamepad::GAMEPAD_AXIS::leftStick_X, x);
-				if (!MATH::CMP(lystick, y))
+				}
+				if (!MATH::CMP(lystick, y)) {
 					gamepadAxisEvent.run(id, INPUT::Gamepad::GAMEPAD_AXIS::leftStick_Y, y);
+				}
 				lxstick = x;
 				lystick = y;
 
@@ -508,10 +545,12 @@ void Window::pollEvent() {
 				static float rystick = 0.0f;
 				x = (float)SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTX) / (float)INT16_MAX;
 				y = (float)SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHTY) / (float)INT16_MAX;
-				if (!MATH::CMP(rxstick, x))
+				if (!MATH::CMP(rxstick, x)) {
 					gamepadAxisEvent.run(id, INPUT::Gamepad::GAMEPAD_AXIS::rightStick_X, x);
-				if (!MATH::CMP(rystick, y))
+				}
+				if (!MATH::CMP(rystick, y)) {
 					gamepadAxisEvent.run(id, INPUT::Gamepad::GAMEPAD_AXIS::rightStick_Y, y);
+				}
 				rxstick = x;
 				rystick = y;
 
@@ -519,10 +558,12 @@ void Window::pollEvent() {
 				static float ltrigger = 0.0f;
 				x = (float)SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) / (float)INT16_MAX;
 				y = (float)SDL_GetGamepadAxis(gp, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) / (float)INT16_MAX;
-				if (!MATH::CMP(ltrigger, x))
+				if (!MATH::CMP(ltrigger, x)) {
 					gamepadTriggerEvent.run(id, INPUT::Gamepad::GAMEPAD_TRIGGER::leftTrigger, x);
-				if (!MATH::CMP(rtrigger, y))
+				}
+				if (!MATH::CMP(rtrigger, y)) {
 					gamepadTriggerEvent.run(id, INPUT::Gamepad::GAMEPAD_TRIGGER::rightTrigger, y);
+				}
 				ltrigger = x;
 				rtrigger = y;
 			}
@@ -534,18 +575,19 @@ void Window::pollEvent() {
 }
 
 void Window::draw() const {
-#if defined(USE_EDITOR) || defined(USE_CHEATS)
+#if defined(USE_EDITOR) || USE_CHEATS
 	if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::OPENGL && mContext->mImGuiBackend) {
 		mContext->mImGuiBackend->renderDrawData();
 	}
 #endif
 	if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::OPENGL) {
 #if defined(OPENGL_BACKEND) && !defined(USING_GLES)
-		if (!(SDL_GetWindowFlags(mContext->mWindow) & SDL_WINDOW_MINIMIZED))
+		if (!(SDL_GetWindowFlags(mContext->mWindow) & SDL_WINDOW_MINIMIZED)) {
 			CAPTURE::ScreenshotService::Get().capture([this] {
 				const auto size = getPixelSize();
-				if (size.x <= 0 || size.y <= 0)
+				if (size.x <= 0 || size.y <= 0) {
 					throw std::runtime_error("Screenshot window has no pixels");
+				}
 				CAPTURE::ScreenshotImage image { static_cast<int>(size.x), static_cast<int>(size.y),
 					std::vector<uint8_t>(size_t(size.x) * size.y * 4) };
 				std::vector<uint8_t> pixels(image.rgba.size());
@@ -573,15 +615,19 @@ void Window::draw() const {
 				glPixelStorei(GL_PACK_SKIP_ROWS, skipRows);
 				glPixelStorei(GL_PACK_SKIP_PIXELS, skipPixels);
 				const size_t stride = size_t(size.x) * 4;
-				for (int y = 0; y < image.height; ++y)
+				for (int y = 0; y < image.height; ++y) {
 					std::copy_n(pixels.data() + size_t(image.height - 1 - y) * stride, stride, image.rgba.data() + size_t(y) * stride);
-				for (size_t i = 3; i < image.rgba.size(); i += 4)
+				}
+				for (size_t i = 3; i < image.rgba.size(); i += 4) {
 					image.rgba[i] = 255;
+				}
 				return image;
 			});
+		}
 #elif defined(OPENGL_BACKEND)
-		if (CAPTURE::ScreenshotService::Get().pending())
+		if (CAPTURE::ScreenshotService::Get().pending()) {
 			CAPTURE::ScreenshotService::Get().fail("Window screenshots require desktop OpenGL");
+		}
 #endif
 		SDL_GL_SwapWindow(mContext->mWindow);
 	}
@@ -589,7 +635,7 @@ void Window::draw() const {
 
 // Call before draw imgui widgets
 void Window::preUpdate() {
-#if defined(USE_EDITOR) || defined(USE_CHEATS)
+#if defined(USE_EDITOR) || USE_CHEATS
 	if (mContext->mImGuiBackend) {
 		mContext->mImGuiBackend->newFrame();
 	}
@@ -597,7 +643,7 @@ void Window::preUpdate() {
 }
 
 void Window::update() {
-#if defined(USE_EDITOR) || defined(USE_CHEATS)
+#if defined(USE_EDITOR) || USE_CHEATS
 	if (mContext->mImGuiBackend) {
 		mContext->mImGuiBackend->endFrame();
 	}
@@ -647,7 +693,7 @@ std::vector<const char*> Window::getSDLVulkanExtentions() {
 #endif
 
 void Window::initImGUI() {
-#if defined(USE_EDITOR) || defined(USE_CHEATS)
+#if defined(USE_EDITOR) || USE_CHEATS
 	if (!RENDER::DriverInterface::Get()) {
 		return;
 	}
@@ -659,7 +705,7 @@ void Window::initImGUI() {
 }
 
 void Window::shutdownImGUI() {
-#if defined(USE_EDITOR) || defined(USE_CHEATS)
+#if defined(USE_EDITOR) || USE_CHEATS
 	if (mContext && mContext->mImGuiBackend) {
 		if (IMGUI::Get() == mContext->mImGuiBackend.get()) {
 			IMGUI::SetActive(nullptr);
@@ -933,8 +979,9 @@ void Window::pollEvent() {
 		struct android_poll_source* source;
 
 		int timeout = -1; // blocking
-		if (appState.Resumed || oxr_is_session_running() || m_app->destroyRequested)
+		if (appState.Resumed || oxr_is_session_running() || m_app->destroyRequested) {
 			timeout = 0; // non blocking
+		}
 
 		const int ident = ALooper_pollOnce(timeout, nullptr, &events, (void**)&source);
 		if (ident < 0) {

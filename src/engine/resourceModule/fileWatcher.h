@@ -5,16 +5,17 @@
 #endif
 
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <functional>
-#include <future>
 #include <mutex>
 #include <optional>
 #include <queue>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utilsModule/event.h>
-
 
 namespace IKIGAI::RESOURCES {
 class FileWatcher {
@@ -28,7 +29,7 @@ private:
 
 	struct FileModificationInfo {
 		FileTime mLastModifyTime;
-		std::uintmax_t mFileSize { };
+		std::uintmax_t mFileSize {};
 		std::optional<std::string> mNativePath;
 	};
 
@@ -37,9 +38,14 @@ private:
 	std::vector<std::pair<std::string, FileStatus>> m_events;
 
 	std::atomic_bool m_isRunning = true;
-	std::future<void> mUpdateTask;
 	std::mutex m_mutex;
 	std::mutex m_mutexDeferred;
+	void workerLoop();
+	std::thread mWorker;
+	std::mutex mWorkerMutex;
+	std::condition_variable mWorkerCv;
+	bool mUpdateRequested = false;
+	bool mWorkerStop = false;
 
 	struct QueueEvent {
 		enum class Action { ADD, REMOVE };

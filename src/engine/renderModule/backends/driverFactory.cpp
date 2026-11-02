@@ -4,26 +4,21 @@
 #include <cctype>
 #include <stdexcept>
 #include <string>
+#include <unordered_map>
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
-#ifdef OPENGL_BACKEND
-#include "gl/driverGl.h"
-#endif
-#ifdef VULKAN_BACKEND
-#include "vk/driverVk.h"
-#endif
-#ifdef DX12_BACKEND
-#include "dx12/driverDx12.h"
-#endif
-#ifdef METAL_BACKEND
 namespace IKIGAI::RENDER {
-std::unique_ptr<DriverInterface> CreateDriverMetal();
+namespace {
+	std::unordered_map<RenderSettings::Backend, CreateDriverFn>& backendFactories() {
+		static std::unordered_map<RenderSettings::Backend, CreateDriverFn> factories;
+		return factories;
+	}
 }
-#endif
-
-namespace IKIGAI::RENDER {
+void RegisterRenderBackend(RenderSettings::Backend backend, CreateDriverFn create) {
+	backendFactories().insert_or_assign(backend, create);
+}
 namespace {
 	std::optional<std::string> gCliBackend;
 	std::optional<std::string> gCliPipeline;
@@ -69,26 +64,7 @@ std::optional<RenderSettings::Backend> ParseBackendName(std::string_view name) {
 }
 
 bool IsBackendCompiled(RenderSettings::Backend backend) {
-	switch (backend) {
-#ifdef OPENGL_BACKEND
-	case RenderSettings::Backend::OPENGL:
-		return true;
-#endif
-#ifdef VULKAN_BACKEND
-	case RenderSettings::Backend::VULKAN:
-		return true;
-#endif
-#ifdef DX12_BACKEND
-	case RenderSettings::Backend::DIRECTX12:
-		return true;
-#endif
-#ifdef METAL_BACKEND
-	case RenderSettings::Backend::METAL:
-		return true;
-#endif
-	default:
-		return false;
-	}
+	return backendFactories().contains(backend);
 }
 
 void ValidateBackendAvailable(RenderSettings::Backend backend) {
@@ -216,31 +192,11 @@ void ResolveRenderBackend(RenderSettings& settings) {
 
 std::unique_ptr<DriverInterface> CreateRenderDriver(RenderSettings::Backend backend, WINDOW::Window&) {
 	ValidateBackendAvailable(backend);
-	std::unique_ptr<DriverInterface> driver;
-	switch (backend) {
-#ifdef OPENGL_BACKEND
-	case RenderSettings::Backend::OPENGL:
-		driver = std::make_unique<DriverGl>();
-		break;
-#endif
-#ifdef VULKAN_BACKEND
-	case RenderSettings::Backend::VULKAN:
-		driver = std::make_unique<DriverVk>();
-		break;
-#endif
-#ifdef DX12_BACKEND
-	case RenderSettings::Backend::DIRECTX12:
-		driver = std::make_unique<DriverDx12>();
-		break;
-#endif
-#ifdef METAL_BACKEND
-	case RenderSettings::Backend::METAL:
-		driver = CreateDriverMetal();
-		break;
-#endif
-	default:
-		break;
+	const auto found = backendFactories().find(backend);
+	if (found == backendFactories().end()) {
+		throw std::runtime_error("Failed to create render driver");
 	}
+	std::unique_ptr<DriverInterface> driver = found->second();
 	if (!driver) {
 		throw std::runtime_error("Failed to create render driver");
 	}

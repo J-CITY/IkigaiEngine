@@ -2,169 +2,42 @@
 
 #include "coreModule/ecs/components/inputComponent.h"
 #include "ecsModule/world.h"
+#include "inputControlPath.h"
+#include "resourceModule/playerProfile.h"
+#include "resourceModule/serviceManager.h"
 #include "utilsModule/jsonLoader.h"
 #include "utilsModule/log/loggerDefine.h"
 #include <algorithm>
 #include <cctype>
-#include <cmath>
 #include <optional>
 
 namespace IKIGAI::INPUT_SYSTEM {
 namespace {
 	std::string ToLower(std::string value) {
 		std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-		return value;
 	}
 
-	std::optional<EKey> ParseKey(const std::string& name) {
-		static const std::unordered_map<std::string, EKey> keys = { { "space", EKey::KEY_SPACE }, { "w", EKey::KEY_W }, { "a", EKey::KEY_A },
-			{ "s", EKey::KEY_S }, { "d", EKey::KEY_D }, { "q", EKey::KEY_Q }, { "e", EKey::KEY_E }, { "r", EKey::KEY_R }, { "f", EKey::KEY_F },
-			{ "g", EKey::KEY_G }, { "z", EKey::KEY_Z }, { "x", EKey::KEY_X }, { "c", EKey::KEY_C }, { "v", EKey::KEY_V },
-			{ "escape", EKey::KEY_ESCAPE }, { "enter", EKey::KEY_ENTER }, { "tab", EKey::KEY_TAB }, { "backspace", EKey::KEY_BACKSPACE },
-			{ "leftshift", EKey::KEY_LEFT_SHIFT }, { "rightshift", EKey::KEY_RIGHT_SHIFT }, { "leftcontrol", EKey::KEY_LEFT_CONTROL },
-			{ "rightcontrol", EKey::KEY_RIGHT_CONTROL }, { "leftalt", EKey::KEY_LEFT_ALT }, { "rightalt", EKey::KEY_RIGHT_ALT },
-			{ "up", EKey::KEY_UP }, { "down", EKey::KEY_DOWN }, { "left", EKey::KEY_LEFT }, { "right", EKey::KEY_RIGHT }, { "1", EKey::KEY_1 },
-			{ "2", EKey::KEY_2 }, { "3", EKey::KEY_3 }, { "4", EKey::KEY_4 }, { "5", EKey::KEY_5 }, { "6", EKey::KEY_6 }, { "7", EKey::KEY_7 },
-			{ "8", EKey::KEY_8 }, { "9", EKey::KEY_9 }, { "0", EKey::KEY_0 } };
-		auto it = keys.find(ToLower(name));
-		if (it == keys.end()) {
-			return std::nullopt;
-		}
-		return it->second;
-	}
-
-	struct ControlSample {
-		bool down = false;
-		bool pressedThisFrame = false;
-		bool releasedThisFrame = false;
-		float value = 0.0f;
-		MATH::Vector2f value2;
-		bool hasVec2 = false;
-	};
-
-	ControlSample SamplePath(const InputManager& input, const std::string& rawPath) {
+	ControlSample SampleResolvedBinding(
+		const InputManager& input, const ResolvedBinding& binding, const std::vector<InputProcessorDesc>& processors) {
 		ControlSample sample;
-		if (rawPath.empty()) {
-			return sample;
+		if (binding.shape == BindingShape::Vector2) {
+			const float up = SampleResolvedPath(input, binding.up).value;
+			const float down = SampleResolvedPath(input, binding.down).value;
+			const float left = SampleResolvedPath(input, binding.left).value;
+			const float right = SampleResolvedPath(input, binding.right).value;
+			sample.value2 = { right - left, up - down };
+			sample.hasVec2 = true;
+			sample.value = std::max(std::abs(sample.value2.x), std::abs(sample.value2.y));
+			sample.down = sample.value > 0.0f;
 		}
-		auto path = ToLower(rawPath);
-		const auto slash = path.find_last_of('/');
-		const std::string device = slash == std::string::npos ? path : path.substr(0, slash);
-		const std::string control = slash == std::string::npos ? std::string {} : path.substr(slash + 1);
+		else if (binding.shape == BindingShape::Axis1) {
+			sample.value = SampleResolvedPath(input, binding.positive).value - SampleResolvedPath(input, binding.negative).value;
+			sample.down = std::abs(sample.value) > 0.0f;
+		}
+		else {
+			sample = SampleResolvedPath(input, binding.path);
+		}
 
-		auto setButton = [&](bool down, bool pressed, bool released) {
-			sample.down = down;
-			sample.pressedThisFrame = pressed;
-			sample.releasedThisFrame = released;
-			sample.value = down ? 1.0f : 0.0f;
-		};
-
-		if (device.find("keyboard") != std::string::npos) {
-			if (const auto key = ParseKey(control)) {
-				setButton(input.isKeyPressed(*key), input.wasKeyPressedThisFrame(*key), input.wasKeyReleasedThisFrame(*key));
-			}
-			return sample;
-		}
-		if (device.find("mouse") != std::string::npos) {
-			if (control == "leftbutton") {
-				setButton(input.isMouseButtonPressed(EMouseButton::MOUSE_BUTTON_LEFT),
-					input.wasMouseButtonPressedThisFrame(EMouseButton::MOUSE_BUTTON_LEFT),
-					input.wasMouseButtonReleasedThisFrame(EMouseButton::MOUSE_BUTTON_LEFT));
-			}
-			else if (control == "rightbutton") {
-				setButton(input.isMouseButtonPressed(EMouseButton::MOUSE_BUTTON_RIGHT),
-					input.wasMouseButtonPressedThisFrame(EMouseButton::MOUSE_BUTTON_RIGHT),
-					input.wasMouseButtonReleasedThisFrame(EMouseButton::MOUSE_BUTTON_RIGHT));
-			}
-			else if (control == "middlebutton") {
-				setButton(input.isMouseButtonPressed(EMouseButton::MOUSE_BUTTON_MIDDLE),
-					input.wasMouseButtonPressedThisFrame(EMouseButton::MOUSE_BUTTON_MIDDLE),
-					input.wasMouseButtonReleasedThisFrame(EMouseButton::MOUSE_BUTTON_MIDDLE));
-			}
-			else if (control == "delta") {
-				sample.value2 = input.getMouseDelta();
-				sample.hasVec2 = true;
-				sample.value = std::max(std::abs(sample.value2.x), std::abs(sample.value2.y));
-			}
-			else if (control == "position") {
-				const auto pos = input.getMousePosition();
-				sample.value2 = { static_cast<float>(pos.x), static_cast<float>(pos.y) };
-				sample.hasVec2 = true;
-				sample.value = 1.0f;
-			}
-			return sample;
-		}
-		if (device.find("gamepad") != std::string::npos) {
-			const auto* gp = input.getFirstGamepad();
-			if (!gp) {
-				return sample;
-			}
-			const int id = gp->getId();
-			using Btn = INPUT::Gamepad::GAMEPAD_BUTTON;
-			auto setGpButton = [&](Btn btn) {
-				setButton(input.isButtonPressed(id, btn), input.wasButtonPressedThisFrame(id, btn), input.wasButtonReleasedThisFrame(id, btn));
-			};
-			if (control == "buttonsouth" || control == "a") {
-				setGpButton(Btn::btn_a);
-			}
-			else if (control == "buttoneast" || control == "b") {
-				setGpButton(Btn::btn_b);
-			}
-			else if (control == "buttonwest" || control == "x") {
-				setGpButton(Btn::btn_x);
-			}
-			else if (control == "buttonnorth" || control == "y") {
-				setGpButton(Btn::btn_y);
-			}
-			else if (control == "leftshoulder") {
-				setGpButton(Btn::btn_lb);
-			}
-			else if (control == "rightshoulder") {
-				setGpButton(Btn::btn_rb);
-			}
-			else if (control == "dpadup") {
-				setGpButton(Btn::dpad_up);
-			}
-			else if (control == "dpaddown") {
-				setGpButton(Btn::dpad_down);
-			}
-			else if (control == "dpadleft") {
-				setGpButton(Btn::dpad_left);
-			}
-			else if (control == "dpadright") {
-				setGpButton(Btn::dpad_right);
-			}
-			else if (control == "start") {
-				setGpButton(Btn::btn_start);
-			}
-			else if (control == "back") {
-				setGpButton(Btn::btn_back);
-			}
-			else if (control == "leftstick") {
-				sample.value2 = { gp->getData().mLeftSticX, gp->getData().mLeftSticY };
-				sample.hasVec2 = true;
-				sample.value = std::sqrt(sample.value2.x * sample.value2.x + sample.value2.y * sample.value2.y);
-				sample.down = sample.value > 0.2f;
-			}
-			else if (control == "rightstick") {
-				sample.value2 = { gp->getData().mRightSticX, gp->getData().mRightSticY };
-				sample.hasVec2 = true;
-				sample.value = std::sqrt(sample.value2.x * sample.value2.x + sample.value2.y * sample.value2.y);
-				sample.down = sample.value > 0.2f;
-			}
-			else if (control == "lefttrigger") {
-				sample.value = gp->getData().mLeftTrigger;
-				sample.down = sample.value > 0.2f;
-			}
-			else if (control == "righttrigger") {
-				sample.value = gp->getData().mRightTrigger;
-				sample.down = sample.value > 0.2f;
-			}
-		}
-		return sample;
-	}
-
-	void ApplyProcessors(ControlSample& sample, const std::vector<InputProcessorDesc>& processors) {
 		for (const auto& processor : processors) {
 			const auto type = ToLower(processor.type);
 			if (type == "deadzone") {
@@ -209,31 +82,6 @@ namespace {
 				sample.value2.y = std::clamp(sample.value2.y, processor.min, processor.max);
 			}
 		}
-	}
-
-	ControlSample SampleBinding(const InputManager& input, const InputBindingDesc& binding) {
-		if (!binding.composite.empty()) {
-			ControlSample sample;
-			const auto composite = ToLower(binding.composite);
-			if (composite == "2dvector") {
-				const float up = SamplePath(input, binding.up).value;
-				const float down = SamplePath(input, binding.down).value;
-				const float left = SamplePath(input, binding.left).value;
-				const float right = SamplePath(input, binding.right).value;
-				sample.value2 = { right - left, up - down };
-				sample.hasVec2 = true;
-				sample.value = std::max(std::abs(sample.value2.x), std::abs(sample.value2.y));
-				sample.down = sample.value > 0.0f;
-			}
-			else if (composite == "1daxis") {
-				sample.value = SamplePath(input, binding.positive).value - SamplePath(input, binding.negative).value;
-				sample.down = std::abs(sample.value) > 0.0f;
-			}
-			ApplyProcessors(sample, binding.processors);
-			return sample;
-		}
-		auto sample = SamplePath(input, binding.path);
-		ApplyProcessors(sample, binding.processors);
 		return sample;
 	}
 }
@@ -256,6 +104,53 @@ bool InputActions::load(const std::string& path) {
 		mMaps[state.desc.name] = std::move(state);
 	}
 	rebuildActions();
+	return true;
+}
+
+bool InputActions::loadBindingOverrides(const std::string& path) {
+	std::optional<InputBindingOverrides> loaded;
+	if (RESOURCES::ServiceManager::Check<RESOURCES::PlayerProfileService>()) {
+		const auto bytes = RESOURCES::ServiceManager::Get<RESOURCES::PlayerProfileService>().profile().readFile(path);
+		if (!bytes.empty()) {
+			if (auto parsed = UTILS::FromJsonStr<InputBindingOverrides>(std::string(bytes.begin(), bytes.end())); parsed.isOk()) {
+				loaded = parsed.unwrap();
+			}
+		}
+	}
+	if (!loaded) {
+		if (auto parsed = UTILS::FromJson<InputBindingOverrides>(path); parsed.isOk()) {
+			loaded = parsed.unwrap();
+		}
+	}
+	if (!loaded) {
+		LOG_WARNING << "No input binding overrides loaded from '" << path << "'";
+		return false;
+	}
+	mBindingOverrides.clear();
+	for (const auto& entry : loaded->overrides) {
+		mBindingOverrides[{ entry.map, entry.action, entry.bindingIndex }] = entry.binding;
+	}
+	rebuildActions();
+	return true;
+}
+
+bool InputActions::saveBindingOverrides(const std::string& path) const {
+	InputBindingOverrides payload;
+	for (const auto& [key, binding] : mBindingOverrides) {
+		payload.overrides.push_back({ key.map, key.action, key.bindingIndex, binding });
+	}
+	auto result = UTILS::ToJsonStr(payload, 2);
+	if (result.isErr()) {
+		LOG_ERROR << "Failed to serialize input binding overrides: " << result.unwrapErr().text;
+		return false;
+	}
+	if (!RESOURCES::ServiceManager::Check<RESOURCES::PlayerProfileService>()) {
+		LOG_ERROR << "PlayerProfileService unavailable; cannot save binding overrides to '" << path << "'";
+		return false;
+	}
+	const auto& text = result.unwrap();
+	std::vector<uint8_t> bytes(text.begin(), text.end());
+	RESOURCES::ServiceManager::Get<RESOURCES::PlayerProfileService>().profile().writeFile(path, bytes).wait();
 	return true;
 }
 
@@ -285,15 +180,17 @@ void InputActions::prepareMaps(ECS::World& world) {
 
 void InputActions::resolve(std::chrono::duration<double> dt) {
 	const float delta = static_cast<float>(dt.count());
-	for (auto& [name, action] : mActions) {
+	for (std::size_t actionIndex = 0; actionIndex < mActionRecords.size(); ++actionIndex) {
+		auto& record = mActionRecords[actionIndex];
+		auto& action = mActionStates[actionIndex];
 		action.wasPressedThisFrame = false;
 		action.wasReleasedThisFrame = false;
 		action.phases.clear();
 		action.value = 0.0f;
 		action.value2 = {};
 
-		const auto mapIt = mMaps.find(action.mapName);
-		if (mapIt == mMaps.end() || !mapIt->second.activeThisFrame) {
+		const auto mapIt = mMaps.find(record.mapName);
+		if (mapIt == mMaps.end() || !mapIt->second.activeThisFrame || record.desc == nullptr) {
 			if (action.isPressed) {
 				action.isPressed = false;
 				action.wasReleasedThisFrame = true;
@@ -302,30 +199,18 @@ void InputActions::resolve(std::chrono::duration<double> dt) {
 			continue;
 		}
 
-		const auto& desc = [&]() -> const InputActionDesc* {
-			for (const auto& candidate : mapIt->second.desc.actions) {
-				if (candidate.name == name) {
-					return &candidate;
-				}
-			}
-			return nullptr;
-		}();
-
-		if (!desc) {
-			continue;
-		}
-
-		if (action.holdTimes.size() != desc->bindings.size()) {
-			action.holdTimes.assign(desc->bindings.size(), 0.0f);
+		if (action.holdTimes.size() != record.bindings.size()) {
+			action.holdTimes.assign(record.bindings.size(), 0.0f);
 		}
 
 		bool anyDown = false;
 		bool performed = false;
 		bool canceled = false;
 		float bestMag = -1.0f;
-		for (size_t i = 0; i < desc->bindings.size(); ++i) {
-			const auto& binding = desc->bindings[i];
-			const auto sample = SampleBinding(mInput, binding);
+		for (std::size_t i = 0; i < record.bindings.size(); ++i) {
+			const auto& binding = record.bindings[i];
+			const auto& processors = i < record.bindingProcessors.size() ? record.bindingProcessors[i] : std::vector<InputProcessorDesc> {};
+			const auto sample = SampleResolvedBinding(mInput, binding, processors);
 			const auto interaction = ToLower(binding.interaction.empty() ? "press" : binding.interaction);
 			if (sample.hasVec2 && sample.value > bestMag) {
 				bestMag = sample.value;
@@ -396,7 +281,7 @@ void InputActions::resolve(std::chrono::duration<double> dt) {
 
 		for (auto phase : action.phases) {
 			for (auto& callback : mCallbacks) {
-				callback(name, phase);
+				callback(record.id, record.name, phase);
 			}
 		}
 	}
@@ -406,34 +291,71 @@ void InputActions::subscribe(Callback callback) {
 	mCallbacks.push_back(std::move(callback));
 }
 
-bool InputActions::isPressed(const std::string& action) const {
-	const auto* state = findAction(action);
+ActionId InputActions::findActionId(const std::string& action) const {
+	const auto it = mActionIds.find(action);
+	return it == mActionIds.end() ? InvalidActionId : it->second;
+}
+
+const std::string& InputActions::getActionName(ActionId id) const {
+	if (id < mActionRecords.size()) {
+		return mActionRecords[id].name;
+	}
+	static const std::string kEmpty;
+	return kEmpty;
+}
+
+bool InputActions::isPressed(ActionId id) const {
+	const auto* state = findActionState(id);
 	return state && state->isPressed;
 }
 
-bool InputActions::wasPressedThisFrame(const std::string& action) const {
-	const auto* state = findAction(action);
+bool InputActions::wasPressedThisFrame(ActionId id) const {
+	const auto* state = findActionState(id);
 	return state && state->wasPressedThisFrame;
 }
 
-bool InputActions::wasReleasedThisFrame(const std::string& action) const {
-	const auto* state = findAction(action);
+bool InputActions::wasReleasedThisFrame(ActionId id) const {
+	const auto* state = findActionState(id);
 	return state && state->wasReleasedThisFrame;
 }
 
-float InputActions::readValue(const std::string& action) const {
-	const auto* state = findAction(action);
+float InputActions::readValue(ActionId id) const {
+	const auto* state = findActionState(id);
 	return state ? state->value : 0.0f;
 }
 
-MATH::Vector2f InputActions::readValue2(const std::string& action) const {
-	const auto* state = findAction(action);
+MATH::Vector2f InputActions::readValue2(ActionId id) const {
+	const auto* state = findActionState(id);
 	return state ? state->value2 : MATH::Vector2f {};
 }
 
-std::vector<InputPhase> InputActions::getPhasesThisFrame(const std::string& action) const {
-	const auto* state = findAction(action);
+std::vector<InputPhase> InputActions::getPhasesThisFrame(ActionId id) const {
+	const auto* state = findActionState(id);
 	return state ? state->phases : std::vector<InputPhase> {};
+}
+
+bool InputActions::isPressed(const std::string& action) const {
+	return isPressed(findActionId(action));
+}
+
+bool InputActions::wasPressedThisFrame(const std::string& action) const {
+	return wasPressedThisFrame(findActionId(action));
+}
+
+bool InputActions::wasReleasedThisFrame(const std::string& action) const {
+	return wasReleasedThisFrame(findActionId(action));
+}
+
+float InputActions::readValue(const std::string& action) const {
+	return readValue(findActionId(action));
+}
+
+MATH::Vector2f InputActions::readValue2(const std::string& action) const {
+	return readValue2(findActionId(action));
+}
+
+std::vector<InputPhase> InputActions::getPhasesThisFrame(const std::string& action) const {
+	return getPhasesThisFrame(findActionId(action));
 }
 
 std::vector<std::string> InputActions::getActionNames(const std::string& mapName) const {
@@ -448,33 +370,103 @@ std::vector<std::string> InputActions::getActionNames(const std::string& mapName
 	return names;
 }
 
+std::vector<ActionId> InputActions::getActionIds(const std::string& mapName) const {
+	std::vector<ActionId> ids;
+	for (const auto& record : mActionRecords) {
+		if (record.mapName == mapName) {
+			ids.push_back(record.id);
+		}
+	}
+	return ids;
+}
+
+bool InputActions::rebindBinding(const std::string& mapName, const std::string& actionName, std::size_t bindingIndex, InputBindingDesc binding) {
+	mBindingOverrides[{ mapName, actionName, bindingIndex }] = std::move(binding);
+	rebuildActions();
+	return true;
+}
+
+bool InputActions::resetBinding(const std::string& mapName, const std::string& actionName, std::size_t bindingIndex) {
+	mBindingOverrides.erase({ mapName, actionName, bindingIndex });
+	rebuildActions();
+	return true;
+}
+
+void InputActions::clearBindingOverrides() {
+	mBindingOverrides.clear();
+	rebuildActions();
+}
+
 void InputActions::rebuildActions() {
-	mActions.clear();
+	std::vector<ActionState> previousStates;
+	previousStates.swap(mActionStates);
+
+	mActionRecords.clear();
+	mActionStates.clear();
+	mActionIds.clear();
+
+	ActionId nextId = 0;
 	for (const auto& [mapName, map] : mMaps) {
 		for (const auto& action : map.desc.actions) {
-			ActionState state;
-			state.mapName = mapName;
+			ActionRecord record;
+			record.id = nextId++;
+			record.name = action.name;
+			record.mapName = mapName;
+			record.desc = &action;
+
 			const auto type = ToLower(action.type);
 			const auto valueType = ToLower(action.valueType);
 			if (type == "value" && (valueType == "vector2" || valueType == "vec2")) {
-				state.valueType = ActionValueType::Vector2;
+				record.valueType = ActionValueType::Vector2;
 			}
 			else if (type == "value") {
-				state.valueType = ActionValueType::Float;
+				record.valueType = ActionValueType::Float;
 			}
-			state.holdTimes.assign(action.bindings.size(), 0.0f);
-			mActions[action.name] = std::move(state);
+
+			record.bindings.reserve(action.bindings.size());
+			record.bindingProcessors.reserve(action.bindings.size());
+			for (std::size_t bindingIndex = 0; bindingIndex < action.bindings.size(); ++bindingIndex) {
+				const auto bindingDesc = bindingFor(record, bindingIndex);
+				ResolvedBinding resolved;
+				if (ResolveBinding(bindingDesc, resolved)) {
+					record.bindings.push_back(resolved);
+					record.bindingProcessors.push_back(bindingDesc.processors);
+				}
+			}
+
+			const ActionId assignedId = record.id;
+			mActionIds[record.name] = assignedId;
+			mActionRecords.push_back(std::move(record));
+
+			ActionState state;
+			state.mapName = mapName;
+			state.valueType = mActionRecords.back().valueType;
+			if (assignedId < previousStates.size() && previousStates[assignedId].mapName == mapName) {
+				state = previousStates[assignedId];
+				state.valueType = mActionRecords.back().valueType;
+			}
+			state.holdTimes.assign(mActionRecords.back().bindings.size(), 0.0f);
+			mActionStates.push_back(std::move(state));
 		}
 	}
 }
 
-InputActions::ActionState* InputActions::findAction(const std::string& name) {
-	auto it = mActions.find(name);
-	return it == mActions.end() ? nullptr : &it->second;
+InputBindingDesc InputActions::bindingFor(const ActionRecord& record, std::size_t bindingIndex) const {
+	if (record.desc == nullptr || bindingIndex >= record.desc->bindings.size()) {
+		return {};
+	}
+	const BindingOverrideKey key { record.mapName, record.name, bindingIndex };
+	if (const auto it = mBindingOverrides.find(key); it != mBindingOverrides.end()) {
+		return it->second;
+	}
+	return record.desc->bindings[bindingIndex];
 }
 
-const InputActions::ActionState* InputActions::findAction(const std::string& name) const {
-	auto it = mActions.find(name);
-	return it == mActions.end() ? nullptr : &it->second;
+const InputActions::ActionState* InputActions::findActionState(ActionId id) const {
+	return id < mActionStates.size() ? &mActionStates[id] : nullptr;
+}
+
+InputActions::ActionState* InputActions::findActionState(ActionId id) {
+	return id < mActionStates.size() ? &mActionStates[id] : nullptr;
 }
 }

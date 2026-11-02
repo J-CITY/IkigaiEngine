@@ -58,18 +58,31 @@ template <typename PhaseFunc> void runPhaseImpl(std::vector<SystemManager::Batch
 		auto& tasks = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::TASK::TaskSystem>();
 		for (auto& batch : batches) {
 			if (batch.systems.size() == 1) {
-				phaseFunc(batch.systems[0].get(), world);
+				CommandBuffer cb;
+				{
+					ActiveCommandBufferScope scope(cb);
+					phaseFunc(batch.systems[0].get(), world);
+				}
+				cb.execute();
 				continue;
 			}
+			std::vector<CommandBuffer> buffers(batch.systems.size());
 			std::vector<IKIGAI::TASK::TaskHandle<void>> handles;
 			handles.reserve(batch.systems.size());
-			for (auto& sys : batch.systems) {
-				handles.push_back(tasks.submit(sys->mName.c_str(), -1, nullptr, [s = sys.get(), &world, &phaseFunc]() { phaseFunc(s, world); }));
+			for (size_t i = 0; i < batch.systems.size(); ++i) {
+				auto* sys = batch.systems[i].get();
+				handles.push_back(tasks.submit(sys->mName.c_str(), -1, nullptr, [sys, &world, &phaseFunc, &cb = buffers[i]]() {
+					ActiveCommandBufferScope scope(cb);
+					phaseFunc(sys, world);
+				}));
 			}
 			for (auto& handle : handles) {
 				if (handle.mFuture) {
 					handle.mFuture->wait();
 				}
+			}
+			for (auto& cb : buffers) {
+				cb.execute();
 			}
 		}
 		return;
@@ -77,7 +90,12 @@ template <typename PhaseFunc> void runPhaseImpl(std::vector<SystemManager::Batch
 
 	for (auto& batch : batches) {
 		for (auto& sys : batch.systems) {
-			phaseFunc(sys.get(), world);
+			CommandBuffer cb;
+			{
+				ActiveCommandBufferScope scope(cb);
+				phaseFunc(sys.get(), world);
+			}
+			cb.execute();
 		}
 	}
 }
@@ -119,7 +137,10 @@ void runUpdatePhaseImpl(std::vector<SystemManager::Batch>& batches, World& world
 		for (auto& batch : batches) {
 			if (batch.systems.size() == 1) {
 				CommandBuffer cb;
-				phaseFunc(batch.systems[0].get(), world, cb, dt);
+				{
+					ActiveCommandBufferScope scope(cb);
+					phaseFunc(batch.systems[0].get(), world, cb, dt);
+				}
 				cb.execute();
 				continue;
 			}
@@ -128,8 +149,10 @@ void runUpdatePhaseImpl(std::vector<SystemManager::Batch>& batches, World& world
 			handles.reserve(batch.systems.size());
 			for (size_t i = 0; i < batch.systems.size(); ++i) {
 				auto* sys = batch.systems[i].get();
-				handles.push_back(tasks.submit(
-					sys->mName.c_str(), -1, nullptr, [sys, &world, &cb = buffers[i], dt, &phaseFunc]() { phaseFunc(sys, world, cb, dt); }));
+				handles.push_back(tasks.submit(sys->mName.c_str(), -1, nullptr, [sys, &world, &cb = buffers[i], dt, &phaseFunc]() {
+					ActiveCommandBufferScope scope(cb);
+					phaseFunc(sys, world, cb, dt);
+				}));
 			}
 			for (auto& handle : handles) {
 				if (handle.mFuture) {
@@ -147,7 +170,10 @@ void runUpdatePhaseImpl(std::vector<SystemManager::Batch>& batches, World& world
 	for (auto& batch : batches) {
 		for (auto& sys : batch.systems) {
 			WebEcsLog(sys->mName.c_str());
-			phaseFunc(sys.get(), world, cb, dt);
+			{
+				ActiveCommandBufferScope scope(cb);
+				phaseFunc(sys.get(), world, cb, dt);
+			}
 		}
 	}
 	cb.execute();
@@ -200,7 +226,10 @@ void SystemManager::run() {
 		for (auto& batch : mBatches) {
 			if (batch.systems.size() == 1) {
 				CommandBuffer cb;
-				batch.systems[0]->run(mWorld, cb);
+				{
+					ActiveCommandBufferScope scope(cb);
+					batch.systems[0]->run(mWorld, cb);
+				}
 				cb.execute();
 				continue;
 			}
@@ -209,7 +238,10 @@ void SystemManager::run() {
 			handles.reserve(batch.systems.size());
 			for (size_t i = 0; i < batch.systems.size(); ++i) {
 				auto* sys = batch.systems[i].get();
-				handles.push_back(tasks.submit(sys->mName.c_str(), -1, nullptr, [sys, &world = mWorld, &cb = buffers[i]]() { sys->run(world, cb); }));
+				handles.push_back(tasks.submit(sys->mName.c_str(), -1, nullptr, [sys, &world = mWorld, &cb = buffers[i]]() {
+					ActiveCommandBufferScope scope(cb);
+					sys->run(world, cb);
+				}));
 			}
 			for (auto& handle : handles) {
 				if (handle.mFuture) {
@@ -226,7 +258,10 @@ void SystemManager::run() {
 	CommandBuffer cb;
 	for (auto& batch : mBatches) {
 		for (auto& sys : batch.systems) {
-			sys->run(mWorld, cb);
+			{
+				ActiveCommandBufferScope scope(cb);
+				sys->run(mWorld, cb);
+			}
 		}
 	}
 	cb.execute();

@@ -198,6 +198,8 @@ source_group(TREE ${MAIN_SOURCE_DIR} FILES ${PROJECT_ABSOLUTE_HEADERS} ${PROJECT
 
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/VectorGraphics.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Coroutines.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Task.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/EngineFeatures.cmake")
 
 add_executable(${APP_NAME}
     ${PROJECT_ABSOLUTE_HEADERS}
@@ -232,7 +234,7 @@ if(USE_VULKAN)
 endif()
 
 # Additional definitions
-target_compile_definitions(${APP_NAME} PRIVATE USE_CHEATS)
+ikigai_apply_feature_definitions(${APP_NAME})
 if(USE_EDITOR)
     target_compile_definitions(${APP_NAME} PRIVATE USE_EDITOR)
 endif()
@@ -310,7 +312,7 @@ target_link_libraries(${APP_NAME} PRIVATE
 
 # Independent vector geometry and SDF font module
 target_link_libraries(${APP_NAME} PRIVATE ikigai_vector)
-target_link_libraries(${APP_NAME} PRIVATE ikigai_coroutines)
+target_link_libraries(${APP_NAME} PRIVATE ikigai_coroutines ikigai_task)
 
 ikigai_configure_scripting(${APP_NAME})
 if(COMMAND ikigai_add_scripting_tests)

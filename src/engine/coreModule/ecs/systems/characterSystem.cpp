@@ -10,10 +10,8 @@
 #include "coreModule/ecs/componentReference.inl"
 #include "coreModule/ecs/components/cameraComponent.h"
 #include "coreModule/ecs/components/physics3dComponent.h"
+#include "coreModule/testHooks.h"
 #include "resourceModule/serviceManager.h"
-#ifdef IKIGAI_TEST_MODULE
-#include "sceneModule/characterDiagnostics.h"
-#endif
 #include "coreModule/ecs/components/thirdPersonController.h"
 #include "windowModule/window/window.h"
 #include <limits>
@@ -95,11 +93,9 @@ void CharacterSystem::fixedUpdate(SCENE_SYSTEM::Scene& scene, float dt) {
 					}
 					TraversalSystem::prepare(t);
 				}
-#ifdef IKIGAI_TEST_MODULE
-				if (SCENE_SYSTEM::CharacterDiagnostics::before(scene, m, t, dt)) {
+				if (TESTHOOK::characterBeforeMove && TESTHOOK::characterBeforeMove(scene, m, t, dt)) {
 					continue;
 				}
-#endif
 				auto& world = scene.physics3d();
 				if (m.motor.capsule.feet.y < -10) {
 					m.motor.reset(m.spawn);
@@ -109,9 +105,9 @@ void CharacterSystem::fixedUpdate(SCENE_SYSTEM::Scene& scene, float dt) {
 				if (traversal && m.jump && !t.traversing && TraversalSystem::tryStart(world, m, t, unit(m.wish, { 0, 0, 0 }))) {
 					m.jump = false;
 				}
-#ifdef IKIGAI_TEST_MODULE
-				SCENE_SYSTEM::CharacterDiagnostics::afterAttempt(scene, m, t);
-#endif
+				if (TESTHOOK::characterAfterAttempt) {
+					TESTHOOK::characterAfterAttempt(scene, m, t);
+				}
 				if (t.traversing) {
 					TraversalSystem::update(scene, m, t, dt);
 				}

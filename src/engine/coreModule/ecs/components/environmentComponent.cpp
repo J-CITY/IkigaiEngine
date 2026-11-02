@@ -100,3 +100,11 @@ void EnvironmentComponent::update(SCENE_SYSTEM::Scene& scene, double dt) {
 	}
 }
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::EnvironmentComponent>();
+	return true;
+}();
+}

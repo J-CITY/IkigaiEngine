@@ -2,6 +2,7 @@
 #ifdef METAL_BACKEND
 
 #include "driverMetal.h"
+#include "renderModule/backends/driverFactory.h"
 #include "captureModule/screenshot.h"
 #include "gpuMemoryMetal.h"
 #include "vertexFormatsMetal.h"
@@ -137,6 +138,12 @@ namespace IKIGAI::RENDER {
 
 	std::unique_ptr<DriverInterface> CreateDriverMetal() {
 		return std::make_unique<DriverMetal>();
+	}
+	namespace {
+	const bool kRegisterMetalBackend = [] {
+		RegisterRenderBackend(RenderSettings::Backend::METAL, [] { return CreateDriverMetal(); });
+		return true;
+	}();
 	}
 
 	DriverMetal::DriverMetal() {

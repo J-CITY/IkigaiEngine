@@ -158,6 +158,8 @@ set(QUEST_SOURCES
 
 include("${CMAKE_CURRENT_LIST_DIR}/VectorGraphics.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/Coroutines.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/Task.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/EngineFeatures.cmake")
 
 add_library(main SHARED ${PROJECT_HEADERS} ${PROJECT_SOURCES} ${QUEST_SOURCES})
 set_target_properties(main PROPERTIES DEBUG_POSTFIX "")
@@ -239,7 +241,8 @@ message(STATUS "OpenXR loader: ${_OX_LOADER}")
 
 # Independent vector geometry and SDF font module
 target_link_libraries(main PRIVATE ikigai_vector)
-target_link_libraries(main PRIVATE ikigai_coroutines)
+ikigai_apply_feature_definitions(main)
+target_link_libraries(main PRIVATE ikigai_coroutines ikigai_task)
 
 ikigai_configure_scripting(main)
 if(COMMAND ikigai_add_scripting_tests)

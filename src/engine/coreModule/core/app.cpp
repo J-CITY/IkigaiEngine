@@ -1,9 +1,7 @@
 #include "app.h"
-#ifdef IKIGAI_TEST_MODULE
-#include "presentationFocus.h"
-#endif
 #include "captureModule/screenshot.h"
 #include "coreModule/ecs/componentTypes.h"
+#include "coreModule/testHooks.h"
 #include "coroutineModule/scheduler.h"
 #include "ecsModule/world.h"
 #if USE_PHYSICS_3D
@@ -56,20 +54,8 @@ void emscriptenMainLoop(IKIGAI::CORE::App* application) {
 #endif
 } // namespace
 
-App::App(
-#ifdef OCULUS
-	android_app* app
-#endif
-	)
-	: core(
-#ifdef DX12_BACKEND
-		  hInstance
-#endif
-#ifdef OCULUS
-			  app
-#endif
-	  ) {
-}
+App::App(const PlatformStartup& platform)
+	: core(platform) { }
 
 App::~App() = default;
 
@@ -211,7 +197,10 @@ void App::update(std::chrono::duration<double> dt) {
 	}
 
 #if defined(USE_SDL) || defined(OCULUS)
-	if (simulate && RESOURCES::ServiceManager::Check<INPUT_SYSTEM::InputActions>() && RESOURCES::ServiceManager::Check<ECS::World>()) {
+	if (simulate && RESOURCES::ServiceManager::Check<INPUT_SYSTEM::InputManager>() && RESOURCES::ServiceManager::Check<INPUT_SYSTEM::InputActions>()
+		&& RESOURCES::ServiceManager::Check<ECS::World>()) {
+		auto& input = RESOURCES::ServiceManager::Get<INPUT_SYSTEM::InputManager>();
+		input.beginInputFrame(dt);
 		auto& actions = RESOURCES::ServiceManager::Get<INPUT_SYSTEM::InputActions>();
 		actions.prepareMaps(RESOURCES::ServiceManager::Get<ECS::World>());
 		actions.resolve(dt);
@@ -269,9 +258,11 @@ void App::update(std::chrono::duration<double> dt) {
 #endif
 
 	if (presentationAllowed && RENDER::DriverInterface::settings.backend != RENDER::RenderSettings::Backend::OPENGL) {
-#if defined(IKIGAI_TEST_MODULE) && defined(_WIN32) && defined(USE_SDL)
-		RENDER::FocusPresentation(
-			SDL_GetPointerProperty(SDL_GetWindowProperties(core.window->getSDLWindow()), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
+#if defined(_WIN32) && defined(USE_SDL)
+		if (TESTHOOK::focusPresentation) {
+			TESTHOOK::focusPresentation(
+				SDL_GetPointerProperty(SDL_GetWindowProperties(core.window->getSDLWindow()), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
+		}
 #endif
 		RESOURCES::ServiceManager::Get<RENDER::Renderer>().submit();
 	}

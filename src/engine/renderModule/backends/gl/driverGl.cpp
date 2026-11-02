@@ -1,4 +1,5 @@
 #include "driverGl.h"
+#include "renderModule/backends/driverFactory.h"
 
 #ifdef OPENGL_BACKEND
 #include "../interface/meshInterface.h"
@@ -886,5 +887,12 @@ void IKIGAI::RENDER::DriverGl::bindBindlessResources() {
 		}
 	}
 #endif
+}
+namespace {
+const bool kRegisterGlBackend = [] {
+	IKIGAI::RENDER::RegisterRenderBackend(IKIGAI::RENDER::RenderSettings::Backend::OPENGL,
+		[] { return std::make_unique<IKIGAI::RENDER::DriverGl>(); });
+	return true;
+}();
 }
 #endif

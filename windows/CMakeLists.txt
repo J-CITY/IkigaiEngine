@@ -230,6 +230,8 @@ endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/VectorGraphics.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Coroutines.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Task.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../cmake/EngineFeatures.cmake")
 
 add_executable(${APP_NAME} ${EXECUTABLE_FLAG}
     ${PROJECT_ABSOLUTE_HEADERS}
@@ -270,7 +272,7 @@ if(USE_DX12)
 endif()
 
 # Additional definitions
-target_compile_definitions(${APP_NAME} PRIVATE USE_CHEATS)
+ikigai_apply_feature_definitions(${APP_NAME})
 if(USE_EDITOR)
     target_compile_definitions(${APP_NAME} PRIVATE USE_EDITOR)
 endif()
@@ -364,6 +366,7 @@ set_target_properties(${APP_NAME} PROPERTIES LINK_FLAGS "/NODEFAULTLIB:LIBCMT /N
 # Independent vector geometry and SDF font module
 target_link_libraries(${APP_NAME} PRIVATE ikigai_vector)
 target_link_libraries(${APP_NAME} PRIVATE ikigai_coroutines)
+target_link_libraries(${APP_NAME} PRIVATE ikigai_task)
 if(IKIGAI_VECTOR_TESTS)
     add_executable(ikigai_vector_components_tests "${CMAKE_CURRENT_SOURCE_DIR}/../utils/tests/vector_components.cpp")
     get_target_property(vector_engine_includes ${APP_NAME} INCLUDE_DIRECTORIES)

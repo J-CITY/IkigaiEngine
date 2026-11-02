@@ -8,6 +8,9 @@
 #include <argParse.h>
 #include <filesystem>
 #include <iostream>
+#ifdef DX12_BACKEND
+#include <Windows.h>
+#endif
 
 namespace IKIGAI::CORE {
 namespace {
@@ -97,17 +100,17 @@ int RunApplication(int argc, char* argv[], PlatformContext platform) {
 			return 2;
 		}
 		applyOptions(options);
+		PlatformStartup startup;
+		startup.android = platform.android;
 #ifdef DX12_BACKEND
-		App::hInstance = GetModuleHandleW(nullptr);
+		startup.nativeInstance = GetModuleHandleW(nullptr);
 #endif
 #ifdef OCULUS
-		if (!platform.android) {
+		if (!startup.android) {
 			throw std::invalid_argument("Android application context is required");
 		}
-		App application(platform.android);
-#else
-		App application;
 #endif
+		App application(startup);
 		if (!options.loadingScene.empty()) {
 			application.getCore()->sceneManager->prepareLoadingScene(options.loadingScene);
 		}

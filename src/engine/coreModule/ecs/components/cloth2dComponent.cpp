@@ -13,4 +13,13 @@ Cloth2DComponent::Cloth2DComponent(UTILS::Ref<Object> object, const Descriptor& 
 	settings = descriptor;
 	settings.Type = GetType<Cloth2DComponent>();
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::Cloth2DComponent>();
+	return true;
+}();
+}
+
 #endif

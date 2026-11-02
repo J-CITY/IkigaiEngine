@@ -24,4 +24,29 @@ private:
 
 	std::mutex mMutex;
 };
+
+inline CommandBuffer*& activeCommandBuffer() {
+	thread_local CommandBuffer* current = nullptr;
+	return current;
+}
+
+class ActiveCommandBufferScope {
+public:
+	explicit ActiveCommandBufferScope(CommandBuffer& buffer)
+		: mPrevious(activeCommandBuffer()) {
+		activeCommandBuffer() = &buffer;
+	}
+
+	~ActiveCommandBufferScope() {
+		activeCommandBuffer() = mPrevious;
+	}
+
+	ActiveCommandBufferScope(const ActiveCommandBufferScope&) = delete;
+	ActiveCommandBufferScope& operator=(const ActiveCommandBufferScope&) = delete;
+	ActiveCommandBufferScope(ActiveCommandBufferScope&&) = delete;
+	ActiveCommandBufferScope& operator=(ActiveCommandBufferScope&&) = delete;
+
+private:
+	CommandBuffer* mPrevious = nullptr;
+};
 }

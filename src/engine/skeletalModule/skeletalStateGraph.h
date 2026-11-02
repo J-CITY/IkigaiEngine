@@ -28,6 +28,12 @@ public:
 	StateGraphRuntime* runtime() const {
 		return mRuntime.get();
 	}
+	const RootMotionSample& rootMotion() const {
+		return mRuntime->rootMotion();
+	}
+	std::vector<AnimationEventDispatch> consumeAnimationEvents() {
+		return mRuntime->consumeAnimationEvents();
+	}
 
 private:
 	ReloadPolicy mReloadPolicy = ReloadPolicy::Automatic;

@@ -15,19 +15,29 @@ using namespace IKIGAI::UTILS::LOGG;
 Log::Log(const Logger& logger, Level level)
 	: mLogger(logger)
 	, mLevel(level)
-	, mpStream(nullptr) {
+	, mActive(false) {
 	if (level >= logger.getLevel()) {
-		mpStream = new (std::ostringstream);
+		mStream.emplace();
+		mActive = true;
 	}
+}
+
+Log::Log(Log&& other)
+	: mLogger(other.mLogger)
+	, mLevel(other.mLevel)
+	, mActive(other.mActive)
+	, mStream(std::move(other.mStream)) {
+	other.mActive = false;
+	other.mStream.reset();
 }
 
 // Destructor : output the Log string stream
 Log::~Log() {
-	if (nullptr != mpStream) {
-		mLogger.output(*this);
-		delete mpStream;
-		mpStream = nullptr;
+	if (!mActive) {
+		return;
 	}
+	mActive = false;
+	mLogger.output(*this);
 }
 
 std::string Log::ToString(Log::Level aLevel) {
@@ -61,16 +71,21 @@ std::string Log::ToString(Log::Level aLevel) {
 
 Log::Level Log::ToLevel(const std::string& levelStr) {
 	auto level = Level::Critic;
-	if (levelStr == "DEBUG")
+	if (levelStr == "DEBUG") {
 		level = Level::Debug;
-	else if (levelStr == "INFO")
+	}
+	else if (levelStr == "INFO") {
 		level = Level::Info;
-	else if (levelStr == "NOTE")
+	}
+	else if (levelStr == "NOTE") {
 		level = Level::Notice;
-	else if (levelStr == "WARNING")
+	}
+	else if (levelStr == "WARNING") {
 		level = Level::Warning;
-	else if (levelStr == "ERROR")
+	}
+	else if (levelStr == "ERROR") {
 		level = Level::Error;
+	}
 	return level;
 }
 
@@ -151,24 +166,28 @@ void Logger::output(const Log& aLog) const {
 }
 
 void Manager::ClearOutputs() {
+	std::lock_guard<std::mutex> lock(mMutex);
 	mOutputList.clear();
 }
 
 Channel::Ptr Manager::Get(const std::string& apChannelName) {
-	Channel::Ptr ChannelPtr;
+	std::lock_guard<std::mutex> lock(mMutex);
 	const auto iChannelPtr = mChannelMap.find(apChannelName);
 	if (mChannelMap.end() != iChannelPtr) {
-		ChannelPtr = iChannelPtr->second;
+		return iChannelPtr->second;
 	}
-	else {
-		ChannelPtr.reset(new Channel(apChannelName, mDefaultLevel));
-		mChannelMap[apChannelName] = ChannelPtr;
-	}
-	return ChannelPtr;
+	Channel::Ptr channelPtr(new Channel(apChannelName, mDefaultLevel));
+	mChannelMap[apChannelName] = channelPtr;
+	return channelPtr;
 }
 
 void Manager::Output(const Channel::Ptr& aChannelPtr, const Log& aLog) {
-	for (auto out : mOutputList) {
+	std::vector<Output::Ptr> outputs;
+	{
+		std::lock_guard<std::mutex> lock(mMutex);
+		outputs = mOutputList;
+	}
+	for (const auto& out : outputs) {
 		out->output(aChannelPtr, aLog);
 	}
 }

@@ -145,3 +145,11 @@ void BehaviorTreeComponent::onDestroy() {
 	onDisable();
 }
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::BehaviorTreeComponent>();
+	return true;
+}();
+}

@@ -1,13 +1,16 @@
 #include "profiler.h"
 #include "profilerReport.h"
 #include "profilerSpy.h"
+#include <functional>
 #include <map>
+#include <stdexcept>
 #include <string>
+#include <thread>
 
 using namespace IKIGAI;
 using namespace IKIGAI::PROFILER;
 
-bool Profiler::__ENABLED = false;
+std::atomic<bool> Profiler::__ENABLED { false };
 std::mutex Profiler::__SAVE_MUTEX;
 std::unordered_map<std::string, double> Profiler::__ELPASED_HISTORY;
 std::unordered_map<std::string, uint64_t> Profiler::__CALLS_COUNTER;
@@ -17,14 +20,15 @@ uint32_t Profiler::__ELAPSED_FRAMES;
 
 Profiler::Profiler() {
 	mLastTime = std::chrono::steady_clock::now();
-	__ENABLED = false;
+	__ENABLED.store(false);
 }
 
-ProfilerReport Profiler::GenerateReport() {
+ProfilerReport Profiler::generateReportUnlocked() const {
 	ProfilerReport report;
 
-	if (__ELAPSED_FRAMES == 0)
+	if (__ELAPSED_FRAMES == 0) {
 		return report;
+	}
 
 	std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - mLastTime;
 
@@ -43,7 +47,46 @@ ProfilerReport Profiler::GenerateReport() {
 	return report;
 }
 
+ProfilerReport Profiler::GenerateReport() {
+	std::lock_guard<std::mutex> lock(__SAVE_MUTEX);
+	return generateReportUnlocked();
+}
+
+void Profiler::pushReportHistoryUnlocked(ProfilerReport report, float duration) {
+	if (__REPORT_HISTORY.size() < kReportHistoryCapacity) {
+		__REPORT_HISTORY.push_back(std::move(report));
+		__REPORT_HISTORY_DURATIONS.push_back(duration);
+		return;
+	}
+	__REPORT_HISTORY[__REPORT_HISTORY_NEXT] = std::move(report);
+	__REPORT_HISTORY_DURATIONS[__REPORT_HISTORY_NEXT] = duration;
+	__REPORT_HISTORY_NEXT = (__REPORT_HISTORY_NEXT + 1) % kReportHistoryCapacity;
+}
+
+std::vector<ProfilerReport> Profiler::copyReportHistoryUnlocked() {
+	const auto count = __REPORT_HISTORY.size();
+	std::vector<ProfilerReport> ordered;
+	ordered.reserve(count);
+	for (std::size_t i = 0; i < count; ++i) {
+		const auto index = static_cast<std::size_t>((static_cast<std::size_t>(__REPORT_HISTORY_NEXT) + i) % kReportHistoryCapacity);
+		ordered.push_back(__REPORT_HISTORY[index]);
+	}
+	return ordered;
+}
+
+std::vector<float> Profiler::copyReportHistoryDurationsUnlocked() {
+	const auto count = __REPORT_HISTORY_DURATIONS.size();
+	std::vector<float> ordered;
+	ordered.reserve(count);
+	for (std::size_t i = 0; i < count; ++i) {
+		const auto index = static_cast<std::size_t>((static_cast<std::size_t>(__REPORT_HISTORY_NEXT) + i) % kReportHistoryCapacity);
+		ordered.push_back(__REPORT_HISTORY_DURATIONS[index]);
+	}
+	return ordered;
+}
+
 void Profiler::ClearHistory() {
+	std::lock_guard<std::mutex> lock(__SAVE_MUTEX);
 	__ELPASED_HISTORY.clear();
 	__CALLS_COUNTER.clear();
 	__WORKING_THREADS_LEVEL.clear();
@@ -51,26 +94,31 @@ void Profiler::ClearHistory() {
 	__ELAPSED_FRAMES = 0;
 	mLastTime = std::chrono::steady_clock::now();
 	__REPORT_HISTORY.clear();
+	__REPORT_HISTORY_DURATIONS.clear();
+	__REPORT_HISTORY_NEXT = 0;
 }
 
 void Profiler::Update(float p_deltaTime) {
-	if (IsEnabled()) {
-		__WORKING_THREADS_CALLS.clear();
-		mFrameStart = std::chrono::steady_clock::now();
-		__ELAPSED_FRAMES++;
+	std::lock_guard<std::mutex> lock(__SAVE_MUTEX);
+	if (!__ENABLED.load()) {
+		return;
 	}
+	__WORKING_THREADS_CALLS.clear();
+	mFrameStart = std::chrono::steady_clock::now();
+	__ELAPSED_FRAMES++;
 }
 
 void Profiler::UpdateEnd() {
-	if (IsEnabled()) {
-		__REPORT_HISTORY.push_back(GenerateReport());
-		std::chrono::duration<double> dur = std::chrono::steady_clock::now() - mFrameStart;
-		__REPORT_HISTORY_DURATIONS.push_back(dur.count());
+	std::lock_guard<std::mutex> lock(__SAVE_MUTEX);
+	if (!__ENABLED.load()) {
+		return;
 	}
+	const auto duration = static_cast<float>(std::chrono::duration<double>(std::chrono::steady_clock::now() - mFrameStart).count());
+	pushReportHistoryUnlocked(generateReportUnlocked(), duration);
 }
 
 void Profiler::Save(ProfilerSpy& p_spy) {
-	__SAVE_MUTEX.lock();
+	std::lock_guard<std::mutex> lock(__SAVE_MUTEX);
 
 	auto delta = std::chrono::duration<double>(p_spy.mEnd - p_spy.mStart).count();
 
@@ -90,53 +138,50 @@ void Profiler::Save(ProfilerSpy& p_spy) {
 	std::chrono::duration<double> start = mFrameStart - p_spy.mStart;
 	__WORKING_THREADS_CALLS[std::this_thread::get_id()].push_back(
 		{ p_spy.mName, start.count(), delta, __WORKING_THREADS_LEVEL[std::this_thread::get_id()] });
-
-	__SAVE_MUTEX.unlock();
 }
 
 bool Profiler::IsEnabled() {
-	return __ENABLED;
+	return __ENABLED.load();
 }
 
 void Profiler::ToggleEnable() {
-	__ENABLED = !__ENABLED;
+	auto enabled = __ENABLED.load();
+	while (!__ENABLED.compare_exchange_weak(enabled, !enabled)) { }
 }
 
 void Profiler::Enable() {
-	__ENABLED = true;
+	__ENABLED.store(true);
 }
 
 void Profiler::Disable() {
-	__ENABLED = false;
+	__ENABLED.store(false);
 }
 
 void Profiler::IncreaseLevel() {
-	__SAVE_MUTEX.lock();
+	std::lock_guard<std::mutex> lock(__SAVE_MUTEX);
 	if (__WORKING_THREADS_LEVEL.count(std::this_thread::get_id()) == 0) {
 		__WORKING_THREADS_LEVEL[std::this_thread::get_id()] = 0;
-		__WORKING_THREADS_CALLS[std::this_thread::get_id()] = { };
+		__WORKING_THREADS_CALLS[std::this_thread::get_id()] = {};
 	}
 	else {
 		__WORKING_THREADS_LEVEL[std::this_thread::get_id()]++;
 	}
-	__SAVE_MUTEX.unlock();
 }
 
 void Profiler::DecreaseLevel() {
-	__SAVE_MUTEX.lock();
+	std::lock_guard<std::mutex> lock(__SAVE_MUTEX);
 	if (__WORKING_THREADS_LEVEL.count(std::this_thread::get_id()) == 0) {
-		throw;
+		throw std::logic_error("Profiler::DecreaseLevel called without a matching IncreaseLevel");
 	}
-	else {
-		__WORKING_THREADS_LEVEL[std::this_thread::get_id()]--;
-	}
-	__SAVE_MUTEX.unlock();
+	__WORKING_THREADS_LEVEL[std::this_thread::get_id()]--;
 }
 
-const std::vector<ProfilerReport>& Profiler::getReportHistory() {
-	return __REPORT_HISTORY;
+std::vector<ProfilerReport> Profiler::getReportHistory() {
+	std::lock_guard<std::mutex> lock(__SAVE_MUTEX);
+	return copyReportHistoryUnlocked();
 }
 
-const std::vector<float>& Profiler::getReportHistoryDurations() {
-	return __REPORT_HISTORY_DURATIONS;
+std::vector<float> Profiler::getReportHistoryDurations() {
+	std::lock_guard<std::mutex> lock(__SAVE_MUTEX);
+	return copyReportHistoryDurationsUnlocked();
 }

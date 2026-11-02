@@ -83,13 +83,21 @@ bool BehaviorTreeInstance::allowed(size_t node, bool force) {
 	return result;
 }
 void BehaviorTreeInstance::enter(size_t node) {
+	enterOnPath(node, mPath);
+}
+void BehaviorTreeInstance::enterOnPath(size_t node, std::vector<size_t>& path) {
 	auto& state = mStates[node];
 	state.child = 0;
 	state.active = true;
 	++state.generation;
-	mPath.push_back(node);
+	path.push_back(node);
 	++mCounters.transitions;
 	record(node, "enter");
+	if (mDefinition->nodes[node].kind == NodeKind::Parallel) {
+		ParallelRun run;
+		run.results.assign(mDefinition->nodes[node].children.size(), std::nullopt);
+		state.parallel = std::move(run);
+	}
 	for (auto& decorator : state.decorators) {
 		decorator.entered = true;
 		decorator.implementation->enter(mTime);
@@ -149,6 +157,9 @@ void BehaviorTreeInstance::leave(size_t node, ExitReason reason) {
 		}
 		decorator.valid = false;
 	}
+	if (mDefinition->nodes[node].kind == NodeKind::Parallel) {
+		state.parallel.reset();
+	}
 	state.active = false;
 	++state.generation;
 	++mCounters.transitions;
@@ -172,7 +183,10 @@ void BehaviorTreeInstance::childFinished(TaskResult result) {
 	}
 	const auto node = mPath.back();
 	auto& state = mStates[node];
-	const bool continueChildren = mDefinition->nodes[node].kind == NodeKind::Sequence ? result == TaskResult::Success : result == TaskResult::Failure;
+	const auto kind = mDefinition->nodes[node].kind;
+	const bool continueChildren = kind == NodeKind::Sequence ? result == TaskResult::Success
+		: kind == NodeKind::Selector						 ? result == TaskResult::Failure
+															 : false;
 	if (continueChildren) {
 		++state.child;
 		if (state.child == mDefinition->nodes[node].children.size()) {
@@ -181,6 +195,236 @@ void BehaviorTreeInstance::childFinished(TaskResult result) {
 	}
 	else {
 		mPending = result;
+	}
+}
+void BehaviorTreeInstance::branchChildFinished(ParallelBranch& branch, size_t parallel, TaskResult result) {
+	if (branch.path.empty()) {
+		finishParallelBranch(branch, parallel, result);
+		return;
+	}
+	const auto node = branch.path.back();
+	auto& state = mStates[node];
+	const auto kind = mDefinition->nodes[node].kind;
+	const bool continueChildren = kind == NodeKind::Sequence ? result == TaskResult::Success
+		: kind == NodeKind::Selector						 ? result == TaskResult::Failure
+															 : false;
+	if (continueChildren) {
+		++state.child;
+		if (state.child == mDefinition->nodes[node].children.size()) {
+			branch.pending = result;
+		}
+	}
+	else {
+		branch.pending = result;
+	}
+}
+TaskResult BehaviorTreeInstance::aggregateParallel(const ParallelRun& run, ParallelPolicy policy) const {
+	if (policy == ParallelPolicy::RequireAll) {
+		for (const auto& result : run.results) {
+			if (!result || *result == TaskResult::Failure) {
+				return TaskResult::Failure;
+			}
+		}
+		return TaskResult::Success;
+	}
+	for (const auto& result : run.results) {
+		if (result && *result == TaskResult::Success) {
+			return TaskResult::Success;
+		}
+	}
+	return TaskResult::Failure;
+}
+void BehaviorTreeInstance::finishParallelBranch(ParallelBranch& branch, size_t parallel, TaskResult result) {
+	auto& run = *mStates[parallel].parallel;
+	run.results[branch.childIndex] = result;
+	const auto policy = mDefinition->nodes[parallel].parallelPolicy;
+	if (policy == ParallelPolicy::RequireAll && result == TaskResult::Failure) {
+		for (auto& sibling : run.branches) {
+			if (sibling.childIndex != branch.childIndex && !run.results[sibling.childIndex]) {
+				abortParallelBranch(sibling, parallel);
+				run.results[sibling.childIndex] = TaskResult::Failure;
+			}
+		}
+	}
+	else if (policy == ParallelPolicy::RequireOne && result == TaskResult::Success) {
+		for (auto& sibling : run.branches) {
+			if (sibling.childIndex != branch.childIndex && !run.results[sibling.childIndex]) {
+				abortParallelBranch(sibling, parallel);
+				run.results[sibling.childIndex] = TaskResult::Failure;
+			}
+		}
+	}
+	if (std::all_of(run.results.begin(), run.results.end(), [](const auto& entry) { return entry.has_value(); })) {
+		const auto aggregate = aggregateParallel(run, policy);
+		if (!mPath.empty() && mPath.back() == parallel) {
+			mPending = aggregate;
+		}
+		else {
+			for (auto& state : mStates) {
+				if (!state.parallel) {
+					continue;
+				}
+				for (auto& sibling : state.parallel->branches) {
+					if (!sibling.path.empty() && sibling.path.back() == parallel) {
+						sibling.pending = aggregate;
+						return;
+					}
+				}
+			}
+		}
+	}
+}
+void BehaviorTreeInstance::abortParallelBranch(ParallelBranch& branch, size_t parallel) {
+	(void)parallel;
+	while (!branch.path.empty()) {
+		const auto node = branch.path.back();
+		if (mStates[node].task && mStates[node].taskEntered) {
+			auto ctx = context(node);
+			try {
+				mStates[node].task->abort(ctx);
+			} catch (...) {
+				record(node, "abort-error");
+			}
+		}
+		leave(node, ExitReason::Aborted);
+		branch.path.pop_back();
+	}
+	branch.pending.reset();
+}
+void BehaviorTreeInstance::startParallelBranches(size_t parallel) {
+	auto& run = *mStates[parallel].parallel;
+	const auto& children = mDefinition->nodes[parallel].children;
+	run.branches.clear();
+	run.branches.reserve(children.size());
+	for (size_t index = 0; index < children.size(); ++index) {
+		ParallelBranch branch;
+		branch.childIndex = index;
+		run.branches.push_back(std::move(branch));
+	}
+	run.started = true;
+	for (auto& branch : run.branches) {
+		const auto child = children[branch.childIndex];
+		if (allowed(child, true)) {
+			enterOnPath(child, branch.path);
+		}
+		else {
+			finishParallelBranch(branch, parallel, TaskResult::Failure);
+		}
+	}
+}
+void BehaviorTreeInstance::pumpBranch(ParallelBranch& branch, size_t parallel, size_t& budget) {
+	while (budget > 0 && mRunning && !mAbort && !mRestartNextTick) {
+		if (branch.pending) {
+			--budget;
+			const auto result = *branch.pending;
+			branch.pending.reset();
+			const auto node = branch.path.back();
+			leave(node, result == TaskResult::Success ? ExitReason::Success : ExitReason::Failure);
+			branch.path.pop_back();
+			branchChildFinished(branch, parallel, result);
+			continue;
+		}
+		if (branch.path.empty()) {
+			return;
+		}
+		--budget;
+		const auto node = branch.path.back();
+		if (mStates[node].task) {
+			return;
+		}
+		if (mDefinition->nodes[node].kind == NodeKind::Parallel) {
+			if (!mStates[node].parallel || !mStates[node].parallel->started) {
+				startParallelBranches(node);
+			}
+			pumpParallel(node, budget);
+			if (mStates[node].parallel
+				&& std::all_of(mStates[node].parallel->results.begin(), mStates[node].parallel->results.end(),
+					[](const auto& entry) { return entry.has_value(); })) {
+				branch.pending = aggregateParallel(*mStates[node].parallel, mDefinition->nodes[node].parallelPolicy);
+			}
+			return;
+		}
+		const auto child = mDefinition->nodes[node].children.at(mStates[node].child);
+		if (allowed(child, true)) {
+			enterOnPath(child, branch.path);
+		}
+		else {
+			branchChildFinished(branch, parallel, TaskResult::Failure);
+		}
+	}
+}
+void BehaviorTreeInstance::pumpParallel(size_t parallel, size_t& budget) {
+	auto& run = *mStates[parallel].parallel;
+	if (!run.started) {
+		startParallelBranches(parallel);
+	}
+	for (auto& branch : run.branches) {
+		if (run.results[branch.childIndex]) {
+			continue;
+		}
+		pumpBranch(branch, parallel, budget);
+		if (budget == 0) {
+			break;
+		}
+	}
+}
+void BehaviorTreeInstance::tickPath(const std::vector<size_t>& path) {
+	if (path.empty() || mAbort) {
+		return;
+	}
+	const auto node = path.back();
+	auto& task = mStates[node].task;
+	if (task && mStates[node].taskEntered && (task->ticks() || mTime >= task->wakeTime())) {
+		++mCounters.taskTicks;
+		auto ctx = context(node);
+		const auto result = task->tick(ctx);
+		if (result != TaskResult::Running) {
+			if (&path == &mPath) {
+				if (!mPending) {
+					mPending = result;
+				}
+			}
+			else {
+				for (auto& state : mStates) {
+					if (!state.parallel) {
+						continue;
+					}
+					for (auto& branch : state.parallel->branches) {
+						if (branch.path.data() == path.data() && branch.path.size() == path.size() && !branch.pending) {
+							branch.pending = result;
+							return;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+void BehaviorTreeInstance::tickParallelTasks() {
+	for (auto& state : mStates) {
+		if (!state.parallel || !state.parallel->started) {
+			continue;
+		}
+		for (auto& branch : state.parallel->branches) {
+			if (branch.path.empty() || branch.pending) {
+				continue;
+			}
+			tickPath(branch.path);
+		}
+	}
+}
+void BehaviorTreeInstance::servicesOnPath(const std::vector<size_t>& path) {
+	for (const auto node : path) {
+		auto ctx = context(node);
+		auto& state = mStates[node];
+		for (size_t index = 0; index < state.services.size(); ++index) {
+			auto& service = state.services[index];
+			if (service.active && service.next <= mTime) {
+				service.next = mTime + mDefinition->nodes[node].services[index].interval;
+				++mCounters.serviceUpdates;
+				service.implementation->update(ctx);
+			}
+		}
 	}
 }
 void BehaviorTreeInstance::pump(size_t& budget) {
@@ -208,6 +452,13 @@ void BehaviorTreeInstance::pump(size_t& budget) {
 		if (mStates[node].task) {
 			break;
 		}
+		if (mDefinition->nodes[node].kind == NodeKind::Parallel) {
+			if (!mStates[node].parallel || !mStates[node].parallel->started) {
+				startParallelBranches(node);
+			}
+			pumpParallel(node, budget);
+			continue;
+		}
 		observe();
 		if (mAbort) {
 			break;
@@ -225,16 +476,13 @@ void BehaviorTreeInstance::pump(size_t& budget) {
 	}
 }
 void BehaviorTreeInstance::services() {
-	for (const auto node : mPath) {
-		auto ctx = context(node);
-		auto& state = mStates[node];
-		for (size_t index = 0; index < state.services.size(); ++index) {
-			auto& service = state.services[index];
-			if (service.active && service.next <= mTime) {
-				service.next = mTime + mDefinition->nodes[node].services[index].interval;
-				++mCounters.serviceUpdates;
-				service.implementation->update(ctx);
-			}
+	servicesOnPath(mPath);
+	for (auto& state : mStates) {
+		if (!state.parallel) {
+			continue;
+		}
+		for (const auto& branch : state.parallel->branches) {
+			servicesOnPath(branch.path);
 		}
 	}
 }
@@ -348,16 +596,43 @@ void BehaviorTreeInstance::update(double dt) {
 			messages.swap(mInbox->messages);
 		}
 		for (const auto& message : messages) {
-			if (mPath.empty() || mPath.back() != message.node || mStates[message.node].generation != message.generation) {
-				continue;
-			}
-			if (mAbort) {
-				if (message.aborted) {
-					mAbort->acknowledged = true;
+			bool handled = false;
+			if (!mPath.empty() && mPath.back() == message.node && mStates[message.node].generation == message.generation) {
+				handled = true;
+				if (mAbort) {
+					if (message.aborted) {
+						mAbort->acknowledged = true;
+					}
+				}
+				else if (!message.aborted && !mPending) {
+					mPending = message.result;
 				}
 			}
-			else if (!message.aborted && !mPending) {
-				mPending = message.result;
+			if (handled) {
+				continue;
+			}
+			for (auto& state : mStates) {
+				if (!state.parallel) {
+					continue;
+				}
+				for (auto& branch : state.parallel->branches) {
+					if (branch.path.empty() || branch.path.back() != message.node || mStates[message.node].generation != message.generation) {
+						continue;
+					}
+					if (mAbort) {
+						if (message.aborted) {
+							mAbort->acknowledged = true;
+						}
+					}
+					else if (!message.aborted && !branch.pending) {
+						branch.pending = message.result;
+					}
+					handled = true;
+					break;
+				}
+				if (handled) {
+					break;
+				}
 			}
 		}
 		if (mAbort) {
@@ -369,17 +644,9 @@ void BehaviorTreeInstance::update(double dt) {
 			}
 			finishAbort();
 		}
-		if (!mPath.empty() && !mPending) {
-			const auto node = mPath.back();
-			auto& task = mStates[node].task;
-			if (task && (task->ticks() || mTime >= task->wakeTime())) {
-				++mCounters.taskTicks;
-				auto ctx = context(node);
-				auto result = task->tick(ctx);
-				if (result != TaskResult::Running) {
-					mPending = result;
-				}
-			}
+		if (!mPending) {
+			tickPath(mPath);
+			tickParallelTasks();
 		}
 		size_t budget = mDefinition->transitionBudget;
 		pump(budget);
@@ -409,6 +676,17 @@ void BehaviorTreeInstance::update(double dt) {
 void BehaviorTreeInstance::stop() {
 	mRunning = false;
 	mRestartNextTick = false;
+	for (auto& state : mStates) {
+		if (!state.parallel) {
+			continue;
+		}
+		for (auto& branch : state.parallel->branches) {
+			if (!branch.path.empty()) {
+				abortParallelBranch(branch, 0);
+			}
+		}
+		state.parallel.reset();
+	}
 	if (!mPath.empty() && !mAbort && mStates[mPath.back()].task && mStates[mPath.back()].taskEntered) {
 		auto ctx = context(mPath.back());
 		try {

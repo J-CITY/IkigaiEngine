@@ -53,3 +53,11 @@ const std::array<VegetationInteractorComponent::Sample, 4>& VegetationInteractor
 	return mPrevious;
 }
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::VegetationInteractorComponent>();
+	return true;
+}();
+}

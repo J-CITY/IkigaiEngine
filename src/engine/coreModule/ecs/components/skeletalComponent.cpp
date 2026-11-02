@@ -70,3 +70,11 @@ void SkeletalComponent::onSerialize(nlohmann::json& j) {
 	j["SkeletonPath"] = mSkeletonPath;
 }
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::SkeletalComponent>();
+	return true;
+}();
+}

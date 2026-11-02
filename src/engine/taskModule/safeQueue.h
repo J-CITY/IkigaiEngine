@@ -77,9 +77,7 @@ namespace TASK {
 
 		void clear() {
 			std::lock_guard<std::shared_mutex> lock { mMutex };
-			while (!mQueue.empty()) {
-				mQueue.pop();
-			}
+			mQueue.clear();
 			mCondition.notify_all();
 		}
 

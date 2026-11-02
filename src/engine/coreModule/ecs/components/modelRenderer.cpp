@@ -215,3 +215,12 @@ ModelLODRenderer::Descriptor ModelLODRenderer::getDescriptor() const {
 // }
 
 //----------------------------------------------
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::ModelRenderer>();
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::ModelLODRenderer>();
+	return true;
+}();
+}

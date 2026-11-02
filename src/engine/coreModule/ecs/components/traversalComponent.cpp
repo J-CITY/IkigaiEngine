@@ -11,4 +11,13 @@ TraversalComponent::TraversalComponent(UTILS::Ref<Object> o, const ComponentBase
 	settings = static_cast<const Descriptor&>(d);
 }
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::TraversalComponent>();
+	return true;
+}();
+}
+
 #endif

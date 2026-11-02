@@ -11,4 +11,13 @@ CharacterMotorComponent::CharacterMotorComponent(UTILS::Ref<Object> o, const Com
 	settings = static_cast<const Descriptor&>(d);
 }
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::CharacterMotorComponent>();
+	return true;
+}();
+}
+
 #endif

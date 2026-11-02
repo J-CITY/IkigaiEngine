@@ -12,9 +12,12 @@ class IkigaiScriptRuntime {
 	std::string path;
 	bool healthy = false;
 
+	bool loadFromVfs(ECS::Object& owner);
+
 public:
 	IkigaiScriptRuntime(ECS::Object& owner, const std::string& script);
 	~IkigaiScriptRuntime();
+	bool reload(ECS::Object& owner);
 	bool isOk() const {
 		return healthy;
 	}

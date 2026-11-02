@@ -131,3 +131,12 @@ AudioListenerComponent::Descriptor AudioListenerComponent::getDescriptor() const
 	descriptor.Type = GetType<AudioListenerComponent>();
 	return descriptor;
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::AudioComponent>();
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::AudioListenerComponent>();
+	return true;
+}();
+}

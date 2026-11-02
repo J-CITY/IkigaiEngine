@@ -1,6 +1,8 @@
 #pragma once
 #include <any>
 #include <map>
+#include <mutex>
+#include <typeindex>
 #include <variant>
 
 namespace IKIGAI::RENDER {
@@ -46,23 +48,28 @@ namespace RESOURCES {
 	class ServiceManager {
 	public:
 		template <class T> static void Set(T* p_service) {
-			SERVICES[typeid(T).hash_code()] = p_service;
+			std::lock_guard<std::mutex> lock(MUTEX);
+			SERVICES[std::type_index(typeid(T))] = p_service;
 		}
 
 		template <class T> static T& Get() {
-			return *std::any_cast<T*>(SERVICES.at(typeid(T).hash_code()));
+			std::lock_guard<std::mutex> lock(MUTEX);
+			return *std::any_cast<T*>(SERVICES.at(std::type_index(typeid(T))));
 		}
 
 		template <class T> static bool Check() {
-			return SERVICES.contains(typeid(T).hash_code());
+			std::lock_guard<std::mutex> lock(MUTEX);
+			return SERVICES.contains(std::type_index(typeid(T)));
 		}
 
 		template <class T> static void Remove() {
-			SERVICES.erase(typeid(T).hash_code());
+			std::lock_guard<std::mutex> lock(MUTEX);
+			SERVICES.erase(std::type_index(typeid(T)));
 		}
 
 	private:
-		static std::map<size_t, ServiceType> SERVICES;
+		static std::mutex MUTEX;
+		static std::map<std::type_index, ServiceType> SERVICES;
 	};
 }
 }

@@ -555,3 +555,11 @@ void TransformComponent::setLocalRotationDeg(Vector3f val) {
 	}
 	setLocalRotation(QuaternionF({ val }));
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::TransformComponent>(IKIGAI::ECS::StorageType::Sparse, true);
+	return true;
+}();
+}

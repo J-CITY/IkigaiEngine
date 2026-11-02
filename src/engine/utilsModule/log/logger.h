@@ -1,11 +1,14 @@
 #pragma once
 
+#include <atomic>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
-
 
 namespace IKIGAI::UTILS::LOGG {
 class Logger;
@@ -16,9 +19,14 @@ public:
 	enum class Level { Debug = 0, Info, Notice, Warning, Error, Critic };
 
 public:
+	Log(Log&& other);
+	Log(const Log&) = delete;
+	Log& operator=(const Log&) = delete;
+	Log& operator=(Log&&) = delete;
+
 	template <typename T> Log& operator<<(const T& aValue) {
-		if (nullptr != mpStream) {
-			(*mpStream) << aValue;
+		if (mActive) {
+			(*mStream) << aValue;
 		}
 		return (*this);
 	}
@@ -30,7 +38,7 @@ public:
 	}
 
 	inline const std::ostringstream& getStream() const {
-		return *mpStream;
+		return mStream.value();
 	}
 
 	static std::string ToString(Log::Level aLevel);
@@ -39,13 +47,11 @@ public:
 private:
 	Log(const Logger& aLogger, Level aSeverity);
 
-	// Log(const Log&);
-	// void operator=(const Log&);
-
 private:
 	const Logger& mLogger;
 	Level mLevel;
-	std::ostringstream* mpStream;
+	bool mActive = false;
+	std::optional<std::ostringstream> mStream;
 };
 
 class Channel {
@@ -65,11 +71,11 @@ public:
 	}
 
 	inline void setLevel(Log::Level aLevel) {
-		mLevel = aLevel;
+		mLevel.store(aLevel, std::memory_order_relaxed);
 	}
 
 	inline Log::Level getLevel() const {
-		return mLevel;
+		return mLevel.load(std::memory_order_relaxed);
 	}
 
 private:
@@ -78,7 +84,7 @@ private:
 
 private:
 	std::string mName;
-	Log::Level mLevel;
+	std::atomic<Log::Level> mLevel;
 };
 
 class Output {
@@ -167,13 +173,16 @@ public:
 	static Channel::Ptr Get(const std::string& apChannelName);
 	static void Output(const Channel::Ptr& aChannelPtr, const Log& aLog);
 	inline static void SetDefaultLevel(Log::Level aLevel) {
+		std::lock_guard<std::mutex> lock(mMutex);
 		mDefaultLevel = aLevel;
 	}
 	inline static void AddOutput(Output::Ptr out) {
-		mOutputList.push_back(out);
+		std::lock_guard<std::mutex> lock(mMutex);
+		mOutputList.push_back(std::move(out));
 	}
 
 private:
+	inline static std::mutex mMutex;
 	inline static Channel::Map mChannelMap;
 	inline static std::vector<Output::Ptr> mOutputList;
 	inline static Log::Level mDefaultLevel = Log::Level::Critic;

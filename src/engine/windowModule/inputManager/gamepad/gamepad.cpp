@@ -9,15 +9,16 @@ Gamepad::Gamepad(int number, std::string name)
 
 bool Gamepad::GamepadData::operator!=(const GamepadData& data) const {
 	auto comparef = [](float x, float y, float epsilon = 0.00001f) {
-		if (fabs(x - y) < epsilon)
+		if (fabs(x - y) < epsilon) {
 			return true;
+		}
 		return false;
 	};
 	if (!comparef(data.mRightTrigger, mRightTrigger) || !comparef(data.mLeftTrigger, mLeftTrigger) || !comparef(data.mRightSticX, mRightSticX)
 		|| !comparef(data.mRightSticY, mRightSticY) || !comparef(data.mLeftSticX, mLeftSticX) || !comparef(data.mLeftSticY, mLeftSticY)) {
 		return true;
 	}
-	return mButtons == data.mButtons;
+	return mButtons != data.mButtons;
 }
 
 bool Gamepad::isButtonPressed(GAMEPAD_BUTTON btn) const {

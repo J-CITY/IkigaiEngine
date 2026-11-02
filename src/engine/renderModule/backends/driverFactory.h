@@ -1,5 +1,6 @@
 #pragma once
 #include "interface/driverInterface.h"
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -26,5 +27,7 @@ bool ApplyCliRenderBackendOverride(RenderSettings& settings);
 // the binary contains exactly one backend and no explicit CLI selection.
 void ResolveRenderBackend(RenderSettings& settings);
 
+using CreateDriverFn = std::function<std::unique_ptr<DriverInterface>()>;
+void RegisterRenderBackend(RenderSettings::Backend backend, CreateDriverFn create);
 std::unique_ptr<DriverInterface> CreateRenderDriver(RenderSettings::Backend backend, WINDOW::Window& window);
 }

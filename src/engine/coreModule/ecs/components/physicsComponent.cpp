@@ -35,4 +35,13 @@ PhysicsComponent::Descriptor PhysicsComponent::getDescriptor() const {
 //	);
 // }
 
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::PhysicsComponent>();
+	return true;
+}();
+}
+
 #endif // USE_PHYSICS_3D

@@ -2,22 +2,40 @@
 
 using namespace IKIGAI::UTILS;
 
+namespace {
+void releaseControlBlock(ControlBlock* block, ControlBlockHandler* owner) {
+	if (!block) {
+		return;
+	}
+	if (block->mPtr == owner) {
+		block->mPtr = nullptr;
+	}
+	if (block->mRC.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+		delete block;
+	}
+}
+}
+
 ControlBlockHandler::ControlBlockHandler() {
 	mCb = new UTILS::ControlBlock();
-	mCb->mRC += 1;
+	mCb->mRC.fetch_add(1, std::memory_order_relaxed);
 	mCb->mPtr = this;
 }
 
 ControlBlockHandler::ControlBlockHandler(ECS::Component* ptr) {
 	mCb = new UTILS::ControlBlock();
-	mCb->mRC += 1;
+	mCb->mRC.fetch_add(1, std::memory_order_relaxed);
 	mCb->mPtr = (ControlBlockHandler*)ptr;
 }
 
 ControlBlockHandler::ControlBlockHandler(const ControlBlockHandler& obj) {
+	// Component's destructor suppresses implicit move, so arrays relocate by copy.
+	// The copy keeps the block and becomes its current address. A fresh block would
+	// leave existing weak pointers on the source, which then dies.
 	mCb = obj.mCb;
 	if (mCb) {
-		++mCb->mRC;
+		mCb->mRC.fetch_add(1, std::memory_order_relaxed);
+		mCb->mPtr = this;
 	}
 }
 
@@ -25,17 +43,11 @@ ControlBlockHandler& ControlBlockHandler::operator=(const ControlBlockHandler& o
 	if (this == &obj) {
 		return *this;
 	}
-	if (mCb) {
-		if (mCb->mPtr == this) {
-			mCb->mPtr = nullptr;
-		}
-		if (--mCb->mRC == 0) {
-			delete mCb;
-		}
-	}
+	releaseControlBlock(mCb, this);
 	mCb = obj.mCb;
 	if (mCb) {
-		++mCb->mRC;
+		mCb->mRC.fetch_add(1, std::memory_order_relaxed);
+		mCb->mPtr = this;
 	}
 	return *this;
 }
@@ -49,31 +61,14 @@ ControlBlockHandler& ControlBlockHandler::operator=(ControlBlockHandler&& obj) n
 	if (this == &obj) {
 		return *this;
 	}
-	if (mCb) {
-		if (mCb->mPtr == this) {
-			mCb->mPtr = nullptr;
-		}
-		if (--mCb->mRC == 0) {
-			delete mCb;
-		}
-	}
+	releaseControlBlock(mCb, this);
 	mCb = obj.mCb;
 	obj.mCb = nullptr;
 	return *this;
 }
 
 ControlBlockHandler::~ControlBlockHandler() {
-	if (!mCb) {
-		return;
-	}
-	if (mCb->mPtr == this) {
-		mCb->mPtr = nullptr;
-	}
-	--(mCb->mRC);
-	if (mCb->mRC == 0) {
-		mCb->mPtr = nullptr;
-		delete mCb;
-	}
+	releaseControlBlock(mCb, this);
 }
 
 ControlBlock* ControlBlockHandler::getControlBlock() {

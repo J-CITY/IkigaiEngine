@@ -1,5 +1,6 @@
 #include "world.h"
 
+#include "commandBuffer.h"
 #include "componentManager.h"
 
 namespace IKIGAI::ECS {
@@ -25,6 +26,11 @@ void World::registerEntity(Entity newEntity) const {
 }
 
 void World::destroyEntity(Entity newEntity) const {
+	if (CommandBuffer* commands = activeCommandBuffer()) {
+		ComponentManager* components = mComponentsManager.get();
+		commands->addCommand([components, newEntity]() { components->destroyEntity(newEntity); });
+		return;
+	}
 	mComponentsManager->destroyEntity(newEntity);
 }
 

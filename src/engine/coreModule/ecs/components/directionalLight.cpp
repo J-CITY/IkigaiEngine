@@ -61,3 +61,11 @@ DirectionalLight::Descriptor DirectionalLight::getDescriptor() const {
 //		rttr::metadata(EditorMetaInfo::EDIT_WIDGET, EditorMetaInfo::WidgetType::DRAG_FLOAT)
 //	);
 // }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::DirectionalLight>();
+	return true;
+}();
+}

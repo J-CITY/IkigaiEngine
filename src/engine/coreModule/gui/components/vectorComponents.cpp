@@ -245,3 +245,14 @@ uint64_t VectorCanvasComponent::configurationHash() const {
 	return h;
 }
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::SdfTextComponent>(IKIGAI::ECS::StorageType::Sparse, true);
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::VectorShapeComponent>(IKIGAI::ECS::StorageType::Sparse, true);
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::VectorPathComponent>(IKIGAI::ECS::StorageType::Sparse, true);
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::VectorCanvasComponent>(IKIGAI::ECS::StorageType::Sparse, true);
+	return true;
+}();
+}

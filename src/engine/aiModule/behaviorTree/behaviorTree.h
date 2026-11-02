@@ -10,7 +10,17 @@ enum class TaskResult { Success, Failure, Running };
 enum class ExitReason { Success, Failure, Aborted, Stopped };
 enum class ObserverAborts { None, Self, LowerPriority, Both };
 enum class RunMode { Once, Loop };
-enum class NodeKind { Sequence, Selector, Task };
+enum class NodeKind { Sequence, Selector, Parallel, Task };
+// RequireAll: succeed when every child succeeds; fail on the first failure (remaining branches abort).
+// RequireOne: succeed on the first success (remaining branches abort); fail when every child fails.
+enum class ParallelPolicy { RequireAll, RequireOne };
+struct ParallelParameters {
+	ParallelPolicy Policy = ParallelPolicy::RequireAll;
+	template <class C> static auto serde(C& c, ParallelParameters& v) {
+		using namespace serde::attribute;
+		serde::serde_struct(c, v).field(&ParallelParameters::Policy, "Policy", default_ { ParallelPolicy::RequireAll });
+	}
+};
 
 struct CompletionMessage {
 	size_t node = 0;
@@ -31,6 +41,11 @@ struct TaskToken {
 	bool sameRun(const TaskToken&) const;
 };
 
+class PathQuery {
+public:
+	virtual ~PathQuery() = default;
+	virtual std::optional<std::vector<MATH::Vector3f>> findPath(MATH::Vector3f from, MATH::Vector3f to) const = 0;
+};
 class ExecutionHost {
 public:
 	virtual ~ExecutionHost() = default;
@@ -39,6 +54,7 @@ public:
 	virtual std::optional<float> ownerHeading() const;
 	virtual bool move(const TaskToken&, MATH::Vector3f velocity, std::optional<float> heading);
 	virtual void release(const TaskToken&);
+	virtual const PathQuery* navigation() const;
 };
 struct TaskContext {
 	Blackboard& blackboard;
@@ -169,6 +185,7 @@ struct CompiledService {
 struct BehaviorNode {
 	std::string id {};
 	NodeKind kind = NodeKind::Task;
+	ParallelPolicy parallelPolicy = ParallelPolicy::RequireAll;
 	std::vector<size_t> children {};
 	std::vector<CompiledDecorator> decorators {};
 	std::vector<CompiledService> services {};
@@ -218,6 +235,16 @@ public:
 	nlohmann::json snapshot() const;
 
 private:
+	struct ParallelBranch {
+		size_t childIndex = 0;
+		std::vector<size_t> path {};
+		std::optional<TaskResult> pending {};
+	};
+	struct ParallelRun {
+		std::vector<ParallelBranch> branches {};
+		std::vector<std::optional<TaskResult>> results {};
+		bool started = false;
+	};
 	struct ServiceState {
 		std::unique_ptr<BehaviorService> implementation {};
 		double next = 0;
@@ -236,6 +263,7 @@ private:
 		std::unique_ptr<BehaviorTask> task {};
 		std::vector<ServiceState> services {};
 		std::vector<DecoratorState> decorators {};
+		std::optional<ParallelRun> parallel {};
 		size_t child = 0;
 		uint64_t generation = 0;
 		bool active = false;
@@ -251,9 +279,20 @@ private:
 	TaskContext context(size_t);
 	bool allowed(size_t, bool force = false);
 	void enter(size_t);
+	void enterOnPath(size_t, std::vector<size_t>&);
 	void leave(size_t, ExitReason);
 	void childFinished(TaskResult);
+	void branchChildFinished(ParallelBranch&, size_t parallel, TaskResult);
 	void pump(size_t& budget);
+	void pumpParallel(size_t, size_t& budget);
+	void pumpBranch(ParallelBranch&, size_t parallel, size_t& budget);
+	void startParallelBranches(size_t);
+	void finishParallelBranch(ParallelBranch&, size_t parallel, TaskResult);
+	void abortParallelBranch(ParallelBranch&, size_t parallel);
+	TaskResult aggregateParallel(const ParallelRun&, ParallelPolicy) const;
+	void tickPath(const std::vector<size_t>&);
+	void tickParallelTasks();
+	void servicesOnPath(const std::vector<size_t>&);
 	void observe();
 	void beginAbort(size_t cut, std::optional<size_t> nextChild);
 	void finishAbort();
@@ -278,4 +317,5 @@ private:
 void registerBuiltinTasks(BehaviorRegistry&);
 void registerBuiltinDecorators(BehaviorRegistry&);
 void registerBuiltinServices(BehaviorRegistry&);
+void registerDefaultPathQuery();
 }

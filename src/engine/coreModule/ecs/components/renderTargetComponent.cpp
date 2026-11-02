@@ -60,3 +60,11 @@ RenderTargetComponent::Descriptor RenderTargetComponent::getDescriptor() const {
 	return descriptor;
 }
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::RenderTargetComponent>();
+	return true;
+}();
+}

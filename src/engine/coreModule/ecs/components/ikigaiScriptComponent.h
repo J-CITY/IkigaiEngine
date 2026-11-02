@@ -2,6 +2,7 @@
 #if USE_IKIGAI_SCRIPT
 #include "component.h"
 #include "utilsModule/reflection/reflection_macros.h"
+#include <cstdint>
 #include <memory>
 namespace IKIGAI::SCRIPTING {
 class IkigaiScriptRuntime;
@@ -35,6 +36,7 @@ public:
 	Descriptor getDescriptor() const;
 	bool isScriptOk() const;
 	void setScript(const std::string& script);
+	void reloadScript();
 	void onAwake() override;
 	void onStart() override;
 	void onEnable() override;
@@ -48,7 +50,12 @@ private:
 	std::string path;
 	std::unique_ptr<SCRIPTING::IkigaiScriptRuntime> runtime;
 	bool awake = false, started = false, enabled = false;
+#if defined(USE_FILE_WATCHER)
+	std::uint64_t fileWatchHandle = 0;
+#endif
 	void ensureRuntime();
+	void attachFileWatch();
+	void detachFileWatch();
 
 public:
 	IKI_PROPERTY(

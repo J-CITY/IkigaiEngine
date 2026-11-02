@@ -16,6 +16,7 @@
 #include "resourceModule/destructibleManager.h"
 #include "resourceModule/ragdollManager.h"
 #endif
+#include "coreModule/ecs/componentCatalog.h"
 #include "sceneLoadingContext.h"
 #include "utilsModule/log/loggerDefine.h"
 #include "utilsModule/time/loadTimer.h"
@@ -28,9 +29,6 @@ using namespace IKIGAI::COROUTINE;
 using namespace IKIGAI::RESOURCES;
 
 namespace {
-template <class... T> void RegisterComponents(ECS::World& world, ECS::ComponentsTypeProvider<T...>) {
-	(world.getComponentManager()->registerComponent<T>(ECS::StorageType::Sparse), ...);
-}
 template <class T>
 Task<> HoldResource(ResourceRequest<T> request, std::shared_ptr<SceneLoadState> state, std::vector<std::shared_ptr<void>>& resources) {
 	state->control->check();
@@ -43,15 +41,6 @@ Task<> HoldResource(ResourceRequest<T> request, std::shared_ptr<SceneLoadState> 
 	} reset { *state };
 	resources.push_back(co_await request.wait());
 	state->control->check();
-}
-template <class D> bool IsLightweight(const D&) {
-	return std::is_same_v<D, ECS::TransformComponent::Descriptor> || std::is_same_v<D, ECS::CameraComponent::Descriptor>
-		|| std::is_same_v<D, ECS::RootGuiComponent::Descriptor> || std::is_same_v<D, ECS::SpriteComponent::Descriptor>
-		|| std::is_same_v<D, ECS::SpriteAnimateComponent::Descriptor> || std::is_same_v<D, ECS::LabelComponent::Descriptor>
-		|| std::is_same_v<D, ECS::SdfTextComponent::Descriptor> || std::is_same_v<D, ECS::VectorShapeComponent::Descriptor>
-		|| std::is_same_v<D, ECS::VectorPathComponent::Descriptor> || std::is_same_v<D, ECS::VectorCanvasComponent::Descriptor>
-		|| std::is_same_v<D, ECS::InteractionComponent::Descriptor> || std::is_same_v<D, ECS::ClipComponent::Descriptor>
-		|| std::is_same_v<D, ECS::ScrollComponent::Descriptor> || std::is_same_v<D, ECS::LayoutComponent::Descriptor>;
 }
 template <class D> Task<> PrepareComponent(D descriptor, std::shared_ptr<SceneLoadState> state, std::vector<std::shared_ptr<void>>& resources) {
 	if constexpr (std::is_same_v<D, ECS::ParticleSystem2DComponent::Descriptor> || std::is_same_v<D, ECS::ParticleSystem3DComponent::Descriptor>) {
@@ -165,6 +154,60 @@ template <class D> Task<> PrepareComponent(D descriptor, std::shared_ptr<SceneLo
 	}
 	co_return;
 }
+
+void EnsureComponentPreparers() {
+	static const bool ready = [] {
+		auto& catalog = ECS::ComponentCatalog::instance();
+		auto bind = [](auto name, auto read) {
+			ECS::ComponentCatalog::instance().setPrepare(name,
+				[read](const nlohmann::json& json, std::shared_ptr<SceneLoadState> state, std::vector<std::shared_ptr<void>>& resources) -> Task<> {
+					auto document = json;
+					co_await PrepareComponent(read(document), state, resources);
+				});
+		};
+		(void)catalog;
+		bind(ECS::GetComponentName<ECS::ParticleSystem2DComponent>(),
+			[](nlohmann::json& document) { return serde::deserialize<ECS::ParticleSystem2DComponent::Descriptor>(document); });
+		bind(ECS::GetComponentName<ECS::ParticleSystem3DComponent>(),
+			[](nlohmann::json& document) { return serde::deserialize<ECS::ParticleSystem3DComponent::Descriptor>(document); });
+		bind(ECS::GetComponentName<ECS::ModelRenderer>(),
+			[](nlohmann::json& document) { return serde::deserialize<ECS::ModelRenderer::Descriptor>(document); });
+		bind(ECS::GetComponentName<ECS::ModelLODRenderer>(),
+			[](nlohmann::json& document) { return serde::deserialize<ECS::ModelLODRenderer::Descriptor>(document); });
+		bind(ECS::GetComponentName<ECS::SurfaceComponent>(),
+			[](nlohmann::json& document) { return DATA::readDescriptor<ECS::SurfaceComponent::Descriptor>(document); });
+		bind(ECS::GetComponentName<ECS::FoliageComponent>(),
+			[](nlohmann::json& document) { return DATA::readDescriptor<ECS::FoliageComponent::Descriptor>(document); });
+		bind(ECS::GetComponentName<ECS::MaterialRenderer>(),
+			[](nlohmann::json& document) { return serde::deserialize<ECS::MaterialRenderer::Descriptor>(document); });
+		bind(ECS::GetComponentName<ECS::SpriteComponent>(),
+			[](nlohmann::json& document) { return serde::deserialize<ECS::SpriteComponent::Descriptor>(document); });
+#if USE_PHYSICS_3D
+		bind(ECS::GetComponentName<ECS::RagdollComponent>(),
+			[](nlohmann::json& document) { return serde::deserialize<ECS::RagdollComponent::Descriptor>(document); });
+		bind(ECS::GetComponentName<ECS::DestructibleMeshComponent>(),
+			[](nlohmann::json& document) { return serde::deserialize<ECS::DestructibleMeshComponent::Descriptor>(document); });
+#endif
+		bind(ECS::GetComponentName<ECS::SkeletalComponent>(),
+			[](nlohmann::json& document) { return serde::deserialize<ECS::SkeletalComponent::Descriptor>(document); });
+		bind(ECS::GetComponentName<ECS::SkeletalAnimationComponent>(),
+			[](nlohmann::json& document) { return serde::deserialize<ECS::SkeletalAnimationComponent::Descriptor>(document); });
+		bind(ECS::GetComponentName<ECS::AudioComponent>(),
+			[](nlohmann::json& document) { return serde::deserialize<ECS::AudioComponent::Descriptor>(document); });
+		bind(ECS::GetComponentName<ECS::SdfTextComponent>(),
+			[](nlohmann::json& document) { return serde::deserialize<ECS::SdfTextComponent::Descriptor>(document); });
+		return true;
+	}();
+	(void)ready;
+}
+
+const ECS::ComponentCatalog::Record& ComponentRecord(const nlohmann::json& component) {
+	const auto* record = ECS::ComponentCatalog::instance().findInJson(component);
+	if (!record) {
+		throw std::runtime_error("Component descriptor has no supported type key");
+	}
+	return *record;
+}
 }
 
 SceneLoadHandle SceneManager::loadFromFileAsync(std::string path) {
@@ -246,6 +289,13 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 	DOCUMENT::Resolver resolver(json.at("Objects"));
 	DOCUMENT::Expanded expanded;
 	std::map<std::string, nlohmann::json> prefabCache;
+	std::vector<std::string> prefabStack;
+	auto readPrefab = [&](const std::string& path) -> nlohmann::json {
+		if (!prefabCache.contains(path)) {
+			throw std::runtime_error("Prefab not found: " + path);
+		}
+		return prefabCache.at(path);
+	};
 	for (auto entry : json.at("Objects")) {
 		state->control->check();
 		nlohmann::json asset;
@@ -261,7 +311,7 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 			}
 			asset = prefabCache.at(path);
 		}
-		auto part = resolver.Expand(std::move(entry), asset);
+		auto part = resolver.Expand(std::move(entry), asset, readPrefab, prefabCache, prefabStack);
 		for (auto& object : part.objects) {
 			expanded.objects.push_back(std::move(object));
 			co_await YieldIfBudgetExceeded();
@@ -285,15 +335,11 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 		}
 		bool transform = false;
 		for (const auto& component : descriptor.Components) {
-			std::visit(
-				[&](const auto& data) {
-					using D = std::decay_t<decltype(data)>;
-					transform |= std::is_same_v<D, ECS::TransformComponent::Descriptor>;
-					if (lightweight && !IsLightweight(data)) {
-						throw std::runtime_error("Loading scene supports only camera and lightweight GUI components");
-					}
-				},
-				component);
+			const auto& record = ComponentRecord(component);
+			transform |= record.name == "TransformComponent";
+			if (lightweight && !record.lightweight) {
+				throw std::runtime_error("Loading scene supports only camera and lightweight GUI components");
+			}
 		}
 		if (!transform) {
 			throw std::runtime_error("Scene object has no TransformComponent");
@@ -329,12 +375,16 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 		state->control->check();
 		co_await YieldIfBudgetExceeded();
 	}
+	EnsureComponentPreparers();
 	state->phase = "Loading resources";
 	state->progress = .1;
 	for (std::size_t i = 0; i < context.descriptors.size(); ++i) {
 		for (const auto& component : context.descriptors[i].Components) {
 			state->control->check();
-			co_await std::visit([&](const auto& data) { return PrepareComponent(data, state, context.resources); }, component);
+			const auto& record = ComponentRecord(component);
+			if (record.prepare) {
+				co_await record.prepare(component, state, context.resources);
+			}
 		}
 		state->progress = .1 + .4 * double(i + 1) / std::max<std::size_t>(1, context.descriptors.size());
 		co_await YieldIfBudgetExceeded();
@@ -396,7 +446,6 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 	for (std::size_t i = 0; i < objects.size(); ++i) {
 		objects[i]->setPendingActive(context.descriptors[i].IsActive);
 	}
-	context.scene->capturePrefabBaselines();
 	context.scene->isSceneReady = true;
 	state->progress = .9;
 }
@@ -518,7 +567,7 @@ Task<> SceneManager::cacheLoadingScene(std::shared_ptr<SceneLoadState> state) {
 	try {
 		mCacheBuild = std::make_unique<LoadContext>();
 		mCacheBuild->world = std::make_unique<ECS::World>();
-		RegisterComponents(*mCacheBuild->world, ECS::ComponentsTypeProviderType {});
+		ECS::ComponentCatalog::instance().applyStorage(*mCacheBuild->world);
 		for (const auto material : { "gui.mat", "text.mat", "vector.mat", "sdfText.mat" }) {
 			co_await HoldResource(ServiceManager::Get<MaterialLoader>().requestResource(std::string("/materials/render/portable/") + material), state,
 				mCacheBuild->resources);
@@ -627,13 +676,30 @@ Task<> SceneManager::instantiatePrefab(std::shared_ptr<SceneLoadState> state, in
 		} while (root <= 0 || target->findObjectByID(ECS::Entity(ECS::Entity::ID(root))));
 		nlohmann::json entry { { "Prefab", state->path }, { "Id", root }, { "ParentId", parentId } };
 		entries.push_back(entry);
+		std::map<std::string, nlohmann::json> prefabCache;
+		prefabCache[state->path] = asset;
+		std::vector<std::string> prefabStack;
+		auto readPrefab = [&](const std::string& path) -> nlohmann::json {
+			if (path == state->path) {
+				return asset;
+			}
+			auto prefabFile = ServiceManager::Get<FileSystem>().getFile(path);
+			if (!prefabFile || !prefabFile->isValid()) {
+				throw std::runtime_error("Prefab not found: " + path);
+			}
+			if (!prefabCache.contains(path)) {
+				prefabCache[path] = nlohmann::json::parse(prefabFile->readAll());
+			}
+			return prefabCache.at(path);
+		};
 		DOCUMENT::Resolver resolver(entries);
-		auto expanded = resolver.Expand(entry, asset);
+		auto expanded = resolver.Expand(entry, asset, readPrefab, prefabCache, prefabStack);
 		auto combined = target->serializeObjects();
 		for (auto object : expanded.objects) {
 			combined.push_back(std::move(object));
 		}
 		DOCUMENT::Validate(combined);
+		EnsureComponentPreparers();
 		state->phase = "Loading prefab resources";
 		std::vector<ECS::Object::Descriptor> descriptors;
 		for (auto value : expanded.objects) {
@@ -644,7 +710,10 @@ Task<> SceneManager::instantiatePrefab(std::shared_ptr<SceneLoadState> state, in
 			}
 			auto descriptor = parsed.unwrap();
 			for (const auto& component : descriptor.Components) {
-				co_await std::visit([&](const auto& data) { return PrepareComponent(data, state, resources); }, component);
+				const auto& record = ComponentRecord(component);
+				if (record.prepare) {
+					co_await record.prepare(component, state, resources);
+				}
 			}
 			descriptors.push_back(std::move(descriptor));
 			co_await YieldIfBudgetExceeded();
@@ -690,19 +759,7 @@ Task<> SceneManager::instantiatePrefab(std::shared_ptr<SceneLoadState> state, in
 		for (std::size_t i = 0; i < descriptors.size(); ++i) {
 			target->getObjects()[firstObject + i]->setPendingActive(descriptors[i].IsActive);
 		}
-		auto instance = std::move(expanded.instances.front());
-		auto canonical = target->serializeObjects();
-		const auto ids = DOCUMENT::ReadMap(instance.entry);
-		std::set<int> owned;
-		for (auto [local, id] : ids) {
-			owned.insert(id);
-		}
-		for (const auto& object : canonical) {
-			if (owned.contains(DOCUMENT::Id(object.at("Id")))) {
-				instance.baseline.push_back(object);
-			}
-		}
-		target->prefabInstances.push_back(std::move(instance));
+		target->prefabInstances.push_back(std::move(expanded.instances.front()));
 		for (std::size_t i = 0; i < descriptors.size(); ++i) {
 			state->control->check();
 			target->getObjects()[firstObject + i]->activateLoaded();

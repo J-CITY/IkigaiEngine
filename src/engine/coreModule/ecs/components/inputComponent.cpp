@@ -58,3 +58,11 @@ InputComponent::Descriptor InputComponent::getDescriptor() const {
 //		rttr::metadata(MetaInfo::FLAGS, MetaInfo::SERIALIZABLE)
 //	);
 // }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::InputComponent>();
+	return true;
+}();
+}

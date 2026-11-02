@@ -1,6 +1,6 @@
 #pragma once
 
-#ifndef DEBUG
+#ifndef NDEBUG
 #define ASSERT(Msg) IKIGAI::UTILS::__Assert("", false, __FILE__, __LINE__, Msg)
 #define ASSERT_IF(Expr, Msg) IKIGAI::UTILS::__Assert(#Expr, Expr, __FILE__, __LINE__, Msg)
 #else

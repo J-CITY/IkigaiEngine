@@ -5,7 +5,6 @@
 #include "utilsModule/exeptions.h"
 #include <iostream>
 
-
 namespace IKIGAI::RESOURCES {
 
 #ifndef USE_FILE_WATCHER
@@ -29,6 +28,8 @@ void FileWatcher::removeDeferred(const Path&, EVENT::Event<FileStatus>::ID) { }
 void FileWatcher::start() { }
 
 void FileWatcher::stop() { }
+
+void FileWatcher::workerLoop() { }
 
 void FileWatcher::applyUpdate() { }
 
@@ -59,10 +60,10 @@ IKIGAI::IdGenerator<IKIGAI::EVENT::Event<>>::ID FileWatcher::add(const Path& pat
 
 void FileWatcher::addDeferred(const Path& path, std::function<void(FileStatus)> cb, std::function<void(EVENT::Event<FileStatus>::ID)> retCb) {
 	const std::lock_guard lock(m_mutexDeferred);
-	if (!ServiceManager::Get<FileSystem>().isFileExist(path.string())) {
-		throw;
-	}
 	const auto _path = path.string();
+	if (!ServiceManager::Get<FileSystem>().isFileExist(_path)) {
+		throw UTILS::EXEPTIONS::WrongPath(_path.c_str());
+	}
 
 	deferredEvents.push({ QueueEvent::Action::ADD, _path, cb, retCb });
 }
@@ -96,34 +97,58 @@ void FileWatcher::removeDeferred(const Path& path, EVENT::Event<FileStatus>::ID 
 }
 
 void FileWatcher::start() {
+	const std::lock_guard lock(mWorkerMutex);
+	mWorkerStop = false;
 	m_isRunning = true;
 }
 
 void FileWatcher::stop() {
-	m_isRunning = false;
-	if (mUpdateTask.valid()) {
-		try {
-			mUpdateTask.get();
-		} catch (const std::exception& error) {
-			std::cerr << "File watcher: " << error.what() << '\n';
-		}
+	std::thread worker;
+	{
+		const std::lock_guard lock(mWorkerMutex);
+		m_isRunning = false;
+		mWorkerStop = true;
+		mUpdateRequested = false;
+		worker = std::move(mWorker);
+	}
+	mWorkerCv.notify_one();
+	if (worker.joinable()) {
+		worker.join();
 	}
 }
 
 void FileWatcher::requestUpdate() {
-	if (!m_isRunning)
-		return;
-	if (mUpdateTask.valid()) {
-		if (mUpdateTask.wait_for(std::chrono::seconds(0)) != std::future_status::ready)
+	{
+		const std::lock_guard lock(mWorkerMutex);
+		if (!m_isRunning || mWorkerStop) {
 			return;
-		try {
-			mUpdateTask.get();
-		} catch (const std::exception& error) {
-			std::cerr << "File watcher: " << error.what() << '\n';
+		}
+		mUpdateRequested = true;
+		if (!mWorker.joinable()) {
+			mWorker = std::thread([this] { workerLoop(); });
 		}
 	}
-	// This worker is independent of TaskSystem::waitSync at the end of a frame.
-	mUpdateTask = std::async(std::launch::async, [this] { update(); });
+	mWorkerCv.notify_one();
+}
+
+void FileWatcher::workerLoop() {
+	while (true) {
+		{
+			std::unique_lock lock(mWorkerMutex);
+			mWorkerCv.wait(lock, [this] { return mWorkerStop || mUpdateRequested; });
+			if (mWorkerStop) {
+				return;
+			}
+			mUpdateRequested = false;
+		}
+		try {
+			update();
+		} catch (const std::exception& error) {
+			std::cerr << "File watcher: " << error.what() << '\n';
+		} catch (...) {
+			std::cerr << "File watcher: unknown error\n";
+		}
+	}
 }
 
 void FileWatcher::applyUpdate() {
@@ -161,28 +186,34 @@ void FileWatcher::update() {
 		snapshot = m_filesLastModifications;
 	}
 	for (const auto& [path, previous] : snapshot) {
-		if (!m_isRunning)
+		if (!m_isRunning) {
 			break;
+		}
 		// Packed assets are immutable. Cache native paths at registration so the
 		// worker performs only filesystem metadata queries, without touching VFS.
-		if (!previous.mNativePath)
+		if (!previous.mNativePath) {
 			continue;
+		}
 		std::error_code error;
 		const auto native = std::filesystem::u8path(*previous.mNativePath);
 		const bool exists = std::filesystem::exists(native, error);
-		if (error)
+		if (error) {
 			continue;
-		const auto modified = exists ? std::filesystem::last_write_time(native, error) : FileTime { };
-		if (error)
+		}
+		const auto modified = exists ? std::filesystem::last_write_time(native, error) : FileTime {};
+		if (error) {
 			continue;
-		const auto size = exists ? std::filesystem::file_size(native, error) : uintmax_t { };
-		if (error || (exists && modified == previous.mLastModifyTime && size == previous.mFileSize))
+		}
+		const auto size = exists ? std::filesystem::file_size(native, error) : uintmax_t {};
+		if (error || (exists && modified == previous.mLastModifyTime && size == previous.mFileSize)) {
 			continue;
+		}
 		const std::lock_guard lock(m_mutex);
 		const auto current = m_filesLastModifications.find(path);
 		if (current == m_filesLastModifications.end() || current->second.mNativePath != previous.mNativePath
-			|| current->second.mLastModifyTime != previous.mLastModifyTime || current->second.mFileSize != previous.mFileSize)
+			|| current->second.mLastModifyTime != previous.mLastModifyTime || current->second.mFileSize != previous.mFileSize) {
 			continue;
+		}
 		current->second.mLastModifyTime = modified;
 		current->second.mFileSize = size;
 		m_events.emplace_back(path, exists ? FileStatus::MODIFIED : FileStatus::DEL);

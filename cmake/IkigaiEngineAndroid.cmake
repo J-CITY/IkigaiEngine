@@ -158,6 +158,8 @@ list(FILTER PROJECT_SOURCES EXCLUDE REGEX "imguiBackendMetal\\.mm$")
 
 include("${CMAKE_CURRENT_LIST_DIR}/VectorGraphics.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/Coroutines.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/Task.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/EngineFeatures.cmake")
 
 add_library(main SHARED ${PROJECT_HEADERS} ${PROJECT_SOURCES})
 set_target_properties(main PROPERTIES DEBUG_POSTFIX "")
@@ -179,7 +181,6 @@ target_compile_definitions(main PRIVATE
     USING_GLES
     IMGUI_IMPL_OPENGL_ES3
     IKIGAI_GLES_VERSION=${IKIGAI_GLES_VERSION}
-    USE_CHEATS
     SOL_EXCEPTIONS_SAFE_PROPAGATION=1
     $<$<CONFIG:Debug>:SOL_ALL_SAFETIES_ON=1>
 )
@@ -236,7 +237,8 @@ message(STATUS "IkigaiEngine Android OpenGL ES IKIGAI_GLES_VERSION=${IKIGAI_GLES
 
 # Independent vector geometry and SDF font module
 target_link_libraries(main PRIVATE ikigai_vector)
-target_link_libraries(main PRIVATE ikigai_coroutines)
+ikigai_apply_feature_definitions(main)
+target_link_libraries(main PRIVATE ikigai_coroutines ikigai_task)
 
 ikigai_configure_scripting(main)
 if(COMMAND ikigai_add_scripting_tests)

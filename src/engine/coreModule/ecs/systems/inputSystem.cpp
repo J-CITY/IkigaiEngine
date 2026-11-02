@@ -31,9 +31,9 @@ void IKIGAI::ECS::InputSystem::onUpdate(ECS::World& world, ECS::CommandBuffer& c
 		}
 		component.getEventFunc()(dt);
 		if (actions && component.getActionCallback()) {
-			for (const auto& actionName : actions->getActionNames(component.getMapName())) {
-				for (auto phase : actions->getPhasesThisFrame(actionName)) {
-					component.getActionCallback()(actionName, phase);
+			for (const auto actionId : actions->getActionIds(component.getMapName())) {
+				for (auto phase : actions->getPhasesThisFrame(actionId)) {
+					component.getActionCallback()(actions->getActionName(actionId), phase);
 				}
 			}
 		}

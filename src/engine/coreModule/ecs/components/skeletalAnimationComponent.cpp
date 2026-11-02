@@ -155,3 +155,11 @@ void SkeletalAnimationComponent::onSerialize(nlohmann::json& j) {
 	j["GraphPath"] = mGraphPath;
 }
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::SkeletalAnimationComponent>();
+	return true;
+}();
+}

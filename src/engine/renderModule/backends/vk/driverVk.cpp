@@ -2,6 +2,7 @@
 
 #include "captureModule/screenshot.h"
 #include "driverVk.h"
+#include "renderModule/backends/driverFactory.h"
 #include "utilsModule/time/loadTimer.h"
 #include "vertexFormatsVk.h"
 #ifdef IKIGAI_USE_STREAMLINE
@@ -2392,5 +2393,12 @@ IKIGAI::RENDER::BindlessCapabilities IKIGAI::RENDER::DriverVk::bindlessCapabilit
 uint32_t IKIGAI::RENDER::DriverVk::maxFragmentSampledTextures() const {
 	const auto limits = mPhysicalDevice.getProperties().limits;
 	return std::min(limits.maxPerStageDescriptorSampledImages, limits.maxPerStageDescriptorSamplers);
+}
+namespace {
+const bool kRegisterVkBackend = [] {
+	IKIGAI::RENDER::RegisterRenderBackend(IKIGAI::RENDER::RenderSettings::Backend::VULKAN,
+		[] { return std::make_unique<IKIGAI::RENDER::DriverVk>(); });
+	return true;
+}();
 }
 #endif

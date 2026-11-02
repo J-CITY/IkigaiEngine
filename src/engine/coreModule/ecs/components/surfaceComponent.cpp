@@ -191,3 +191,11 @@ uint64_t SurfaceComponent::revision() const {
 	return mRevision;
 }
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::SurfaceComponent>();
+	return true;
+}();
+}

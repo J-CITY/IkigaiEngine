@@ -158,3 +158,11 @@ const std::vector<SURFACE::FoliageSpecies>& FoliageComponent::species() const {
 	return mDescriptor.Species;
 }
 }
+
+#include "coreModule/ecs/componentCatalog.h"
+namespace {
+[[maybe_unused]] const bool kRegisterComponents = [] {
+	IKIGAI::ECS::ComponentCatalog::enroll<IKIGAI::ECS::FoliageComponent>();
+	return true;
+}();
+}

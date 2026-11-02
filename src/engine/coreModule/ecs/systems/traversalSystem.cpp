@@ -8,10 +8,8 @@
 #include "resourceModule/skeletonManager.h"
 #include "sceneModule/scene.h"
 #include <serdepp/adaptor/nlohmann_json.hpp>
+#include "coreModule/testHooks.h"
 #include <set>
-#ifdef IKIGAI_TEST_MODULE
-#include "sceneModule/characterDiagnostics.h"
-#endif
 namespace IKIGAI::ECS {
 using namespace PHYSICS::CHARACTER;
 using PHYSICS::Vec3;
@@ -209,9 +207,9 @@ void TraversalSystem::update(SCENE_SYSTEM::Scene& scene, CharacterMotorComponent
 		}
 	}
 	origin.y += lift;
-#ifdef IKIGAI_TEST_MODULE
-	SCENE_SYSTEM::CharacterDiagnostics::contact(scene, m, t, origin, pose, phase);
-#endif
+	if (TESTHOOK::traversalContact) {
+		TESTHOOK::traversalContact(scene, m, t, origin, pose, phase);
+	}
 	t.poseOffset = (rotate(origin - m.motor.capsule.feet, -m.heading));
 	const int hips = t.skeleton->findJointIndex(t.rig.root);
 	const auto hip = hips >= 0 ? points[hips] * t.rig.unitsToMeters : Vec3 { 0, t.rig.rootHeight, 0 };

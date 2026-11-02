@@ -1,5 +1,6 @@
 #include "utilsModule/memory/resourceAllocator.h"
 #include "driverDx12.h"
+#include "renderModule/backends/driverFactory.h"
 #include "vertexFormatsDx12.h"
 #include "captureModule/screenshot.h"
 #ifdef IKIGAI_USE_STREAMLINE
@@ -1570,4 +1571,11 @@ void IKIGAI::RENDER::DriverDx12::draw(const DrawArguments& args) {
     else mCommandList->DrawInstanced(args.count,args.instanceCount,args.first,args.firstInstance);
 }
 
+namespace {
+const bool kRegisterDx12Backend = [] {
+	IKIGAI::RENDER::RegisterRenderBackend(IKIGAI::RENDER::RenderSettings::Backend::DIRECTX12,
+		[] { return std::make_unique<IKIGAI::RENDER::DriverDx12>(); });
+	return true;
+}();
+}
 #endif

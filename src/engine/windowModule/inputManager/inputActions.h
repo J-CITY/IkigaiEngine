@@ -2,7 +2,9 @@
 
 #include "inputManager.h"
 #include <chrono>
+#include <cstdint>
 #include <functional>
+#include <limits>
 #include <mathModule/math.h>
 #include <serdepp/attribute/default.hpp>
 #include <serdepp/serializer.hpp>
@@ -18,6 +20,10 @@ class World;
 namespace IKIGAI::INPUT_SYSTEM {
 inline constexpr const char* InputResourceExtension = ".input";
 inline constexpr const char* DefaultInputResourcePath = "/Configs/input.input";
+inline constexpr const char* DefaultBindingOverridesPath = "input.bindings.json";
+
+using ActionId = std::uint32_t;
+inline constexpr ActionId InvalidActionId = std::numeric_limits<ActionId>::max();
 
 enum class InputPhase { Started, Performed, Canceled };
 
@@ -165,17 +171,57 @@ struct InputConfig {
 	}
 };
 
+struct InputBindingOverrideEntry {
+	std::string map;
+	std::string action;
+	std::size_t bindingIndex = 0;
+	InputBindingDesc binding;
+
+	template <class Context> constexpr static auto serde(Context& context, InputBindingOverrideEntry& value) {
+		using namespace serde::attribute;
+		serde::serde_struct(context, value)
+			.field(&InputBindingOverrideEntry::map, "map")
+			.field(&InputBindingOverrideEntry::action, "action")
+			.field(&InputBindingOverrideEntry::bindingIndex, "bindingIndex", default_ { std::size_t { 0 } })
+			.field(&InputBindingOverrideEntry::binding, "binding");
+	}
+};
+
+struct InputBindingOverrides {
+	std::vector<InputBindingOverrideEntry> overrides;
+
+	template <class Context> constexpr static auto serde(Context& context, InputBindingOverrides& value) {
+		using namespace serde::attribute;
+		serde::serde_struct(context, value)
+			.field(&InputBindingOverrides::overrides, "overrides", default_ { std::vector<InputBindingOverrideEntry> {} });
+	}
+};
+
+#include "inputControlPath.h"
+
 class InputActions {
 public:
-	using Callback = std::function<void(const std::string& action, InputPhase phase)>;
+	using Callback = std::function<void(ActionId actionId, const std::string& actionName, InputPhase phase)>;
 
 	explicit InputActions(InputManager& inputManager);
 
 	bool load(const std::string& path = DefaultInputResourcePath);
+	bool loadBindingOverrides(const std::string& path = DefaultBindingOverridesPath);
+	bool saveBindingOverrides(const std::string& path = DefaultBindingOverridesPath) const;
 	void enableMap(const std::string& name, bool enabled);
 	void prepareMaps(ECS::World& world);
 	void resolve(std::chrono::duration<double> dt);
 	void subscribe(Callback callback);
+
+	[[nodiscard]] ActionId findActionId(const std::string& action) const;
+	[[nodiscard]] const std::string& getActionName(ActionId id) const;
+
+	[[nodiscard]] bool isPressed(ActionId id) const;
+	[[nodiscard]] bool wasPressedThisFrame(ActionId id) const;
+	[[nodiscard]] bool wasReleasedThisFrame(ActionId id) const;
+	[[nodiscard]] float readValue(ActionId id) const;
+	[[nodiscard]] MATH::Vector2f readValue2(ActionId id) const;
+	[[nodiscard]] std::vector<InputPhase> getPhasesThisFrame(ActionId id) const;
 
 	[[nodiscard]] bool isPressed(const std::string& action) const;
 	[[nodiscard]] bool wasPressedThisFrame(const std::string& action) const;
@@ -184,6 +230,11 @@ public:
 	[[nodiscard]] MATH::Vector2f readValue2(const std::string& action) const;
 	[[nodiscard]] std::vector<InputPhase> getPhasesThisFrame(const std::string& action) const;
 	[[nodiscard]] std::vector<std::string> getActionNames(const std::string& mapName) const;
+	[[nodiscard]] std::vector<ActionId> getActionIds(const std::string& mapName) const;
+
+	bool rebindBinding(const std::string& mapName, const std::string& actionName, std::size_t bindingIndex, InputBindingDesc binding);
+	bool resetBinding(const std::string& mapName, const std::string& actionName, std::size_t bindingIndex);
+	void clearBindingOverrides();
 
 private:
 	struct ActionState {
@@ -198,19 +249,50 @@ private:
 		std::vector<float> holdTimes;
 	};
 
+	struct ActionRecord {
+		ActionId id = InvalidActionId;
+		std::string name;
+		std::string mapName;
+		const InputActionDesc* desc = nullptr;
+		ActionValueType valueType = ActionValueType::Button;
+		std::vector<ResolvedBinding> bindings;
+		std::vector<std::vector<InputProcessorDesc>> bindingProcessors;
+	};
+
 	struct MapState {
 		InputMapDesc desc;
 		bool assetEnabled = true;
 		bool activeThisFrame = true;
 	};
 
+	struct BindingOverrideKey {
+		std::string map;
+		std::string action;
+		std::size_t bindingIndex = 0;
+		bool operator==(const BindingOverrideKey& other) const {
+			return map == other.map && action == other.action && bindingIndex == other.bindingIndex;
+		}
+	};
+
+	struct BindingOverrideKeyHash {
+		std::size_t operator()(const BindingOverrideKey& key) const {
+			return std::hash<std::string> {}(key.map) ^ (std::hash<std::string> {}(key.action) << 1)
+				^ (std::hash<std::size_t> {}(key.bindingIndex) << 2);
+		}
+	};
+
 	InputManager& mInput;
 	std::unordered_map<std::string, MapState> mMaps;
-	std::unordered_map<std::string, ActionState> mActions;
+	std::vector<ActionRecord> mActionRecords;
+	std::vector<ActionState> mActionStates;
+	std::unordered_map<std::string, ActionId> mActionIds;
+	std::unordered_map<BindingOverrideKey, InputBindingDesc, BindingOverrideKeyHash> mBindingOverrides;
 	std::vector<Callback> mCallbacks;
 
 	void rebuildActions();
-	ActionState* findAction(const std::string& name);
-	const ActionState* findAction(const std::string& name) const;
+	InputBindingDesc bindingFor(const ActionRecord& record, std::size_t bindingIndex) const;
+	const ActionState* findActionState(ActionId id) const;
+	ActionState* findActionState(ActionId id);
 };
+
 }
