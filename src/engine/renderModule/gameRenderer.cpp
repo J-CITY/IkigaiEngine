@@ -360,8 +360,14 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 			else {
 				for (const auto& member : uniform.mMembers) {
 					const auto key = uniform.mName + member.mName;
-					if (!copyUniform(key, key) && !copyUniform(key, member.mName) && member.mName == "u_Albedo") {
-						copyUniform(key, "data_UBOu_Diffuse");
+					if (!copyUniform(key, key) && !copyUniform(key, member.mName)) {
+						if (member.mName == "u_Albedo") {
+							copyUniform(key, "data_UBOu_Diffuse");
+						}
+						else if (member.mName == "u_EmissiveColor" && material->findUniform(key)) {
+							// The pass material is shared by all drawables: surfaces without emissive data must not inherit the previous one.
+							material->set(key, MATH::Vector4f {});
+						}
 					}
 				}
 			}
