@@ -14,6 +14,7 @@
 
 #include "utilsModule/log/loggerDefine.h"
 #include <iostream>
+#include <tuple>
 
 namespace IKIGAI::ECS {
 // TODO: use faster std container (EA for example)
@@ -90,7 +91,7 @@ private:
 			return;
 		}
 
-		// Default to Archetype
+		// Default storage is Archetype. Sparse is opt-in via registerComponent.
 		mComponentStorageType[id] = StorageType::Archetype;
 		mDefaultArraysArchetype.insert({ id, std::make_shared<ComponentArray<T>>() });
 	}
@@ -166,28 +167,63 @@ private:
 		(addComponentToArchetypeImpl<Component>(entity, to, components), ...);
 	}
 
-	template <class... Components>
-	void moveEntity(Entity entity, std::shared_ptr<Archetype> from, std::shared_ptr<Archetype> to, Record& record, Components&&... components) {
-		for (auto& [ctype, cvec] : from->mComponentArrays) {
-			if (to->mComponentArrays.contains(ctype)) {
-				// moveComponent(entity, to->mComponentArrays.at(ctype), cvec, ctype);
+	// Migrate archetype columns. NewComponents are not transferred: the caller inserts each once.
+	// An empty pack (removeComponents) transfers every column that still exists on `to`.
+	template <class... NewComponents> void moveEntity(Entity entity, std::shared_ptr<Archetype> from, std::shared_ptr<Archetype> to, Record& record) {
+		const bool replacesExisting = ((from->mComponentArrays.contains(getComponentType<std::decay_t<NewComponents>>())) || ...);
+		if (from.get() == to.get() && !replacesExisting) {
+			record.archetype = to;
+			return;
+		}
+
+		for (auto& [ctype, fromArr] : from->mComponentArrays) {
+			if (!fromArr->contains(entity)) {
+				continue;
+			}
+			const bool inPack = ((getComponentType<std::decay_t<NewComponents>>() == ctype) || ...);
+			const bool keep = to->mComponentArrays.contains(ctype) && !inPack;
+			if (!keep) {
+				fromArr->entityDestroyed(entity);
+				continue;
+			}
+			if (from.get() != to.get()) {
+				fromArr->transferEntityTo(entity, *to->mComponentArrays.at(ctype));
+			}
+			else if (replacesExisting) {
+				// Same table: replay remove+append so a replaced column stays index-aligned.
+				fromArr->transferEntityTo(entity, *fromArr);
 			}
 		}
 
-		addComponentsToArchetype(entity, *to, components...);
+		if (from.get() != to.get()) {
+			for (auto& [ctype, fromArr] : from->mComponentArrays) {
+				ASSERT_IF(!fromArr->contains(entity), "Entity ghosted in source archetype");
+			}
+		}
 		record.archetype = to;
+	}
+
+	template <typename T> void insertNewComponent(Entity entity, Record& record, T&& component) {
+		using C = std::decay_t<T>;
+		static_assert(std::is_base_of_v<Component, C>, "Must inherit from class Component");
+		const ComponentType id = getComponentType<C>();
+		ensureComponentRegistered<C>(id);
+		if (mComponentStorageType.at(id) == StorageType::Sparse) {
+			addComponentToSparseImpl(entity, std::forward<T>(component));
+			return;
+		}
+		addComponentToArchetypeImpl(entity, *record.archetype, std::forward<T>(component));
 	}
 
 	template <typename T> RawType<T>& forEachComponentsImpl(Archetype& archetype, size_t i, [[maybe_unused]] Entity entity) {
 		using U = RawType<T>;
 		static_assert(std::is_base_of_v<Component, U>, "Must inherit from class Component");
 		ComponentType id = getComponentType<U>();
-		// if (mComponentStorageType[id] == StorageType::Archetype) {
-		return archetype.getComponents<U>(id)->at(i);
-		//}
-		// else {
-		//	return std::static_pointer_cast<ComponentArray<U>>(mSparseArrays[id])->getData(entity);
-		//}
+		const auto storage = mComponentStorageType.find(id);
+		if (storage != mComponentStorageType.end() && storage->second == StorageType::Archetype) {
+			return archetype.getComponents<U>(id)->at(i);
+		}
+		return std::static_pointer_cast<ComponentArray<U>>(mSparseArrays.at(id))->getData(entity);
 	}
 
 	template <class... Components, class F> void forEachComponents(Archetype& archetype, size_t i, Entity entity, F&& func) {
@@ -210,14 +246,13 @@ private:
 
 	template <typename T> T& getRef(Entity entity) {
 		ComponentType id = getComponentType<T>();
-		// if (mComponentStorageType[id] == StorageType::Archetype) {
-		//	const Record& record = mEntityRecords[entity];
-		//	const auto& archetype = record.archetype;
-		//	return std::static_pointer_cast<ComponentArray<T>>(archetype->mComponentArrays.at(id))->getData(entity);
-		// }
-		// else {
-		return std::static_pointer_cast<ComponentArray<T>>(mSparseArrays[id])->getData(entity);
-		//}
+		const auto storage = mComponentStorageType.find(id);
+		if (storage != mComponentStorageType.end() && storage->second == StorageType::Archetype) {
+			const Record& record = mEntityRecords.at(entity);
+			const auto& archetype = record.archetype;
+			return std::static_pointer_cast<ComponentArray<T>>(archetype->mComponentArrays.at(id))->getData(entity);
+		}
+		return std::static_pointer_cast<ComponentArray<T>>(mSparseArrays.at(id))->getData(entity);
 	}
 
 public:
@@ -249,7 +284,7 @@ public:
 		return getComponentTypeImpl<RawType<T>>();
 	}
 
-	template <typename T> void registerComponent(StorageType type) {
+	template <typename T> void registerComponent(StorageType type = StorageType::Archetype) {
 		static_assert(std::is_base_of_v<Component, T>, "Must inherit from class Component");
 		ComponentType id = getComponentType<T>();
 
@@ -315,19 +350,16 @@ public:
 		addComponents(entity, (Components(), ...));
 	}
 
-	template <class... Components> void addComponents(Entity entity, Components&&... newComponent) {
+	template <class... Components> void addComponents(Entity entity, Components... newComponent) {
 		Record& record = mEntityRecords.at(entity);
-		const auto& archetype = record.archetype;
-		auto newMask = archetype->mMask;
+		auto newMask = record.archetype->mMask;
 		// set all components to mask (Only Archetype ones)
 		(addComponentToArchetypeMaskImpl<Components>(newMask), ...);
-		const auto& nextArchetype = getArchetype(newMask);
+		auto nextArchetype = getArchetype(newMask);
 
-		// Move entity (Handles Archetype components)
-		moveEntity(entity, archetype, nextArchetype, record, std::forward<Components>(newComponent)...);
-
-		// Handle Sparse components
-		(addComponentToSparseImpl<Components>(entity, std::forward<Components>(newComponent)), ...);
+		// Transfer existing archetype columns only. Each new value is inserted once below.
+		moveEntity<Components...>(entity, record.archetype, nextArchetype, record);
+		(insertNewComponent(entity, record, std::move(newComponent)), ...);
 		(emitOnAdd<Components>(entity), ...);
 
 		// auto signature = getSignature(entity);
@@ -438,17 +470,15 @@ public:
 		}
 		const Record& record = recordIt->second;
 		const auto& archetype = record.archetype;
-		if (archetype->mComponentArrays.contains(id)) {
-			return true;
+		if (archetype) {
+			const auto column = archetype->mComponentArrays.find(id);
+			if (column != archetype->mComponentArrays.end()) {
+				return column->second->contains(entity);
+			}
 		}
 
-		// Sparse check
 		if (mSparseArrays.contains(id)) {
-			// We need to check if entity exists in this array.
-			// ComponentArray->getDataPtr returns nullptr if not found?
-			// need to check `entityDestroyed` logic or `hasData`.
-			// ComponentArray usually has `getDataPtr`.
-			return std::static_pointer_cast<ComponentArray<T>>(mSparseArrays[id])->checkComponent(entity);
+			return mSparseArrays.at(id)->contains(entity);
 		}
 		return false;
 	}
@@ -482,6 +512,15 @@ public:
 			array->entityDestroyed(entity);
 		}
 		if (archetype) {
+			int columnSize = -1;
+			for (auto& [type, array] : archetype->mComponentArrays) {
+				if (columnSize < 0) {
+					columnSize = array->getSize();
+				}
+				else {
+					ASSERT_IF(array->getSize() == columnSize, "Archetype column sizes diverged");
+				}
+			}
 			for (auto& [type, array] : archetype->mComponentArrays) {
 				array->entityDestroyed(entity);
 			}
@@ -491,15 +530,26 @@ public:
 	}
 
 	template <class... Components, class Func> void forEach(Func&& func) {
+		static_assert(sizeof...(Components) > 0, "forEach requires components");
 		Signature mask;
 		(addComponentToArchetypeMaskImpl<Components>(mask), ...);
+		using FirstComponent = std::tuple_element_t<0, std::tuple<std::decay_t<Components>...>>;
+		const ComponentType canonicalType = getComponentType<FirstComponent>();
 
 		for (auto& [m, a] : mMaskToArchetype) {
 			if ((mask & m) != mask) {
 				continue;
 			}
-			for (size_t i = 0; i < a->size(); ++i) {
-				auto entity = a->mComponentArrays.begin()->second->getEntity(i);
+			const auto columnIt = a->mComponentArrays.find(canonicalType);
+			if (columnIt == a->mComponentArrays.end()) {
+				continue;
+			}
+			auto& column = columnIt->second;
+			for (const auto& [ctype, arr] : a->mComponentArrays) {
+				ASSERT_IF(arr->getSize() == column->getSize(), "Archetype column sizes diverged");
+			}
+			for (size_t i = 0; i < static_cast<size_t>(column->getSize()); ++i) {
+				Entity entity = column->getEntity(i);
 				if ((checkComponent<Components>(entity) && ...)) {
 					forEachComponents<Components...>(*a, i, entity, func);
 				}

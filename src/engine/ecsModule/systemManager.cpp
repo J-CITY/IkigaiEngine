@@ -1,9 +1,9 @@
 #include "systemManager.h"
 #include "commandBuffer.h"
+#include "resourceModule/serviceManager.h"
+#include "systemAccessConflict.h"
+#include "taskModule/taskSystem.h"
 #include "world.h"
-#include <future>
-#include <resourceModule/serviceManager.h>
-#include <taskModule/taskSystem.h>
 
 #ifdef __EMSCRIPTEN__
 #include <iostream>
@@ -35,84 +35,49 @@ void WebEcsLog(const char* msg) {
 }
 
 void SystemManager::rebuildBatches() {
+	std::vector<SystemScheduleView> views;
+	views.reserve(mSystemsOrder.size());
+	for (const auto& sys : mSystemsOrder) {
+		views.push_back(SystemScheduleView { sys->mPriority, sys->mExclusiveBatch, &sys->mReads, &sys->mWrites });
+	}
+
 	mBatches.clear();
-	for (const auto& [name, sys] : mSystems) {
-		bool added = false;
-		// Try to add to the last batch if exists
-		if (!mBatches.empty()) {
-			auto& batch = mBatches.back();
-			bool conflict = false;
-			for (const auto& existingSys : batch.systems) {
-				// Check conflicts
-				// Conflict if sys Writes to something existingSys Reads or Writes
-				for (auto id : sys->mWrites) {
-					if (existingSys->mReads.contains(id) || existingSys->mWrites.contains(id)) {
-						conflict = true;
-						break;
-					}
-				}
-				if (conflict) {
-					break;
-				}
-
-				// Conflict if sys Reads something existingSys Writes
-				for (auto id : sys->mReads) {
-					if (existingSys->mWrites.contains(id)) {
-						conflict = true;
-						break;
-					}
-				}
-				if (conflict) {
-					break;
-				}
-			}
-
-			if (!conflict) {
-				batch.systems.push_back(sys);
-				added = true;
-			}
+	for (const std::vector<size_t>& indexes : buildSystemBatches(views)) {
+		Batch batch;
+		batch.systems.reserve(indexes.size());
+		for (const size_t index : indexes) {
+			batch.systems.push_back(mSystemsOrder[index]);
 		}
-
-		if (!added) {
-			Batch newBatch;
-			newBatch.systems.push_back(sys);
-			mBatches.push_back(std::move(newBatch));
-		}
+		mBatches.push_back(std::move(batch));
 	}
 	mIsDirty = false;
 }
 
-// Template helper for running phases with batching and multithreading
 template <typename PhaseFunc> void runPhaseImpl(std::vector<SystemManager::Batch>& batches, World& world, PhaseFunc&& phaseFunc) {
 	if (UseTaskSystem()) {
-		auto& ts = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::TASK::TaskSystem>();
-
+		auto& tasks = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::TASK::TaskSystem>();
 		for (auto& batch : batches) {
 			if (batch.systems.size() == 1) {
 				phaseFunc(batch.systems[0].get(), world);
+				continue;
 			}
-			else {
-				std::vector<IKIGAI::TASK::TaskHandle<void>> handles;
-				handles.reserve(batch.systems.size());
-
-				for (auto& sys : batch.systems) {
-					handles.push_back(ts.submit(sys->mName.c_str(), -1, nullptr, [s = sys.get(), &w = world, &phaseFunc]() { phaseFunc(s, w); }));
-				}
-
-				for (auto& h : handles) {
-					if (h.mFuture) {
-						h.mFuture->wait();
-					}
+			std::vector<IKIGAI::TASK::TaskHandle<void>> handles;
+			handles.reserve(batch.systems.size());
+			for (auto& sys : batch.systems) {
+				handles.push_back(tasks.submit(sys->mName.c_str(), -1, nullptr, [s = sys.get(), &world, &phaseFunc]() { phaseFunc(s, world); }));
+			}
+			for (auto& handle : handles) {
+				if (handle.mFuture) {
+					handle.mFuture->wait();
 				}
 			}
 		}
+		return;
 	}
-	else {
-		// Fallback single threaded
-		for (auto& batch : batches) {
-			for (auto& sys : batch.systems) {
-				phaseFunc(sys.get(), world);
-			}
+
+	for (auto& batch : batches) {
+		for (auto& sys : batch.systems) {
+			phaseFunc(sys.get(), world);
 		}
 	}
 }
@@ -147,52 +112,45 @@ void SystemManager::runStart() {
 	});
 }
 
-// Template helper for update phases (with dt and CommandBuffer)
 template <typename PhaseFunc>
 void runUpdatePhaseImpl(std::vector<SystemManager::Batch>& batches, World& world, std::chrono::duration<double> dt, PhaseFunc&& phaseFunc) {
 	if (UseTaskSystem()) {
-		auto& ts = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::TASK::TaskSystem>();
-
+		auto& tasks = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::TASK::TaskSystem>();
 		for (auto& batch : batches) {
 			if (batch.systems.size() == 1) {
 				CommandBuffer cb;
 				phaseFunc(batch.systems[0].get(), world, cb, dt);
 				cb.execute();
+				continue;
 			}
-			else {
-				std::vector<CommandBuffer> buffers(batch.systems.size());
-				std::vector<IKIGAI::TASK::TaskHandle<void>> handles;
-				handles.reserve(batch.systems.size());
-
-				int i = 0;
-				for (auto& sys : batch.systems) {
-					handles.push_back(ts.submit(sys->mName.c_str(), -1, nullptr,
-						[s = sys.get(), &w = world, &cb = buffers[i], dt, &phaseFunc]() { phaseFunc(s, w, cb, dt); }));
-					i++;
+			std::vector<CommandBuffer> buffers(batch.systems.size());
+			std::vector<IKIGAI::TASK::TaskHandle<void>> handles;
+			handles.reserve(batch.systems.size());
+			for (size_t i = 0; i < batch.systems.size(); ++i) {
+				auto* sys = batch.systems[i].get();
+				handles.push_back(tasks.submit(
+					sys->mName.c_str(), -1, nullptr, [sys, &world, &cb = buffers[i], dt, &phaseFunc]() { phaseFunc(sys, world, cb, dt); }));
+			}
+			for (auto& handle : handles) {
+				if (handle.mFuture) {
+					handle.mFuture->wait();
 				}
-
-				for (auto& h : handles) {
-					if (h.mFuture) {
-						h.mFuture->wait();
-					}
-				}
-
-				for (auto& cb : buffers) {
-					cb.execute();
-				}
+			}
+			for (auto& cb : buffers) {
+				cb.execute();
 			}
 		}
+		return;
 	}
-	else {
-		CommandBuffer cb;
-		for (auto& batch : batches) {
-			for (auto& sys : batch.systems) {
-				WebEcsLog(sys->mName.c_str());
-				phaseFunc(sys.get(), world, cb, dt);
-			}
+
+	CommandBuffer cb;
+	for (auto& batch : batches) {
+		for (auto& sys : batch.systems) {
+			WebEcsLog(sys->mName.c_str());
+			phaseFunc(sys.get(), world, cb, dt);
 		}
-		cb.execute();
 	}
+	cb.execute();
 }
 
 void SystemManager::runUpdate(std::chrono::duration<double> dt) {
@@ -232,54 +190,46 @@ void SystemManager::runDestroy() {
 	});
 }
 
-// Legacy run() method - calls run() on each system
 void SystemManager::run() {
 	if (mIsDirty) {
 		rebuildBatches();
 	}
 
 	if (UseTaskSystem()) {
-		auto& ts = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::TASK::TaskSystem>();
-
+		auto& tasks = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::TASK::TaskSystem>();
 		for (auto& batch : mBatches) {
 			if (batch.systems.size() == 1) {
 				CommandBuffer cb;
 				batch.systems[0]->run(mWorld, cb);
 				cb.execute();
+				continue;
 			}
-			else {
-				std::vector<CommandBuffer> buffers(batch.systems.size());
-				std::vector<IKIGAI::TASK::TaskHandle<void>> handles;
-				handles.reserve(batch.systems.size());
-
-				int i = 0;
-				for (auto& sys : batch.systems) {
-					handles.push_back(
-						ts.submit(sys->mName.c_str(), -1, nullptr, [s = sys.get(), &w = mWorld, &cb = buffers[i]]() { s->run(w, cb); }));
-					i++;
+			std::vector<CommandBuffer> buffers(batch.systems.size());
+			std::vector<IKIGAI::TASK::TaskHandle<void>> handles;
+			handles.reserve(batch.systems.size());
+			for (size_t i = 0; i < batch.systems.size(); ++i) {
+				auto* sys = batch.systems[i].get();
+				handles.push_back(tasks.submit(sys->mName.c_str(), -1, nullptr, [sys, &world = mWorld, &cb = buffers[i]]() { sys->run(world, cb); }));
+			}
+			for (auto& handle : handles) {
+				if (handle.mFuture) {
+					handle.mFuture->wait();
 				}
-
-				for (auto& h : handles) {
-					if (h.mFuture) {
-						h.mFuture->wait();
-					}
-				}
-
-				for (auto& cb : buffers) {
-					cb.execute();
-				}
+			}
+			for (auto& cb : buffers) {
+				cb.execute();
 			}
 		}
+		return;
 	}
-	else {
-		CommandBuffer cb;
-		for (auto& batch : mBatches) {
-			for (auto& sys : batch.systems) {
-				sys->run(mWorld, cb);
-			}
+
+	CommandBuffer cb;
+	for (auto& batch : mBatches) {
+		for (auto& sys : batch.systems) {
+			sys->run(mWorld, cb);
 		}
-		cb.execute();
 	}
+	cb.execute();
 }
 
 World& SystemManager::getWorld() const {

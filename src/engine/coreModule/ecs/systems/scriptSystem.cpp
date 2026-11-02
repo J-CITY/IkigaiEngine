@@ -9,6 +9,8 @@
 
 IKIGAI::ECS::ScriptSystem::ScriptSystem() {
 	mName = "ScriptSystem";
+	mPriority = 0;
+	mExclusiveBatch = true;
 	auto cm = RESOURCES::ServiceManager::Get<ECS::World>().getComponentManager();
 	mReads.insert(cm->getComponentType<ScriptComponent>());
 };

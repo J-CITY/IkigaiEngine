@@ -4,6 +4,8 @@
 IKIGAI::ECS::LogicSystem::LogicSystem() {
 	// mComponentsRead.insert(typeid(LogicComponent).name());
 	mName = "LogicSystem";
+	mPriority = 10;
+	mExclusiveBatch = true;
 	auto cm = RESOURCES::ServiceManager::Get<ECS::World>().getComponentManager();
 	mReads.insert(cm->getComponentType<LogicComponent>());
 }

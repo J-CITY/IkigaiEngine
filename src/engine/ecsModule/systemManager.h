@@ -4,6 +4,7 @@
 #include "componentManager.h"
 #include "entityManager.h"
 #include "signature.h"
+#include <algorithm>
 #include <functional>
 #include <memory>
 #include <unordered_map>
@@ -47,6 +48,10 @@ public:
 	std::string mName;
 	std::unordered_set<ComponentType> mReads;
 	std::unordered_set<ComponentType> mWrites;
+	// Lower values run earlier. Equal values keep registration order.
+	int mPriority = 0;
+	// Never shares a batch, including with systems whose components do not overlap.
+	bool mExclusiveBatch = false;
 
 	// Signature for matching (if Query based)
 	Signature mQueryHas;
@@ -68,12 +73,35 @@ public:
 
 	template <typename T, typename... Args> std::shared_ptr<T> registerSystem(Args&&... args) {
 		auto system = std::make_shared<T>(std::forward<Args>(args)...);
-		mSystems[system->getName()] = system;
+		const auto& name = system->getName();
+		if (const auto existing = mSystems.find(name); existing != mSystems.end()) {
+			const auto orderIt = std::find_if(
+				mSystemsOrder.begin(), mSystemsOrder.end(), [&name](const std::shared_ptr<System>& entry) { return entry->getName() == name; });
+			if (orderIt != mSystemsOrder.end()) {
+				*orderIt = system;
+			}
+		}
+		else {
+			mSystemsOrder.push_back(system);
+		}
+		mSystems[name] = system;
+		mIsDirty = true;
 		return system;
 	}
 
 	void addSystem(std::shared_ptr<System> system) {
-		mSystems[system->getName()] = system;
+		const auto& name = system->getName();
+		if (const auto existing = mSystems.find(name); existing != mSystems.end()) {
+			const auto orderIt = std::find_if(
+				mSystemsOrder.begin(), mSystemsOrder.end(), [&name](const std::shared_ptr<System>& entry) { return entry->getName() == name; });
+			if (orderIt != mSystemsOrder.end()) {
+				*orderIt = system;
+			}
+		}
+		else {
+			mSystemsOrder.push_back(system);
+		}
+		mSystems[name] = system;
 		mIsDirty = true;
 	}
 
@@ -124,6 +152,7 @@ public:
 private:
 	World& mWorld;
 	std::unordered_map<std::string, std::shared_ptr<System>> mSystems;
+	std::vector<std::shared_ptr<System>> mSystemsOrder;
 	std::vector<Batch> mBatches;
 	bool mIsDirty = true;
 

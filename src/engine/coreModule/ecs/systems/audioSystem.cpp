@@ -4,6 +4,8 @@
 
 IKIGAI::ECS::AudioSystem::AudioSystem() {
 	mName = "AudioSystem";
+	mPriority = 30;
+	mExclusiveBatch = true;
 	auto cm = RESOURCES::ServiceManager::Get<ECS::World>().getComponentManager();
 	mReads.insert(cm->getComponentType<AudioListenerComponent>());
 	mWrites.insert(cm->getComponentType<AudioComponent>());

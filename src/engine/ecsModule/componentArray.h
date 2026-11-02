@@ -83,6 +83,11 @@ public:
 		}
 	}
 
+	void transferEntityTo(Entity entity, ComponentArrayInterface& destination) override {
+		T data = removeData(entity);
+		static_cast<ComponentArray<T>&>(destination).insert(entity, std::move(data));
+	}
+
 	std::shared_ptr<ComponentArrayInterface> createEmptyFromThis() override {
 		return std::make_shared<ComponentArray<T>>();
 	}

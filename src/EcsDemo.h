@@ -19,7 +19,7 @@ void ConfigureBehaviorTree(IKIGAI::ECS::Object& npc, int candidateObjectId, bool
 // 1. Components Definition
 // ------------------------
 
-// Archetype Component (Default storage)
+// Archetype component. Register explicitly with StorageType::Archetype.
 // Good for components that most entities have and are accessed frequently together.
 struct Position : public IKIGAI::ECS::Component {
 	float x = 0.0f, y = 0.0f;
@@ -92,9 +92,10 @@ public:
 		auto sysMgr = world.getSystemManager();
 
 		// B. Register Components
-		// By default components are Archetype. Explicitly register Sparse ones.
+		// Unregistered components default to Sparse. Position and Velocity stay archetype columns.
+		compMgr->registerComponent<Position>(IKIGAI::ECS::StorageType::Archetype);
+		compMgr->registerComponent<Velocity>(IKIGAI::ECS::StorageType::Archetype);
 		compMgr->registerComponent<Health>(IKIGAI::ECS::StorageType::Sparse);
-		// Others like Position/Velocity will be auto-registered as Archetype on first use or logical default.
 
 		// C. Singleton Component
 		compMgr->addSingletonComponent<GlobalConfig>();
