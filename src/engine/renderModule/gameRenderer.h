@@ -10,6 +10,7 @@
 #include "environmentModule/environmentQuality.h"
 #include "frustum.h"
 #include "gameRendererInterface.h"
+#include "historyValidity.h"
 #include "light.h"
 #include "primitiveRender.h"
 #include "profilerModule/gpuStageProfiler.h"
@@ -359,7 +360,8 @@ struct RenderGraphPipeline {
 	void rebuildFrameBuffers(Renderer& renderer);
 	void reloadSettings(Renderer& renderer, const std::string& asset = {});
 	void pollSettings(Renderer& renderer);
-	void invalidateResources(const std::vector<std::string>& resources, bool resetHistory = true);
+	void invalidateResources(
+		const std::vector<std::string>& resources, bool resetHistory = true, HistoryReason reason = HistoryReason::EnvironmentChange);
 	void pollResourceUpdates();
 	Descriptor mDescriptor;
 	Descriptor mSourceDescriptor;
@@ -373,8 +375,10 @@ struct RenderGraphPipeline {
 	std::unique_ptr<UpscalerInterface> mUpscaler;
 	UpscalerSettings mUpscalerSettings;
 	UpscalerCapabilities mUpscalerStatus;
-	bool mUpscalerSettingsLoaded = false, mUpscalerFailed = false, mUpscaleHistoryValid = false, mPresentationHistoryValid = false;
-	bool mHistoryValid = false;
+	bool mUpscalerSettingsLoaded = false;
+	bool mUpscalerFailed = false;
+	// Per-effect temporal history validity (GI, reflections, shadows, presentation, upscaler).
+	HistoryValidity mHistory;
 	std::map<std::string, std::shared_ptr<TextureInterface>> mAllocatedTextures;
 
 	// private:
@@ -388,6 +392,8 @@ class GameRenderer : public RENDER::GameRendererInterface {
 
 	IKIGAI::CORE::Core& mContext;
 	std::unique_ptr<RenderGraphPipeline> mRenderPipeline;
+	HistoryCounters mRetiredHistoryCounters;
+	HistoryCounters mLoggedHistoryCounters;
 	std::string mStartupPipelineAsset, mActivePipelineAsset;
 	std::weak_ptr<void> mRenderedScene;
 	std::uint64_t mRenderedTopologyRevision = 0;
@@ -401,10 +407,26 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	std::vector<LightOGL> mRayLights;
 	std::vector<std::shared_ptr<TextureInterface>> mRayAlbedoMaps;
 	std::shared_ptr<TextureInterface> mRayWhite;
-	uint64_t mRaySceneHash = 0;
+	uint64_t mRayTopologyHash = 0;
+	uint64_t mRayMaterialHash = 0;
+	uint64_t mRayDynamicHash = 0;
 	unsigned mRaySample = 0;
+	// True when the RT scene topology, materials or lights changed. Pure dynamic
+	// motion (skinning, rigid transforms) does not set it; see HistoryValidity::sceneMoved.
 	bool mRaySceneChanged = true;
 	std::shared_ptr<UniformBufferInterface> mRayFrameUbo;
+	// Contents of the engine_RayFrame uniform block. Only the first vec4 existed
+	// before M3; shaders declaring just {vec4 State;} keep working.
+	struct RayFrameData {
+		// x = sample index since the last RT reset, y = 1 when GI, reflection and shadow
+		// history are all valid, z = frame counter, w = 0 when topology/material/lights changed.
+		MATH::Vector4f State;
+		// x = 1 when dynamic scene motion (skinning, rigid transforms) happened this frame,
+		// y/z/w = per-effect history validity of GI, reflections and shadows.
+		MATH::Vector4f Motion;
+	};
+	static_assert(sizeof(RayFrameData) == 32);
+	RayFrameData rayFrameData() const;
 	void prepareRayTracingScene(const std::vector<RenderChunk>& chunks);
 	void runRayTracingStage(PipelineStage& stage);
 	RayTracingDispatch buildProgramDispatch(PipelineStage& stage);
@@ -526,6 +548,7 @@ class GameRenderer : public RENDER::GameRendererInterface {
 
 public:
 	GameRenderer(CORE::Core& context);
+	~GameRenderer() override;
 	PrimitiveRender& primitives() {
 		return mPrimitives;
 	}
@@ -547,11 +570,13 @@ public:
 		mRenderPipeline->mAccelerationStructures[name] = std::move(structure);
 	}
 	void reloadPipelineSettings(const std::string& asset = {});
-	void resetTemporalHistory() {
-		mRenderPipeline->mHistoryValid = false;
-		mRenderPipeline->mUpscaleHistoryValid = false;
-		mRenderPipeline->mPresentationHistoryValid = false;
+	void resetTemporalHistory(HistoryReason reason = HistoryReason::UserReset) {
+		mRenderPipeline->mHistory.invalidate(reason, HistoryAllEffects);
 	}
+	// Cumulative history invalidation counters over every pipeline this renderer used.
+	HistoryCounters historyCounters() const;
+	// Prints GI_HISTORY_RESET / GI_HISTORY_KEPT style lines (see gameRenderer.cpp).
+	void logHistoryCounters(bool force);
 	void enableGpuProfiling(bool enabled = true);
 	void resetGpuProfile();
 	PROFILER::GpuProfileSnapshot gpuProfile() const;

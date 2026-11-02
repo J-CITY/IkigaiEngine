@@ -101,12 +101,12 @@ void GameRenderer::updateEnvironment(SCENE_SYSTEM::Scene& scene) {
 			mRenderPipeline->invalidateResources({ "Environment", "SkyEnvironment" }, update.ResetHistory || qualityChanged);
 		}
 		if (update.ResetHistory || qualityChanged) {
-			mRenderPipeline->mPresentationHistoryValid = false;
+			mRenderPipeline->mHistory.invalidate(HistoryReason::EnvironmentChange, historyEffectBit(HistoryEffect::Presentation));
 		}
 	}
 	else if (old.Atmosphere.x > .5f) {
 		mRenderPipeline->invalidateResources({ "Environment", "SkyEnvironment" });
-		mRenderPipeline->mPresentationHistoryValid = false;
+		mRenderPipeline->mHistory.invalidate(HistoryReason::EnvironmentChange, historyEffectBit(HistoryEffect::Presentation));
 		mAtmosphereCache = {};
 	}
 	mEnvironmentUbo->setData(mEnvironmentState);
