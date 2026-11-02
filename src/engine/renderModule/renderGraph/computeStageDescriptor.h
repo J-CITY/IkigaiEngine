@@ -10,6 +10,24 @@ namespace IKIGAI::RENDER {
 // Asset names of BufferUsage flags (gpuFeatures.h). Resolved to BufferUsage at pipeline load.
 enum class PipelineBufferUsage { STORAGE = 0, INDIRECT, VERTEX, INDEX, TRANSFER_SRC, TRANSFER_DST, READBACK };
 
+// GpuFeatures flags (gpuFeatures.h) a COMPUTE stage can require. A missing feature applies the stage's Unsupported policy.
+enum class PipelineGpuFeature {
+	COMPUTE = 0,
+	BUFFER_USAGE_FLAGS,
+	BUFFER_TRANSFER,
+	BUFFER_READBACK,
+	DRAW_INDIRECT,
+	DRAW_INDIRECT_COUNT,
+	DISPATCH_INDIRECT,
+	STORAGE_IMAGE_MIP_VIEWS,
+	HALF_FLOAT_TEXTURES,
+	SAMPLER_MIN_MAX_REDUCTION,
+	SUBGROUP_BASIC,
+	SUBGROUP_BALLOT,
+	BUFFER_INT64_ATOMICS,
+	TIMESTAMP_QUERIES
+};
+
 // RAY_QUERY keeps the historical meaning of a COMPUTE stage with a Program (dispatchRayQueries,
 // requires RayQuery). COMPUTE runs the program through createComputeProgram/dispatchComputeProgram.
 enum class ComputeProgramKind { RAY_QUERY = 0, COMPUTE };
@@ -64,10 +82,12 @@ struct ComputeStageDescriptor {
 	size_t DispatchOffset = 0;
 	std::vector<BufferClearDescriptor> ClearBuffers;
 	MipChainDescriptor MipChain;
+	// Material stages with a DispatchTexture opt into capability checks and the Unsupported policy through Requires.
+	std::vector<PipelineGpuFeature> Requires;
 
 	bool usesExtensions() const {
 		return ProgramKind != ComputeProgramKind::RAY_QUERY || !Groups.empty() || !DispatchBuffer.empty() || !ClearBuffers.empty()
-			|| !MipChain.Texture.empty();
+			|| !MipChain.Texture.empty() || !Requires.empty();
 	}
 
 	template <class Context> constexpr static auto serde(Context& context, ComputeStageDescriptor& value) {
@@ -79,7 +99,8 @@ struct ComputeStageDescriptor {
 			.field(&Self::DispatchBuffer, "DispatchBuffer", default_ { std::string {} })
 			.field(&Self::DispatchOffset, "DispatchOffset", default_ { size_t { 0 } })
 			.field(&Self::ClearBuffers, "ClearBuffers", default_ { std::vector<BufferClearDescriptor> {} })
-			.field(&Self::MipChain, "MipChain", default_ { MipChainDescriptor {} });
+			.field(&Self::MipChain, "MipChain", default_ { MipChainDescriptor {} })
+			.field(&Self::Requires, "Requires", default_ { std::vector<PipelineGpuFeature> {} });
 	}
 };
 }
