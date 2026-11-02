@@ -208,12 +208,12 @@ void GameRenderer::renderScene() {
 		std::cout << "Scene render pipeline: " << asset << std::endl;
 	}
 	if (mRenderedScene.lock() != scene.lifetime) {
-		resetTemporalHistory();
+		resetTemporalHistory(HistoryReason::CameraCut);
 		mPreviousCamera = nullptr;
 		mRenderedScene = scene.lifetime;
 	}
 	if (mRenderedTopologyRevision != scene.renderTopologyRevision) {
-		resetTemporalHistory();
+		resetTemporalHistory(HistoryReason::SceneTopology);
 		mRenderedTopologyRevision = scene.renderTopologyRevision;
 	}
 
@@ -251,7 +251,7 @@ void GameRenderer::renderLoadingScene(SCENE_SYSTEM::Scene* scene) {
 		return;
 	}
 	render.getDriver()->resize(size.x, size.y);
-	resetTemporalHistory();
+	resetTemporalHistory(HistoryReason::SceneLoading);
 	mPreviousCamera = nullptr;
 	mSkinningPoses.clear();
 	CAPTURE::ScreenshotService::Get().setSource({}, {});
@@ -581,9 +581,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	auto unjitteredViewProjection = projection * cameraComponent.getCamera().getViewMatrix();
 	const auto unjitteredProjection = projection;
 	if (mPreviousCamera != &cameraComponent) {
-		mRenderPipeline->mPresentationHistoryValid = false;
-		mRenderPipeline->mHistoryValid = false;
-		mRenderPipeline->mUpscaleHistoryValid = false;
+		mRenderPipeline->mHistory.invalidate(HistoryReason::CameraCut);
 	}
 	else {
 		float difference = 0;
@@ -593,9 +591,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			}
 		}
 		if (difference > 2.0f) {
-			mRenderPipeline->mPresentationHistoryValid = false;
-			mRenderPipeline->mHistoryValid = false;
-			mRenderPipeline->mUpscaleHistoryValid = false;
+			mRenderPipeline->mHistory.invalidate(HistoryReason::CameraCut);
 		}
 	}
 	const bool taaEnabled = mRenderPipeline->mDescriptor.TemporalJitter
@@ -630,7 +626,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	mEngineUbo->setData(uboData);
 	const auto viewProjection = projection * cameraComponent.getCamera().getViewMatrix();
 	mFrameData.InvViewProjection = MATH::Matrix4f::Transpose(MATH::Matrix4f::Inverse(viewProjection));
-	const bool temporalValid = mRenderPipeline->mPresentationHistoryValid;
+	const bool temporalValid = mRenderPipeline->mHistory.isValid(HistoryEffect::Presentation);
 	mFrameData.PreviousViewProjection = MATH::Matrix4f::Transpose(temporalValid ? mPreviousViewProjection : viewProjection);
 	mFrameData.PreviousModel = MATH::Matrix4f::Identity;
 	const float zeroToOne = DriverInterface::settings.backend == RenderSettings::Backend::OPENGL ? 0.0f : 1.0f;
@@ -715,7 +711,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			&& (lights.size() != mRayLights.size() || std::memcmp(lights.data(), mRayLights.data(), lights.size() * sizeof(LightOGL)) != 0)) {
 			mRayLightSSBO = mContext.render->createStorageBuffer(lights.data(), lights.size(), sizeof(LightOGL));
 			mRayLights = std::move(lights);
-			mRenderPipeline->mHistoryValid = false;
+			mRenderPipeline->mHistory.invalidate(HistoryReason::LightChange);
 			mRaySceneChanged = true;
 		}
 		float difference = 0;
@@ -724,9 +720,13 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 				difference = std::max(difference, std::abs(unjitteredViewProjection(r, c) - mPreviousUnjitteredViewProjection(r, c)));
 			}
 		}
-		if ((progressive && difference > 1e-6f) || !mRenderPipeline->mHistoryValid) {
+		auto& history = mRenderPipeline->mHistory;
+		if (progressive && (difference > 1e-6f || history.sceneMoved())) {
+			// Progressive accumulation has no per-pixel rejection: any motion restarts it.
+			history.invalidate(HistoryReason::ProgressiveMotion);
+		}
+		if (!history.allValid(HistoryRayTracedEffects)) {
 			mRaySample = 0;
-			mRenderPipeline->mHistoryValid = false;
 			mFrameData.FrameState.x = 0;
 			mFrameUbo->setData(mFrameData);
 		}
@@ -767,8 +767,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		}
 	}
 	if (rayFrameNeeded) {
-		mRayFrameUbo = mContext.render->createUniformBuffer<MATH::Vector4f>({ static_cast<float>(mRaySample),
-			mRenderPipeline->mHistoryValid ? 1.f : 0.f, static_cast<float>(mFrameCount), mRaySceneChanged ? 0.f : 1.f });
+		mRayFrameUbo = mContext.render->createUniformBuffer<RayFrameData>(rayFrameData());
 	}
 	mShadowUbo->setData(mShadowData);
 
@@ -1013,14 +1012,14 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			f.Far = cameraComponent.getFar();
 			f.VerticalFov = cameraComponent.getFov() * 3.14159265358979323846f / 180.f;
 			f.DeltaMilliseconds = mFrameData.FrameState.y * 1000.f;
-			f.Reset = !mRenderPipeline->mUpscaleHistoryValid;
+			f.Reset = !mRenderPipeline->mHistory.isValid(HistoryEffect::Upscaler);
 			f.Sharpness = mRenderPipeline->mUpscalerSettings.sharpness;
 			try {
 				mRenderPipeline->mUpscaler->dispatch(f);
 				if (!stage->mExecuted || f.Reset) {
 					std::cout << "UPSCALE_DISPATCH " << mRenderPipeline->mUpscalerStatus.Implementation << " reset=" << f.Reset << '\n';
 				}
-				mRenderPipeline->mUpscaleHistoryValid = true;
+				mRenderPipeline->mHistory.markValid(historyEffectBit(HistoryEffect::Upscaler));
 				stage->mExecuted = true;
 				return;
 			} catch (const UnsupportedUpscaler& error) {
@@ -1030,7 +1029,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 				mRenderPipeline->mUpscalerStatus.Supported = false;
 				mRenderPipeline->mUpscalerStatus.Reason = error.what();
 				mRenderPipeline->mUpscalerFailed = true;
-				mRenderPipeline->mUpscaleHistoryValid = false;
+				mRenderPipeline->mHistory.invalidate(HistoryReason::ResourceUpdate, historyEffectBit(HistoryEffect::Upscaler));
 				std::cerr << "UPSCALER_FALLBACK " << error.what() << '\n';
 				// Draw the stage's spatial fallback for this already-rendered frame.
 			}
@@ -1186,7 +1185,10 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	mPreviousJitter = mJitter;
 	mPreviousUnjitteredViewProjection = unjitteredViewProjection;
 	mPreviousCamera = &cameraComponent;
-	mRenderPipeline->mPresentationHistoryValid = true;
+	mRenderPipeline->mHistory.markValid(historyEffectBit(HistoryEffect::Presentation));
+	if (mFrameCount % 60 == 59) {
+		logHistoryCounters(false);
+	}
 }
 
 void GameRenderer::captureShadows(
@@ -1350,13 +1352,21 @@ void GameRenderer::setPipeline(std::unique_ptr<RenderGraphPipeline>&& renderPipe
 	mRayInstances.reset();
 	mRayLightSSBO.reset();
 	mRayLights.clear();
-	mRaySceneHash = 0;
+	mRayTopologyHash = 0;
+	mRayMaterialHash = 0;
+	mRayDynamicHash = 0;
 	mRaySample = 0;
 	mSkinningPoses.clear();
 	mRayAlbedoMaps.clear();
 	mRayWhite.reset();
 	mRayFrameUbo.reset();
 	mRaySceneChanged = true;
+	if (mRenderPipeline) {
+		mRetiredHistoryCounters.add(mRenderPipeline->mHistory.counters());
+	}
+	if (renderPipeline) {
+		renderPipeline->mHistory.invalidate(HistoryReason::PipelineReload);
+	}
 	mRenderPipeline = std::move(renderPipeline);
 	mCloudShadowAnchorValid = false;
 	mCloudShadowNeedsUpdate = true;
@@ -1862,9 +1872,7 @@ void RenderGraphPipeline::reloadSettings(Renderer& renderer, const std::string& 
 	mSourceDescriptor = std::move(source);
 	mSettingsOverrideAsset = overrideAsset;
 	if (changed) {
-		mHistoryValid = false;
-		mUpscaleHistoryValid = false;
-		mPresentationHistoryValid = false;
+		mHistory.invalidate(HistoryReason::PipelineReload);
 		mIsInitialized = false;
 		if (!changedTextures.empty() && mSize.x > 0 && mSize.y > 0) {
 			for (const auto& name : changedTextures) {
@@ -1885,7 +1893,7 @@ void RenderGraphPipeline::reloadSettings(Renderer& renderer, const std::string& 
 	}
 }
 
-void RenderGraphPipeline::invalidateResources(const std::vector<std::string>& resources, bool resetHistory) {
+void RenderGraphPipeline::invalidateResources(const std::vector<std::string>& resources, bool resetHistory, HistoryReason reason) {
 	std::set<std::string> dirty(resources.begin(), resources.end());
 	for (auto* stages : stageGroups()) {
 		for (auto& stage : *stages) {
@@ -1917,8 +1925,7 @@ void RenderGraphPipeline::invalidateResources(const std::vector<std::string>& re
 		}
 	}
 	if (resetHistory) {
-		mHistoryValid = false;
-		mUpscaleHistoryValid = false;
+		mHistory.invalidate(reason, HistoryResourceEffects);
 	}
 	mIsInitialized = false;
 }
@@ -1936,7 +1943,7 @@ void RenderGraphPipeline::pollResourceUpdates() {
 		}
 	}
 	if (!changed.empty()) {
-		invalidateResources(changed);
+		invalidateResources(changed, true, HistoryReason::ResourceUpdate);
 	}
 }
 
@@ -1965,9 +1972,7 @@ void RenderGraphPipeline::prepareUpscaler(Renderer& renderer, int width, int hei
 		mUpscalerSettingsLoaded = true;
 		mUpscalerFailed = false;
 		mUpscaler.reset();
-		mUpscaleHistoryValid = false;
-		mHistoryValid = false;
-		mPresentationHistoryValid = false;
+		mHistory.invalidate(HistoryReason::PipelineReload);
 	}
 	if (mUpscalerFailed) {
 		mUpscaler.reset();
@@ -2070,9 +2075,7 @@ void RenderGraphPipeline::resize(Renderer& renderer, int width, int height) {
 	mAllocatedTextures = mTextures;
 	mSize = { width, height };
 	mAllocatedRenderSize = mRenderSize;
-	mUpscaleHistoryValid = false;
-	mPresentationHistoryValid = false;
-	mHistoryValid = false;
+	mHistory.invalidate(HistoryReason::Resize);
 	mIsInitialized = false;
 	rebuildFrameBuffers(renderer);
 	const bool history = std::any_of(mDescriptor.Textures.begin(), mDescriptor.Textures.end(), [](const auto& t) { return t.History; });
@@ -2146,6 +2149,53 @@ std::vector<RenderGraphPipeline::StagesArr*> RenderGraphPipeline::stageGroups() 
 	return groups;
 }
 
+GameRenderer::RayFrameData GameRenderer::rayFrameData() const {
+	const auto& history = mRenderPipeline->mHistory;
+	const auto flag = [](bool value) { return value ? 1.f : 0.f; };
+	RayFrameData data;
+	data.State = { static_cast<float>(mRaySample), flag(history.allValid(HistoryRayTracedEffects)), static_cast<float>(mFrameCount),
+		mRaySceneChanged ? 0.f : 1.f };
+	data.Motion = { flag(history.sceneMoved()), flag(history.isValid(HistoryEffect::GlobalIllumination)),
+		flag(history.isValid(HistoryEffect::Reflections)), flag(history.isValid(HistoryEffect::Shadows)) };
+	return data;
+}
+
+HistoryCounters GameRenderer::historyCounters() const {
+	auto total = mRetiredHistoryCounters;
+	if (mRenderPipeline) {
+		total.add(mRenderPipeline->mHistory.counters());
+	}
+	return total;
+}
+
+void GameRenderer::logHistoryCounters(bool force) {
+	const auto total = historyCounters();
+	if (!force && total == mLoggedHistoryCounters) {
+		return;
+	}
+	mLoggedHistoryCounters = total;
+	for (size_t effect = 0; effect < HistoryEffectCount; ++effect) {
+		const auto* prefix = historyEffectLogPrefix(static_cast<HistoryEffect>(effect));
+		for (size_t reason = 0; reason < HistoryReasonCount; ++reason) {
+			const auto* name = historyReasonName(static_cast<HistoryReason>(reason));
+			// GI lines are always printed (including zero counts) so tests can assert them.
+			if (total.Resets[effect][reason] != 0 || effect == static_cast<size_t>(HistoryEffect::GlobalIllumination)) {
+				std::cout << prefix << "_HISTORY_RESET reason=" << name << " count=" << total.Resets[effect][reason] << " frame=" << mFrameCount
+						  << '\n';
+			}
+			if (total.Kept[effect][reason] != 0 && effect != static_cast<size_t>(HistoryEffect::Presentation)
+				&& effect != static_cast<size_t>(HistoryEffect::Upscaler)) {
+				std::cout << prefix << "_HISTORY_KEPT reason=" << name << " count=" << total.Kept[effect][reason] << " frame=" << mFrameCount << '\n';
+			}
+		}
+	}
+	std::cout.flush();
+}
+
+GameRenderer::~GameRenderer() {
+	logHistoryCounters(true);
+}
+
 void RenderGraphPipeline::advanceHistory(Renderer& renderer) {
 	bool changed = false;
 	for (const auto& texture : mDescriptor.Textures) {
@@ -2154,7 +2204,7 @@ void RenderGraphPipeline::advanceHistory(Renderer& renderer) {
 			changed = true;
 		}
 	}
-	mHistoryValid = true;
+	mHistory.markValid(HistoryRayTracedEffects);
 	if (changed) {
 		std::swap(mFrameBuffers, mAlternateFrameBuffers);
 		for (auto* stages : stageGroups()) {
