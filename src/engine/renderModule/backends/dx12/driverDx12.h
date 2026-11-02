@@ -228,6 +228,13 @@ public:
 		}
 		return mDescriptorHeapCPUHandle;
 	}
+	// Slots of the legacy range [0, 1000) of the shader-visible heap used by textures and storage buffers.
+	// Released slots are recycled only after the end-of-frame GPU wait, so recorded commands never see them reused.
+	static constexpr uint32_t InvalidLegacyDescriptor = UINT32_MAX;
+	uint32_t allocateLegacyDescriptors(uint32_t count);
+	void releaseLegacyDescriptors(uint32_t index, uint32_t count);
+	D3D12_CPU_DESCRIPTOR_HANDLE legacyDescriptorCpu(uint32_t index) const;
+	D3D12_GPU_DESCRIPTOR_HANDLE legacyDescriptorGpu(uint32_t index) const;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE& getDescriptorHeapGPUHandle() {
 		return mDescriptorHeapGPUHandle;
 	}
@@ -286,6 +293,11 @@ private:
 	CD3DX12_GPU_DESCRIPTOR_HANDLE mDescriptorHeapGPUHandle {};
 	unsigned int mDescriptorIncSize = 0;
 	std::vector<UINT> mImGuiFreeSrv;
+	static constexpr uint32_t LegacyDescriptorCapacity = 1000;
+	uint32_t mLegacyDescriptorCursor = 0;
+	// Free slot runs by run length (index 1 and 2 are used), plus runs waiting for the next GPU wait.
+	std::array<std::vector<uint32_t>, 3> mFreeLegacyDescriptors;
+	std::vector<std::pair<uint32_t, uint32_t>> mPendingLegacyDescriptors;
 
 	std::vector<Microsoft::WRL::ComPtr<ID3D12DeviceChild>> mDestroyDeffered {};
 	std::vector<Dx12Resource> mDestroyDeferredResources {};

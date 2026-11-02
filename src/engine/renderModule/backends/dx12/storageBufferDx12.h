@@ -12,6 +12,7 @@ namespace IKIGAI::RENDER {
 	class StorageBufferDx12 : public StorageBufferInterface {
 		D3D12_CPU_DESCRIPTOR_HANDLE mSrvHeapBegin{};
 		D3D12_CPU_DESCRIPTOR_HANDLE mUavHeapBegin{};
+		uint32_t mDescriptorIndex = UINT32_MAX;
 
 		CD3DX12_GPU_DESCRIPTOR_HANDLE mGpuSrvDescriptorHandle;
 		CD3DX12_GPU_DESCRIPTOR_HANDLE mGpuUavDescriptorHandle;

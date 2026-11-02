@@ -965,8 +965,44 @@ std::vector<Microsoft::WRL::ComPtr<ID3D12DeviceChild>>& DriverDx12::getDestroyDe
 	return mDestroyDeffered;
 }
 
+uint32_t DriverDx12::allocateLegacyDescriptors(uint32_t count) {
+	if (count == 0 || count >= mFreeLegacyDescriptors.size()) {
+		throw std::runtime_error("Unsupported legacy descriptor run length");
+	}
+	auto& free = mFreeLegacyDescriptors[count];
+	if (!free.empty()) {
+		const uint32_t index = free.back();
+		free.pop_back();
+		return index;
+	}
+	if (mLegacyDescriptorCursor + count > LegacyDescriptorCapacity) {
+		throw std::runtime_error("Legacy descriptor range exhausted; bindless/ImGui ranges are reserved");
+	}
+	const uint32_t index = mLegacyDescriptorCursor;
+	mLegacyDescriptorCursor += count;
+	return index;
+}
+
+void DriverDx12::releaseLegacyDescriptors(uint32_t index, uint32_t count) {
+	if (index != InvalidLegacyDescriptor) {
+		mPendingLegacyDescriptors.emplace_back(index, count);
+	}
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DriverDx12::legacyDescriptorCpu(uint32_t index) const {
+	return CD3DX12_CPU_DESCRIPTOR_HANDLE(mDescriptorHeap->GetCPUDescriptorHandleForHeapStart(), static_cast<INT>(index), mDescriptorIncSize);
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE DriverDx12::legacyDescriptorGpu(uint32_t index) const {
+	return CD3DX12_GPU_DESCRIPTOR_HANDLE(mDescriptorHeap->GetGPUDescriptorHandleForHeapStart(), static_cast<INT>(index), mDescriptorIncSize);
+}
+
 void DriverDx12::clearForDestroy() {
-    mRayFrameResources.clear();
+	for (const auto& [index, count] : mPendingLegacyDescriptors) {
+		mFreeLegacyDescriptors[count].push_back(index);
+	}
+	mPendingLegacyDescriptors.clear();
+	mRayFrameResources.clear();
     while(!mRayDeferred.empty()||!mDestroyDeffered.empty()||!mDestroyDeferredResources.empty()) {
         auto ray=std::move(mRayDeferred);mRayDeferred.clear();
         auto objects=std::move(mDestroyDeffered);mDestroyDeffered.clear();
