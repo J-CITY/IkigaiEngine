@@ -89,6 +89,74 @@ namespace {
 		return { reflection.mLocalSize[0], reflection.mLocalSize[1], reflection.mLocalSize[2] };
 	}
 
+	bool HasPipelineGpuFeature(const GpuFeatures& features, PipelineGpuFeature feature) {
+		switch (feature) {
+		case PipelineGpuFeature::COMPUTE:
+			return features.Compute;
+		case PipelineGpuFeature::BUFFER_USAGE_FLAGS:
+			return features.BufferUsageFlags;
+		case PipelineGpuFeature::BUFFER_TRANSFER:
+			return features.BufferTransfer;
+		case PipelineGpuFeature::BUFFER_READBACK:
+			return features.BufferReadback;
+		case PipelineGpuFeature::DRAW_INDIRECT:
+			return features.DrawIndirect;
+		case PipelineGpuFeature::DRAW_INDIRECT_COUNT:
+			return features.DrawIndirectCount;
+		case PipelineGpuFeature::DISPATCH_INDIRECT:
+			return features.DispatchIndirect;
+		case PipelineGpuFeature::STORAGE_IMAGE_MIP_VIEWS:
+			return features.StorageImageMipViews;
+		case PipelineGpuFeature::HALF_FLOAT_TEXTURES:
+			return features.HalfFloatTextures;
+		case PipelineGpuFeature::SAMPLER_MIN_MAX_REDUCTION:
+			return features.SamplerMinMaxReduction;
+		case PipelineGpuFeature::SUBGROUP_BASIC:
+			return features.SubgroupBasic;
+		case PipelineGpuFeature::SUBGROUP_BALLOT:
+			return features.SubgroupBallot;
+		case PipelineGpuFeature::BUFFER_INT64_ATOMICS:
+			return features.BufferInt64Atomics;
+		case PipelineGpuFeature::TIMESTAMP_QUERIES:
+			return features.TimestampQueries;
+		}
+		return false;
+	}
+
+	const char* PipelineGpuFeatureName(PipelineGpuFeature feature) {
+		switch (feature) {
+		case PipelineGpuFeature::COMPUTE:
+			return "COMPUTE";
+		case PipelineGpuFeature::BUFFER_USAGE_FLAGS:
+			return "BUFFER_USAGE_FLAGS";
+		case PipelineGpuFeature::BUFFER_TRANSFER:
+			return "BUFFER_TRANSFER";
+		case PipelineGpuFeature::BUFFER_READBACK:
+			return "BUFFER_READBACK";
+		case PipelineGpuFeature::DRAW_INDIRECT:
+			return "DRAW_INDIRECT";
+		case PipelineGpuFeature::DRAW_INDIRECT_COUNT:
+			return "DRAW_INDIRECT_COUNT";
+		case PipelineGpuFeature::DISPATCH_INDIRECT:
+			return "DISPATCH_INDIRECT";
+		case PipelineGpuFeature::STORAGE_IMAGE_MIP_VIEWS:
+			return "STORAGE_IMAGE_MIP_VIEWS";
+		case PipelineGpuFeature::HALF_FLOAT_TEXTURES:
+			return "HALF_FLOAT_TEXTURES";
+		case PipelineGpuFeature::SAMPLER_MIN_MAX_REDUCTION:
+			return "SAMPLER_MIN_MAX_REDUCTION";
+		case PipelineGpuFeature::SUBGROUP_BASIC:
+			return "SUBGROUP_BASIC";
+		case PipelineGpuFeature::SUBGROUP_BALLOT:
+			return "SUBGROUP_BALLOT";
+		case PipelineGpuFeature::BUFFER_INT64_ATOMICS:
+			return "BUFFER_INT64_ATOMICS";
+		case PipelineGpuFeature::TIMESTAMP_QUERIES:
+			return "TIMESTAMP_QUERIES";
+		}
+		return "UNKNOWN";
+	}
+
 	uint32_t CeilDiv(size_t value, uint32_t divisor) {
 		if (!divisor) {
 			throw std::runtime_error("Invalid compute local size");
@@ -340,6 +408,12 @@ void LoadComputeStage(RenderGraphPipeline& pipeline, PipelineStage& stage) {
 	try {
 		if (state->UsesProgram && !SupportsReflectedComputePrograms(driver)) {
 			throw UnsupportedGpuFeature("reflected compute programs are unavailable on this backend");
+		}
+		for (const auto feature : compute.Requires) {
+			if (!HasPipelineGpuFeature(features, feature)) {
+				throw UnsupportedGpuFeature(
+					std::string("required GPU feature ") + PipelineGpuFeatureName(feature) + " is unavailable on this backend/GPU");
+			}
 		}
 		if (indirect) {
 			if (!features.DispatchIndirect) {

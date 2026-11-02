@@ -14,6 +14,7 @@
 #include "primitiveRender.h"
 #include "profilerModule/gpuStageProfiler.h"
 #include "renderGraph/computeStageDescriptor.h"
+#include "renderGraph/screenProbeSettings.h"
 #include <filesystem>
 
 // TODO move include to .cpp
@@ -313,6 +314,8 @@ struct RenderGraphPipeline {
 		std::vector<PipelineStage::Descriptor> StartStages;
 		std::vector<PipelineStage::Descriptor> Stages;
 		std::vector<LightPassDescriptor> LightPasses;
+		// Screen probe gather parameters (hybrid-sp); disabled unless the pipeline enables the block.
+		ScreenProbeSettings ScreenProbes;
 
 		template <class Context> constexpr static auto serde(Context& context, Descriptor& value) {
 			using Self = Descriptor;
@@ -327,7 +330,8 @@ struct RenderGraphPipeline {
 				.field(&Self::Buffers, "Buffers", default_ { decltype(Buffers) {} })
 				.field(&Self::Stages, "Stages")
 				.field(&Self::LightPasses, "LightPasses", default_ { decltype(LightPasses) {} })
-				.field(&Self::StartStages, "StartStages", default_ { decltype(StartStages) {} });
+				.field(&Self::StartStages, "StartStages", default_ { decltype(StartStages) {} })
+				.field(&Self::ScreenProbes, "ScreenProbes", default_ { ScreenProbeSettings {} });
 		}
 	};
 

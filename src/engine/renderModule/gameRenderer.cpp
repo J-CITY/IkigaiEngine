@@ -8,6 +8,7 @@
 #include "profilerModule/profiler.h"
 #include "profilerModule/profilerSpy.h"
 #include "renderGraph/computeStage.h"
+#include "renderGraph/screenProbeStage.h"
 #include "utilsModule/time/loadTimer.h"
 #include "virtualGeometryModule/runtime/virtualGeometryRenderer.h"
 #if USE_PHYSICS_3D
@@ -1589,6 +1590,7 @@ static RenderGraphPipeline::Descriptor ResolvePipelineSettings(const RenderGraph
 			stage.Uniforms = std::move(uniforms);
 		}
 	}
+	ResolveScreenProbes(resolved);
 	auto validation = resolved;
 	for (const auto& pass : resolved.LightPasses) {
 		if (pass.ShadowBudget < -1 || pass.VolumeLightLimit < -1) {
@@ -1725,6 +1727,7 @@ RenderGraphPipeline::RenderGraphPipeline(const Descriptor& descriptor, Renderer&
 		mSettingsWriteTime = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().lastWriteTime(descriptor.SettingsAsset);
 	}
 	CreatePipelineBuffers(*this, renderer);
+	CreateScreenProbeBuffer(*this, renderer);
 	mStartStages = loadStages(mDescriptor.StartStages);
 	for (const auto& descriptor : mDescriptor.LightPasses) {
 		if (mLightPasses.contains(descriptor.Name)) {
