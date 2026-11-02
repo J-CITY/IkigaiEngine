@@ -21,6 +21,8 @@ namespace {
 			hash *= 1099511628211ull;
 		}
 	}
+	// Emissive radiance (linear RGB, HDR) is packed into lanes that were unused so the 160 byte std430 stride stays compatible with
+	// existing readers: Properties = { roughness, metallic, emissive.r, emissive.g }, UV2 = { u, v, emissive.b, 0 }.
 	struct TriangleData {
 		MATH::Vector4f P0, P1, P2, N0, N1, N2, Albedo, Properties, UV01, UV2;
 	};
@@ -35,9 +37,9 @@ namespace {
 	};
 	struct TriangleUniform {
 		MATH::Matrix4f World;
-		MATH::Vector4f Albedo, Properties, UVTransform;
+		MATH::Vector4f Albedo, Properties, UVTransform, Emissive;
 	};
-	static_assert(sizeof(SkinVertex) == 80 && sizeof(DeformedVertex) == 48 && sizeof(TriangleUniform) == 112);
+	static_assert(sizeof(SkinVertex) == 80 && sizeof(DeformedVertex) == 48 && sizeof(TriangleUniform) == 128);
 	void dispatchCompute(DriverInterface& driver, const std::shared_ptr<RayTracingProgram>& program, uint32_t count,
 		std::map<std::string, std::vector<RayTracingResource>> bindings, const std::array<uint32_t, 4>& options) {
 		RayTracingDispatch dispatch;
@@ -206,7 +208,9 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 			float roughness = .5f, metallic = 0;
 			auto albedoMap = mRayWhite;
 			MATH::Vector2f tiling { 1, 1 }, offset { 0, 0 };
+			MATH::Vector3f emissive { 0, 0, 0 };
 			if (drawable.material) {
+				emissive = drawable.material->emissive().radiance();
 				if (!drawable.material->pbrLayers().Layers.empty()) {
 					throw std::runtime_error("Ray tracing does not yet support layered PBR textures: " + drawable.material->getPath());
 				}
@@ -244,6 +248,7 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 			albedo.y *= drawable.tint.y;
 			albedo.z *= drawable.tint.z;
 			hashBytes(hash, &albedo, sizeof(albedo));
+			hashBytes(hash, &emissive, sizeof(emissive));
 			hashBytes(hash, &roughness, sizeof(roughness));
 			hashBytes(hash, &metallic, sizeof(metallic));
 			const auto* textureIdentity = albedoMap.get();
@@ -255,7 +260,8 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 			albedoMaps.push_back(albedoMap);
 			offsets.push_back({ triangleCount, 0, 0, 0 });
 			batches.push_back({ pose ? entry.DeformedBuffer : entry.Source->RigidVertices, entry.Source,
-				{ MATH::Matrix4f::Transpose(drawable.world), albedo, { roughness, metallic, 0, 0 }, { tiling.x, tiling.y, offset.x, offset.y } },
+				{ MATH::Matrix4f::Transpose(drawable.world), albedo, { roughness, metallic, 0, 0 }, { tiling.x, tiling.y, offset.x, offset.y },
+				{ emissive.x, emissive.y, emissive.z, 0 } },
 				triangleCount });
 			triangleCount += entry.Source->TriangleCount;
 			RayTracingInstance instance;

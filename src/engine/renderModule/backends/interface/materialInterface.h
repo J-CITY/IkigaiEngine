@@ -40,6 +40,7 @@ protected:
 		std::map<std::string, UniformData> uniforms;
 	};
 	PbrLayersDescriptor mPbrLayers;
+	PbrEmissiveDescriptor mEmissive;
 	DeformationDescriptor mDeformation = {};
 	PreparedMaterial prepareMaterial(const MaterialResource& resource);
 	void applyMaterialState(const MaterialResource& resource);
@@ -51,6 +52,9 @@ public:
 	}
 	const PbrLayersDescriptor& pbrLayers() const {
 		return mPbrLayers;
+	}
+	const PbrEmissiveDescriptor& emissive() const {
+		return mEmissive;
 	}
 
 	MaterialInterface() = default;
