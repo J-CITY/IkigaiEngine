@@ -57,6 +57,25 @@ namespace {
 			texture->Scale = scale;
 		}
 	}
+
+	// The DDGI grid has one source of truth: the push constants of the RAY_TRACE stage named by DdgiStage.
+	ScreenProbeDdgiVolume ResolveDdgiVolume(const RenderGraphPipeline::Descriptor& descriptor) {
+		const auto& settings = descriptor.ScreenProbes;
+		if (!settings.UseDdgi) {
+			return {};
+		}
+		Require(!settings.DdgiStage.empty(), "DdgiStage", "must name the DDGI probe trace stage when UseDdgi is true");
+		const PipelineStage::Descriptor* found = nullptr;
+		for (const auto* stage : AllStages(descriptor)) {
+			if (stage->Name == settings.DdgiStage) {
+				found = stage;
+			}
+		}
+		Require(found != nullptr, "DdgiStage", "references unknown stage " + settings.DdgiStage);
+		Require(found->Draw == DrawContent::RAY_TRACE && !found->Program.empty(), "DdgiStage",
+			"stage " + settings.DdgiStage + " must be a RAY_TRACE stage with a Program");
+		return DecodeScreenProbeDdgiVolume(found->PushConstants, settings.DdgiStage);
+	}
 }
 
 void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
@@ -79,7 +98,7 @@ void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
 	if (!linked) {
 		throw std::runtime_error(std::string("ScreenProbes block is enabled but no stage links ") + ScreenProbeBufferName);
 	}
-	const auto gpu = ResolveScreenProbeGpuSettings(settings);
+	const auto gpu = ResolveScreenProbeGpuSettings(settings, ResolveDdgiVolume(descriptor));
 	ScaleTextures(descriptor, settings.ProbeTextures, 1.0f / static_cast<float>(gpu.TileSize), "ProbeTextures");
 	ScaleTextures(descriptor, settings.AtlasTextures, static_cast<float>(gpu.DirectionSide) / static_cast<float>(gpu.TileSize), "AtlasTextures");
 	for (const auto& name : settings.ProbeTextures) {
@@ -94,10 +113,11 @@ void CreateScreenProbeBuffer(RenderGraphPipeline& pipeline, Renderer& renderer) 
 	if (!settings.Enabled) {
 		return;
 	}
-	const auto gpu = ResolveScreenProbeGpuSettings(settings);
+	const auto gpu = ResolveScreenProbeGpuSettings(settings, ResolveDdgiVolume(pipeline.mDescriptor));
 	pipeline.mUniformBuffers[ScreenProbeBufferName] = renderer.createUniformBuffer(&gpu, sizeof(gpu));
 	std::cout << "SCREEN_PROBES tile=" << gpu.TileSize << " directions=" << gpu.DirectionSide * gpu.DirectionSide << " max_steps=" << gpu.MaxSteps
 			  << " thickness=" << gpu.Thickness << " intensity=" << gpu.Intensity << " history=" << gpu.UseHistory << " debug=" << gpu.DebugMode
-			  << " spatial_radius=" << gpu.SpatialRadius << std::endl;
+			  << " spatial_radius=" << gpu.SpatialRadius << " chain_mask=" << gpu.ChainMask << " previous_scene_weight=" << gpu.PreviousSceneWeight
+			  << " ray_query_max_distance=" << gpu.RayQueryMaxDistance << " ddgi=" << gpu.DdgiValid << std::endl;
 }
 }

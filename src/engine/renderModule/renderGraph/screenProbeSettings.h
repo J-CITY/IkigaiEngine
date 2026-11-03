@@ -7,8 +7,13 @@
 #include <vector>
 
 namespace IKIGAI::RENDER {
-// Visualisations written to the screen probe Indirect output instead of the irradiance.
-enum class ScreenProbeDebugMode { OFF = 0, PROBES, HIT_MISS, CONFIDENCE, RAW, FILTERED };
+// Visualisations written to the screen probe Indirect output instead of the irradiance. SOURCE colours the source of the
+// probe rays (screen green, ray query blue, DDGI magenta, environment red, mixed by their share in the probe).
+enum class ScreenProbeDebugMode { OFF = 0, PROBES, HIT_MISS, CONFIDENCE, RAW, FILTERED, SOURCE };
+
+// Links of the screen probe trace chain screen -> ray query -> DDGI -> environment (hybrid-sp-rt). A link missing from
+// ChainMask is skipped, so tests can force every fallback state.
+enum class ScreenProbeChainLink { SCREEN = 0, RAY_QUERY, DDGI, ENVIRONMENT };
 
 // Pipeline "ScreenProbes" block (hybrid-sp): parameters of the compute screen probe gather. Validated at pipeline load
 // (ResolveScreenProbes); the resolved values reach the stages through the uniform buffer ScreenProbeBufferName.
@@ -43,6 +48,21 @@ struct ScreenProbeSettings {
 	float ClampSigma = 1.5f;
 	// History length at which the output confidence reaches the probe validity.
 	float ConfidenceHistory = 4.0f;
+	// Trace screen misses with ray queries against the TLAS (stage with an RT program; bypassed without ray query support).
+	bool UseRayQuery = true;
+	// Read the DDGI volume of DdgiStage: secondary light at ray query hits and radiance beyond RayQueryMaxDistance.
+	bool UseDdgi = false;
+	// Range of the ray query trace in world units; longer rays continue in the DDGI volume, then the environment.
+	float RayQueryMaxDistance = 30.0f;
+	// Confidence of ray query samples (screen hits count 1, DDGI and environment samples count MissConfidence).
+	float RayQueryConfidence = 0.9f;
+	// Scale of the DDGI irradiance read by the screen probe chain.
+	float DdgiIntensity = 1.0f;
+	// RAY_TRACE stage that updates the DDGI volume; its push constants (OriginSpacing, CountsRays) define the probe grid.
+	std::string DdgiStage;
+	// Enabled links of the trace chain. A block without the field gets every link (serde default); the member starts empty
+	// because serdepp appends list elements to the existing container.
+	std::vector<ScreenProbeChainLink> ChainMask;
 	// Textures sized one texel per probe (Scale = 1 / TileSize) and per probe direction (Scale = side / TileSize).
 	std::vector<std::string> ProbeTextures;
 	std::vector<std::string> AtlasTextures;
@@ -68,6 +88,15 @@ struct ScreenProbeSettings {
 			.field(&Self::NormalPower, "NormalPower", default_ { 8.0f })
 			.field(&Self::ClampSigma, "ClampSigma", default_ { 1.5f })
 			.field(&Self::ConfidenceHistory, "ConfidenceHistory", default_ { 4.0f })
+			.field(&Self::UseRayQuery, "UseRayQuery", default_ { true })
+			.field(&Self::UseDdgi, "UseDdgi", default_ { false })
+			.field(&Self::RayQueryMaxDistance, "RayQueryMaxDistance", default_ { 30.0f })
+			.field(&Self::RayQueryConfidence, "RayQueryConfidence", default_ { 0.9f })
+			.field(&Self::DdgiIntensity, "DdgiIntensity", default_ { 1.0f })
+			.field(&Self::DdgiStage, "DdgiStage", default_ { std::string {} })
+			.field(&Self::ChainMask, "ChainMask",
+				default_ { std::vector<ScreenProbeChainLink> {
+				ScreenProbeChainLink::SCREEN, ScreenProbeChainLink::RAY_QUERY, ScreenProbeChainLink::DDGI, ScreenProbeChainLink::ENVIRONMENT } })
 			.field(&Self::ProbeTextures, "ProbeTextures", default_ { std::vector<std::string> {} })
 			.field(&Self::AtlasTextures, "AtlasTextures", default_ { std::vector<std::string> {} });
 	}
@@ -91,12 +120,54 @@ struct ScreenProbeGpuSettings {
 	float NormalPower = 8.0f;
 	float ClampSigma = 1.5f;
 	float ConfidenceHistory = 4.0f;
+	// Bits of ScreenProbeChainBit; RAY_QUERY and DDGI are cleared when UseRayQuery / UseDdgi are off.
+	int32_t ChainMask = 15;
+	// 1 when the DDGI probe grid below was resolved from DdgiStage.
+	int32_t DdgiValid = 0;
+	int32_t ChainReserved0 = 0;
+	int32_t ChainReserved1 = 0;
+	float RayQueryMaxDistance = 30.0f;
+	float RayQueryConfidence = 0.9f;
+	float DdgiIntensity = 1.0f;
+	float RayQueryReserved = 0.0f;
+	float DdgiOriginX = 0.0f;
+	float DdgiOriginY = 0.0f;
+	float DdgiOriginZ = 0.0f;
+	float DdgiSpacing = 1.0f;
+	int32_t DdgiCountX = 0;
+	int32_t DdgiCountY = 0;
+	int32_t DdgiCountZ = 0;
+	int32_t DdgiRays = 0;
 };
-static_assert(sizeof(ScreenProbeGpuSettings) == 64);
+static_assert(sizeof(ScreenProbeGpuSettings) == 128);
+
+// Bit values of ScreenProbeGpuSettings::ChainMask (SP_CHAIN_* in screenProbeSettings.glsl).
+enum ScreenProbeChainBit : int32_t {
+	SCREEN_PROBE_CHAIN_SCREEN = 1,
+	SCREEN_PROBE_CHAIN_RAY_QUERY = 2,
+	SCREEN_PROBE_CHAIN_DDGI = 4,
+	SCREEN_PROBE_CHAIN_ENVIRONMENT = 8
+};
+
+// DDGI probe grid decoded from the push constants of the ScreenProbes.DdgiStage stage (layout of ddgi.rgen: vec4 OriginSpacing,
+// ivec4 CountsRays). Valid is false when UseDdgi is off.
+struct ScreenProbeDdgiVolume {
+	bool Valid = false;
+	float OriginX = 0.0f;
+	float OriginY = 0.0f;
+	float OriginZ = 0.0f;
+	float Spacing = 1.0f;
+	int32_t CountX = 0;
+	int32_t CountY = 0;
+	int32_t CountZ = 0;
+	int32_t Rays = 0;
+};
 
 // Pipeline uniform buffer that screen probe stages bind with BufferLinks { "ScreenProbe": ScreenProbeBufferName }.
 inline constexpr const char* ScreenProbeBufferName = "ScreenProbeSettings";
 
 // Validates the parameters (throws std::runtime_error naming the field) and returns the shader block.
-ScreenProbeGpuSettings ResolveScreenProbeGpuSettings(const ScreenProbeSettings& settings);
+ScreenProbeGpuSettings ResolveScreenProbeGpuSettings(const ScreenProbeSettings& settings, const ScreenProbeDdgiVolume& volume);
+// Decodes and validates a DDGI grid from RT push constant bytes (each element must be a byte 0..255).
+ScreenProbeDdgiVolume DecodeScreenProbeDdgiVolume(const std::vector<int>& pushConstants, const std::string& stage);
 }

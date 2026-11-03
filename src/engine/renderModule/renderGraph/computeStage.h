@@ -55,4 +55,8 @@ bool SupportsReflectedComputePrograms(DriverInterface& driver);
 void CreatePipelineBuffers(RenderGraphPipeline& pipeline, Renderer& renderer);
 // Validates the Compute block of a loaded COMPUTE stage, checks capabilities and applies the Unsupported policy.
 void LoadComputeStage(RenderGraphPipeline& pipeline, PipelineStage& stage);
+// Runs before the stage Material is loaded: an enabled Material COMPUTE stage whose Compute.Requires are unavailable is
+// bypassed (BYPASS) or rejected (ERROR) without compiling its compute shader, which a backend without compute may be
+// unable to build. Returns true when the stage was bypassed; the caller then skips the Material and LoadComputeStage.
+bool BypassUnsupportedComputeStageBeforeLoad(RenderGraphPipeline& pipeline, PipelineStage& stage);
 }

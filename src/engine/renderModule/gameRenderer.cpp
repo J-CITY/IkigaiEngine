@@ -2313,6 +2313,10 @@ RenderGraphPipeline::StagesArr RenderGraphPipeline::loadStages(const std::vector
 				}
 			}
 		}
+		if (BypassUnsupportedComputeStageBeforeLoad(*this, *stage)) {
+			result.push_back(std::move(stage));
+			continue;
+		}
 		if (!desc.Material.empty()) {
 			try {
 				stage->mMaterial = RESOURCES::ServiceManager::Get<RESOURCES::MaterialLoader>().loadResource(desc.Material);

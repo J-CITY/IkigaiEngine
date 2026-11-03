@@ -252,6 +252,46 @@ void CreatePipelineBuffers(RenderGraphPipeline& pipeline, Renderer& renderer) {
 	}
 }
 
+bool BypassUnsupportedComputeStageBeforeLoad(RenderGraphPipeline& pipeline, PipelineStage& stage) {
+	const auto& desc = stage.mDescriptor;
+	if (desc.Draw != DrawContent::COMPUTE || !desc.Enabled || desc.Material.empty() || desc.Compute.Requires.empty()) {
+		return false;
+	}
+	if (desc.Unsupported != "ERROR" && desc.Unsupported != "BYPASS") {
+		throw std::runtime_error("Unknown COMPUTE Unsupported policy: " + desc.Name);
+	}
+	const auto features = RESOURCES::ServiceManager::Get<Renderer>().getDriver()->gpuFeatures();
+	std::string missing;
+	for (const auto feature : desc.Compute.Requires) {
+		if (!HasPipelineGpuFeature(features, feature)) {
+			missing = PipelineGpuFeatureName(feature);
+			break;
+		}
+	}
+	if (missing.empty()) {
+		return false;
+	}
+	const auto reason = "required GPU feature " + missing + " is unavailable on this backend/GPU";
+	if (desc.Unsupported == "ERROR") {
+		throw std::runtime_error("COMPUTE stage " + desc.Name + ": " + reason);
+	}
+	for (const auto& output : desc.Writes) {
+		if (FindPipelineTexture(pipeline, output) && !desc.Bypass.contains(output)) {
+			throw std::runtime_error("Unsupported COMPUTE stage needs explicit Bypass for output " + output);
+		}
+	}
+	for (const auto& [output, input] : desc.Bypass) {
+		if (!FindPipelineTexture(pipeline, output) || !FindPipelineTexture(pipeline, input)) {
+			throw std::runtime_error(desc.Name + ": Bypass entries must alias pipeline textures: " + output);
+		}
+	}
+	auto state = std::make_shared<ComputeStageState>();
+	state->Bypassed = true;
+	stage.mCompute = state;
+	std::cout << "GPU_DRIVEN_FALLBACK " << desc.Name << ": " << reason << " (material not loaded)\n";
+	return true;
+}
+
 void LoadComputeStage(RenderGraphPipeline& pipeline, PipelineStage& stage) {
 	const auto& desc = stage.mDescriptor;
 	const auto& compute = desc.Compute;
