@@ -11,6 +11,7 @@
 #include "frustum.h"
 #include "gameRendererInterface.h"
 #include "historyValidity.h"
+#include "indirectLighting/temporalDenoiseSettings.h"
 #include "light.h"
 #include "primitiveRender.h"
 #include "profilerModule/gpuStageProfiler.h"
@@ -317,6 +318,8 @@ struct RenderGraphPipeline {
 		std::vector<LightPassDescriptor> LightPasses;
 		// Screen probe gather parameters (hybrid-sp); disabled unless the pipeline enables the block.
 		ScreenProbeSettings ScreenProbes;
+		// Temporal denoiser settings blocks (indirectLighting/temporalDenoiseSettings.h), one uniform buffer per entry.
+		std::vector<TemporalDenoiseSettings> TemporalDenoisers;
 
 		template <class Context> constexpr static auto serde(Context& context, Descriptor& value) {
 			using Self = Descriptor;
@@ -332,7 +335,8 @@ struct RenderGraphPipeline {
 				.field(&Self::Stages, "Stages")
 				.field(&Self::LightPasses, "LightPasses", default_ { decltype(LightPasses) {} })
 				.field(&Self::StartStages, "StartStages", default_ { decltype(StartStages) {} })
-				.field(&Self::ScreenProbes, "ScreenProbes", default_ { ScreenProbeSettings {} });
+				.field(&Self::ScreenProbes, "ScreenProbes", default_ { ScreenProbeSettings {} })
+				.field(&Self::TemporalDenoisers, "TemporalDenoisers", default_ { std::vector<TemporalDenoiseSettings> {} });
 		}
 	};
 
@@ -383,6 +387,8 @@ struct RenderGraphPipeline {
 	bool mUpscalerFailed = false;
 	// Per-effect temporal history validity (GI, reflections, shadows, presentation, upscaler).
 	HistoryValidity mHistory;
+	// Temporal denoiser buffers and light change state (indirectLighting/temporalDenoiseStage.h).
+	TemporalDenoiseRuntime mTemporalDenoise;
 	std::map<std::string, std::shared_ptr<TextureInterface>> mAllocatedTextures;
 
 	// private:

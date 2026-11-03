@@ -72,6 +72,10 @@ ScreenProbeDdgiVolume DecodeScreenProbeDdgiVolume(const std::vector<int>& pushCo
 	return volume;
 }
 
+bool ScreenProbeTemporalV2Active(const ScreenProbeSettings& settings) {
+	return settings.UseTemporalV2 && settings.DebugMode == ScreenProbeDebugMode::OFF;
+}
+
 ScreenProbeGpuSettings ResolveScreenProbeGpuSettings(const ScreenProbeSettings& settings, const ScreenProbeDdgiVolume& volume) {
 	Require(settings.TileSize >= 4 && settings.TileSize <= 64, "TileSize", "must be in [4, 64]");
 	const int side = DirectionSide(settings.DirectionsPerProbe);

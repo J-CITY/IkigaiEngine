@@ -3,6 +3,7 @@
 #include "coreModule/ecs/systems/environmentSystem.h"
 #include "environmentModule/surfaceWeather.h"
 #include "diagnostics/renderStatistics.h"
+#include "indirectLighting/temporalDenoiseStage.h"
 #include "instanceBatch.h"
 #include "particles/particleRenderer.h"
 #include "profilerModule/profiler.h"
@@ -737,6 +738,13 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			mFrameData.FrameState.x = 0;
 			mFrameUbo->setData(mFrameData);
 		}
+	}
+	if (HasTemporalDenoisers(*mRenderPipeline)) {
+		// Pipelines without a ray traced light list (hybrid-sp) detect light changes for their GI history here.
+		if (!(rayTracingActive && rayLightsNeeded)) {
+			DetectTemporalDenoiseLightChange(*mRenderPipeline, scene.findLightData());
+		}
+		UpdateTemporalDenoiseBuffers(*mRenderPipeline, mFrameData.FrameState.x > .5f);
 	}
 	FrameGenerationInputs temporalCamera;
 	temporalCamera.RenderSize = renderSize;
@@ -1607,6 +1615,7 @@ static RenderGraphPipeline::Descriptor ResolvePipelineSettings(const RenderGraph
 		}
 	}
 	ResolveScreenProbes(resolved);
+	ResolveTemporalDenoisers(resolved);
 	auto validation = resolved;
 	for (const auto& pass : resolved.LightPasses) {
 		if (pass.ShadowBudget < -1 || pass.VolumeLightLimit < -1) {
@@ -1744,6 +1753,7 @@ RenderGraphPipeline::RenderGraphPipeline(const Descriptor& descriptor, Renderer&
 	}
 	CreatePipelineBuffers(*this, renderer);
 	CreateScreenProbeBuffer(*this, renderer);
+	CreateTemporalDenoiseBuffers(*this, renderer);
 	mStartStages = loadStages(mDescriptor.StartStages);
 	for (const auto& descriptor : mDescriptor.LightPasses) {
 		if (mLightPasses.contains(descriptor.Name)) {
