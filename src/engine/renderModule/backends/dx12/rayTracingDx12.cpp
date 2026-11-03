@@ -775,7 +775,7 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 				auto uniform = value ? std::dynamic_pointer_cast<UniformBufferDx12>(*value) : nullptr;
 				if (!uniform)
 					throw std::runtime_error("Invalid DXR uniform");
-				D3D12_CONSTANT_BUFFER_VIEW_DESC desc { uniform->getBuffer()->GetGPUVirtualAddress(), UINT(uniform->getBuffer()->GetDesc().Width) };
+				D3D12_CONSTANT_BUFFER_VIEW_DESC desc { uniform->getGpuAddress(), UINT(uniform->getSizeByte()) };
 				mDevice->CreateConstantBufferView(&desc, handle);
 			}
 			else if (b.Dimension == D3D_SRV_DIMENSION_BUFFER || b.Dimension == D3D_SRV_DIMENSION_BUFFEREX) {

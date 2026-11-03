@@ -12,6 +12,8 @@
 #include "shaderDx12.h"
 #include <array>
 #include <d3d12.h>
+#include <functional>
+#include <memory>
 #include <vector>
 #include <wrl/client.h>
 
@@ -34,6 +36,8 @@ class FrameBufferDx12;
 class IndexBufferDx12;
 class VertexBufferDx12;
 class ShaderDx12;
+class UploadRingDx12;
+class ImmediateSubmitDx12;
 
 class DriverDx12 : public IKIGAI::RENDER::DriverInterface {
 	friend class FsrFrameGenerationDx12;
@@ -129,6 +133,10 @@ public:
 	void draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) override;
 	std::vector<float> readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) override;
+	// Texture infrastructure for GI/HZB (M1-4, M1-8); implemented in textureFeaturesDx12.cpp.
+	void setStorageImage(size_t binding, std::shared_ptr<TextureInterface> texture, uint32_t mip, uint32_t layer) override;
+	// Sets StorageImageMipViews, HalfFloatTextures and SamplerMinMaxReduction.
+	void fillTextureGpuFeatures(GpuFeatures& features) const;
 	BindlessCapabilities bindlessCapabilities() const override;
 	uint32_t maxFragmentSampledTextures() const override {
 		return 128;
@@ -138,6 +146,10 @@ public:
 	}
 	void draw(const DrawArguments& args) override;
 	void drawIndexed(uint32_t index_count, uint32_t index_offset, uint32_t instance_count) override;
+	// Timestamp queries for GpuStageProfiler (timestampQueriesDx12.cpp).
+	uint32_t timestampQueryCapacity() const override;
+	void writeTimestamp(uint32_t index) override;
+	bool readTimestamps(uint32_t first, uint32_t count, std::vector<uint64_t>& ticks) override;
 	void draw(const MeshInterface& mesh, PrimitiveMode primitive, uint32_t instances) override;
 
 	void resize(size_t width, size_t height) override;
@@ -216,6 +228,13 @@ public:
 		}
 		return mDescriptorHeapCPUHandle;
 	}
+	// Slots of the legacy range [0, 1000) of the shader-visible heap used by textures and storage buffers.
+	// Released slots are recycled only after the end-of-frame GPU wait, so recorded commands never see them reused.
+	static constexpr uint32_t InvalidLegacyDescriptor = UINT32_MAX;
+	uint32_t allocateLegacyDescriptors(uint32_t count);
+	void releaseLegacyDescriptors(uint32_t index, uint32_t count);
+	D3D12_CPU_DESCRIPTOR_HANDLE legacyDescriptorCpu(uint32_t index) const;
+	D3D12_GPU_DESCRIPTOR_HANDLE legacyDescriptorGpu(uint32_t index) const;
 	CD3DX12_GPU_DESCRIPTOR_HANDLE& getDescriptorHeapGPUHandle() {
 		return mDescriptorHeapGPUHandle;
 	}
@@ -225,8 +244,26 @@ public:
 	unsigned getDescriptorIncSize() {
 		return mDescriptorIncSize;
 	}
+	// GPU-driven rendering contract (gpuFeatures.h); implemented in gpuDrivenDx12.cpp.
+	GpuFeatures gpuFeatures() const override;
+	std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void* data, size_t count, size_t stride, BufferUsage usage) override;
+	void fillBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size, uint32_t value) override;
+	void copyBuffer(const std::shared_ptr<StorageBufferInterface>& source, size_t sourceOffset,
+		const std::shared_ptr<StorageBufferInterface>& destination, size_t destinationOffset, size_t size) override;
+	std::vector<uint8_t> readBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size) override;
+	void drawIndexedIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset, uint32_t drawCount, uint32_t stride) override;
+	void drawIndexedIndirectCount(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset,
+		const std::shared_ptr<StorageBufferInterface>& count, size_t countOffset, uint32_t maxDrawCount, uint32_t stride) override;
+	void dispatchIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset) override;
+	// Executes everything recorded so far on the queue without waiting and continues recording into the same list.
+	// ImGui platform windows execute their own command lists immediately; this orders them after the frame's barriers.
+	void executeRecordedCommands();
 	void allocImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE* outCpu, D3D12_GPU_DESCRIPTOR_HANDLE* outGpu);
 	void freeImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIPTOR_HANDLE gpu);
+	// Transient upload memory for constant buffer snapshots and staging copies recorded in the current frame.
+	UploadRingDx12& getUploadRing();
+	// Records, submits and waits for a one-off command list on the reusable immediate queue.
+	void immediateSubmit(const std::function<void(ID3D12GraphicsCommandList*)>& record);
 
 private:
 	void begin() override;
@@ -243,13 +280,30 @@ private:
 	std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> bindlessSnapshot(
 		const ShaderReflection::Uniform&, uint32_t, const BindlessResourceTable* localTable = nullptr);
 	std::map<std::string, std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE>> mBindlessSnapshots;
+	struct StorageImageBinding {
+		std::shared_ptr<TextureDx12> Texture;
+		uint32_t Mip = 0;
+		uint32_t Layer = 0;
+	};
+	// Per-mip/per-layer storage image overrides; setTexture on the same binding removes the override.
+	std::map<size_t, StorageImageBinding> mStorageImageBindings;
+	// Per-frame UAV for one mip/layer, allocated from the transient bindless descriptor range.
+	D3D12_GPU_DESCRIPTOR_HANDLE storageImageUav(const StorageImageBinding& binding);
 	CD3DX12_CPU_DESCRIPTOR_HANDLE mDescriptorHeapCPUHandle {};
 	CD3DX12_GPU_DESCRIPTOR_HANDLE mDescriptorHeapGPUHandle {};
 	unsigned int mDescriptorIncSize = 0;
 	std::vector<UINT> mImGuiFreeSrv;
+	static constexpr uint32_t LegacyDescriptorCapacity = 1000;
+	uint32_t mLegacyDescriptorCursor = 0;
+	// Free slot runs by run length (index 1 and 2 are used), plus runs waiting for the next GPU wait.
+	std::array<std::vector<uint32_t>, 3> mFreeLegacyDescriptors;
+	std::vector<std::pair<uint32_t, uint32_t>> mPendingLegacyDescriptors;
 
 	std::vector<Microsoft::WRL::ComPtr<ID3D12DeviceChild>> mDestroyDeffered {};
 	std::vector<Dx12Resource> mDestroyDeferredResources {};
+	// Upload pages are retired with mFenceValue in end() and recycled in begin() once the fence passed it.
+	std::unique_ptr<UploadRingDx12> mUploadRing;
+	std::unique_ptr<ImmediateSubmitDx12> mImmediateSubmit;
 
 	struct SwapchainContextDx12 {
 		Microsoft::WRL::ComPtr<IDXGISwapChain3> mSwapChain;
@@ -291,6 +345,18 @@ private:
 	HANDLE mFenceEvent = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12Fence> mFence;
 	UINT64 mFenceValue {};
+	Microsoft::WRL::ComPtr<ID3D12QueryHeap> mTimestampHeap;
+	Microsoft::WRL::ComPtr<ID3D12Resource> mTimestampReadback;
+	Microsoft::WRL::ComPtr<ID3D12Fence> mTimestampFence;
+	UINT64 mTimestampSerial = 0;
+	uint32_t mTimestampCapacity = 0;
+	double mTimestampPeriodNanoseconds = 0.0;
+	std::vector<uint32_t> mTimestampsWritten;
+	// Per query: timestamp fence value after which its resolved value is readable; 0 = none.
+	std::vector<UINT64> mTimestampResolveSerial;
+	void createTimestampQueries();
+	bool resolveTimestampQueries();
+	void signalTimestampQueries();
 
 	State mCurrentState;
 	std::map<std::string, Microsoft::WRL::ComPtr<ID3D12PipelineState>> mStates {};
@@ -320,6 +386,13 @@ private:
 	void wait();
 
 	FrameInfo mFrameInfo;
+
+	GpuFeatures mGpuFeatures;
+	std::map<uint32_t, Microsoft::WRL::ComPtr<ID3D12CommandSignature>> mDrawIndexedSignatures;
+	Microsoft::WRL::ComPtr<ID3D12CommandSignature> mDispatchSignature;
+	void configureGpuFeatures();
+	ID3D12CommandSignature* drawIndexedSignature(uint32_t stride);
+	void flushRecordedCommands();
 
 public:
 	void cleanup() override { };

@@ -90,6 +90,23 @@ void PbrLayersDescriptor::validate(const std::string& materialPath) const {
 	}
 }
 
+void PbrEmissiveDescriptor::validate(const std::string& materialPath) const {
+	const auto context = "Emissive in " + materialPath;
+	requireRange(Color.x, 0.0f, 1.0f, context + ".Color.X");
+	requireRange(Color.y, 0.0f, 1.0f, context + ".Color.Y");
+	requireRange(Color.z, 0.0f, 1.0f, context + ".Color.Z");
+	// RGBA16F G-buffer targets saturate at 65504.
+	requireRange(Intensity, 0.0f, 65504.0f, context + ".Intensity");
+}
+
+bool PbrEmissiveDescriptor::isActive() const {
+	return Intensity > 0.0f;
+}
+
+MATH::Vector3f PbrEmissiveDescriptor::radiance() const {
+	return isActive() ? MATH::Vector3f { Color.x * Intensity, Color.y * Intensity, Color.z * Intensity } : MATH::Vector3f { 0.0f, 0.0f, 0.0f };
+}
+
 bool PbrLayersDescriptor::requiresLayeredShader() const {
 	return !Layers.empty() || AlphaMode != PbrAlphaMode::Opaque || AlphaCutoff != 0.5f || BaseHeightScale != 1.0f || BaseHeightBias != 0.0f;
 }

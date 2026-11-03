@@ -1,4 +1,5 @@
 #pragma once
+#include "backends/interface/gpuFeatures.h"
 #include "backends/interface/materialInterface.h"
 #include "backends/interface/rayTracingInterface.h"
 #include "backends/interface/resourceStruct.h"
@@ -9,9 +10,12 @@
 #include "environmentModule/environmentQuality.h"
 #include "frustum.h"
 #include "gameRendererInterface.h"
+#include "historyValidity.h"
 #include "light.h"
 #include "primitiveRender.h"
 #include "profilerModule/gpuStageProfiler.h"
+#include "renderGraph/computeStageDescriptor.h"
+#include "renderGraph/screenProbeSettings.h"
 #include <filesystem>
 
 // TODO move include to .cpp
@@ -33,6 +37,9 @@ class VectorRenderer;
 namespace IKIGAI::RENDER {
 class ParticleRenderer;
 }
+namespace IKIGAI::VG {
+class VirtualGeometryRenderer;
+}
 #if USE_PHYSICS_3D
 namespace IKIGAI::RENDER {
 class DeformableRenderer;
@@ -52,6 +59,7 @@ class TextureInterface;
 class UniformBufferInterface;
 class StorageBufferInterface;
 class Renderer;
+struct ComputeStageState;
 
 enum class DrawContent {
 	FORWARD = 0,
@@ -110,6 +118,7 @@ struct PipelineStage {
 		std::string LightPass;
 		bool Additive = false;
 		std::map<std::string, std::string> Bypass;
+		ComputeStageDescriptor Compute;
 
 		std::map<std::string, std::string> BufferLinks; // ShaderBufferName -> Pipeline/GlobalBufferName
 		std::map<std::string, std::map<std::string, UniformTypeDescr>> BufferOverrides; // BufferName -> MemberName -> Value
@@ -154,13 +163,15 @@ struct PipelineStage {
 				.field(&Self::ShadowLightId, "ShadowLightId", default_ { -1 })
 				.field(&Self::LightPass, "LightPass", default_ { std::string {} })
 				.field(&Self::Additive, "Additive", default_ { false })
-				.field(&Self::Bypass, "Bypass", default_ { decltype(Bypass) {} });
+				.field(&Self::Bypass, "Bypass", default_ { decltype(Bypass) {} })
+				.field(&Self::Compute, "Compute", default_ { ComputeStageDescriptor {} });
 		}
 	};
 	PipelineStage() = default;
 	Descriptor mDescriptor;
 	bool mExecuted = false;
 	std::shared_ptr<RayTracingProgram> mRayTracingProgram;
+	std::shared_ptr<ComputeStageState> mCompute;
 
 	std::string mName;
 	std::shared_ptr<::IKIGAI::RENDER::FrameBufferInterface> mFrameBuffer;
@@ -184,6 +195,9 @@ struct RenderGraphPipeline {
 		SizeBase Size = SizeBase::DISPLAY;
 		bool History = false;
 		bool Persistent = false;
+		// Allocates floor(log2(max(width, height))) + 1 mips for the resolved size (render-size pyramids such as HZB).
+		// Requires UseMipmap false: the chain is filled by compute stages, not by blitting.
+		bool FullMipChain = false;
 
 		template <class Context> constexpr static auto serde(Context& context, TextureDesc& value) {
 			using Self = TextureDesc;
@@ -195,7 +209,8 @@ struct RenderGraphPipeline {
 				.field(&Self::Scale, "Scale", default_ { 1.0f })
 				.field(&Self::Size, "Size", default_ { SizeBase::DISPLAY })
 				.field(&Self::History, "History", default_ { false })
-				.field(&Self::Persistent, "Persistent", default_ { false });
+				.field(&Self::Persistent, "Persistent", default_ { false })
+				.field(&Self::FullMipChain, "FullMipChain", default_ { false });
 		}
 	};
 
@@ -224,7 +239,9 @@ struct RenderGraphPipeline {
 		std::string Name;
 		size_t Size = 0;
 		size_t Stride = 0; // Needed for SSBO
+		size_t Count = 0; // SSBO element count; alternative to the legacy Size
 		BufferType Type = BufferType::UNIFORM;
+		std::vector<PipelineBufferUsage> Usage;
 
 		template <class Context> constexpr static auto serde(Context& context, BufferDescriptor& value) {
 			using Self = BufferDescriptor;
@@ -233,7 +250,9 @@ struct RenderGraphPipeline {
 				.field(&Self::Name, "Name")
 				.field(&Self::Size, "Size", default_ { 0 })
 				.field(&Self::Stride, "Stride", default_ { 0 })
-				.field(&Self::Type, "Type", default_ { BufferType::UNIFORM });
+				.field(&Self::Type, "Type", default_ { BufferType::UNIFORM })
+				.field(&Self::Count, "Count", default_ { size_t { 0 } })
+				.field(&Self::Usage, "Usage", default_ { std::vector<PipelineBufferUsage> {} });
 		}
 	};
 
@@ -296,6 +315,8 @@ struct RenderGraphPipeline {
 		std::vector<PipelineStage::Descriptor> StartStages;
 		std::vector<PipelineStage::Descriptor> Stages;
 		std::vector<LightPassDescriptor> LightPasses;
+		// Screen probe gather parameters (hybrid-sp); disabled unless the pipeline enables the block.
+		ScreenProbeSettings ScreenProbes;
 
 		template <class Context> constexpr static auto serde(Context& context, Descriptor& value) {
 			using Self = Descriptor;
@@ -310,7 +331,8 @@ struct RenderGraphPipeline {
 				.field(&Self::Buffers, "Buffers", default_ { decltype(Buffers) {} })
 				.field(&Self::Stages, "Stages")
 				.field(&Self::LightPasses, "LightPasses", default_ { decltype(LightPasses) {} })
-				.field(&Self::StartStages, "StartStages", default_ { decltype(StartStages) {} });
+				.field(&Self::StartStages, "StartStages", default_ { decltype(StartStages) {} })
+				.field(&Self::ScreenProbes, "ScreenProbes", default_ { ScreenProbeSettings {} });
 		}
 	};
 
@@ -323,6 +345,7 @@ struct RenderGraphPipeline {
 	std::map<std::string, std::shared_ptr<RENDER::StorageBufferInterface>> mStorageBuffers;
 	std::map<std::string, std::shared_ptr<RENDER::UniformBufferInterface>> mUniformBuffers;
 	std::map<std::string, std::shared_ptr<AccelerationStructure>> mAccelerationStructures;
+	std::map<std::string, BufferUsage> mBufferUsages;
 
 	using StagesArr = std::list<std::unique_ptr<PipelineStage>>;
 
@@ -341,7 +364,8 @@ struct RenderGraphPipeline {
 	void rebuildFrameBuffers(Renderer& renderer);
 	void reloadSettings(Renderer& renderer, const std::string& asset = {});
 	void pollSettings(Renderer& renderer);
-	void invalidateResources(const std::vector<std::string>& resources, bool resetHistory = true);
+	void invalidateResources(
+		const std::vector<std::string>& resources, bool resetHistory = true, HistoryReason reason = HistoryReason::EnvironmentChange);
 	void pollResourceUpdates();
 	Descriptor mDescriptor;
 	Descriptor mSourceDescriptor;
@@ -355,8 +379,10 @@ struct RenderGraphPipeline {
 	std::unique_ptr<UpscalerInterface> mUpscaler;
 	UpscalerSettings mUpscalerSettings;
 	UpscalerCapabilities mUpscalerStatus;
-	bool mUpscalerSettingsLoaded = false, mUpscalerFailed = false, mUpscaleHistoryValid = false, mPresentationHistoryValid = false;
-	bool mHistoryValid = false;
+	bool mUpscalerSettingsLoaded = false;
+	bool mUpscalerFailed = false;
+	// Per-effect temporal history validity (GI, reflections, shadows, presentation, upscaler).
+	HistoryValidity mHistory;
 	std::map<std::string, std::shared_ptr<TextureInterface>> mAllocatedTextures;
 
 	// private:
@@ -370,6 +396,8 @@ class GameRenderer : public RENDER::GameRendererInterface {
 
 	IKIGAI::CORE::Core& mContext;
 	std::unique_ptr<RenderGraphPipeline> mRenderPipeline;
+	HistoryCounters mRetiredHistoryCounters;
+	HistoryCounters mLoggedHistoryCounters;
 	std::string mStartupPipelineAsset, mActivePipelineAsset;
 	std::weak_ptr<void> mRenderedScene;
 	std::uint64_t mRenderedTopologyRevision = 0;
@@ -383,12 +411,30 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	std::vector<LightOGL> mRayLights;
 	std::vector<std::shared_ptr<TextureInterface>> mRayAlbedoMaps;
 	std::shared_ptr<TextureInterface> mRayWhite;
-	uint64_t mRaySceneHash = 0;
+	uint64_t mRayTopologyHash = 0;
+	uint64_t mRayMaterialHash = 0;
+	uint64_t mRayDynamicHash = 0;
 	unsigned mRaySample = 0;
+	// True when the RT scene topology, materials or lights changed. Pure dynamic
+	// motion (skinning, rigid transforms) does not set it; see HistoryValidity::sceneMoved.
 	bool mRaySceneChanged = true;
 	std::shared_ptr<UniformBufferInterface> mRayFrameUbo;
+	// Contents of the engine_RayFrame uniform block. Only the first vec4 existed
+	// before M3; shaders declaring just {vec4 State;} keep working.
+	struct RayFrameData {
+		// x = sample index since the last RT reset, y = 1 when GI, reflection and shadow
+		// history are all valid, z = frame counter, w = 0 when topology/material/lights changed.
+		MATH::Vector4f State;
+		// x = 1 when dynamic scene motion (skinning, rigid transforms) happened this frame,
+		// y/z/w = per-effect history validity of GI, reflections and shadows.
+		MATH::Vector4f Motion;
+	};
+	static_assert(sizeof(RayFrameData) == 32);
+	RayFrameData rayFrameData() const;
 	void prepareRayTracingScene(const std::vector<RenderChunk>& chunks);
 	void runRayTracingStage(PipelineStage& stage);
+	RayTracingDispatch buildProgramDispatch(PipelineStage& stage);
+	void runComputeStage(PipelineStage& stage);
 	std::vector<LightOGL> mLights;
 	std::vector<int> mLightObjectIds;
 	std::vector<float> mEnvironmentSun;
@@ -450,6 +496,7 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	std::shared_ptr<VECTOR::VectorRenderer> mVectorRenderer;
 	PrimitiveRender mPrimitives;
 	std::shared_ptr<ParticleRenderer> mParticleRenderer;
+	std::shared_ptr<VG::VirtualGeometryRenderer> mVirtualGeometry;
 #if USE_PHYSICS_3D
 	std::shared_ptr<DeformableRenderer> mDeformableRenderer;
 #endif
@@ -505,9 +552,12 @@ class GameRenderer : public RENDER::GameRendererInterface {
 
 public:
 	GameRenderer(CORE::Core& context);
+	~GameRenderer() override;
 	PrimitiveRender& primitives() {
 		return mPrimitives;
 	}
+	// Cluster renderer for VirtualMeshRenderer components (settings, statistics, tests).
+	VG::VirtualGeometryRenderer& virtualGeometry();
 	void Init();
 	void renderScene() override;
 	void renderLoadingScene(SCENE_SYSTEM::Scene* scene);
@@ -524,11 +574,13 @@ public:
 		mRenderPipeline->mAccelerationStructures[name] = std::move(structure);
 	}
 	void reloadPipelineSettings(const std::string& asset = {});
-	void resetTemporalHistory() {
-		mRenderPipeline->mHistoryValid = false;
-		mRenderPipeline->mUpscaleHistoryValid = false;
-		mRenderPipeline->mPresentationHistoryValid = false;
+	void resetTemporalHistory(HistoryReason reason = HistoryReason::UserReset) {
+		mRenderPipeline->mHistory.invalidate(reason, HistoryAllEffects);
 	}
+	// Cumulative history invalidation counters over every pipeline this renderer used.
+	HistoryCounters historyCounters() const;
+	// Prints GI_HISTORY_RESET / GI_HISTORY_KEPT style lines (see gameRenderer.cpp).
+	void logHistoryCounters(bool force);
 	void enableGpuProfiling(bool enabled = true);
 	void resetGpuProfile();
 	PROFILER::GpuProfileSnapshot gpuProfile() const;

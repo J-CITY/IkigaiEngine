@@ -21,6 +21,8 @@ namespace {
 			hash *= 1099511628211ull;
 		}
 	}
+	// Emissive radiance (linear RGB, HDR) is packed into lanes that were unused so the 160 byte std430 stride stays compatible with
+	// existing readers: Properties = { roughness, metallic, emissive.r, emissive.g }, UV2 = { u, v, emissive.b, 0 }.
 	struct TriangleData {
 		MATH::Vector4f P0, P1, P2, N0, N1, N2, Albedo, Properties, UV01, UV2;
 	};
@@ -35,9 +37,9 @@ namespace {
 	};
 	struct TriangleUniform {
 		MATH::Matrix4f World;
-		MATH::Vector4f Albedo, Properties, UVTransform;
+		MATH::Vector4f Albedo, Properties, UVTransform, Emissive;
 	};
-	static_assert(sizeof(SkinVertex) == 80 && sizeof(DeformedVertex) == 48 && sizeof(TriangleUniform) == 112);
+	static_assert(sizeof(SkinVertex) == 80 && sizeof(DeformedVertex) == 48 && sizeof(TriangleUniform) == 128);
 	void dispatchCompute(DriverInterface& driver, const std::shared_ptr<RayTracingProgram>& program, uint32_t count,
 		std::map<std::string, std::vector<RayTracingResource>> bindings, const std::array<uint32_t, 4>& options) {
 		RayTracingDispatch dispatch;
@@ -46,6 +48,7 @@ namespace {
 		dispatch.Bindings = std::move(bindings);
 		dispatch.PushConstants.resize(sizeof(options));
 		std::memcpy(dispatch.PushConstants.data(), options.data(), sizeof(options));
+		RenderStatistics::Get().recordDispatch();
 		driver.dispatchComputeProgram(dispatch);
 	}
 }
@@ -88,6 +91,7 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 			= renderer.getDriver()->createComputeProgram(RESOURCES::ShaderLoader::LoadProgramResource("/shaders/raytracing/buildTriangles.shader"));
 	}
 	mRaySceneChanged = false;
+	mRenderPipeline->mHistory.beginFrame();
 	if (!mRayWhite) {
 		TextureResource white;
 		white.width = white.height = 1;
@@ -97,7 +101,12 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 		mRayWhite = renderer.createTexture(white);
 	}
 	std::vector<std::shared_ptr<TextureInterface>> albedoMaps;
-	uint64_t hash = 1469598103934665603ull;
+	// Three independent change classes: topology (what exists), material (how it
+	// shades) and dynamic motion (poses and transforms). Only the first two drop
+	// temporal history; motion is reported as a "scene moved" signal instead.
+	uint64_t topologyHash = 1469598103934665603ull;
+	uint64_t materialHash = 1469598103934665603ull;
+	uint64_t dynamicHash = 1469598103934665603ull;
 	uint32_t triangleCount = 0;
 	std::vector<std::array<uint32_t, 4>> offsets;
 	struct TriangleBatch {
@@ -205,7 +214,9 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 			float roughness = .5f, metallic = 0;
 			auto albedoMap = mRayWhite;
 			MATH::Vector2f tiling { 1, 1 }, offset { 0, 0 };
+			MATH::Vector3f emissive { 0, 0, 0 };
 			if (drawable.material) {
+				emissive = drawable.material->emissive().radiance();
 				if (!drawable.material->pbrLayers().Layers.empty()) {
 					throw std::runtime_error("Ray tracing does not yet support layered PBR textures: " + drawable.material->getPath());
 				}
@@ -235,26 +246,28 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 				}
 			}
 			const auto* identity = mesh.get();
-			hashBytes(hash, &identity, sizeof(identity));
-			hashBytes(hash, &key.second, sizeof(key.second));
-			hashBytes(hash, &poseHash, sizeof(poseHash));
-			hashBytes(hash, &drawable.world, sizeof(drawable.world));
+			hashBytes(topologyHash, &identity, sizeof(identity));
+			hashBytes(topologyHash, &key.second, sizeof(key.second));
+			hashBytes(dynamicHash, &poseHash, sizeof(poseHash));
+			hashBytes(dynamicHash, &drawable.world, sizeof(drawable.world));
 			albedo.x *= drawable.tint.x;
 			albedo.y *= drawable.tint.y;
 			albedo.z *= drawable.tint.z;
-			hashBytes(hash, &albedo, sizeof(albedo));
-			hashBytes(hash, &roughness, sizeof(roughness));
-			hashBytes(hash, &metallic, sizeof(metallic));
+			hashBytes(materialHash, &albedo, sizeof(albedo));
+			hashBytes(materialHash, &emissive, sizeof(emissive));
+			hashBytes(materialHash, &roughness, sizeof(roughness));
+			hashBytes(materialHash, &metallic, sizeof(metallic));
 			const auto* textureIdentity = albedoMap.get();
 			const auto revision = albedoMap->getRevision();
-			hashBytes(hash, &textureIdentity, sizeof(textureIdentity));
-			hashBytes(hash, &revision, sizeof(revision));
-			hashBytes(hash, &tiling, sizeof(tiling));
-			hashBytes(hash, &offset, sizeof(offset));
+			hashBytes(topologyHash, &textureIdentity, sizeof(textureIdentity));
+			hashBytes(topologyHash, &revision, sizeof(revision));
+			hashBytes(materialHash, &tiling, sizeof(tiling));
+			hashBytes(materialHash, &offset, sizeof(offset));
 			albedoMaps.push_back(albedoMap);
 			offsets.push_back({ triangleCount, 0, 0, 0 });
 			batches.push_back({ pose ? entry.DeformedBuffer : entry.Source->RigidVertices, entry.Source,
-				{ MATH::Matrix4f::Transpose(drawable.world), albedo, { roughness, metallic, 0, 0 }, { tiling.x, tiling.y, offset.x, offset.y } },
+				{ MATH::Matrix4f::Transpose(drawable.world), albedo, { roughness, metallic, 0, 0 }, { tiling.x, tiling.y, offset.x, offset.y },
+				{ emissive.x, emissive.y, emissive.z, 0 } },
 				triangleCount });
 			triangleCount += entry.Source->TriangleCount;
 			RayTracingInstance instance;
@@ -319,8 +332,11 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 	}
 	// The geometry table is an optional default provider. Custom programs can
 	// bind their own buffers instead; it is not part of trace dispatch semantics.
-	if (hash != mRaySceneHash || !mRayTriangles) {
-		mRaySceneChanged = true;
+	const bool topologyChanged = topologyHash != mRayTopologyHash || !mRayTriangles;
+	const bool materialChanged = materialHash != mRayMaterialHash;
+	const bool dynamicChanged = dynamicHash != mRayDynamicHash;
+	if (topologyChanged || materialChanged || dynamicChanged) {
+		mRaySceneChanged = topologyChanged || materialChanged;
 		if (offsets.empty()) {
 			offsets.resize(1);
 		}
@@ -337,7 +353,9 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 			mRayTopLevels.clear();
 		}
 		mRayScene->Instances = std::move(instances);
-		mRaySceneHash = hash;
+		mRayTopologyHash = topologyHash;
+		mRayMaterialHash = materialHash;
+		mRayDynamicHash = dynamicHash;
 		for (auto& [key, top] : mRayTopLevels) {
 			auto updated = mRayScene->Instances;
 			for (auto& instance : updated) {
@@ -347,9 +365,16 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 		}
 		mRayAlbedoMaps = std::move(albedoMaps);
 		mRayAlbedoMaps.resize(64, mRayWhite);
-		mRenderPipeline->mHistoryValid = false;
-		mFrameData.FrameState.x = 0;
-		mFrameUbo->setData(mFrameData);
+		auto& history = mRenderPipeline->mHistory;
+		if (topologyChanged) {
+			history.invalidate(HistoryReason::SceneTopology);
+		}
+		else if (dynamicChanged) {
+			history.invalidate(HistoryReason::SceneDynamicPose);
+		}
+		if (materialChanged) {
+			history.invalidate(HistoryReason::SceneMaterial);
+		}
 		std::cout << "RAY_TRACING_SCENE instances=" << mRayScene->Instances.size() << " triangles=" << triangleCount << " skinned=" << skinned
 				  << " blas_builds=" << builds << " blas_refits=" << refits << " tlas_refits=" << mRayTopLevels.size()
 				  << " skin_compute=" << skinDispatches << " triangle_compute=" << batches.size() << "\n";
@@ -364,6 +389,22 @@ void GameRenderer::runRayTracingStage(PipelineStage& stage) {
 		}
 		return;
 	}
+	auto dispatch = buildProgramDispatch(stage);
+	auto& renderer = *mContext.render;
+	if (desc.Draw == DrawContent::COMPUTE) {
+		renderer.dispatchRayQueries(std::move(dispatch));
+	}
+	else {
+		renderer.traceRays(std::move(dispatch));
+	}
+	stage.mExecuted = true;
+	if (mFrameCount == 0) {
+		std::cout << (desc.Draw == DrawContent::COMPUTE ? "Pipeline ray query: " : "Pipeline ray trace: ") << stage.mName << "\n";
+	}
+}
+
+RayTracingDispatch GameRenderer::buildProgramDispatch(PipelineStage& stage) {
+	const auto& desc = stage.mDescriptor;
 	RayTracingDispatch dispatch;
 	dispatch.Program = stage.mRayTracingProgram;
 	dispatch.Extent = { static_cast<uint32_t>(desc.LaunchX), static_cast<uint32_t>(desc.LaunchY), static_cast<uint32_t>(desc.LaunchZ) };
@@ -379,10 +420,8 @@ void GameRenderer::runRayTracingStage(PipelineStage& stage) {
 		}
 		dispatch.PushConstants.push_back(static_cast<uint8_t>(b));
 	}
-	const MATH::Vector4f rayState { static_cast<float>(mRaySample), mRenderPipeline->mHistoryValid ? 1.f : 0.f, static_cast<float>(mFrameCount),
-		mRaySceneChanged ? 0.f : 1.f };
 	auto& renderer = *mContext.render;
-	auto rayFrame = renderer.createUniformBuffer<MATH::Vector4f>(rayState);
+	auto rayFrame = renderer.createUniformBuffer<RayFrameData>(rayFrameData());
 	auto resource = [&](const std::string& source) -> RayTracingResource {
 		if (source == "@Scene") {
 			if (!mRayScene) {
@@ -458,15 +497,6 @@ void GameRenderer::runRayTracingStage(PipelineStage& stage) {
 			begin = end + 1;
 		} while (true);
 	}
-	if (desc.Draw == DrawContent::COMPUTE) {
-		renderer.dispatchRayQueries(std::move(dispatch));
-	}
-	else {
-		renderer.traceRays(std::move(dispatch));
-	}
-	stage.mExecuted = true;
-	if (mFrameCount == 0) {
-		std::cout << (desc.Draw == DrawContent::COMPUTE ? "Pipeline ray query: " : "Pipeline ray trace: ") << stage.mName << "\n";
-	}
+	return dispatch;
 }
 }

@@ -420,6 +420,7 @@ struct SkeletonBlendspace : public ResourceBase {
 struct MaterialResource : public ResourceBase {
 	DeformationDescriptor Deformation = {};
 	PbrLayersDescriptor PbrLayers;
+	PbrEmissiveDescriptor Emissive;
 	ResourceType Type = ResourceType::MATERIAL;
 	std::string path;
 	bool NeedFileWatch = false;
@@ -456,6 +457,7 @@ struct MaterialResource : public ResourceBase {
 			.field(&Self::DepthFunc, "DepthFunc", default_ { DepthFunction::LESS })
 			.field(&Self::parentPath, "##parent", default_ { std::string() })
 			.field(&Self::PbrLayers, "PbrLayers", default_ { PbrLayersDescriptor {} })
+			.field(&Self::Emissive, "Emissive", default_ { PbrEmissiveDescriptor {} })
 			.field(&Self::Deformation, "Deformation", default_ { DeformationDescriptor {} })
 			.field(&Self::Uniforms, "Uniforms");
 	}
@@ -474,6 +476,7 @@ struct MaterialResource : public ResourceBase {
 			IKIGAI::UTILS::MakeMemberInfo("DepthFunc", &MaterialResource::DepthFunc),
 			IKIGAI::UTILS::MakeMemberInfo("Uniforms", &MaterialResource::Uniforms),
 			IKIGAI::UTILS::MakeMemberInfo("PbrLayers", &MaterialResource::PbrLayers),
+			IKIGAI::UTILS::MakeMemberInfo("Emissive", &MaterialResource::Emissive),
 		};
 	}
 };

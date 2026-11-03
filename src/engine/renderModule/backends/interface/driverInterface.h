@@ -9,6 +9,7 @@
 
 #include "frameBufferInterface.h"
 #include "frameGenerationInterface.h"
+#include "gpuFeatures.h"
 #include "materialInterface.h"
 #include "meshInterface.h"
 #include "modelInterface.h"
@@ -52,7 +53,12 @@ std::shared_ptr<T> AllocateMaterial(UTILS::IAllocator* allocator, MaterialDelete
 
 struct RenderSettings {
 	enum class Backend { OPENGL, VULKAN, DIRECTX12, METAL };
+	// DEFAULT keeps each backend's historical behaviour (Vulkan FIFO, DX12
+	// frameGeneration.vsync). FIFO forces vsync; MAILBOX/IMMEDIATE disable it
+	// (DX12 presents with sync interval 0 for both). Unsupported Vulkan modes fall back to FIFO.
+	enum class PresentMode { DEFAULT, FIFO, MAILBOX, IMMEDIATE };
 	Backend backend = Backend::OPENGL;
+	PresentMode presentMode = PresentMode::DEFAULT;
 	std::string pipeline;
 	UpscalerSettings upscaler;
 	FrameGenerationSettings frameGeneration;
@@ -63,7 +69,8 @@ struct RenderSettings {
 			.field(&RenderSettings::backend, "backend", default_ { Backend::OPENGL })
 			.field(&RenderSettings::pipeline, "pipeline", default_ { std::string {} })
 			.field(&RenderSettings::upscaler, "upscaler", default_ { UpscalerSettings {} })
-			.field(&RenderSettings::frameGeneration, "frameGeneration", default_ { FrameGenerationSettings {} });
+			.field(&RenderSettings::frameGeneration, "frameGeneration", default_ { FrameGenerationSettings {} })
+			.field(&RenderSettings::presentMode, "presentMode", default_ { PresentMode::DEFAULT });
 	}
 };
 
@@ -254,6 +261,52 @@ public:
 	virtual void latencySubmitEnd() { }
 	virtual RayTracingCapabilities rayTracingCapabilities() const {
 		return {};
+	}
+	// GPU-driven rendering contract (gpuFeatures.h). Vulkan and DirectX 12 only.
+	// Commands are recorded into the current frame; the driver inserts the barriers
+	// needed between compute writes and indirect/vertex/index/transfer reads.
+	virtual GpuFeatures gpuFeatures() const {
+		return {};
+	}
+	// count elements of stride bytes, matching createStorageBuffer(data, size, stride).
+	virtual std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void*, size_t, size_t, BufferUsage) {
+		throw UnsupportedGpuFeature("Storage buffer usage flags are unavailable on this backend");
+	}
+	virtual void fillBuffer(const std::shared_ptr<StorageBufferInterface>&, size_t, size_t, uint32_t) {
+		throw UnsupportedGpuFeature("Buffer fill is unavailable on this backend");
+	}
+	virtual void copyBuffer(const std::shared_ptr<StorageBufferInterface>&, size_t, const std::shared_ptr<StorageBufferInterface>&, size_t, size_t) {
+		throw UnsupportedGpuFeature("Buffer copy is unavailable on this backend");
+	}
+	// Synchronous: waits for all recorded GPU work. Tests and debug tools only.
+	virtual std::vector<uint8_t> readBuffer(const std::shared_ptr<StorageBufferInterface>&, size_t, size_t) {
+		throw UnsupportedGpuFeature("Buffer readback is unavailable on this backend");
+	}
+	// Uses the currently bound shader, vertex and index buffers like drawIndexed.
+	virtual void drawIndexedIndirect(const std::shared_ptr<StorageBufferInterface>&, size_t, uint32_t, uint32_t) {
+		throw UnsupportedGpuFeature("Indirect draw is unavailable on this backend");
+	}
+	virtual void drawIndexedIndirectCount(
+		const std::shared_ptr<StorageBufferInterface>&, size_t, const std::shared_ptr<StorageBufferInterface>&, size_t, uint32_t, uint32_t) {
+		throw UnsupportedGpuFeature("Indirect count draw is unavailable on this backend");
+	}
+	virtual void dispatchIndirect(const std::shared_ptr<StorageBufferInterface>&, size_t) {
+		throw UnsupportedGpuFeature("Indirect dispatch is unavailable on this backend");
+	}
+	// Binds one mip/layer of a texture as a storage image for the next dispatch.
+	virtual void setStorageImage(size_t, std::shared_ptr<TextureInterface>, uint32_t, uint32_t) {
+		throw UnsupportedGpuFeature("Storage image mip views are unavailable on this backend");
+	}
+	// Timestamp queries for GpuStageProfiler. Indices are in [0, timestampQueryCapacity()).
+	virtual uint32_t timestampQueryCapacity() const {
+		return 0;
+	}
+	virtual void writeTimestamp(uint32_t) {
+		throw UnsupportedGpuFeature("Timestamp queries are unavailable on this backend");
+	}
+	// Returns false while results are not yet available. Values are raw ticks.
+	virtual bool readTimestamps(uint32_t, uint32_t, std::vector<uint64_t>&) {
+		return false;
 	}
 	virtual std::shared_ptr<VertexBufferInterface> createRayTracingVertexBuffer(const void*, size_t, size_t) {
 		throw UnsupportedRayTracing("RT vertex buffers are unavailable on this backend");

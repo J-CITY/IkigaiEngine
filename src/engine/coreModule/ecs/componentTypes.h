@@ -30,6 +30,7 @@
 #include "components/transform.h"
 #include "components/variableContextComponent.h"
 #include "components/vegetationInteractorComponent.h"
+#include "components/virtualMeshRenderer.h"
 
 #include "components/spotLight.h"
 #if USE_PHYSICS_3D

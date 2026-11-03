@@ -22,6 +22,9 @@ void SetCliUpscalerOverride(std::string_view name);
 void SetCliUpscalerQualityOverride(std::string_view name);
 void SetCliFrameGenerationOverride(std::string_view name);
 void SetCliFrameGenerationMultiplier(unsigned multiplier);
+// Accepts default/fifo/mailbox/immediate (also vsync=fifo, novsync=immediate).
+void SetCliPresentModeOverride(std::string_view name);
+const char* PresentModeToString(RenderSettings::PresentMode mode);
 bool ApplyCliRenderBackendOverride(RenderSettings& settings);
 // A shared asset config may target another platform. Only fall back when
 // the binary contains exactly one backend and no explicit CLI selection.

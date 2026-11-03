@@ -18,6 +18,8 @@ namespace IKIGAI::EDITOR {
 		const PROFILER::MemorySnapshot* memorySnapshot() const;
 	private:
 		void drawFrameTime();
+		void drawRenderStatistics();
+		void drawVirtualGeometry();
 		void drawMemory();
 		std::size_t mFrameId = 0;
 #if IKIGAI_ENABLE_MEMORY_TRACKING

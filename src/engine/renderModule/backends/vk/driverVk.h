@@ -93,6 +93,17 @@ public:
 	void traceRays(const RayTracingDispatch&) override;
 	void dispatchRayQueries(const RayTracingDispatch&) override;
 	void executeRayProgram(const RayTracingDispatch&, bool rayQuery);
+	// Timestamp queries for GpuStageProfiler (timestampQueriesVk.cpp).
+	vk::raii::QueryPool mTimestampPool = nullptr;
+	uint32_t mTimestampCapacity = 0;
+	double mTimestampPeriodNanoseconds = 0.0;
+	uint64_t mTimestampMask = 0;
+	bool mTimestampPoolNeedsReset = false;
+	void createTimestampQueries();
+	void resetTimestampPoolIfNeeded();
+	uint32_t timestampQueryCapacity() const override;
+	void writeTimestamp(uint32_t index) override;
+	bool readTimestamps(uint32_t first, uint32_t count, std::vector<uint64_t>& ticks) override;
 	uint32_t mQueueFamilyIndex = -1;
 	vk::SurfaceFormatKHR mSurfaceFormat;
 
@@ -326,6 +337,17 @@ public:
 	void draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) override;
 	std::vector<float> readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) override;
+	// Texture infrastructure for GI/HZB (M1-4, M1-8); implemented in textureFeaturesVk.cpp.
+	void setStorageImage(size_t binding, std::shared_ptr<TextureInterface> texture, uint32_t mip, uint32_t layer) override;
+	// Sets StorageImageMipViews, HalfFloatTextures and SamplerMinMaxReduction.
+	void fillTextureGpuFeatures(GpuFeatures& features) const;
+	struct StorageImageBinding {
+		std::shared_ptr<TextureVk> Texture;
+		uint32_t Mip = 0;
+		uint32_t Layer = 0;
+	};
+	// Per-mip/per-layer storage image overrides; setTexture on the same binding removes the override.
+	std::map<size_t, StorageImageBinding> mStorageImageBindings;
 	BindlessCapabilities mBindlessCapabilities;
 	BindlessCapabilities bindlessCapabilities() const override;
 	uint32_t maxFragmentSampledTextures() const override;
@@ -354,6 +376,24 @@ public:
 	void clear(bool clearColor, bool clearDepth, bool clearStencil) override;
 	void setClearColor(const MATH::Vector4f& color) override;
 	void setClearColor(float r, float g, float b, float a) override;
+
+	// GPU-driven rendering contract (gpuFeatures.h); implemented in gpuDrivenVk.cpp.
+	GpuFeatures mGpuFeatures;
+	void configureGpuFeatures(std::vector<const char*>& extensions);
+	GpuFeatures gpuFeatures() const override;
+	std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void* data, size_t count, size_t stride, BufferUsage usage) override;
+	void fillBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size, uint32_t value) override;
+	void copyBuffer(const std::shared_ptr<StorageBufferInterface>& source, size_t sourceOffset,
+		const std::shared_ptr<StorageBufferInterface>& destination, size_t destinationOffset, size_t size) override;
+	std::vector<uint8_t> readBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size) override;
+	void drawIndexedIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset, uint32_t drawCount, uint32_t stride) override;
+	void drawIndexedIndirectCount(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset,
+		const std::shared_ptr<StorageBufferInterface>& count, size_t countOffset, uint32_t maxDrawCount, uint32_t stride) override;
+	void dispatchIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset) override;
+	void EnsureComputeState(vk::raii::CommandBuffer& cmdlist);
+	void beginTransferCommands(vk::raii::CommandBuffer& cmdlist);
+	void endTransferCommands(vk::raii::CommandBuffer& cmdlist);
+	void flushRecordedCommands();
 
 private:
 	void init() override;

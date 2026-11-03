@@ -1,0 +1,3 @@
+meshoptimizer v1.3 (https://github.com/zeux/meshoptimizer, tag v1.3, commit 9e1f07b159d3cb777f1c67ed31fc11fd117986f4)
+Vendored: src/*.cpp, src/meshoptimizer.h, LICENSE.md (MIT), clusterlod.h (from demo/, MIT).
+No local modifications.

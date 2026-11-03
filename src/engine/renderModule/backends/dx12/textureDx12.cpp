@@ -68,6 +68,10 @@ static const std::map<PixelFormat, DXGI_FORMAT> FormatMap = {
 	{ PixelFormat::DEPTH_24_UNORM_STENCIL_8_UINT, DXGI_FORMAT_D24_UNORM_S8_UINT },
 	{ PixelFormat::DEPTH32_FLOAT, DXGI_FORMAT_D32_FLOAT },
 	{ PixelFormat::DEPTH32_FLOAT_S8X24_UINT, DXGI_FORMAT_D32_FLOAT_S8X24_UINT },
+	{ PixelFormat::RGBA16_FLOAT, DXGI_FORMAT_R16G16B16A16_FLOAT },
+	{ PixelFormat::RG16_FLOAT, DXGI_FORMAT_R16G16_FLOAT },
+	{ PixelFormat::R16_FLOAT, DXGI_FORMAT_R16_FLOAT },
+	{ PixelFormat::R11G11B10_FLOAT, DXGI_FORMAT_R11G11B10_FLOAT },
 };
 
 static uint32_t GetFormatChannelsCount(PixelFormat format) {
@@ -83,6 +87,10 @@ static uint32_t GetFormatChannelsCount(PixelFormat format) {
 		{PixelFormat::DEPTH_24_UNORM_STENCIL_8_UINT, 1},
 		{PixelFormat::DEPTH32_FLOAT, 1},
 		{PixelFormat::DEPTH32_FLOAT_S8X24_UINT, 1},
+		{ PixelFormat::RGBA16_FLOAT, 4 },
+		{ PixelFormat::RG16_FLOAT, 2 },
+		{ PixelFormat::R16_FLOAT, 1 },
+		{ PixelFormat::R11G11B10_FLOAT, 1 },
 	};
 	return FormatChannelsMap.at(format);
 }
@@ -100,6 +108,10 @@ static uint32_t GetFormatChannelSize(PixelFormat format) {
 		{PixelFormat::DEPTH_24_UNORM_STENCIL_8_UINT, 4},
 		{PixelFormat::DEPTH32_FLOAT, 4},
 		{PixelFormat::DEPTH32_FLOAT_S8X24_UINT, 8},
+		{ PixelFormat::RGBA16_FLOAT, 2 },
+		{ PixelFormat::RG16_FLOAT, 2 },
+		{ PixelFormat::R16_FLOAT, 2 },
+		{ PixelFormat::R11G11B10_FLOAT, 4 },
 	};
 	return FormatChannelSizeMap.at(format);
 }
@@ -125,6 +137,7 @@ TextureDx12::TextureDx12(size_t width, size_t height, PixelFormat format, Micros
 }
 
 TextureDx12::~TextureDx12() {
+	d3dUtil::GetDriver()->releaseLegacyDescriptors(mDescriptorIndex, mDescriptorCount);
 	d3dUtil::GetDriver()->destroyDeferred(mResource);
 }
 
@@ -168,17 +181,23 @@ void TextureDx12::create(const TextureResource& descriptor, const std::vector<vo
 	
 	mCurrentState = D3D12_RESOURCE_STATE_COMMON;
 	mResource = d3dUtil::CreateResource(desc, D3D12_HEAP_TYPE_DEFAULT, mCurrentState, nullptr, allocFlags);
+	// SRV (and UAV for storage textures) take consecutive legacy slots; recreate() returns the previous run.
+	d3dUtil::GetDriver()->releaseLegacyDescriptors(mDescriptorIndex, mDescriptorCount);
+	mDescriptorCount = descriptor.storage ? 2 : 1;
+	mDescriptorIndex = d3dUtil::GetDriver()->allocateLegacyDescriptors(mDescriptorCount);
 	SetGpuMemoryKindDx12(mResource.Get(), PROFILER::GpuResourceKind::Texture, mPath.empty() && !descriptor.pathTexture.empty() ? descriptor.pathTexture.front().c_str() : mPath.c_str());
 
 	if (descriptor.texType != TextureType::DEPTH) {
-		DirectX::CreateShaderResourceView(d3dUtil::GetDriver()->getDevice().Get(), mResource.Get(), d3dUtil::GetDriver()->getDescriptorHeapCPUHandle(), mType == TextureType::TEXTURE_CUBE);
+		DirectX::CreateShaderResourceView(d3dUtil::GetDriver()->getDevice().Get(), mResource.Get(),
+			d3dUtil::GetDriver()->legacyDescriptorCpu(mDescriptorIndex), mType == TextureType::TEXTURE_CUBE);
 	} else {
 		D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
 		srv.Format = mFormat == PixelFormat::DEPTH32_FLOAT ? DXGI_FORMAT_R32_FLOAT : mFormat == PixelFormat::DEPTH32_FLOAT_S8X24_UINT ? DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS : DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
 		srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 		srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 		srv.Texture2D.MipLevels = 1;
-		d3dUtil::GetDriver()->getDevice()->CreateShaderResourceView(mResource.Get(), &srv, d3dUtil::GetDriver()->getDescriptorHeapCPUHandle());
+		d3dUtil::GetDriver()->getDevice()->CreateShaderResourceView(
+			mResource.Get(), &srv, d3dUtil::GetDriver()->legacyDescriptorCpu(mDescriptorIndex));
 	}
 	if (descriptor.texType == TextureType::DEPTH) {
 		d3dUtil::OneTimeSubmit([&](ID3D12GraphicsCommandList* cmdList) {
@@ -189,18 +208,15 @@ void TextureDx12::create(const TextureResource& descriptor, const std::vector<vo
 	if(descriptor.storage) {
         auto* driver=d3dUtil::GetDriver();
         // Reserve SRV below first, then its UAV slot.
-        auto cpu=driver->getDescriptorHeapCPUHandle(); cpu.Offset(1,driver->getDescriptorIncSize());
-        auto gpu=driver->getDescriptorHeapGPUHandle(); gpu.Offset(1,driver->getDescriptorIncSize());
-        D3D12_UNORDERED_ACCESS_VIEW_DESC uav{}; uav.Format=FormatMap.at(mFormat);
+		auto cpu = CD3DX12_CPU_DESCRIPTOR_HANDLE(driver->legacyDescriptorCpu(mDescriptorIndex + 1));
+		auto gpu = CD3DX12_GPU_DESCRIPTOR_HANDLE(driver->legacyDescriptorGpu(mDescriptorIndex + 1));
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uav{}; uav.Format=FormatMap.at(mFormat);
         if(mType==TextureType::TEXTURE_3D) {uav.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE3D;uav.Texture3D.WSize=mDepth;}
         else uav.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
         driver->getDevice()->CreateUnorderedAccessView(mResource.Get(),nullptr,&uav,cpu);
         mUavHandle=gpu;
     }
-	mGpuDescriptorHandle = d3dUtil::GetDriver()->getDescriptorHeapGPUHandle();
-	d3dUtil::GetDriver()->getDescriptorHeapCPUHandle().Offset(descriptor.storage ? 2 : 1, d3dUtil::GetDriver()->getDescriptorIncSize());
-	d3dUtil::GetDriver()->getDescriptorHeapGPUHandle().Offset(descriptor.storage ? 2 : 1, d3dUtil::GetDriver()->getDescriptorIncSize());
-
+	mGpuDescriptorHandle = d3dUtil::GetDriver()->legacyDescriptorGpu(mDescriptorIndex);
 
 	if (data.size()) {
 		setData(data, mWidth, mHeight, mFormat, 0);

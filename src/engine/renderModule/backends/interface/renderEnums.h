@@ -182,6 +182,12 @@ namespace IKIGAI::RENDER {
 		DEPTH32_FLOAT_S8X24_UINT,
 		DEPTH_32_FLOAT_STENCIL_8_UINT,
 		BGRA_INT,
+
+		// Half-float and packed float color formats. readTexture returns them as 32-bit floats.
+		RGBA16_FLOAT,
+		RG16_FLOAT,
+		R16_FLOAT,
+		R11G11B10_FLOAT,
 	};
 
 	enum class MinMagFilter {

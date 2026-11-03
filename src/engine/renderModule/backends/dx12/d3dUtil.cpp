@@ -378,26 +378,7 @@ ComPtr<ID3DBlob> d3dUtil::CompileShaderFromHlsl(const std::string& hlslSource, c
 }
 
 void d3dUtil::OneTimeSubmit(std::function<void(ID3D12GraphicsCommandList*)> func) {
-    D3D12_COMMAND_QUEUE_DESC queue_desc = {};
-    queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-    queue_desc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-    queue_desc.NodeMask = 1;
-
-    ComPtr<ID3D12CommandQueue> cmd_queue;
-    GetDriver()->getDevice()->CreateCommandQueue(&queue_desc, IID_PPV_ARGS(cmd_queue.GetAddressOf()));
-
-    ComPtr<ID3D12CommandAllocator> cmd_alloc;
-    GetDriver()->getDevice()->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(cmd_alloc.GetAddressOf()));
-
-    ComPtr<ID3D12GraphicsCommandList> cmd_list;
-    GetDriver()->getDevice()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, cmd_alloc.Get(), NULL,
-        IID_PPV_ARGS(cmd_list.GetAddressOf()));
-
-    cmd_list->Close();
-
-    GetDriver()->beginCommandList(cmd_alloc.Get(), cmd_list.Get());
-    func(cmd_list.Get());
-    GetDriver()->endCommandList(cmd_queue.Get(), cmd_list.Get(), true);
+	GetDriver()->immediateSubmit(func);
 }
 
 Dx12Resource d3dUtil::CreateBuffer(uint64_t size, D3D12_HEAP_TYPE heapType) {

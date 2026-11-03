@@ -105,6 +105,25 @@ struct PbrLayersDescriptor {
 	}
 };
 
+// Emissive surface radiance: Color is linear RGB (0..1), Intensity scales it into HDR and may exceed 1 (radiance = Color * Intensity).
+// Raster passes receive it through the `u_EmissiveColor` uniform of shaders that declare it; ray tracing reads it from the descriptor.
+struct PbrEmissiveDescriptor {
+	MATH::Vector3f Color = { 1.0f, 1.0f, 1.0f };
+	float Intensity = 0.0f;
+
+	void validate(const std::string& materialPath) const;
+	bool isActive() const;
+	MATH::Vector3f radiance() const;
+
+	template <class Context> static void serde(Context& context, PbrEmissiveDescriptor& value) {
+		using Self = PbrEmissiveDescriptor;
+		using namespace serde::attribute;
+		serde::serde_struct(context, value)
+			.field(&Self::Color, "Color", default_ { MATH::Vector3f { 1.0f, 1.0f, 1.0f } })
+			.field(&Self::Intensity, "Intensity", default_ { 0.0f });
+	}
+};
+
 // Also used by CPU probes: the shader implements the same endpoint-preserving rule.
 float PbrHeightBlendWeight(float weight, float baseHeight, float layerHeight, float influence, float transitionWidth);
 

@@ -15,8 +15,6 @@
 
 namespace IKIGAI::RESOURCES {
 
-AssimpParser ModelLoader::_ASSIMP;
-
 COROUTINE::Task<ResourcePtr<RENDER::ModelInterface>> ModelLoader::createResourceTask(
 	std::string path, ELoadingType type, std::shared_ptr<ResourceLoadControl> control) {
 	UTILS::LoadTimer timing("model", path);
@@ -53,7 +51,8 @@ COROUTINE::Task<ResourcePtr<RENDER::ModelInterface>> ModelLoader::createResource
 	co_await COROUTINE::NextFrame();
 	control->check();
 	auto model = ServiceManager::Get<RENDER::Renderer>().createModel(path, nullptr, createCacheDeleter(path));
-	if (!model || !_ASSIMP.LoadModel(source, bytes, model, flags)) {
+	AssimpParser parser;
+	if (!model || !parser.LoadModel(source, bytes, model, flags)) {
 		throw std::runtime_error("Cannot import model: " + source);
 	}
 	model->computeBoundingSphere();
@@ -126,7 +125,8 @@ ResourcePtr<RENDER::ModelInterface> ModelLoader::Create(
 		return nullptr;
 	}
 
-	if (_ASSIMP.LoadModel(filepath, data, result, parserFlags)) {
+	AssimpParser parser;
+	if (parser.LoadModel(filepath, data, result, parserFlags)) {
 		result->computeBoundingSphere();
 		return result;
 	}
@@ -148,7 +148,8 @@ ResourcePtr<RENDER::ModelInterface> ModelLoader::CreateVerts(const std::string& 
 		return nullptr;
 	}
 
-	if (_ASSIMP.LoadVertexes(filepath, data, result, parserFlags, _globalVerticesPerMesh, _globalIndicesPerMesh)) {
+	AssimpParser parser;
+	if (parser.LoadVertexes(filepath, data, result, parserFlags, _globalVerticesPerMesh, _globalIndicesPerMesh)) {
 		result->computeBoundingSphere();
 		return result;
 	}

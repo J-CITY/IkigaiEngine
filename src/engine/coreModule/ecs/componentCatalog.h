@@ -29,6 +29,8 @@ class AnimationProperty;
 
 namespace IKIGAI::ECS {
 
+class VirtualMeshRenderer;
+
 // Closed std::variant lists cannot grow when a component is added.
 // Each component translation unit calls enroll<T>(), which records the operations
 // the old type list performed: storage, scene IO, references and reflection.
@@ -118,7 +120,8 @@ template <class T> bool ComponentCatalog::enroll(StorageType storage, bool light
 	record.apply = [](Object& object, const nlohmann::json& component) {
 		auto document = component;
 		typename T::Descriptor descriptor;
-		if constexpr (std::is_same_v<T, SurfaceComponent> || std::is_same_v<T, FoliageComponent> || std::is_same_v<T, ChunkModelRenderer>) {
+		if constexpr (std::is_same_v<T, SurfaceComponent> || std::is_same_v<T, FoliageComponent> || std::is_same_v<T, ChunkModelRenderer>
+			|| std::is_same_v<T, VirtualMeshRenderer>) {
 			descriptor = DATA::readDescriptor<typename T::Descriptor>(std::move(document));
 		}
 		else {

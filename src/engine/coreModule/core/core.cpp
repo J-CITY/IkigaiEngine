@@ -71,6 +71,7 @@
 #include "resourceModule/skeletonBlendspaceManager.h"
 #include "resourceModule/skeletonManager.h"
 #include "resourceModule/skeletonStateGraphManager.h"
+#include "virtualGeometryModule/runtime/virtualMeshLoader.h"
 #include <coreModule/ecs/components/scriptComponent.h>
 #include <renderModule/gameRenderer.h>
 
@@ -318,6 +319,8 @@ Core::Core(const PlatformStartup& platform)
 #endif
 	skeletonBlendspaceLoader = std::make_unique<RESOURCES::SkeletonBlendspaceLoader>();
 	skeletonAnimationLoader = std::make_unique<RESOURCES::SkeletonAnimationLoader>();
+	virtualMeshLoader = std::make_unique<VG::VirtualMeshLoader>();
+	RESOURCES::ServiceManager::Set<VG::VirtualMeshLoader>(virtualMeshLoader.get());
 
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonLoader>(skeletonLoader.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonStateGraphLoader>(skeletalStateGraphLoader.get());

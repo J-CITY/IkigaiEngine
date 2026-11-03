@@ -46,6 +46,8 @@ namespace IKIGAI::RENDER {
 		void create(const TextureResource& descriptor, const std::vector<void*>& data);
 
 		Dx12Resource mResource;
+		uint32_t mDescriptorIndex = UINT32_MAX;
+		uint32_t mDescriptorCount = 0;
 		CD3DX12_GPU_DESCRIPTOR_HANDLE mGpuDescriptorHandle;
         CD3DX12_GPU_DESCRIPTOR_HANDLE mUavHandle{};
 		D3D12_RESOURCE_STATES mCurrentState = D3D12_RESOURCE_STATE_COMMON;

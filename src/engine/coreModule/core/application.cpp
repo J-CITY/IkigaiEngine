@@ -5,6 +5,9 @@
 #include "renderModule/backends/driverFactory.h"
 #include "sceneModule/sceneManager.h"
 #include "utilsModule/contentRoot.h"
+#if defined(IKIGAI_VG_COOKER)
+#include "virtualGeometryModule/cook/vmeshCookModel.h"
+#endif
 #include <argParse.h>
 #include <filesystem>
 #include <iostream>
@@ -32,6 +35,11 @@ namespace {
 		stringOption("--content-release", options.contentRelease, "Local content release manifest");
 		stringOption("--screenshot", options.screenshot, "Capture a screenshot");
 		stringOption("--screenshot-texture", options.screenshotTexture, "Screenshot source texture");
+#if defined(IKIGAI_VG_COOKER)
+		stringOption("--cook-vmesh", options.cookVmesh, "Cook a model into a virtual mesh and exit");
+		stringOption("--cook-output", options.cookOutput, "Output .vmesh path for --cook-vmesh");
+		stringOption("--cook-settings", options.cookSettings, "Optional JSON cook settings for --cook-vmesh");
+#endif
 		parser.addArg<int>({ "--width" }, [&](int value) { options.width = value; }, {}, "Window width");
 		parser.addArg<int>({ "--height" }, [&](int value) { options.height = value; }, {}, "Window height");
 		parser.addArg<int>(
@@ -100,6 +108,11 @@ int RunApplication(int argc, char* argv[], PlatformContext platform) {
 			return 2;
 		}
 		applyOptions(options);
+#if defined(IKIGAI_VG_COOKER)
+		if (!options.cookVmesh.empty()) {
+			return VG::RunVMeshCookCommand(VG::VMeshCookCommand { options.cookVmesh, options.cookOutput, options.cookSettings });
+		}
+#endif
 		PlatformStartup startup;
 		startup.android = platform.android;
 #ifdef DX12_BACKEND

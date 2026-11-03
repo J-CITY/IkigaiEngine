@@ -10,6 +10,7 @@
 namespace IKIGAI::RENDER {
 namespace {
 	constexpr auto fallbackPath = "/__pbr_neutral_white__";
+	constexpr auto emissiveUniform = "data_UBOu_EmissiveColor";
 
 	bool reflected(const ShaderInterface& shader, const std::string& name) {
 		for (const auto& uniform : shader.getReflection().mUniforms) {
@@ -29,6 +30,7 @@ namespace {
 MaterialInterface::PreparedMaterial MaterialInterface::prepareMaterial(const MaterialResource& resource) {
 	resource.Deformation.validate();
 	resource.PbrLayers.validate(resource.path);
+	resource.Emissive.validate(resource.path);
 	auto& shaders = RESOURCES::ServiceManager::Get<RESOURCES::ShaderLoader>();
 	auto& textures = RESOURCES::ServiceManager::Get<RESOURCES::TextureLoader>();
 	auto& files = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>();
@@ -71,6 +73,12 @@ MaterialInterface::PreparedMaterial MaterialInterface::prepareMaterial(const Mat
 				}
 			},
 			value);
+	}
+	// The typed Emissive block drives the shader uniform when the shader declares it. Shaders without the uniform ignore it
+	// (ray tracing still reads the descriptor), so non-emissive pipelines are unaffected.
+	if (resource.Emissive.isActive() && reflected(*result.shader, emissiveUniform)) {
+		const auto radiance = resource.Emissive.radiance();
+		result.uniforms[emissiveUniform] = MATH::Vector4f { radiance.x, radiance.y, radiance.z, resource.Emissive.Intensity };
 	}
 	if (!layered) {
 		return result;
@@ -250,6 +258,7 @@ void MaterialInterface::applyMaterialState(const MaterialResource& resource) {
 	mParentPath = resource.parentPath;
 	mNeedFileWatch = resource.NeedFileWatch;
 	mPbrLayers = resource.PbrLayers;
+	mEmissive = resource.Emissive;
 	mDeformation = resource.Deformation;
 	mBlendable = getShader()->supportsPbrLayers() ? resource.PbrLayers.AlphaMode == PbrAlphaMode::Blend : resource.Blendable;
 	mBackfaceCulling = resource.BackfaceCulling;
@@ -267,7 +276,12 @@ void MaterialInterface::completeDescriptor(MaterialResource& resource) const {
 	resource.parentPath = mParentPath;
 	resource.NeedFileWatch = mNeedFileWatch;
 	resource.PbrLayers = mPbrLayers;
+	resource.Emissive = mEmissive;
 	resource.Deformation = mDeformation;
+	if (mEmissive.isActive()) {
+		// The typed Emissive block regenerates this uniform on load.
+		resource.Uniforms.erase(emissiveUniform);
+	}
 	if (!getShader() || !getShader()->supportsPbrLayers()) {
 		return;
 	}

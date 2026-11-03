@@ -1,4 +1,5 @@
 #pragma once
+#include "importedModel.h"
 #include "parseFlags.h"
 #include <assimp/scene.h>
 #include <renderModule/backends/interface/modelInterface.h>
@@ -25,7 +26,18 @@ namespace RENDER {
 namespace RESOURCES {
 	class AssimpParser {
 	public:
-		// --- Model loading ---
+		// --- Model import, CPU stage ---
+		// Reentrant: reads the scene into plain data and never touches renderer state.
+		// The in-memory overload resolves sidecar files through the engine VFS.
+		static bool ImportModel(const std::string& fileName, ModelParserFlags parserFlags, ImportedModel& outModel);
+		static bool ImportModel(const std::string& fileName, const std::vector<uint8_t>& data, ModelParserFlags parserFlags, ImportedModel& outModel);
+
+		// --- Model import, GPU stage ---
+		// Main/render thread only: creates meshes through RENDER::CreateMesh and fills
+		// the model. Consumes the morph targets of imported.
+		static void CreateModelResources(ImportedModel&& imported, RENDER::ModelInterface& model, const ModelBuildOptions& options = {});
+
+		// --- Model loading (CPU stage followed by GPU stage) ---
 		bool LoadModel(const std::string& fileName, RESOURCES::ResourcePtr<RENDER::ModelInterface> model, ModelParserFlags parserFlags);
 		bool LoadModel(const std::string& fileName, const std::vector<uint8_t>& data, RESOURCES::ResourcePtr<RENDER::ModelInterface> model,
 			ModelParserFlags parserFlags);
@@ -46,20 +58,9 @@ namespace RESOURCES {
 			SKELETON::Animation& outAnimation, bool additive = false, SKELETON::Animation* additiveReference = nullptr);
 
 	private:
-		const unsigned int MAX_BONE_WEIGHTS = 4;
-		void processMaterials(const struct aiScene* scene, std::vector<std::string>& materials);
-		;
-		void processNode(void* transform, struct aiNode* node, const struct aiScene* scene, RESOURCES::ResourcePtr<RENDER::ModelInterface> model,
-			const std::unordered_map<std::string, int>& boneMapping);
-		void processMesh(
-			void* transform, struct aiMesh* mesh, const struct aiScene* scene, std::vector<Vertex>& outVertices, std::vector<uint32_t>& outIndices);
-		void importMorphAnimations(const struct aiScene* scene, RENDER::ModelInterface& model);
-		void loadBones(std::vector<Vertex>& vertices, aiMesh* mesh, const aiScene* scene, RESOURCES::ResourcePtr<RENDER::ModelInterface> model,
-			const std::unordered_map<std::string, int>& boneMapping);
-		void setVertexBoneData(Vertex& vertex, int boneID, float weight);
-
+		static bool ReadImportedModel(const aiScene* scene, ImportedModel& outModel);
 		// Skeleton internal helpers (delegates to Skeleton methods)
-		bool buildSkeleton(const aiScene* scene, SKELETON::Skeleton& outSkeleton);
+		static bool buildSkeleton(const aiScene* scene, SKELETON::Skeleton& outSkeleton);
 		// Animation internal helpers
 		bool fillAnimation(const aiScene* scene, SKELETON::Skeleton& skeleton, SKELETON::Animation& outAnimation, bool additive,
 			SKELETON::Animation* additiveReference);

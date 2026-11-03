@@ -2,6 +2,7 @@
 #ifdef DX12_BACKEND
 #include "d3dUtil.h"
 #include "driverDx12.h"
+#include "uploadRingDx12.h"
 #include "d3dx12/DirectXHelpers.h"
 
 namespace IKIGAI::RENDER {
@@ -12,6 +13,12 @@ namespace IKIGAI::RENDER {
 				StorageBufferDx12::setData(data, sz, stride);
 			}
 		}
+	}
+
+	StorageBufferDx12::StorageBufferDx12(const void* data, size_t sz, size_t stride, BufferUsage usage)
+		: StorageBufferDx12(data, sz, stride) {
+		// Every DX12 storage buffer is a default-heap UAV buffer; the usage only gates driver validation.
+		mUsage = usage | BufferUsage::STORAGE | BufferUsage::TRANSFER_DST;
 	}
 
 	void StorageBufferDx12::init() {
@@ -38,8 +45,12 @@ namespace IKIGAI::RENDER {
 			//d3dUtil::GetDriver()->getDevice()->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSrvHeap));
 			//mSrvHeapBegin = mSrvHeap->GetCPUDescriptorHandleForHeapStart();
 
-			mSrvHeapBegin = d3dUtil::GetDriver()->getDescriptorHeapCPUHandle();
-			mGpuSrvDescriptorHandle = d3dUtil::GetDriver()->getDescriptorHeapGPUHandle();
+			auto* driver = d3dUtil::GetDriver();
+			// SRV and UAV take two consecutive legacy slots; growth re-runs init() and returns the old pair.
+			driver->releaseLegacyDescriptors(mDescriptorIndex, 2);
+			mDescriptorIndex = driver->allocateLegacyDescriptors(2);
+			mSrvHeapBegin = driver->legacyDescriptorCpu(mDescriptorIndex);
+			mGpuSrvDescriptorHandle = driver->legacyDescriptorGpu(mDescriptorIndex);
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
 			srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 			srvDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -49,8 +60,6 @@ namespace IKIGAI::RENDER {
 			srvDesc.Buffer.StructureByteStride = mStride;
 			srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
 			d3dUtil::GetDriver()->getDevice()->CreateShaderResourceView(mBuffer.Get(), &srvDesc, mSrvHeapBegin);
-			d3dUtil::GetDriver()->getDescriptorHeapCPUHandle().Offset(1, d3dUtil::GetDriver()->getDescriptorIncSize());
-			d3dUtil::GetDriver()->getDescriptorHeapGPUHandle().Offset(1, d3dUtil::GetDriver()->getDescriptorIncSize());
 
 		}
 
@@ -62,8 +71,8 @@ namespace IKIGAI::RENDER {
 			//uavheapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 			//d3dUtil::GetDriver()->getDevice()->CreateDescriptorHeap(&uavheapDesc, IID_PPV_ARGS(&mUavHeap));
 			//mUavHeapBegin = mUavHeap->GetCPUDescriptorHandleForHeapStart();
-			mUavHeapBegin = d3dUtil::GetDriver()->getDescriptorHeapCPUHandle();
-			mGpuUavDescriptorHandle = d3dUtil::GetDriver()->getDescriptorHeapGPUHandle();
+			mUavHeapBegin = d3dUtil::GetDriver()->legacyDescriptorCpu(mDescriptorIndex + 1);
+			mGpuUavDescriptorHandle = d3dUtil::GetDriver()->legacyDescriptorGpu(mDescriptorIndex + 1);
 
 			D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
 			uavDesc.Format = DXGI_FORMAT_R32_TYPELESS;
@@ -74,12 +83,11 @@ namespace IKIGAI::RENDER {
 			uavDesc.Buffer.CounterOffsetInBytes = 0;
 			uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
 			d3dUtil::GetDriver()->getDevice()->CreateUnorderedAccessView(mBuffer.Get(), nullptr, &uavDesc, mUavHeapBegin);
-			d3dUtil::GetDriver()->getDescriptorHeapCPUHandle().Offset(1, d3dUtil::GetDriver()->getDescriptorIncSize());
-			d3dUtil::GetDriver()->getDescriptorHeapGPUHandle().Offset(1, d3dUtil::GetDriver()->getDescriptorIncSize());
 		}
 	}
 
 	StorageBufferDx12::~StorageBufferDx12() {
+		d3dUtil::GetDriver()->releaseLegacyDescriptors(mDescriptorIndex, 2);
 		if (mBuffer) {
 			d3dUtil::GetDriver()->destroyDeferred(mBuffer);
 		}
@@ -94,18 +102,14 @@ namespace IKIGAI::RENDER {
 			return;
 		}
 
-		auto buffer = d3dUtil::CreateBuffer(sz, D3D12_HEAP_TYPE_UPLOAD);
-		void* mapBuffer = nullptr;
-		buffer->Map(0, nullptr, &mapBuffer);
-		memcpy(mapBuffer, data, sz);
-		buffer->Unmap(0, nullptr);
+		const auto staging = d3dUtil::GetDriver()->getUploadRing().allocate(sz, D3D12_STANDARD_MAXIMUM_ELEMENT_ALIGNMENT_BYTE_MULTIPLE);
+		memcpy(staging.Cpu, data, sz);
 
 		auto barrier = DirectX::ScopedBarrier(d3dUtil::GetDriver()->getCommandList().Get(), {
 			CD3DX12_RESOURCE_BARRIER::Transition(mBuffer.Get(), mState, D3D12_RESOURCE_STATE_COPY_DEST)
 		});
 
-		d3dUtil::GetDriver()->getCommandList()->CopyBufferRegion(mBuffer.Get(), offset, buffer.Get(), 0, sz);
-		d3dUtil::GetDriver()->destroyDeferred(buffer);
+		d3dUtil::GetDriver()->getCommandList()->CopyBufferRegion(mBuffer.Get(), offset, staging.Resource, staging.Offset, sz);
 
 		DirectX::ScopedBarrier(d3dUtil::GetDriver()->getCommandList().Get(), {
 			CD3DX12_RESOURCE_BARRIER::Transition(mBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, mState)
@@ -130,18 +134,14 @@ namespace IKIGAI::RENDER {
 			return;
 		}
 
-		auto buffer = d3dUtil::CreateBuffer(newSizeByte, D3D12_HEAP_TYPE_UPLOAD);
-		void* mapBuffer = nullptr;
-		buffer->Map(0, nullptr, &mapBuffer);
-		memcpy(mapBuffer, data, newSizeByte);
-		buffer->Unmap(0, nullptr);
+		const auto staging = d3dUtil::GetDriver()->getUploadRing().allocate(newSizeByte, D3D12_STANDARD_MAXIMUM_ELEMENT_ALIGNMENT_BYTE_MULTIPLE);
+		memcpy(staging.Cpu, data, newSizeByte);
 
 		auto barrier = DirectX::ScopedBarrier(d3dUtil::GetDriver()->getCommandList().Get(), {
 			CD3DX12_RESOURCE_BARRIER::Transition(mBuffer.Get(), mState, D3D12_RESOURCE_STATE_COPY_DEST)
 		});
 
-		d3dUtil::GetDriver()->getCommandList()->CopyBufferRegion(mBuffer.Get(), 0, buffer.Get(), 0, newSizeByte);
-		d3dUtil::GetDriver()->destroyDeferred(buffer);
+		d3dUtil::GetDriver()->getCommandList()->CopyBufferRegion(mBuffer.Get(), 0, staging.Resource, staging.Offset, newSizeByte);
 
 		auto barrier2 = DirectX::ScopedBarrier(d3dUtil::GetDriver()->getCommandList().Get(), {
 			CD3DX12_RESOURCE_BARRIER::Transition(mBuffer.Get(), D3D12_RESOURCE_STATE_COPY_DEST, mState)
