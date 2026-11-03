@@ -81,7 +81,7 @@ namespace {
 		}
 		return nullptr;
 	}
-	class MoveTask final : public BehaviorTask {
+	class MoveTask : public BehaviorTask {
 	public:
 		MoveTask(BlackboardKeyId target, MoveParameters parameters, bool faceOnly)
 			: mTarget(target)
@@ -226,7 +226,7 @@ void registerBuiltinTasks(BehaviorRegistry& registry) {
 				|| parameters.Timeout <= 0) {
 				throw std::runtime_error("Invalid movement target, Speed, AcceptanceRadius or Timeout");
 			}
-			return [=] {
+			return [=]() -> std::unique_ptr<BehaviorTask> {
 				if (pathAware) {
 					return std::make_unique<MoveToTask>(key, parameters, faceOnly);
 				}

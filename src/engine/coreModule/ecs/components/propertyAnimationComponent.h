@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace IKIGAI::ECS {
@@ -35,6 +36,11 @@ public:
 	PropertyAnimationComponent(UTILS::Ref<ECS::Object> obj, const Descriptor& descriptor);
 	PropertyAnimationComponent(UTILS::Ref<ECS::Object> obj, const ComponentBase::Descriptor& descriptor)
 		: PropertyAnimationComponent(obj, static_cast<const Descriptor&>(descriptor)) { }
+
+	// No reflected properties: the editor and timeline binder iterate an empty tuple.
+	static std::tuple<> GetMembers() {
+		return {};
+	}
 
 	void onEnable() override;
 	void onDisable() override;
@@ -68,3 +74,5 @@ template <> inline std::string GetComponentName<PropertyAnimationComponent>() {
 }
 
 } // namespace IKIGAI::ECS
+
+#include "generated/propertyAnimationComponent.generated.h"

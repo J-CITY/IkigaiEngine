@@ -3,7 +3,6 @@
 #endif
 #include "timelineAnimationWindow.h"
 
-#include "componentEditorHooks.h"
 #include "coreModule/ecs/componentCatalog.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"

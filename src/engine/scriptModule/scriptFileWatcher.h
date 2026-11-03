@@ -31,7 +31,7 @@ public:
 
 		auto& nativeSlot = instance().mNativeSlots[*native];
 		nativeSlot.handles.push_back(handle);
-		if (nativeSlot.watchId == 0) {
+		if (!nativeSlot.watchId.valid()) {
 			const std::string nativePath = *native;
 			nativeSlot.watchId = RESOURCES::FileWatcher::getInstance()->add(nativePath, [nativePath](RESOURCES::FileWatcher::FileStatus status) {
 				if (status != RESOURCES::FileWatcher::FileStatus::MODIFIED) {
@@ -57,7 +57,7 @@ public:
 			auto& slot = slotIt->second;
 			slot.handles.erase(std::remove(slot.handles.begin(), slot.handles.end(), handle), slot.handles.end());
 			if (slot.handles.empty()) {
-				if (slot.watchId != 0) {
+				if (slot.watchId.valid()) {
 					RESOURCES::FileWatcher::getInstance()->remove(slotIt->first, slot.watchId);
 				}
 				instance().mNativeSlots.erase(slotIt);

@@ -15,6 +15,7 @@ namespace IKIGAI::INPUT_SYSTEM {
 namespace {
 	std::string ToLower(std::string value) {
 		std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		return value;
 	}
 
 	ControlSample SampleResolvedBinding(
@@ -110,7 +111,9 @@ bool InputActions::load(const std::string& path) {
 bool InputActions::loadBindingOverrides(const std::string& path) {
 	std::optional<InputBindingOverrides> loaded;
 	if (RESOURCES::ServiceManager::Check<RESOURCES::PlayerProfileService>()) {
-		const auto bytes = RESOURCES::ServiceManager::Get<RESOURCES::PlayerProfileService>().profile().readFile(path);
+		// A profile that never saved overrides has no file; reading it would throw on first run.
+		const auto profile = RESOURCES::ServiceManager::Get<RESOURCES::PlayerProfileService>().profile();
+		const auto bytes = profile.exists(path) ? profile.readFile(path) : std::vector<uint8_t> {};
 		if (!bytes.empty()) {
 			if (auto parsed = UTILS::FromJsonStr<InputBindingOverrides>(std::string(bytes.begin(), bytes.end())); parsed.isOk()) {
 				loaded = parsed.unwrap();

@@ -688,7 +688,7 @@ Task<> SceneManager::instantiatePrefab(std::shared_ptr<SceneLoadState> state, in
 				throw std::runtime_error("Prefab not found: " + path);
 			}
 			if (!prefabCache.contains(path)) {
-				prefabCache[path] = nlohmann::json::parse(prefabFile->readAll());
+				prefabCache[path] = nlohmann::json::parse(prefabFile->readStr());
 			}
 			return prefabCache.at(path);
 		};

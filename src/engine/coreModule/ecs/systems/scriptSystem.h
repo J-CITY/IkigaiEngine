@@ -1,14 +1,10 @@
 #if USE_LUA
 #pragma once
 #include "../components/scriptComponent.h"
+#include <sol/forward.hpp>
 
 #include "ecsModule/systemManager.h"
 #include "utilsModule/log/loggerDefine.h"
-
-namespace sol {
-class state;
-class table;
-}
 
 namespace IKIGAI::ECS {
 class Object;

@@ -373,12 +373,12 @@ float lerpEulerDegrees(float from, float to, float progress) {
 	return from + delta * progress;
 }
 
-MATH::Vector3f lerpVector3(const MATH::Vector3f& from, const MATH::Vector3f& to, float progress, bool eulerShortest) {
+IKIGAI::MATH::Vector3f lerpVector3(const IKIGAI::MATH::Vector3f& from, const IKIGAI::MATH::Vector3f& to, float progress, bool eulerShortest) {
 	if (eulerShortest) {
-		return MATH::Vector3f(
+		return IKIGAI::MATH::Vector3f(
 			lerpEulerDegrees(from.x, to.x, progress), lerpEulerDegrees(from.y, to.y, progress), lerpEulerDegrees(from.z, to.z, progress));
 	}
-	return MATH::Vector3f(from.x + (to.x - from.x) * progress, from.y + (to.y - from.y) * progress, from.z + (to.z - from.z) * progress);
+	return IKIGAI::MATH::Vector3f(from.x + (to.x - from.x) * progress, from.y + (to.y - from.y) * progress, from.z + (to.z - from.z) * progress);
 }
 
 InterpolationType segmentTypeFor(const Animation& animation, const std::string& track, int startFrame, const AnimationProperty& property) {

@@ -102,9 +102,11 @@ namespace IKIGAI::ECS {
 #else
 template <class T> inline void BindComponentEditor(ComponentCatalog::Record&) { }
 #endif
+}
 
 #include "utilsModule/animationTimelineBind.h"
 
+namespace IKIGAI::ECS {
 template <class T> bool ComponentCatalog::enroll(StorageType storage, bool lightweight) {
 	Record record;
 	record.name = GetComponentName<T>();

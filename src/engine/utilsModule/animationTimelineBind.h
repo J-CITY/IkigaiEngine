@@ -2,7 +2,7 @@
 
 #include "animation.h"
 #include "coreModule/ecs/object.h"
-#include "coreModule/ecs/world.h"
+#include "ecsModule/world.h"
 #include "resourceModule/serviceManager.h"
 #include "sceneModule/sceneManager.h"
 namespace IKIGAI::ANIMATION::detail {
@@ -128,10 +128,16 @@ template <class T, class Member> bool tryBindMember(ECS::Object::Id id, std::str
 }
 
 template <class T> bool bindTimelineFromMembers(ECS::Object::Id id, std::string_view propertyName, AnimationProperty& out) {
-	auto props = T::GetMembers();
-	bool bound = false;
-	std::apply([&](auto&... members) { ((bound = bound || tryBindMember<T>(id, propertyName, members, out)), ...); }, props);
-	return bound;
+	// Components without reflected properties have no GetMembers and nothing to bind.
+	if constexpr (requires { T::GetMembers(); }) {
+		auto props = T::GetMembers();
+		bool bound = false;
+		std::apply([&](auto&... members) { ((bound = bound || tryBindMember<T>(id, propertyName, members, out)), ...); }, props);
+		return bound;
+	}
+	else {
+		return false;
+	}
 }
 
 } // namespace IKIGAI::ANIMATION::detail

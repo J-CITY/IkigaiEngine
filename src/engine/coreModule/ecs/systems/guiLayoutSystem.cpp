@@ -1,7 +1,7 @@
 #include "guiLayoutSystem.h"
 
-#include "../gui/components/spriteComponent.h"
-#include "../gui/components/vectorComponents.h"
+#include "coreModule/gui/components/spriteComponent.h"
+#include "coreModule/gui/components/vectorComponents.h"
 #include "resourceModule/serviceManager.h"
 #include "sceneModule/sceneManager.h"
 #include <algorithm>
@@ -45,7 +45,7 @@ namespace {
 		return seed ^ (value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2));
 	}
 
-	std::size_t layoutSignature(const Object& object, const LayoutComponent& layout) {
+	std::size_t layoutSignature(Object& object, const LayoutComponent& layout) {
 		std::size_t signature = std::hash<int> {}(static_cast<int>(layout.mType));
 		signature = hashCombine(signature, std::hash<int> {}(static_cast<int>(layout.mAlignment)));
 		signature = hashCombine(signature, std::hash<float> {}(layout.mHorizontalOffset));

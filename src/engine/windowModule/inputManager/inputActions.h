@@ -1,5 +1,6 @@
 #pragma once
 
+#include "inputControlPath.h"
 #include "inputManager.h"
 #include <chrono>
 #include <cstdint>
@@ -196,8 +197,6 @@ struct InputBindingOverrides {
 			.field(&InputBindingOverrides::overrides, "overrides", default_ { std::vector<InputBindingOverrideEntry> {} });
 	}
 };
-
-#include "inputControlPath.h"
 
 class InputActions {
 public:

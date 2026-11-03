@@ -46,8 +46,8 @@ namespace {
 		CompiledClipMeta meta;
 		meta.name = name;
 		try {
-			ClipDescriptor desc;
-			serde::from_json(c, desc);
+			auto document = c;
+			const auto desc = serde::deserialize<ClipDescriptor>(document);
 			meta.loop = desc.Loop;
 			meta.phaseOffset = desc.PhaseOffset;
 			meta.rootMode = parseClipRootMode(desc.RootMode);
@@ -380,8 +380,8 @@ std::shared_ptr<const StateGraphDefinition> StateGraphDefinition::compile(
 	result->ir.initialStateIndex = result->ir.stateByName.at(doc.at("InitialState").get<std::string>());
 	if (doc.contains("Layers")) {
 		for (const auto& layerJson : doc.at("Layers")) {
-			LayerDescriptor layerDesc;
-			serde::from_json(layerJson, layerDesc);
+			auto layerDocument = layerJson;
+			const auto layerDesc = serde::deserialize<LayerDescriptor>(layerDocument);
 			CompiledLayer layer;
 			layer.mode = parseLayerMode(layerDesc.Mode);
 			layer.defaultWeight = layerDesc.Weight;
