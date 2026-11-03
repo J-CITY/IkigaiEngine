@@ -23,6 +23,10 @@ namespace IKIGAI::SCENE_SYSTEM {
 struct SceneLoadState;
 }
 
+namespace IKIGAI::ANIMATION {
+class AnimationProperty;
+}
+
 namespace IKIGAI::ECS {
 
 // Closed std::variant lists cannot grow when a component is added.
@@ -47,6 +51,7 @@ public:
 		std::function<void(Object&)> remove;
 		std::function<UTILS::WeakPtr<ComponentBase>(Object&)> resolve;
 		PrepareFn prepare;
+		std::function<bool(Object::Id, std::string_view, std::string_view, ANIMATION::AnimationProperty&)> bindTimelineProperty;
 #ifdef USE_EDITOR
 		std::function<void(UTILS::WeakPtr<ComponentBase>)> inspect;
 		std::function<void(const std::string&, Object::Id, UTILS::WeakPtr<ComponentBase>)> collectTimeline;
@@ -69,6 +74,8 @@ public:
 	void createOnObject(Object& object, std::string_view typeName) const;
 	void removeFromObject(Object& object, std::string_view key) const;
 	UTILS::WeakPtr<ComponentBase> resolveOnObject(Object& object, std::string_view name) const;
+	bool tryBindTimelineProperty(
+		Object::Id id, std::string_view componentName, std::string_view propertyName, ANIMATION::AnimationProperty& out) const;
 #ifdef USE_EDITOR
 	void inspectComponent(UTILS::WeakPtr<ComponentBase> component) const;
 	void collectTimeline(const std::string& name, Object::Id id, UTILS::WeakPtr<ComponentBase> component) const;
@@ -93,6 +100,8 @@ namespace IKIGAI::ECS {
 #else
 template <class T> inline void BindComponentEditor(ComponentCatalog::Record&) { }
 #endif
+
+#include "utilsModule/animationTimelineBind.h"
 
 template <class T> bool ComponentCatalog::enroll(StorageType storage, bool lightweight) {
 	Record record;
@@ -144,6 +153,13 @@ template <class T> bool ComponentCatalog::enroll(StorageType storage, bool light
 		type->mMethods[configuration.name] = std::move(configuration);
 	}
 	BindComponentEditor<T>(record);
+	record.bindTimelineProperty
+		= [](Object::Id id, std::string_view componentName, std::string_view propertyName, ANIMATION::AnimationProperty& out) -> bool {
+		if (componentName != GetComponentName<T>()) {
+			return false;
+		}
+		return ANIMATION::detail::bindTimelineFromMembers<T>(id, propertyName, out);
+	};
 	instance().add(std::move(record));
 	return true;
 }

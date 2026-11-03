@@ -3,8 +3,14 @@
 #endif
 #include "timelineAnimationWindow.h"
 
+#include "componentEditorHooks.h"
 #include "coreModule/ecs/componentCatalog.h"
+#include "resourceModule/fileSystem/fileSystem.h"
+#include "resourceModule/serviceManager.h"
+#include "sceneModule/sceneDocument.h"
 #include "utilsModule/animation.h"
+#include "utilsModule/jsonLoader.h"
+#include "utilsModule/log/loggerDefine.h"
 #include "utilsModule/tinyspline/tinysplinecxx.h"
 
 #ifdef USE_EDITOR
@@ -957,13 +963,67 @@ IKIGAI::EDITOR::TimelineAnimationWindow::TimelineAnimationWindow() {
 	mAnimation = std::make_unique<IKIGAI::ANIMATION::Animation>(100, 60, false);
 }
 
-void IKIGAI::EDITOR::TimelineAnimationWindow::openResource(const std::string& path) { }
+void getProp(const std::string& name, const IKIGAI::ECS::Object::Id& id, const std::string& componentName, const std::string& propName, Prop& prop);
 
-////////
-///
+namespace {
+std::string normalizeTrackAnimPath(std::string path) {
+	try {
+		return IKIGAI::SCENE_SYSTEM::DOCUMENT::Path(std::move(path));
+	} catch (const std::exception&) {
+		return path;
+	}
+}
 
-////////////
+bool bindTrackProperty(const IKIGAI::ANIMATION::TimelineAnimationTrackDescriptor& track, const std::string& trackKey, Prop& outProp) {
+	if (track.componentName == "EVENT") {
+		outProp = Prop(track.objectName, IKIGAI::ECS::Object::Id(IKIGAI::ECS::Object::Id::ID(track.objectId)), "EVENT", "",
+			IKIGAI::ANIMATION::AnimationProperty(
+				trackKey, [](IKIGAI::ANIMATION::PropType val) { std::cout << "SEND EVENT" << std::get<std::string>(val) << std::endl; },
+				[]() { return IKIGAI::ANIMATION::PropType { std::string {} }; }),
+			IKIGAI::ANIMATION::PropType { std::string {} });
+		return true;
+	}
 
+	getProp(track.objectName, IKIGAI::ECS::Object::Id(IKIGAI::ECS::Object::Id::ID(track.objectId)), track.componentName, track.propertyName, outProp);
+	return !outProp.propertyName.empty() && !outProp.animProp.getName().empty();
+}
+} // namespace
+
+void IKIGAI::EDITOR::TimelineAnimationWindow::markDirty() {
+	mDirty = true;
+}
+
+void IKIGAI::EDITOR::TimelineAnimationWindow::openResource(const std::string& path) {
+	if (path.empty()) {
+		return;
+	}
+	const auto normalized = normalizeTrackAnimPath(path);
+	auto loaded = UTILS::FromJson<IKIGAI::ANIMATION::TimelineAnimationDescriptor>(normalized);
+	if (loaded.isErr()) {
+		LOG_ERROR << "TimelineAnimationWindow: failed to load " << normalized << ": " << loaded.unwrapErr().text;
+		return;
+	}
+	fromDescriptor(loaded.unwrap());
+	mResourcePath = normalized;
+	mDirty = false;
+}
+
+bool IKIGAI::EDITOR::TimelineAnimationWindow::saveToFile(const std::string& path) {
+	if (path.empty()) {
+		return false;
+	}
+	const auto normalized = normalizeTrackAnimPath(path);
+	auto desc = toDescriptor();
+	auto jsonRes = UTILS::ToJsonStr(desc, 2);
+	if (jsonRes.isErr()) {
+		LOG_ERROR << "TimelineAnimationWindow: failed to serialize " << normalized << ": " << jsonRes.unwrapErr().text;
+		return false;
+	}
+	RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().writeTextAtomic(normalized, jsonRes.unwrap());
+	mResourcePath = normalized;
+	mDirty = false;
+	return true;
+}
 
 void getProps(const std::string& name, const IKIGAI::ECS::Object::Id& id, IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::ComponentBase> comp) {
 	IKIGAI::ECS::ComponentCatalog::instance().collectTimeline(name, id, comp);
@@ -1003,7 +1063,7 @@ void getObjectProps() {
 	ObjProps[objName + "EVENT"] = eventProp;
 }
 
-IKIGAI::ANIMATION::TimelineAnimationDescriptor IKIGAI::EDITOR::TimelineAnimationWindow::toDescriptor() {
+IKIGAI::ANIMATION::TimelineAnimationDescriptor IKIGAI::EDITOR::TimelineAnimationWindow::toDescriptor() const {
 	IKIGAI::ANIMATION::TimelineAnimationDescriptor desc;
 
 	desc.isLooped = mAnimation->getLooped();
@@ -1030,36 +1090,34 @@ IKIGAI::ANIMATION::TimelineAnimationDescriptor IKIGAI::EDITOR::TimelineAnimation
 	return desc;
 }
 
-std::unique_ptr<IKIGAI::ANIMATION::Animation> IKIGAI::EDITOR::TimelineAnimationWindow::fromDescriptor(
-	IKIGAI::ANIMATION::TimelineAnimationDescriptor& desc) {
+void IKIGAI::EDITOR::TimelineAnimationWindow::fromDescriptor(const IKIGAI::ANIMATION::TimelineAnimationDescriptor& desc) {
+	AllObjPropsInAnimation.clear();
 	mAnimation
 		= std::make_unique<ANIMATION::Animation>(static_cast<unsigned int>(desc.framesCount), static_cast<unsigned int>(desc.FPS), desc.isLooped);
 
-	for (auto& track : desc.tracks) {
+	for (const auto& track : desc.tracks) {
 		Prop prop;
-		getProp(track.second.objectName, IKIGAI::ECS::Object::Id(IKIGAI::ECS::Object::Id::ID(track.second.objectId)), track.second.componentName,
-			track.second.propertyName, prop);
-
-		mAnimation->addProperty(ObjProps[track.first].animProp);
+		if (!bindTrackProperty(track.second, track.first, prop)) {
+			LOG_ERROR << "TimelineAnimationWindow: could not bind track '" << track.first << "' (object '" << track.second.objectName
+					  << "', component '" << track.second.componentName << "', property '" << track.second.propertyName << "')";
+			continue;
+		}
+		ObjProps[track.first] = prop;
 		AllObjPropsInAnimation[track.first] = prop;
+		mAnimation->addProperty(prop.animProp);
 	}
 
-	for (auto frames : desc.trackFrames) {
-		for (auto frame : frames.second) {
+	for (const auto& frames : desc.trackFrames) {
+		for (const auto& frame : frames.second) {
 			if (!mAnimation->hasFrameForProperty(frame.frame, frames.first)) {
 				std::map<std::string, ANIMATION::PropType> prop;
 				prop[frames.first] = frame.value;
 				mAnimation->addKeyFrameMerge(frame.frame, prop);
-
 				mAnimation->curves[frames.first][frame.frame] = frame.curve;
 			}
 		}
 	}
-
-	return std::move(mAnimation);
 }
-
-// TODO: save to file move to utils function
 
 void IKIGAI::EDITOR::TimelineAnimationWindow::draw() {
 	if (!mAnimation) {
@@ -1072,22 +1130,36 @@ void IKIGAI::EDITOR::TimelineAnimationWindow::draw() {
 	//	coutn = new_count;
 	// }
 	ImGui::Begin("Timeline Animation");
+	if (!mResourcePath.empty()) {
+		ImGui::Text("%s%s", mResourcePath.c_str(), mDirty ? " *" : "");
+	}
+	else if (mDirty) {
+		ImGui::TextUnformatted("Untitled *");
+	}
+	// Neo sequencer uses integer frame indices in [0, frameCount). Duration in seconds is frameCount / FPS; key time = frame / FPS.
 	ImGui::PushItemWidth(130);
-	int maxFrame = mAnimation->getFrameCount();
+	int maxFrame = static_cast<int>(mAnimation->getFrameCount());
 	if (ImGui::DragInt("Frame Count", &maxFrame)) {
-		mAnimation->setFrameCount(maxFrame);
+		mAnimation->setFrameCount(static_cast<unsigned>(maxFrame));
+		markDirty();
 	}
 	ImGui::SameLine();
 
-	int fps = mAnimation->getFPS();
-	if (ImGui::DragInt("FPS", &maxFrame)) {
-		mAnimation->setFPS(fps);
+	int fps = static_cast<int>(mAnimation->getFPS());
+	if (ImGui::DragInt("FPS", &fps)) {
+		mAnimation->setFPS(static_cast<unsigned>(fps));
+		markDirty();
+	}
+	ImGui::SameLine();
+	if (mAnimation->getFPS() > 0) {
+		ImGui::Text("Duration: %.2f s", static_cast<float>(mAnimation->getFrameCount()) / static_cast<float>(mAnimation->getFPS()));
 	}
 	ImGui::SameLine();
 
 	bool isLooped = mAnimation->getLooped();
 	if (ImGui::Checkbox("Loop", &isLooped)) {
 		mAnimation->setLooped(isLooped);
+		markDirty();
 	}
 	ImGui::SameLine();
 
@@ -1102,45 +1174,49 @@ void IKIGAI::EDITOR::TimelineAnimationWindow::draw() {
 	ImGui::SameLine();
 
 	if (ImGui::Button("Save")) {
-		ImGui::OpenPopup("Save new timeline animation");
+		if (mResourcePath.empty()) {
+			ImGui::OpenPopup("Save timeline animation");
+		}
+		else {
+			saveToFile(mResourcePath);
+		}
+	}
+	ImGui::SameLine();
+
+	if (ImGui::Button("Save As")) {
+		ImGui::OpenPopup("Save timeline animation");
 	}
 	ImGui::SameLine();
 
 	if (ImGui::Button("New")) {
 		mAnimation = std::make_unique<ANIMATION::Animation>(100, 60, false);
+		AllObjPropsInAnimation.clear();
+		mResourcePath.clear();
+		mDirty = false;
 	}
 
 	// Always center this window when appearing
 	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
-	if (ImGui::BeginPopupModal("Save new timeline animation", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+	if (ImGui::BeginPopupModal("Save timeline animation", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
 		static std::string name = "newAnimation";
 
-		ImGui::Text("Enter name");
-		ImGui::SameLine();
+		ImGui::Text("VFS path (e.g. /animations/myAnim.trackanim)");
 		ImGui::InputText("#animName", &name);
 
 		ImGui::Separator();
 
 		if (ImGui::Button("OK", ImVec2(120, 0))) {
 			if (!name.empty()) {
-				auto desc = toDescriptor();
-				auto res = UTILS::ToJsonStr(desc);
-
-				if (res.isErr()) {
-					// LOG_ERROR << "Can not save: " << sceneFilePath;
+				auto path = name;
+				if (path.find('/') == std::string::npos) {
+					path = "/animations/" + path;
 				}
-
-				auto jsonStr = res.unwrap();
-				// write
-				// auto path = UTILS::GetRealPath("animations/") + name + ".trackanim";
-				// std::ofstream f(path);
-				// if (f.is_open()) {
-				//	f << jsonStr << std::endl;
-				// }
-				// f.close();
-
+				if (path.size() < 10 || path.substr(path.size() - 10) != ".trackanim") {
+					path += ".trackanim";
+				}
+				saveToFile(path);
 				ImGui::CloseCurrentPopup();
 			}
 		}
@@ -1175,10 +1251,12 @@ void IKIGAI::EDITOR::TimelineAnimationWindow::draw() {
 		ImGui::EndCombo();
 	}
 	if (itemCurrentIndex >= 0) {
-		// Add line
-
-		mAnimation->addProperty(ObjProps[selectedPropName].animProp);
-		AllObjPropsInAnimation[selectedPropName] = ObjProps[selectedPropName];
+		const auto propIt = ObjProps.find(selectedPropName);
+		if (propIt != ObjProps.end()) {
+			mAnimation->addProperty(propIt->second.animProp);
+			AllObjPropsInAnimation[selectedPropName] = propIt->second;
+			markDirty();
+		}
 
 		itemCurrentIndex = -1;
 		selectedPropName.clear();
@@ -1218,6 +1296,7 @@ void IKIGAI::EDITOR::TimelineAnimationWindow::draw() {
 
 							if (frames[line.first + std::to_string(v.first)] != v.first) {
 								mAnimation->moveFrameInTrack(line.first, v.first, frames[line.first + std::to_string(v.first)]);
+								markDirty();
 							}
 
 							if (frameAction == 1) {
@@ -1236,6 +1315,7 @@ void IKIGAI::EDITOR::TimelineAnimationWindow::draw() {
 					if (frameToDelete) { // Delete frame from line
 						mAnimation->delKeyFrameProp(frameToDelete.value(), line.first);
 						frameToDelete = std::nullopt;
+						markDirty();
 					}
 
 					const auto addFrameData = GetAddFrame(); // Add frame to line
@@ -1246,6 +1326,7 @@ void IKIGAI::EDITOR::TimelineAnimationWindow::draw() {
 							std::map<std::string, ANIMATION::PropType> prop;
 							prop[line.first] = AllObjPropsInAnimation.at(line.first).defaultValue;
 							mAnimation->addKeyFrameMerge(static_cast<int>(addFrameData.y), prop);
+							markDirty();
 						}
 					}
 
@@ -1266,6 +1347,7 @@ void IKIGAI::EDITOR::TimelineAnimationWindow::draw() {
 				mAnimation->delProperty(lineToDelete.value());
 				AllObjPropsInAnimation.erase(lineToDelete.value());
 				lineToDelete = std::nullopt;
+				markDirty();
 			}
 
 			ImGui::EndNeoSequencer();
@@ -1370,7 +1452,7 @@ void IKIGAI::EDITOR::TimelineAnimationWindow::draw() {
 	}
 
 	if (mAnimation) {
-		mAnimation->update(IKIGAI::TIME::Timer::GetInstance().getDeltaTime().count() * 1000.0f);
+		mAnimation->update(static_cast<float>(IKIGAI::TIME::Timer::GetInstance().getDeltaTime().count()));
 	}
 
 	ImGui::End();

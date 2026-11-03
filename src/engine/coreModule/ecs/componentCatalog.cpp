@@ -1,5 +1,7 @@
 #include "componentCatalog.h"
 
+#include "utilsModule/animation.h"
+
 #include <algorithm>
 
 namespace IKIGAI::ECS {
@@ -123,6 +125,16 @@ void ComponentCatalog::inspectComponent(UTILS::WeakPtr<ComponentBase> component)
 			record->inspect(component);
 		}
 	}
+}
+
+bool ComponentCatalog::tryBindTimelineProperty(
+	Object::Id id, std::string_view componentName, std::string_view propertyName, ANIMATION::AnimationProperty& out) const {
+	if (const auto* record = findByName(componentName)) {
+		if (record->bindTimelineProperty) {
+			return record->bindTimelineProperty(id, componentName, propertyName, out);
+		}
+	}
+	return false;
 }
 
 void ComponentCatalog::collectTimeline(const std::string& name, Object::Id id, UTILS::WeakPtr<ComponentBase> component) const {

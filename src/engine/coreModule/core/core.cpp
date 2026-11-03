@@ -32,6 +32,7 @@
 #include "../ecs/systems/guiLayoutSystem.h"
 #include "../ecs/systems/inputSystem.h"
 #include "../ecs/systems/logicSystem.h"
+#include "../ecs/systems/propertyAnimationSystem.h"
 #include "../ecs/systems/scriptSystem.h"
 #include "coreModule/gui/components/vectorComponents.h"
 #include "networkModule/networkRuntime.h"
@@ -282,6 +283,7 @@ Core::Core(const PlatformStartup& platform)
 #endif
 		sysMgr->registerSystem<ECS::GuiLayoutSystem>();
 		sysMgr->registerSystem<ECS::LogicSystem>();
+		sysMgr->registerSystem<ECS::PropertyAnimationSystem>();
 		sysMgr->registerSystem<ECS::InputSystem>();
 		sysMgr->registerSystem<ECS::AudioSystem>();
 	}

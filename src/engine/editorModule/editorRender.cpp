@@ -34,6 +34,7 @@ struct EditorRender::Internal {
 	std::unique_ptr<MenuBar> mMenu;
 	ProfillerWindow mProfiler;
 	SurfaceBrushWindow mSurfaceBrushes;
+	TimelineAnimationWindow* mTimelineAnimation = nullptr;
 
 	std::list<std::unique_ptr<EditorWindow>> mWindows;
 	std::list<std::unique_ptr<EditorWindow>> mResWindows;
@@ -47,7 +48,11 @@ struct EditorRender::Internal {
 		mWindows.push_back(std::make_unique<ComponentInspectorWindow>());
 		mWindows.push_back(std::make_unique<TreeWindow>());
 		mWindows.push_back(std::make_unique<StatWindow>());
-		mWindows.push_back(std::make_unique<TimelineAnimationWindow>());
+		{
+			auto timeline = std::make_unique<TimelineAnimationWindow>();
+			mTimelineAnimation = timeline.get();
+			mWindows.push_back(std::move(timeline));
+		}
 		mWindows.push_back(std::make_unique<FileBrowserWindow>("/"));
 		mWindows.push_back(std::make_unique<TextureWatcherWindow>());
 
@@ -218,6 +223,13 @@ void EditorRender::draw() {
 			}
 			auto data = res.unwrap();
 			mData->mResWindows.push_back(std::make_unique<ResourceEditorWindow<INPUT_SYSTEM::InputConfig>>(GlobalState.mResPath, data));
+			break;
+		}
+		case File::FileType::TRACK_ANIM: {
+			if (mData->mTimelineAnimation) {
+				mData->mTimelineAnimation->openResource(GlobalState.mResPath);
+				mData->mTimelineAnimation->setOpen(true);
+			}
 			break;
 		}
 		default:;

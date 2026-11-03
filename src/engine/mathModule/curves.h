@@ -1,7 +1,5 @@
 #pragma once
 #include "math.h"
-#include <functional>
-#include <map>
 #include <vector>
 
 namespace IKIGAI::MATH::CURVES {
@@ -50,9 +48,13 @@ enum class InterpolationType {
 	CUBIC_IN,
 	CUBIC_OUT,
 	CUBIC_IN_OUT,
+	// Historical spelling: QUADRIC_* aliases quartic (degree-4) easing, not quadratic.
 	QUADRIC_IN,
 	QUADRIC_OUT,
 	QUADRIC_IN_OUT,
+	QUARTIC_IN,
+	QUARTIC_OUT,
+	QUARTIC_IN_OUT,
 	QUINTIC_IN,
 	QUINTIC_OUT,
 	QUINTIC_IN_OUT,
@@ -77,22 +79,16 @@ enum class InterpolationType {
 
 	CUSTOM
 };
-inline std::map<InterpolationType, std::function<float(float)>> functions = { { InterpolationType::LINEAR, &FUNC::linearInterpolation },
-	{ InterpolationType::QUADRATIC_IN, &FUNC::quadraticEaseIn }, { InterpolationType::QUADRATIC_OUT, &FUNC::quadraticEaseOut },
-	{ InterpolationType::QUADRATIC_IN_OUT, &FUNC::quadraticEaseInOut }, { InterpolationType::CUBIC_IN, &FUNC::cubicEaseIn },
-	{ InterpolationType::CUBIC_OUT, &FUNC::cubicEaseOut }, { InterpolationType::CUBIC_IN_OUT, &FUNC::cubicEaseInOut },
-	{ InterpolationType::QUADRIC_IN, &FUNC::quarticEaseIn }, { InterpolationType::QUADRIC_OUT, &FUNC::quarticEaseOut },
-	{ InterpolationType::QUADRIC_IN_OUT, &FUNC::quarticEaseInOut }, { InterpolationType::QUINTIC_IN, &FUNC::quinticEaseIn },
-	{ InterpolationType::QUINTIC_OUT, &FUNC::quinticEaseOut }, { InterpolationType::QUINTIC_IN_OUT, &FUNC::quinticEaseInOut },
-	{ InterpolationType::SINE_IN, &FUNC::sineEaseIn }, { InterpolationType::SINE_OUT, &FUNC::sineEaseOut },
-	{ InterpolationType::SINE_IN_OUT, &FUNC::sineEaseInOut }, { InterpolationType::CIRCULAR_IN, &FUNC::circularEaseIn },
-	{ InterpolationType::CIRCULAR_OUT, &FUNC::circularEaseOut }, { InterpolationType::CIRCULAR_IN_OUT, &FUNC::circularEaseInOut },
-	{ InterpolationType::EXPONENTIAL_IN, &FUNC::exponentialEaseIn }, { InterpolationType::EXPONENTIAL_OUT, &FUNC::exponentialEaseOut },
-	{ InterpolationType::EXPONENTIAL_IN_OUT, &FUNC::exponentialEaseInOut }, { InterpolationType::ELASTIC_IN, &FUNC::elasticEaseIn },
-	{ InterpolationType::ELASTIC_OUT, &FUNC::elasticEaseOut }, { InterpolationType::ELASTIC_IN_OUT, &FUNC::elasticEaseInOut },
-	{ InterpolationType::BACK_IN, &FUNC::backEaseIn }, { InterpolationType::BACK_OUT, &FUNC::backEaseOut },
-	{ InterpolationType::BACK_IN_OUT, &FUNC::backEaseInOut }, { InterpolationType::BOUNCE_IN, &FUNC::bounceEaseOut },
-	{ InterpolationType::BOUNCE_OUT, &FUNC::bounceEaseIn }, { InterpolationType::BOUNCE_IN_OUT, &FUNC::bounceEaseInOut } };
+
+using EasingFunction = float (*)(float);
+// Returns nullptr for CUSTOM and unknown values.
+EasingFunction getEasing(InterpolationType type);
+inline EasingFunction getEasingOrLinear(InterpolationType type) {
+	if (const EasingFunction fn = getEasing(type)) {
+		return fn;
+	}
+	return &FUNC::linearInterpolation;
+}
 
 // TODO: move to own file
 struct Curve {
@@ -115,9 +111,19 @@ struct Curve {
 	}
 };
 
+inline Curve makeUnitBezierCurve() {
+	return Curve {
+		{ 0.f, 0.f },
+		{ 1.f, 1.f },
+		{ 1.f / 3.f, 1.f / 3.f },
+		{ 2.f / 3.f, 2.f / 3.f },
+		{},
+	};
+}
+
 // Parametric evaluation preserves the historical animation easing semantics.
 Vector2f evaluateParametric(const Curve& curve, float u);
-// The X control points must be ordered between the endpoints.
+// Segment time t in [mLeft.x, mRight.x] -> eased progress on Y.
 float evaluateAtTime(const Curve& curve, float time);
 
 enum class SegmentInterpolation { Step, Linear, Bezier, Easing };

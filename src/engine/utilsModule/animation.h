@@ -14,16 +14,19 @@
 namespace IKIGAI::ANIMATION {
 namespace FUNC = MATH::CURVES::FUNC;
 using MATH::CURVES::Curve;
-using MATH::CURVES::functions;
+using MATH::CURVES::getEasing;
+using MATH::CURVES::getEasingOrLinear;
 using MATH::CURVES::InterpolationType;
+using MATH::CURVES::makeUnitBezierCurve;
 using PropType = std::variant<float, int, bool, std::string, MATH::Vector4f, MATH::Vector3f, MATH::Vector2f>;
 
 class AnimationProperty {
 	std::string name;
 	InterpolationType interpolationType;
-	// std::function<float(float)> interpolation;
 	std::function<void(PropType)> _set;
 	std::function<PropType()> _get;
+	bool eulerShortestPath = false;
+	bool timelineEventTrack = false;
 
 public:
 	AnimationProperty() = default;
@@ -33,6 +36,10 @@ public:
 	PropType get();
 	const std::string& getName() const;
 	InterpolationType getInterpolationType() const;
+	void setEulerShortestPath(bool value);
+	bool getEulerShortestPath() const;
+	void setTimelineEventTrack(bool value);
+	bool isTimelineEventTrack() const;
 };
 
 struct TimelineAnimationFrameDescriptor {
@@ -106,7 +113,7 @@ public:
 	virtual void stop() = 0;
 	virtual void play() = 0;
 	virtual void pause() = 0;
-	const Status& getStatus();
+	const Status& getStatus() const;
 
 protected:
 	bool isLooped = false;
@@ -119,12 +126,14 @@ class Animation : public AnimationBase {
 public:
 	int FPS = 30;
 	int framesCount = 50;
-	float time = 0.f;
-	float curTime = 0.f;
+	// Playback clock in seconds (authoring grid still uses framesCount / FPS).
+	double curTime = 0.0;
 
 	std::map<int, std::map<std::string, PropType>> frames;
 	std::map<std::string, AnimationProperty> props;
 	std::map<std::string, std::map<int, Curve>> curves;
+	std::map<std::string, std::map<int, InterpolationType>> segmentInterpolation;
+	std::map<std::string, TimelineAnimationTrackDescriptor> trackDescriptors;
 	bool isInit = false;
 	std::map<std::string, std::vector<int>> fastAccess;
 	std::map<std::string, PropType> curState;
@@ -169,8 +178,13 @@ public:
 	void delKeyFrameProp(int frame, std::map<std::string, PropType> prop);
 	void delKeyFrameProp(int frame, const std::string& propName);
 	void addKeyFrameMerge(int frame, std::map<std::string, PropType> prop);
+	void setSegmentInterpolation(const std::string& track, int frame, InterpolationType type);
 
 	bool hasFrameForProperty(int frame, const std::string& name);
+	double getDurationSeconds() const;
+	double frameToTime(int frame) const;
+
+	static std::unique_ptr<Animation> createFromDescriptor(const TimelineAnimationDescriptor& desc);
 
 public:
 	void update(float dt) override;
@@ -232,11 +246,6 @@ private:
 	Status status = Status::STOP;
 };
 
-class AnimationSystem {
-public:
-	void update() { }
-};
-
 // class NodableAnimation : public AnimationBase {
 //	std::unique_ptr<NodableAnimationNode> root;
 // public:
@@ -267,270 +276,67 @@ class NodableAnimationNodeSequence : public NodableAnimationNode {
 	size_t currentId = 0;
 
 public:
-	virtual void update(float dt) override {
-		if (status == Status::FINISH || childs.empty()) {
-			return;
-		}
-		if (status == Status::NOT_START) {
-			status = Status::PROGRESS;
-		}
-
-		if (childs[currentId]->status == Status::FINISH) {
-			currentId++;
-			if (currentId >= childs.size()) {
-				status = Status::FINISH;
-				return;
-			}
-		}
-		childs[currentId]->update(dt);
-	}
-
-	void clear() {
-		childs.clear();
-	}
-
-	void add(std::unique_ptr<NodableAnimationNode> node) {
-		childs.push_back(std::move(node));
-	}
+	void update(float dt) override;
+	void clear();
+	void add(std::unique_ptr<NodableAnimationNode> node);
 };
 
 class NodableAnimationNodeSimultaneous : public NodableAnimationNode {
 public:
 	std::vector<std::unique_ptr<NodableAnimationNode>> childs;
-	size_t currentId = 0;
 
 public:
-	virtual void update(float dt) override {
-		if (status == Status::FINISH || childs.empty()) {
-			return;
-		}
-		if (status == Status::NOT_START) {
-			status = Status::PROGRESS;
-		}
-
-		bool allFinish = false;
-		for (const auto& child : childs) {
-			child->update(dt);
-			if (child->status != Status::FINISH) {
-				allFinish = true;
-			}
-		}
-
-		if (allFinish) {
-			status = Status::FINISH;
-		}
-	}
-
-	void clear() {
-		childs.clear();
-	}
-
-	void add(std::unique_ptr<NodableAnimationNode> node) {
-		childs.push_back(std::move(node));
-	}
+	void update(float dt) override;
+	void clear();
+	void add(std::unique_ptr<NodableAnimationNode> node);
 };
 
 class NodableAnimationNodePos : public NodableAnimationNode {
 public:
 	ECS::Object::Id id;
-	MATH::Vector3f toPos { };
+	MATH::Vector3f toPos {};
 
-	MATH::Vector3f fromPos { };
+	MATH::Vector3f fromPos {};
 	float time = 0.0f;
 	float curTime = 0.0f;
 
 	Curve curve;
 	AnimationProperty prop;
 
-public:
-	NodableAnimationNodePos(ECS::Object::Id id, MATH::Vector3f toPos, float time, InterpolationType interpolation = InterpolationType::LINEAR)
-		: id(id)
-		, toPos(toPos)
-		, time(time) {
-
-		auto& scene = RESOURCES::ServiceManager::Get<SCENE_SYSTEM::SceneManager>().getCurrentScene();
-		auto obj = scene.findObjectByID(id);
-		auto component = obj->getComponent<ECS::TransformComponent>();
-		fromPos = component->getLocalPosition();
-
-		prop = AnimationProperty(
-			"propPos", std::function<void(PropType)>([component](PropType prop) {
-				if (auto val = std::get_if<MATH::Vector3f>(&prop)) {
-					if (component) {
-						component->setLocalPosition(*val);
-					}
-				}
-			}),
-			[component]() {
-				if (component) {
-					return component->getLocalPosition();
-				}
-				throw;
-			},
-			interpolation);
-	}
-
-	virtual void update(float dt) override {
-		if (status == Status::FINISH) {
-			return;
-		}
-		if (status == Status::NOT_START) {
-			status = Status::PROGRESS;
-		}
-
-		curTime += dt;
-
-		float progress = 0.0f;
-		if (prop.getInterpolationType() == InterpolationType::CUSTOM) {
-			// progress = cubicBezierCurve(, std::min(1.0f, curTime / time));
-		}
-		else {
-			progress = functions[prop.getInterpolationType()](std::min(1.0f, curTime / time));
-		}
-
-		const auto newPos = MATH::Vector3(
-			fromPos.x + progress * (toPos.x - fromPos.x), fromPos.y + progress * (toPos.y - fromPos.y), fromPos.z + progress * (toPos.z - fromPos.z));
-		prop.set(newPos);
-		if (progress >= 1.0f) {
-			status = Status::FINISH;
-		}
-	}
+	NodableAnimationNodePos(ECS::Object::Id id, MATH::Vector3f toPos, float time, InterpolationType interpolation = InterpolationType::LINEAR);
+	void update(float dt) override;
 };
 
 class NodableAnimationNodeScale : public NodableAnimationNode {
 public:
 	ECS::Object::Id id;
-	MATH::Vector3f to { };
+	MATH::Vector3f to {};
 
-	MATH::Vector3f from { };
+	MATH::Vector3f from {};
 	float time = 0.0f;
 	float curTime = 0.0f;
 
 	Curve curve;
 	AnimationProperty prop;
 
-public:
-	NodableAnimationNodeScale(ECS::Object::Id id, MATH::Vector3f to, float time, InterpolationType interpolation = InterpolationType::LINEAR)
-		: NodableAnimationNode()
-		, id(id)
-		, to(to)
-		, time(time) {
-
-		auto& scene = RESOURCES::ServiceManager::Get<SCENE_SYSTEM::SceneManager>().getCurrentScene();
-		auto obj = scene.findObjectByID(id);
-		auto component = obj->getComponent<ECS::TransformComponent>();
-		from = component->getLocalScale();
-
-		prop = AnimationProperty(
-			"propScale", std::function<void(PropType)>([component](PropType prop) {
-				if (auto val = std::get_if<MATH::Vector3f>(&prop)) {
-					if (component) {
-						component->setLocalScale(*val);
-					}
-				}
-			}),
-			[component]() {
-				if (component) {
-					return component->getLocalScale();
-				}
-				throw;
-			},
-			interpolation);
-	}
-
-	virtual void update(float dt) override {
-		if (status == Status::FINISH) {
-			return;
-		}
-		if (status == Status::NOT_START) {
-			status = Status::PROGRESS;
-		}
-
-		curTime += dt;
-		// const auto progress = prop.getInterpolation()(std::min(1.0f, curTime / time));
-
-		float progress = 0.0f;
-		if (prop.getInterpolationType() == InterpolationType::CUSTOM) {
-			// progress = cubicBezierCurve(, std::min(1.0f, curTime / time));
-		}
-		else {
-			progress = functions[prop.getInterpolationType()](std::min(1.0f, curTime / time));
-		}
-
-		const auto newPos
-			= MATH::Vector3(from.x + progress * (to.x - from.x), from.y + progress * (to.y - from.y), from.z + progress * (to.z - from.z));
-		prop.set(newPos);
-		if (progress >= 1.0f) {
-			status = Status::FINISH;
-		}
-	}
+	NodableAnimationNodeScale(ECS::Object::Id id, MATH::Vector3f to, float time, InterpolationType interpolation = InterpolationType::LINEAR);
+	void update(float dt) override;
 };
 
 class NodableAnimationNodeRotate : public NodableAnimationNode {
 public:
 	ECS::Object::Id id;
-	MATH::Vector3f to { };
+	MATH::Vector3f to {};
 
-	MATH::Vector3f from { };
+	MATH::Vector3f from {};
 	float time = 0.0f;
 	float curTime = 0.0f;
 
 	Curve curve;
 	AnimationProperty prop;
 
-public:
-	NodableAnimationNodeRotate(ECS::Object::Id id, MATH::Vector3f to, float time, InterpolationType interpolation = InterpolationType::LINEAR)
-		: NodableAnimationNode()
-		, id(id)
-		, to(to)
-		, time(time) {
-
-		auto& scene = RESOURCES::ServiceManager::Get<SCENE_SYSTEM::SceneManager>().getCurrentScene();
-		auto obj = scene.findObjectByID(id);
-		auto component = obj->getComponent<ECS::TransformComponent>();
-		from = component->getLocalRotationDeg();
-
-		prop = AnimationProperty(
-			"propRotate", std::function<void(PropType)>([component](PropType prop) {
-				if (auto val = std::get_if<MATH::Vector3f>(&prop)) {
-					if (component) {
-						component->setLocalRotationDeg(*val);
-					}
-				}
-			}),
-			[component]() {
-				if (component) {
-					return component->getLocalRotationDeg();
-				}
-				throw;
-			},
-			interpolation);
-	}
-
-	virtual void update(float dt) override {
-		if (status == Status::FINISH) {
-			return;
-		}
-		if (status == Status::NOT_START) {
-			status = Status::PROGRESS;
-		}
-
-		curTime += dt;
-		// const auto progress = prop.getInterpolation()(std::min(1.0f, curTime / time));
-		float progress = 0.0f;
-		if (prop.getInterpolationType() == InterpolationType::CUSTOM) {
-			// progress = cubicBezierCurve(, std::min(1.0f, curTime / time));
-		}
-		else {
-			progress = functions[prop.getInterpolationType()](std::min(1.0f, curTime / time));
-		}
-		const auto newPos
-			= MATH::Vector3(from.x + progress * (to.x - from.x), from.y + progress * (to.y - from.y), from.z + progress * (to.z - from.z));
-		prop.set(newPos);
-		if (progress >= 1.0f) {
-			status = Status::FINISH;
-		}
-	}
+	NodableAnimationNodeRotate(ECS::Object::Id id, MATH::Vector3f to, float time, InterpolationType interpolation = InterpolationType::LINEAR);
+	void update(float dt) override;
 };
 
 class NodableAnimationNodeWait : public NodableAnimationNode {
@@ -538,26 +344,8 @@ public:
 	float time = 0.0f;
 	float curTime = 0.0f;
 
-public:
-	NodableAnimationNodeWait(float time)
-		: NodableAnimationNode()
-		, time(time) { }
-
-	virtual void update(float dt) override {
-		if (status == Status::FINISH) {
-			return;
-		}
-		if (status == Status::NOT_START) {
-			status = Status::PROGRESS;
-		}
-
-		curTime += dt;
-		const auto progress = std::min(1.0f, curTime / time);
-
-		if (progress >= 1.0f) {
-			status = Status::FINISH;
-		}
-	}
+	explicit NodableAnimationNodeWait(float time);
+	void update(float dt) override;
 };
 
 class NodableAnimationNodeEvent : public NodableAnimationNode {
@@ -566,28 +354,8 @@ public:
 	float curTime = 0.0f;
 	std::string eventId;
 
-public:
-	NodableAnimationNodeEvent(const std::string& eventId, float time)
-		: NodableAnimationNode()
-		, time(time)
-		, eventId(eventId) { }
-
-	virtual void update(float dt) override {
-		if (status == Status::FINISH) {
-			return;
-		}
-		if (status == Status::NOT_START) {
-			status = Status::PROGRESS;
-		}
-
-		curTime += dt;
-		const auto progress = std::min(1.0f, curTime / time);
-
-		if (progress >= 1.0f) {
-			RESOURCES::ServiceManager::Get<EVENT::EventBroadcaster>().run(eventId, EVENT::EventBroadcaster::Payload { });
-			status = Status::FINISH;
-		}
-	}
+	NodableAnimationNodeEvent(const std::string& eventId, float time);
+	void update(float dt) override;
 };
 
 class NodableAnimation : public AnimationBase {
@@ -597,34 +365,10 @@ public:
 	Status status = Status::STOP;
 	std::vector<std::unique_ptr<NodableAnimationNode>> animations;
 	int currentAnim = 0;
-	void update(float dt) {
-		if (status == Status::PAUSE || status == Status::STOP) {
-			return;
-		}
-		if (currentAnim >= animations.size()) {
-			status = Status::STOP;
-			return;
-		}
-		animations.at(currentAnim)->update(dt);
-		if (animations.at(currentAnim)->status == NodableAnimationNode::Status::FINISH) {
-			currentAnim++;
-		}
-	};
-
-	void stop() override {
-		status = Status::STOP;
-		if (currentAnim < animations.size()) {
-			status = Status::STOP;
-			animations.at(currentAnim)->status = NodableAnimationNode::Status::NOT_START;
-		}
-		currentAnim = 0;
-	}
-	void play() override {
-		status = Status::PLAY;
-	}
-	void pause() override {
-		status = Status::PAUSE;
-	}
+	void update(float dt) override;
+	void stop() override;
+	void play() override;
+	void pause() override;
 };
 
 }

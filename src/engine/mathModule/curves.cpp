@@ -10,67 +10,129 @@ Vector2f IKIGAI::MATH::CURVES::evaluateParametric(const Curve& curve, float t) {
 		+ 3.f * t * t * (1.f - t) * curve.mRightTangent + t * t * t * curve.mRight;
 }
 
+EasingFunction IKIGAI::MATH::CURVES::getEasing(const InterpolationType type) {
+	static const EasingFunction kTable[] = {
+		&FUNC::linearInterpolation,
+		&FUNC::quadraticEaseIn,
+		&FUNC::quadraticEaseOut,
+		&FUNC::quadraticEaseInOut,
+		&FUNC::cubicEaseIn,
+		&FUNC::cubicEaseOut,
+		&FUNC::cubicEaseInOut,
+		&FUNC::quarticEaseIn,
+		&FUNC::quarticEaseOut,
+		&FUNC::quarticEaseInOut,
+		&FUNC::quarticEaseIn,
+		&FUNC::quarticEaseOut,
+		&FUNC::quarticEaseInOut,
+		&FUNC::quinticEaseIn,
+		&FUNC::quinticEaseOut,
+		&FUNC::quinticEaseInOut,
+		&FUNC::sineEaseIn,
+		&FUNC::sineEaseOut,
+		&FUNC::sineEaseInOut,
+		&FUNC::circularEaseIn,
+		&FUNC::circularEaseOut,
+		&FUNC::circularEaseInOut,
+		&FUNC::exponentialEaseIn,
+		&FUNC::exponentialEaseOut,
+		&FUNC::exponentialEaseInOut,
+		&FUNC::elasticEaseIn,
+		&FUNC::elasticEaseOut,
+		&FUNC::elasticEaseInOut,
+		&FUNC::backEaseIn,
+		&FUNC::backEaseOut,
+		&FUNC::backEaseInOut,
+		&FUNC::bounceEaseIn,
+		&FUNC::bounceEaseOut,
+		&FUNC::bounceEaseInOut,
+	};
+	const auto index = static_cast<std::size_t>(type);
+	if (index >= sizeof(kTable) / sizeof(kTable[0]) || type == InterpolationType::CUSTOM) {
+		return nullptr;
+	}
+	return kTable[index];
+}
+
 float IKIGAI::MATH::CURVES::evaluateAtTime(const Curve& curve, float time) {
-	if (!std::isfinite(time))
+	if (!std::isfinite(time)) {
 		throw std::invalid_argument("Non-finite curve time");
-	for (const auto& p : { curve.mLeft, curve.mRight, curve.mLeftTangent, curve.mRightTangent })
-		if (!std::isfinite(p.x) || !std::isfinite(p.y))
+	}
+	for (const auto& p : { curve.mLeft, curve.mRight, curve.mLeftTangent, curve.mRightTangent }) {
+		if (!std::isfinite(p.x) || !std::isfinite(p.y)) {
 			throw std::invalid_argument("Non-finite Bezier control");
+		}
+	}
 	if (!(curve.mLeft.x < curve.mRight.x) || curve.mLeftTangent.x < curve.mLeft.x || curve.mLeftTangent.x > curve.mRightTangent.x
-		|| curve.mRightTangent.x > curve.mRight.x)
+		|| curve.mRightTangent.x > curve.mRight.x) {
 		throw std::invalid_argument("Bezier X controls must be monotonic");
-	if (time <= curve.mLeft.x)
+	}
+	if (time <= curve.mLeft.x) {
 		return curve.mLeft.y;
-	if (time >= curve.mRight.x)
+	}
+	if (time >= curve.mRight.x) {
 		return curve.mRight.y;
+	}
 	// Bounded bisection also handles zero derivatives at either endpoint.
 	float lo = 0, hi = 1;
 	for (int i = 0; i < 28; ++i) {
 		const float mid = (lo + hi) * .5f;
-		if (evaluateParametric(curve, mid).x < time)
+		if (evaluateParametric(curve, mid).x < time) {
 			lo = mid;
-		else
+		}
+		else {
 			hi = mid;
+		}
 	}
 	return evaluateParametric(curve, (lo + hi) * .5f).y;
 }
 
 void IKIGAI::MATH::CURVES::FloatCurve::validate() const {
-	if (keys.empty())
+	if (keys.empty()) {
 		throw std::invalid_argument("Curve needs at least one key");
+	}
 	float previous = -std::numeric_limits<float>::infinity();
 	for (const auto& k : keys) {
-		if (!std::isfinite(k.time) || !std::isfinite(k.value) || k.time <= previous)
+		if (!std::isfinite(k.time) || !std::isfinite(k.value) || k.time <= previous) {
 			throw std::invalid_argument("Curve keys must be finite and strictly ordered");
-		if (!std::isfinite(k.outControl.x) || !std::isfinite(k.outControl.y) || !std::isfinite(k.inControl.x) || !std::isfinite(k.inControl.y))
+		}
+		if (!std::isfinite(k.outControl.x) || !std::isfinite(k.outControl.y) || !std::isfinite(k.inControl.x) || !std::isfinite(k.inControl.y)) {
 			throw std::invalid_argument("Non-finite curve controls");
-		if (k.interpolation == SegmentInterpolation::Bezier && (k.outControl.x < 0 || k.outControl.x > k.inControl.x || k.inControl.x > 1))
+		}
+		if (k.interpolation == SegmentInterpolation::Bezier && (k.outControl.x < 0 || k.outControl.x > k.inControl.x || k.inControl.x > 1)) {
 			throw std::invalid_argument("Bezier X controls must be monotonic in [0,1]");
-		if (k.interpolation == SegmentInterpolation::Easing && !functions.contains(k.easing))
+		}
+		if (k.interpolation == SegmentInterpolation::Easing && getEasing(k.easing) == nullptr) {
 			throw std::invalid_argument("Unknown easing function");
+		}
 		previous = k.time;
 	}
 }
 
 float IKIGAI::MATH::CURVES::FloatCurve::evaluate(float time) const {
-	if (keys.empty() || !std::isfinite(time))
+	if (keys.empty() || !std::isfinite(time)) {
 		throw std::invalid_argument("Invalid curve evaluation");
-	if (time <= keys.front().time)
+	}
+	if (time <= keys.front().time) {
 		return keys.front().value;
-	if (time >= keys.back().time)
+	}
+	if (time >= keys.back().time) {
 		return keys.back().value;
+	}
 	const auto next = std::upper_bound(keys.begin(), keys.end(), time, [](float t, const FloatKey& k) { return t < k.time; });
 	const auto& b = *next;
 	const auto& a = *(next - 1);
 	float p = (time - a.time) / (b.time - a.time);
-	if (a.interpolation == SegmentInterpolation::Step)
+	if (a.interpolation == SegmentInterpolation::Step) {
 		return a.value;
+	}
 	if (a.interpolation == SegmentInterpolation::Bezier) {
-		Curve c { { 0, 0 }, { 1, 1 }, a.outControl, a.inControl, { } };
+		Curve c { { 0, 0 }, { 1, 1 }, a.outControl, a.inControl, {} };
 		p = evaluateAtTime(c, p);
 	}
-	else if (a.interpolation == SegmentInterpolation::Easing)
-		p = functions.at(a.easing)(p);
+	else if (a.interpolation == SegmentInterpolation::Easing) {
+		p = getEasingOrLinear(a.easing)(p);
+	}
 	return a.value + (b.value - a.value) * p;
 }
 
@@ -183,8 +245,9 @@ float FUNC::circularEaseInOut(float a) {
 }
 
 float FUNC::exponentialEaseIn(float a) {
-	if (a <= 0.0f)
+	if (a <= 0.0f) {
 		return a;
+	}
 	else {
 		float const Complementary = a - 1.0f;
 		float const Two = static_cast<float>(2);
@@ -194,18 +257,21 @@ float FUNC::exponentialEaseIn(float a) {
 }
 
 float FUNC::exponentialEaseOut(float a) {
-	if (a >= 1.0f)
+	if (a >= 1.0f) {
 		return a;
+	}
 	else {
 		return 1.0f - powf(static_cast<float>(2), -static_cast<float>(10) * a);
 	}
 }
 
 float FUNC::exponentialEaseInOut(float a) {
-	if (a < static_cast<float>(0.5))
+	if (a < static_cast<float>(0.5)) {
 		return static_cast<float>(0.5) * powf(static_cast<float>(2), (static_cast<float>(20) * a) - static_cast<float>(10));
-	else
+	}
+	else {
 		return -static_cast<float>(0.5) * powf(static_cast<float>(2), (-static_cast<float>(20) * a) + static_cast<float>(10)) + 1.0f;
+	}
 }
 
 float FUNC::elasticEaseIn(float a) {
@@ -217,14 +283,16 @@ float FUNC::elasticEaseOut(float a) {
 }
 
 float FUNC::elasticEaseInOut(float a) {
-	if (a < static_cast<float>(0.5))
+	if (a < static_cast<float>(0.5)) {
 		return static_cast<float>(0.5) * sinf(static_cast<float>(13) * (PI / 2.0f) * (static_cast<float>(2) * a))
 			* powf(static_cast<float>(2), static_cast<float>(10) * ((static_cast<float>(2) * a) - 1.0f));
-	else
+	}
+	else {
 		return static_cast<float>(0.5)
 			* (sinf(-static_cast<float>(13) * (PI / 2.0f) * ((static_cast<float>(2) * a - 1.0f) + 1.0f))
 					* powf(static_cast<float>(2), -static_cast<float>(10) * (static_cast<float>(2) * a - 1.0f))
 				+ static_cast<float>(2));
+	}
 }
 
 float FUNC::backEaseInInternal(float a, float o) {

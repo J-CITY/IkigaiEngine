@@ -1,9 +1,17 @@
 #include "animation.h"
 
+#include "animationTimelineBind.h"
+#include "resourceModule/serviceManager.h"
+#include "utilsModule/event.h"
+#include "utilsModule/log/logger.h"
+
 #include <algorithm>
+#include <cmath>
+#include <limits>
 
 using namespace IKIGAI::ANIMATION;
 using namespace IKIGAI::MATH;
+using namespace IKIGAI::MATH::CURVES;
 
 AnimationProperty::AnimationProperty(std::string name, std::function<void(PropType)> set, std::function<PropType()> get, InterpolationType type)
 	: name(name)
@@ -22,6 +30,26 @@ const std::string& AnimationProperty::getName() const {
 }
 InterpolationType AnimationProperty::getInterpolationType() const {
 	return interpolationType;
+}
+
+void AnimationProperty::setEulerShortestPath(bool value) {
+	eulerShortestPath = value;
+}
+
+bool AnimationProperty::getEulerShortestPath() const {
+	return eulerShortestPath;
+}
+
+void AnimationProperty::setTimelineEventTrack(bool value) {
+	timelineEventTrack = value;
+}
+
+bool AnimationProperty::isTimelineEventTrack() const {
+	return timelineEventTrack;
+}
+
+const AnimationBase::Status& AnimationBase::getStatus() const {
+	return animStatus;
 }
 
 Animation::Builder::Builder(unsigned int framesCount, unsigned int fps, bool isLooped)
@@ -48,9 +76,8 @@ std::unique_ptr<Animation> Animation::Builder::build() {
 
 Animation::Animation(unsigned int frameCount, unsigned int fps, bool isLooped)
 	: AnimationBase()
-	, framesCount(frameCount)
-	, FPS(fps) {
-	time = static_cast<float>(frameCount * fps);
+	, framesCount(static_cast<int>(frameCount))
+	, FPS(static_cast<int>(fps)) {
 	this->isLooped = isLooped;
 }
 
@@ -80,20 +107,23 @@ void Animation::init() {
 }
 
 float Animation::linearFunc(float x0, float x1, float progress) {
-	if (progress > 1.f)
+	if (progress > 1.f) {
 		progress = 1.0f;
+	}
 	return static_cast<float>(x0 + (x1 - x0) * progress);
 }
 
 int Animation::linearFunc(int x0, int x1, float progress) {
-	if (progress > 1.f)
+	if (progress > 1.f) {
 		progress = 1.0f;
+	}
 	return static_cast<int>(x0 + (x1 - x0) * progress);
 }
 
 bool Animation::linearFunc(bool x0, bool x1, float progress) {
-	if (progress > 1.f)
+	if (progress > 1.f) {
 		progress = 1.0f;
+	}
 	return progress == 1.0f ? x1 : x0;
 }
 
@@ -165,12 +195,8 @@ void Animation::addKeyFrame(int frame, std::map<std::string, PropType> prop) {
 		//	curves[p.first].erase(curves[p.first].begin());
 		// }
 
-		curves[p.first][frame] = Curve {
-			{ 0.0f, 0.0f },
-			{ 1.0f, 1.0f },
-			{ 0.5f, 0.0f },
-			{ -1.0f, 0.0f },
-		};
+		curves[p.first][frame] = makeUnitBezierCurve();
+		segmentInterpolation[p.first][frame] = InterpolationType::LINEAR;
 
 		// std::sort(curves[p.first].begin(), curves[p.first].end(), [](const Curve& a, const Curve& b) {
 		//	return a.mLeft.x < b.mLeft.x;
@@ -248,12 +274,8 @@ void Animation::addKeyFrameMerge(int frame, std::map<std::string, PropType> prop
 		//	curves[p.first].erase(curves[p.first].begin());
 		// }
 
-		curves[p.first][frame] = Curve {
-			{ 0.0f, 0.0f },
-			{ 1.0f, 1.0f },
-			{ 0.5f, 0.0f },
-			{ -1.0f, 0.0f },
-		};
+		curves[p.first][frame] = makeUnitBezierCurve();
+		segmentInterpolation[p.first][frame] = InterpolationType::LINEAR;
 
 		// std::sort(curves[p.first].begin(), curves[p.first].end(), [](const Curve& a, const Curve& b) {
 		//	return a.mLeft.x < b.mLeft.x;
@@ -281,14 +303,101 @@ bool Animation::hasFrameForProperty(int frame, const std::string& name) {
 	return std::find(vec.begin(), vec.end(), frame) != vec.end();
 }
 
+void Animation::setSegmentInterpolation(const std::string& track, int frame, InterpolationType type) {
+	segmentInterpolation[track][frame] = type;
+}
+
+double Animation::getDurationSeconds() const {
+	if (FPS <= 0) {
+		return 0.0;
+	}
+	return static_cast<double>(framesCount) / static_cast<double>(FPS);
+}
+
+double Animation::frameToTime(int frame) const {
+	if (FPS <= 0) {
+		return 0.0;
+	}
+	return static_cast<double>(frame) / static_cast<double>(FPS);
+}
+
+std::unique_ptr<Animation> Animation::createFromDescriptor(const TimelineAnimationDescriptor& desc) {
+	auto animation = std::make_unique<Animation>(static_cast<unsigned int>(desc.framesCount), static_cast<unsigned int>(desc.FPS), desc.isLooped);
+	animation->trackDescriptors = desc.tracks;
+
+	for (const auto& track : desc.tracks) {
+		AnimationProperty property;
+		const auto objectId = ECS::Object::Id(ECS::Object::Id::ID(track.second.objectId));
+		if (!tryBindTimelineProperty(objectId, track.second.componentName, track.second.propertyName, property, track.first)) {
+			LOG_WARNING << "Property animation: skipped track '" << track.first << "' (bind failed for " << track.second.componentName << '.'
+						<< track.second.propertyName << ')';
+			continue;
+		}
+		animation->addProperty(std::move(property));
+	}
+
+	for (const auto& trackFrames : desc.trackFrames) {
+		const auto trackName = trackFrames.first;
+		if (!animation->props.contains(trackName)) {
+			continue;
+		}
+		for (const auto& frame : trackFrames.second) {
+			if (!animation->hasFrameForProperty(frame.frame, trackName)) {
+				std::map<std::string, PropType> keyed;
+				keyed[trackName] = frame.value;
+				animation->addKeyFrameMerge(frame.frame, keyed);
+			}
+			animation->curves[trackName][frame.frame] = frame.curve;
+			animation->setSegmentInterpolation(trackName, frame.frame, frame.curveType);
+		}
+	}
+
+	return animation;
+}
+
 template <class... Ts> struct overloaded : Ts... {
 	using Ts::operator()...;
 };
 template <class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
-float cubicBezierCurve(const Curve& curve, float t) {
-	return IKIGAI::MATH::CURVES::evaluateParametric(curve, t).y;
+namespace {
+
+float lerpEulerDegrees(float from, float to, float progress) {
+	float delta = to - from;
+	while (delta > 180.f) {
+		delta -= 360.f;
+	}
+	while (delta < -180.f) {
+		delta += 360.f;
+	}
+	return from + delta * progress;
 }
+
+MATH::Vector3f lerpVector3(const MATH::Vector3f& from, const MATH::Vector3f& to, float progress, bool eulerShortest) {
+	if (eulerShortest) {
+		return MATH::Vector3f(
+			lerpEulerDegrees(from.x, to.x, progress), lerpEulerDegrees(from.y, to.y, progress), lerpEulerDegrees(from.z, to.z, progress));
+	}
+	return MATH::Vector3f(from.x + (to.x - from.x) * progress, from.y + (to.y - from.y) * progress, from.z + (to.z - from.z) * progress);
+}
+
+InterpolationType segmentTypeFor(const Animation& animation, const std::string& track, int startFrame, const AnimationProperty& property) {
+	if (const auto trackIt = animation.segmentInterpolation.find(track); trackIt != animation.segmentInterpolation.end()) {
+		if (const auto frameIt = trackIt->second.find(startFrame); frameIt != trackIt->second.end()) {
+			return frameIt->second;
+		}
+	}
+	return property.getInterpolationType();
+}
+
+float applySegmentEasing(InterpolationType type, const Curve& curve, float segmentTime) {
+	if (type == InterpolationType::CUSTOM) {
+		return evaluateAtTime(curve, segmentTime);
+	}
+	return getEasingOrLinear(type)(segmentTime);
+}
+
+} // namespace
 
 void Animation::update(float dt) {
 	if (animStatus == AnimationBase::Status::PAUSE || animStatus == AnimationBase::Status::STOP) {
@@ -297,110 +406,134 @@ void Animation::update(float dt) {
 	if (!isInit) {
 		init();
 	}
-	if (dt < std::numeric_limits<float>::epsilon()) {
-		dt = 16.66f;
-	}
-	curTime += dt;
 
-	auto curFrame = static_cast<int>(curTime / FPS);
-	if (curFrame > framesCount) {
-		if (isLooped) {
-			curTime = 0.0f;
+	const double prevTime = curTime;
+	curTime += static_cast<double>(dt);
+	const double duration = getDurationSeconds();
+
+	auto dispatchTimelineEvents = [&](double rangeStart, double rangeEnd) {
+		if (rangeEnd <= rangeStart) {
+			return;
 		}
-		else {
-			animStatus = AnimationBase::Status::STOP;
-		}
-	}
-	curState.clear();
-	for (auto& p : props) {
-		for (auto i = 0u; i < fastAccess[p.first].size() - 1; i++) {
-			if (curFrame >= fastAccess[p.first][i]) {
-				auto a1 = fastAccess[p.first][i];
-				auto a2 = fastAccess[p.first][i + 1];
-				if (curTime < a1 * FPS || curTime > a2 * FPS) {
-					continue;
+		for (const auto& property : props) {
+			if (!property.second.isTimelineEventTrack()) {
+				continue;
+			}
+			const auto keysIt = fastAccess.find(property.first);
+			if (keysIt == fastAccess.end()) {
+				continue;
+			}
+			for (const int frame : keysIt->second) {
+				const double keyTime = frameToTime(frame);
+				if (keyTime > rangeStart && keyTime <= rangeEnd) {
+					if (const auto frameIt = frames.find(frame); frameIt != frames.end()) {
+						if (const auto valueIt = frameIt->second.find(property.first); valueIt != frameIt->second.end()) {
+							if (const auto* eventName = std::get_if<std::string>(&valueIt->second)) {
+								RESOURCES::ServiceManager::Get<EVENT::EventBroadcaster>().run(*eventName, EVENT::EventBroadcaster::Payload {});
+							}
+						}
+					}
 				}
-				auto progress = (curTime - a1 * FPS) / ((a2 - a1) * FPS);
-				if (progress > 1.0f) {
-					progress = 1.0f;
-				}
-				if (progress < 0.0f) {
-					progress = 0.0f;
-				}
-
-				if (p.second.getInterpolationType() == InterpolationType::CUSTOM) {
-					progress = cubicBezierCurve(curves[p.first].at(i), progress);
-				}
-				else {
-					progress = functions[p.second.getInterpolationType()](progress);
-				}
-
-				std::visit(overloaded { [this, &p, a1, a2, progress](const float& val) {
-										   auto val1 = std::get_if<float>(&frames[a1][p.first]);
-										   auto val2 = std::get_if<float>(&frames[a2][p.first]);
-										   if (val1 && val2) {
-											   curState[p.first] = linearFunc(*val1, *val2, progress);
-										   }
-									   },
-						   [this, &p, a1, a2, progress](const int& val) {
-							   auto val1 = std::get_if<int>(&frames[a1][p.first]);
-							   auto val2 = std::get_if<int>(&frames[a2][p.first]);
-							   if (val1 && val2) {
-								   curState[p.first] = linearFunc(*val1, *val2, progress);
-							   }
-						   },
-						   [this, &p, a1, a2, progress](const bool& val) {
-							   auto val1 = std::get_if<bool>(&frames[a1][p.first]);
-							   auto val2 = std::get_if<bool>(&frames[a2][p.first]);
-							   if (val1 && val2) {
-								   curState[p.first] = linearFunc(*val1, *val2, progress);
-							   }
-						   },
-						   [this, &p, a1, a2, progress](const MATH::Vector2f& val) {
-							   auto val1 = std::get_if<MATH::Vector2f>(&frames[a1][p.first]);
-							   auto val2 = std::get_if<MATH::Vector2f>(&frames[a2][p.first]);
-							   if (val1 && val2) {
-								   curState[p.first] = MATH::Vector2f(linearFunc(val1->x, val2->x, progress), linearFunc(val1->y, val2->y, progress));
-							   }
-						   },
-						   [this, &p, a1, a2, progress](const MATH::Vector3f& val) {
-							   auto val1 = std::get_if<MATH::Vector3f>(&frames[a1][p.first]);
-							   auto val2 = std::get_if<MATH::Vector3f>(&frames[a2][p.first]);
-							   if (val1 && val2) {
-								   curState[p.first] = MATH::Vector3f(linearFunc(val1->x, val2->x, progress), linearFunc(val1->y, val2->y, progress),
-									   linearFunc(val1->z, val2->z, progress));
-							   }
-						   },
-						   [this, &p, a1, a2, progress](const MATH::Vector4f& val) {
-							   auto val1 = std::get_if<MATH::Vector4f>(&frames[a1][p.first]);
-							   auto val2 = std::get_if<MATH::Vector4f>(&frames[a2][p.first]);
-							   if (val1 && val2) {
-								   curState[p.first] = MATH::Vector4f(linearFunc(val1->x, val2->x, progress), linearFunc(val1->y, val2->y, progress),
-									   linearFunc(val1->z, val2->z, progress), linearFunc(val1->w, val2->w, progress));
-							   }
-						   },
-						   [this, &p, a1, a2, progress, curFrame](const std::string& val) {
-							   // auto val1 = std::get_if<std::string>(&frames[a1][p.first]);
-							   // auto val2 = std::get_if<std::string>(&frames[a2][p.first]);
-							   // if (val1 && val2) {
-							   if (curFrame == a1) {
-								   curState[p.first] = val;
-							   }
-							   // else if (curFrame == a2) {
-							   //	curState[p.first] = &val2;
-							   // }
-							   //}
-						   },
-						   [this, &p, a1, a2, progress](const auto& val) {
-
-						   } },
-					frames[a1][p.first]);
 			}
 		}
+	};
+
+	if (duration > 0.0 && curTime > duration) {
+		if (isLooped) {
+			dispatchTimelineEvents(prevTime, duration);
+			while (curTime > duration) {
+				curTime -= duration;
+			}
+			dispatchTimelineEvents(0.0, curTime);
+		}
+		else {
+			curTime = duration;
+			animStatus = AnimationBase::Status::STOP;
+			dispatchTimelineEvents(prevTime, duration);
+		}
+	}
+	else {
+		dispatchTimelineEvents(prevTime, curTime);
 	}
 
-	for (auto& v : curState) {
-		props.at(v.first).set(v.second);
+	curState.clear();
+	for (auto& property : props) {
+		if (property.second.isTimelineEventTrack()) {
+			continue;
+		}
+		const auto keysIt = fastAccess.find(property.first);
+		if (keysIt == fastAccess.end() || keysIt->second.size() < 2) {
+			continue;
+		}
+		const auto& keys = keysIt->second;
+		for (std::size_t i = 0; i + 1 < keys.size(); ++i) {
+			const int startFrame = keys[i];
+			const int endFrame = keys[i + 1];
+			const double startTime = frameToTime(startFrame);
+			const double endTime = frameToTime(endFrame);
+			if (curTime < startTime || curTime > endTime) {
+				continue;
+			}
+			const double segmentDuration = endTime - startTime;
+			float progress = segmentDuration > 0.0 ? static_cast<float>((curTime - startTime) / segmentDuration) : 1.f;
+			progress = std::clamp(progress, 0.f, 1.f);
+
+			const auto segmentType = segmentTypeFor(*this, property.first, startFrame, property.second);
+			const auto& curve = curves.at(property.first).at(startFrame);
+			progress = applySegmentEasing(segmentType, curve, progress);
+
+			std::visit(
+				overloaded { [this, &property, startFrame, endFrame, progress](const float&) {
+								const auto* val1 = std::get_if<float>(&frames.at(startFrame).at(property.first));
+								const auto* val2 = std::get_if<float>(&frames.at(endFrame).at(property.first));
+								if (val1 && val2) {
+									curState[property.first] = linearFunc(*val1, *val2, progress);
+								}
+							},
+				[this, &property, startFrame, endFrame, progress](const int&) {
+					const auto* val1 = std::get_if<int>(&frames.at(startFrame).at(property.first));
+					const auto* val2 = std::get_if<int>(&frames.at(endFrame).at(property.first));
+					if (val1 && val2) {
+						curState[property.first] = linearFunc(*val1, *val2, progress);
+					}
+				},
+				[this, &property, startFrame, endFrame, progress](const bool&) {
+					const auto* val1 = std::get_if<bool>(&frames.at(startFrame).at(property.first));
+					const auto* val2 = std::get_if<bool>(&frames.at(endFrame).at(property.first));
+					if (val1 && val2) {
+						curState[property.first] = linearFunc(*val1, *val2, progress);
+					}
+				},
+				[this, &property, startFrame, endFrame, progress](const MATH::Vector2f&) {
+					const auto* val1 = std::get_if<MATH::Vector2f>(&frames.at(startFrame).at(property.first));
+					const auto* val2 = std::get_if<MATH::Vector2f>(&frames.at(endFrame).at(property.first));
+					if (val1 && val2) {
+						curState[property.first] = MATH::Vector2f(linearFunc(val1->x, val2->x, progress), linearFunc(val1->y, val2->y, progress));
+					}
+				},
+				[this, &property, startFrame, endFrame, progress](const MATH::Vector3f&) {
+					const auto* val1 = std::get_if<MATH::Vector3f>(&frames.at(startFrame).at(property.first));
+					const auto* val2 = std::get_if<MATH::Vector3f>(&frames.at(endFrame).at(property.first));
+					if (val1 && val2) {
+						curState[property.first] = lerpVector3(*val1, *val2, progress, property.second.getEulerShortestPath());
+					}
+				},
+				[this, &property, startFrame, endFrame, progress](const MATH::Vector4f&) {
+					const auto* val1 = std::get_if<MATH::Vector4f>(&frames.at(startFrame).at(property.first));
+					const auto* val2 = std::get_if<MATH::Vector4f>(&frames.at(endFrame).at(property.first));
+					if (val1 && val2) {
+						curState[property.first] = MATH::Vector4f(linearFunc(val1->x, val2->x, progress), linearFunc(val1->y, val2->y, progress),
+							linearFunc(val1->z, val2->z, progress), linearFunc(val1->w, val2->w, progress));
+					}
+				},
+				[](const std::string&) {}, [](const auto&) {} },
+				frames.at(startFrame).at(property.first));
+			break;
+		}
+	}
+
+	for (auto& value : curState) {
+		props.at(value.first).set(value.second);
 	}
 }
 
@@ -409,7 +542,7 @@ void Animation::play() {
 }
 
 void Animation::stop() {
-	curTime = 0.0f;
+	curTime = 0.0;
 	animStatus = AnimationBase::Status::STOP;
 }
 
