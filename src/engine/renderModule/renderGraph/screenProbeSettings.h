@@ -66,6 +66,12 @@ struct ScreenProbeSettings {
 	// Textures sized one texel per probe (Scale = 1 / TileSize) and per probe direction (Scale = side / TileSize).
 	std::vector<std::string> ProbeTextures;
 	std::vector<std::string> AtlasTextures;
+	// M4 temporal stack (probe history, shared full resolution denoiser). Stages in TemporalV2Stages run only when it is on,
+	// stages in LegacyTemporalStages (the M3 SPTemporal) only when it is off; the inactive set is disabled at load and its
+	// Bypass aliases rewire the graph. Debug visualisations (DebugMode other than OFF) always use the legacy stages.
+	bool UseTemporalV2 = false;
+	std::vector<std::string> TemporalV2Stages;
+	std::vector<std::string> LegacyTemporalStages;
 
 	template <class Context> constexpr static auto serde(Context& context, ScreenProbeSettings& value) {
 		using Self = ScreenProbeSettings;
@@ -98,7 +104,10 @@ struct ScreenProbeSettings {
 				default_ { std::vector<ScreenProbeChainLink> {
 				ScreenProbeChainLink::SCREEN, ScreenProbeChainLink::RAY_QUERY, ScreenProbeChainLink::DDGI, ScreenProbeChainLink::ENVIRONMENT } })
 			.field(&Self::ProbeTextures, "ProbeTextures", default_ { std::vector<std::string> {} })
-			.field(&Self::AtlasTextures, "AtlasTextures", default_ { std::vector<std::string> {} });
+			.field(&Self::AtlasTextures, "AtlasTextures", default_ { std::vector<std::string> {} })
+			.field(&Self::UseTemporalV2, "UseTemporalV2", default_ { false })
+			.field(&Self::TemporalV2Stages, "TemporalV2Stages", default_ { std::vector<std::string> {} })
+			.field(&Self::LegacyTemporalStages, "LegacyTemporalStages", default_ { std::vector<std::string> {} });
 	}
 };
 
@@ -166,6 +175,8 @@ struct ScreenProbeDdgiVolume {
 // Pipeline uniform buffer that screen probe stages bind with BufferLinks { "ScreenProbe": ScreenProbeBufferName }.
 inline constexpr const char* ScreenProbeBufferName = "ScreenProbeSettings";
 
+// True when the M4 temporal stack runs: UseTemporalV2 and no debug visualisation (those are drawn by the legacy stage).
+bool ScreenProbeTemporalV2Active(const ScreenProbeSettings& settings);
 // Validates the parameters (throws std::runtime_error naming the field) and returns the shader block.
 ScreenProbeGpuSettings ResolveScreenProbeGpuSettings(const ScreenProbeSettings& settings, const ScreenProbeDdgiVolume& volume);
 // Decodes and validates a DDGI grid from RT push constant bytes (each element must be a byte 0..255).

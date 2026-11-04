@@ -76,6 +76,37 @@ namespace {
 			"stage " + settings.DdgiStage + " must be a RAY_TRACE stage with a Program");
 		return DecodeScreenProbeDdgiVolume(found->PushConstants, settings.DdgiStage);
 	}
+
+	// Enables one temporal stack and disables the other. A disabled stage applies its Bypass aliases every frame, so the
+	// graph is rewired without editing stage inputs (M4 probe history -> raw probe irradiance; M3 SPIndirect -> denoiser output).
+	void SelectTemporalStages(RenderGraphPipeline::Descriptor& descriptor) {
+		const auto& settings = descriptor.ScreenProbes;
+		const std::set<std::string> v2(settings.TemporalV2Stages.begin(), settings.TemporalV2Stages.end());
+		const std::set<std::string> legacy(settings.LegacyTemporalStages.begin(), settings.LegacyTemporalStages.end());
+		Require(v2.size() == settings.TemporalV2Stages.size(), "TemporalV2Stages", "lists a stage twice");
+		Require(legacy.size() == settings.LegacyTemporalStages.size(), "LegacyTemporalStages", "lists a stage twice");
+		for (const auto& name : v2) {
+			Require(!legacy.contains(name), "TemporalV2Stages", "stage " + name + " is also listed in LegacyTemporalStages");
+		}
+		Require(!settings.UseTemporalV2 || !v2.empty(), "TemporalV2Stages", "must name the M4 temporal stages when UseTemporalV2 is true");
+		const bool active = ScreenProbeTemporalV2Active(settings);
+		size_t found = 0;
+		for (auto& stage : descriptor.Stages) {
+			const bool isV2 = v2.contains(stage.Name);
+			const bool isLegacy = legacy.contains(stage.Name);
+			if (!isV2 && !isLegacy) {
+				continue;
+			}
+			++found;
+			const std::string field = isV2 ? "TemporalV2Stages" : "LegacyTemporalStages";
+			Require(stage.Draw == DrawContent::COMPUTE, field, "stage " + stage.Name + " must be a COMPUTE stage");
+			for (const auto& output : stage.Writes) {
+				Require(stage.Bypass.contains(output), field, "stage " + stage.Name + " needs a Bypass alias for " + output);
+			}
+			stage.Enabled = stage.Enabled && (isV2 ? active : !active);
+		}
+		Require(found == v2.size() + legacy.size(), "TemporalV2Stages", "names a stage that is not in Stages");
+	}
 }
 
 void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
@@ -106,6 +137,7 @@ void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
 			Require(name != atlas, "AtlasTextures", "texture " + name + " is also a probe texture");
 		}
 	}
+	SelectTemporalStages(descriptor);
 }
 
 void CreateScreenProbeBuffer(RenderGraphPipeline& pipeline, Renderer& renderer) {
@@ -118,6 +150,7 @@ void CreateScreenProbeBuffer(RenderGraphPipeline& pipeline, Renderer& renderer) 
 	std::cout << "SCREEN_PROBES tile=" << gpu.TileSize << " directions=" << gpu.DirectionSide * gpu.DirectionSide << " max_steps=" << gpu.MaxSteps
 			  << " thickness=" << gpu.Thickness << " intensity=" << gpu.Intensity << " history=" << gpu.UseHistory << " debug=" << gpu.DebugMode
 			  << " spatial_radius=" << gpu.SpatialRadius << " chain_mask=" << gpu.ChainMask << " previous_scene_weight=" << gpu.PreviousSceneWeight
-			  << " ray_query_max_distance=" << gpu.RayQueryMaxDistance << " ddgi=" << gpu.DdgiValid << std::endl;
+			  << " ray_query_max_distance=" << gpu.RayQueryMaxDistance << " ddgi=" << gpu.DdgiValid
+			  << " temporal_v2=" << (ScreenProbeTemporalV2Active(settings) ? 1 : 0) << std::endl;
 }
 }
