@@ -78,7 +78,9 @@ enum class DrawContent {
 	VECTOR_WORLD,
 	PRIMITIVES_WORLD,
 	PRIMITIVES_SCREEN,
-	WEATHER
+	WEATHER,
+	// Phase 2 of the virtual geometry HZB occlusion (renderModule/virtualGeometry/virtualGeometryPostStage.h).
+	VIRTUAL_GEOMETRY_POST
 };
 
 struct PipelineStage {

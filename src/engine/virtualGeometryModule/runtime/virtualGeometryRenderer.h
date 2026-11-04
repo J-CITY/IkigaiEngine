@@ -44,6 +44,12 @@ class VirtualMeshAsset;
 // The environment variable IKIGAI_VG_SELECTION=cpu|gpu|auto overrides the setting (tests).
 enum class VirtualGeometrySelectionPath { AUTO = 0, CPU = 1, GPU = 2 };
 
+// Debug modes of the two-phase HZB occlusion (M4-V2). PHASE_COLORS paints cluster albedo by the phase that drew it
+// (green: phase 1, red: phase 2). PHASE1_ONLY and UNSAFE_MIP are deliberately non-conservative negative controls of
+// the "no false holes" test: phase 2 is skipped, or the HZB is read one mip too fine at a single texel.
+// The environment variable IKIGAI_VG_OCCLUSION_DEBUG=none|phase-colors|phase1-only|unsafe-mip overrides the setting.
+enum class VirtualGeometryOcclusionDebug { NONE = 0, PHASE_COLORS = 1, PHASE1_ONLY = 2, UNSAFE_MIP = 3 };
+
 // Runtime switches of the virtual geometry renderer (typed descriptor; set by tools, tests and the editor).
 struct VirtualGeometrySettings {
 	// false draws every virtual mesh through its fallback mesh on the regular path.
@@ -57,6 +63,10 @@ struct VirtualGeometrySettings {
 	// Multiplies every component threshold (quality scaling).
 	float ThresholdScale = 1.0f;
 	VirtualGeometrySelectionPath SelectionPath = VirtualGeometrySelectionPath::AUTO;
+	// Two-phase HZB occlusion on the GPU path. Active only when the pipeline has a VIRTUAL_GEOMETRY_POST stage after an
+	// HZB build; otherwise selection is frustum + cone as in M4-V1. IKIGAI_VG_OCCLUSION=on|off overrides it.
+	bool OcclusionCulling = true;
+	VirtualGeometryOcclusionDebug OcclusionDebug = VirtualGeometryOcclusionDebug::NONE;
 
 	template <class C> static void serde(C& context, VirtualGeometrySettings& value) {
 		using namespace serde::attribute;
@@ -67,7 +77,9 @@ struct VirtualGeometrySettings {
 			.field(&VirtualGeometrySettings::ConeCulling, "ConeCulling", default_ { true })
 			.field(&VirtualGeometrySettings::DebugOverride, "DebugOverride", default_ { ECS::VirtualMeshDebugMode::NONE })
 			.field(&VirtualGeometrySettings::ThresholdScale, "ThresholdScale", default_ { 1.0f })
-			.field(&VirtualGeometrySettings::SelectionPath, "SelectionPath", default_ { VirtualGeometrySelectionPath::AUTO });
+			.field(&VirtualGeometrySettings::SelectionPath, "SelectionPath", default_ { VirtualGeometrySelectionPath::AUTO })
+			.field(&VirtualGeometrySettings::OcclusionCulling, "OcclusionCulling", default_ { true })
+			.field(&VirtualGeometrySettings::OcclusionDebug, "OcclusionDebug", default_ { VirtualGeometryOcclusionDebug::NONE });
 	}
 };
 
@@ -104,6 +116,23 @@ struct VirtualGeometryFrameStatistics {
 	uint32_t DrawCapacity = 0;
 	// Bytes of the GPU selection buffers.
 	uint64_t GpuSelectionBytes = 0;
+	// Two-phase HZB occlusion (M4-V2). OcclusionActive: phase 2 runs this frame; OcclusionHistory: phase 1 tested
+	// against the previous HZB. The counters are GPU statistics with the same latency as above.
+	bool OcclusionActive = false;
+	bool OcclusionHistory = false;
+	uint32_t InstancesOccludedPhase1 = 0;
+	uint32_t InstancesRevivedPhase2 = 0;
+	uint32_t ClustersOccludedPhase1 = 0;
+	uint32_t ClustersRevivedPhase2 = 0;
+	// Clusters drawn by phase 2 for instances phase 1 rejected as a whole.
+	uint32_t ClustersPostInstances = 0;
+	// Clusters rejected by the current HZB in phase 2 (finally occluded).
+	uint32_t ClustersOccludedPhase2 = 0;
+	uint32_t Phase2Triangles = 0;
+	uint32_t OccludedListOverflow = 0;
+	// Capacity of the occluded-cluster list and CPU time of recordOcclusionPost.
+	uint32_t OccludedCapacity = 0;
+	double OcclusionPostMilliseconds = 0.0;
 };
 
 // Camera inputs for one frame of cluster selection.
@@ -114,6 +143,18 @@ struct VirtualGeometryFrameInput {
 	bool GeometryStageActive = false;
 	// Optional GPU timestamps of the selection passes (stages VgInstanceCull and VgClusterCull).
 	PROFILER::GpuStageProfiler* GpuProfiler = nullptr;
+	// Two-phase HZB occlusion (M4-V2). The pipeline runs an enabled VIRTUAL_GEOMETRY_POST stage this frame (validated
+	// at load to follow an HZB build after the Geometry stage): only then may phase 1 reject by occlusion.
+	bool OcclusionPostStageActive = false;
+	// Temporal history is valid (no camera cut, resize or pipeline reload since the previous frame).
+	bool HistoryValid = false;
+	// Row-major view-projection with the projection jitter this frame's depth is rendered with, and the previous one.
+	MATH::Matrix4f ViewProjection = MATH::Matrix4f::Identity;
+	MATH::Matrix4f PreviousViewProjection = MATH::Matrix4f::Identity;
+	// Physical HZB texture of the post stage (its size must match the previous frame's for phase 1).
+	std::shared_ptr<RENDER::TextureInterface> Hzb = {};
+	// Any 2D texture: bound to the HZB slot of the cull shaders when no HZB is tested.
+	std::shared_ptr<RENDER::TextureInterface> FallbackTexture = {};
 };
 
 // Inputs of the last GPU-selected frame, kept for equivalence tests against the CPU selection.
@@ -166,8 +207,15 @@ public:
 	// (shadow maps, ray tracing and GI use the fallback mesh in M2).
 	void prepareFrame(RENDER::Renderer& renderer, SCENE_SYSTEM::Scene& scene, const VirtualGeometryFrameInput& input,
 		std::vector<RENDER::RenderChunk>& viewChunks, std::vector<RENDER::RenderChunk>& shadowChunks);
-	// Records the cluster draws of the frame into the currently bound G-buffer framebuffer.
+	// Records the cluster draws of the frame into the currently bound G-buffer framebuffer (phase 1 with occlusion).
 	void drawGeometry(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings);
+	// Two-phase occlusion, phase 2 (VIRTUAL_GEOMETRY_POST stage): outside any render pass, re-tests what phase 1
+	// rejected against `hzb` (built from the phase-1 depth). Returns true when post draws may follow.
+	bool recordOcclusionPost(RENDER::Renderer& renderer, const std::shared_ptr<RENDER::TextureInterface>& hzb, PROFILER::GpuStageProfiler* profiler);
+	// Records the phase-2 draws into the currently bound G-buffer framebuffer (loaded, not cleared).
+	void drawOcclusionPost(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings);
+	// Phase 1 of this frame may reject by occlusion, so the post stage must run.
+	bool occlusionActive() const;
 	// Drops per-frame references (call when the frame or scene ends).
 	void endFrame();
 
@@ -240,6 +288,8 @@ private:
 		std::shared_ptr<VirtualMeshAsset> Asset = {};
 		MATH::Matrix4f World = MATH::Matrix4f::Identity;
 		MATH::Matrix4f PreviousWorld = MATH::Matrix4f::Identity;
+		// PreviousWorld is the real pose of the previous frame (not a first frame or a gap).
+		bool ContinuousHistory = false;
 		VirtualGeometryInstanceTransform Transform = {};
 		int OwnerId = 0;
 		float Threshold = 0.0f;
@@ -254,7 +304,10 @@ private:
 		VirtualGeometrySelectionStatistics& statistics);
 	// Builds the GPU tables; returns false (and logs) when a limit of the GPU path is exceeded.
 	bool buildGpuFrame(RENDER::Renderer& renderer, const VirtualGeometryFrameInput& input);
+	// Decides the two-phase occlusion state of the frame (settings, environment, pipeline, history).
+	void resolveOcclusion(const VirtualGeometryFrameInput& input);
 	void applyGpuStatistics(const VirtualGeometryGpuStatistics& statistics, uint32_t latency);
+	void drawBatches(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings, bool post);
 	bool mGpuFrameRecorded = false;
 	void appendFallback(ECS::VirtualMeshRenderer& component, const MATH::Matrix4f& world, const MATH::Matrix4f& previousWorld, int ownerId,
 		float distance, std::vector<RENDER::RenderChunk>& chunks) const;
@@ -299,5 +352,25 @@ private:
 	bool mHasEnvironmentPath = false;
 	VirtualGeometrySelectionPath mEnvironmentPath = VirtualGeometrySelectionPath::AUTO;
 	std::string mLoggedSelection = {};
+
+	// Two-phase HZB occlusion (M4-V2).
+	bool mEnvironmentOcclusionRead = false;
+	bool mHasEnvironmentOcclusion = false;
+	bool mEnvironmentOcclusion = true;
+	bool mHasEnvironmentOcclusionDebug = false;
+	VirtualGeometryOcclusionDebug mEnvironmentOcclusionDebug = VirtualGeometryOcclusionDebug::NONE;
+	// Phase 1 of the current frame may reject (the post stage must run before the frame ends).
+	bool mOcclusionPending = false;
+	bool mOcclusionPostDone = false;
+	// Set when a frame with phase-1 rejections ended without phase 2: occlusion stays off (logged once).
+	bool mOcclusionBroken = false;
+	// HZB written by the last frame's pipeline and the view-projection its depth used.
+	std::shared_ptr<RENDER::TextureInterface> mHistoryHzb = {};
+	MATH::Matrix4f mHistoryViewProjection = MATH::Matrix4f::Identity;
+	uint64_t mHistoryFrame = 0;
+	bool mHistoryHzbValid = false;
+	MATH::Matrix4f mFrameViewProjection = MATH::Matrix4f::Identity;
+	uint64_t mFrame = 0;
+	std::string mLoggedOcclusion = {};
 };
 }

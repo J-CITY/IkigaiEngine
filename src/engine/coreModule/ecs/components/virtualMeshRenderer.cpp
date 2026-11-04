@@ -148,7 +148,12 @@ MATH::Matrix4f VirtualMeshRenderer::advanceHistory(const MATH::Matrix4f& world, 
 	mHistoryWorld = world;
 	mHistoryFrame = frame;
 	mHistoryValid = true;
+	mHistoryContinuous = continuous;
 	return mHistoryPreviousWorld;
+}
+
+bool VirtualMeshRenderer::hasContinuousHistory() const {
+	return mHistoryContinuous;
 }
 }
 

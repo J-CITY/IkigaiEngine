@@ -8,6 +8,7 @@
 #include "renderModule/backends/interface/meshInterface.h"
 #include "renderModule/backends/interface/modelInterface.h"
 #include "renderModule/backends/interface/storageBufferInterface.h"
+#include "renderModule/backends/interface/textureInterface.h"
 #include "renderModule/backends/interface/vertexBufferInterface.h"
 #include "renderModule/diagnostics/renderStatistics.h"
 #include "renderModule/drawable.h"
@@ -23,6 +24,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <numeric>
 
@@ -110,6 +112,43 @@ namespace {
 		}
 		return false;
 	}
+
+	std::string Lowercase(std::string value) {
+		std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		return value;
+	}
+
+	bool ParseOcclusionDebug(const std::string& text, VirtualGeometryOcclusionDebug& debug) {
+		const auto value = Lowercase(text);
+		if (value == "none") {
+			debug = VirtualGeometryOcclusionDebug::NONE;
+		}
+		else if (value == "phase-colors") {
+			debug = VirtualGeometryOcclusionDebug::PHASE_COLORS;
+		}
+		else if (value == "phase1-only") {
+			debug = VirtualGeometryOcclusionDebug::PHASE1_ONLY;
+		}
+		else if (value == "unsafe-mip") {
+			debug = VirtualGeometryOcclusionDebug::UNSAFE_MIP;
+		}
+		else {
+			return false;
+		}
+		return true;
+	}
+
+	void CopyMatrixRows(const MATH::Matrix4f& matrix, float rows[4][4]) {
+		const auto* data = matrix.getData();
+		for (int row = 0; row < 4; ++row) {
+			for (int column = 0; column < 4; ++column) {
+				rows[row][column] = data[row * 4 + column];
+			}
+		}
+	}
+
+	// Phase-colour debug mode of vgGBuffer.vert.glsl (outside the component's VirtualMeshDebugMode range).
+	constexpr float OcclusionPhaseDebugMode = 4.0f;
 }
 
 void ValidateVirtualGeometrySettings(const VirtualGeometrySettings& settings) {
@@ -123,6 +162,11 @@ void ValidateVirtualGeometrySettings(const VirtualGeometrySettings& settings) {
 	const auto debug = static_cast<int>(settings.DebugOverride);
 	if (debug < static_cast<int>(ECS::VirtualMeshDebugMode::NONE) || debug > static_cast<int>(ECS::VirtualMeshDebugMode::GROUP)) {
 		throw std::invalid_argument("VirtualGeometrySettings.DebugOverride is out of range");
+	}
+	const auto occlusionDebug = static_cast<int>(settings.OcclusionDebug);
+	if (occlusionDebug < static_cast<int>(VirtualGeometryOcclusionDebug::NONE)
+		|| occlusionDebug > static_cast<int>(VirtualGeometryOcclusionDebug::UNSAFE_MIP)) {
+		throw std::invalid_argument("VirtualGeometrySettings.OcclusionDebug must be NONE, PHASE_COLORS, PHASE1_ONLY or UNSAFE_MIP");
 	}
 }
 
@@ -185,7 +229,99 @@ bool VirtualGeometryRenderer::collectGpuSelection(RENDER::Renderer& renderer, co
 	return mGpuSelection.collectCapture(renderer, capture.Tickets, capture.Segments, visible, statistics);
 }
 
+bool VirtualGeometryRenderer::occlusionActive() const {
+	return mOcclusionPending;
+}
+
+void VirtualGeometryRenderer::resolveOcclusion(const VirtualGeometryFrameInput& input) {
+	if (!mEnvironmentOcclusionRead) {
+		mEnvironmentOcclusionRead = true;
+		if (const char* value = std::getenv("IKIGAI_VG_OCCLUSION")) {
+			const auto text = Lowercase(value);
+			mHasEnvironmentOcclusion = text == "on" || text == "off";
+			mEnvironmentOcclusion = text == "on";
+			if (!mHasEnvironmentOcclusion) {
+				std::cerr << "VG_OCCLUSION_ENV_INVALID IKIGAI_VG_OCCLUSION=" << value << " (expected on or off)" << std::endl;
+			}
+		}
+		if (const char* value = std::getenv("IKIGAI_VG_OCCLUSION_DEBUG")) {
+			mHasEnvironmentOcclusionDebug = ParseOcclusionDebug(value, mEnvironmentOcclusionDebug);
+			if (!mHasEnvironmentOcclusionDebug) {
+				std::cerr << "VG_OCCLUSION_ENV_INVALID IKIGAI_VG_OCCLUSION_DEBUG=" << value
+						  << " (expected none, phase-colors, phase1-only or unsafe-mip)" << std::endl;
+			}
+		}
+	}
+	auto& occlusion = mGpuFrame.Occlusion;
+	occlusion = {};
+	occlusion.FallbackTexture = input.FallbackTexture;
+	const bool enabled = mHasEnvironmentOcclusion ? mEnvironmentOcclusion : mSettings.OcclusionCulling;
+	const auto debug = mHasEnvironmentOcclusionDebug ? mEnvironmentOcclusionDebug : mSettings.OcclusionDebug;
+	std::string reason;
+	if (!enabled) {
+		reason = "setting";
+	}
+	else if (mOcclusionBroken) {
+		reason = "post-missed";
+	}
+	else if (!input.OcclusionPostStageActive) {
+		reason = "no-post-stage";
+	}
+	else if (!input.Hzb || !input.FallbackTexture) {
+		reason = "no-hzb";
+	}
+	occlusion.Active = reason.empty();
+	// The previous HZB is usable when the previous frame ran phase 2 with an HZB of the same size and nothing broke
+	// the temporal history (camera cut, resize, pipeline reload): otherwise phase 1 tests frustum and cone only.
+	occlusion.History = occlusion.Active && mHistoryHzbValid && mHistoryHzb && mHistoryFrame + 1 == input.Frame && input.HistoryValid
+		&& mHistoryHzb->getWidth() == input.Hzb->getWidth() && mHistoryHzb->getHeight() == input.Hzb->getHeight();
+	if (occlusion.Active) {
+		occlusion.PreviousHzb = occlusion.History ? mHistoryHzb : nullptr;
+		CopyMatrixRows(mHistoryViewProjection, occlusion.PreviousViewProjection);
+		CopyMatrixRows(input.ViewProjection, occlusion.ViewProjection);
+		occlusion.DebugFlags = debug == VirtualGeometryOcclusionDebug::PHASE1_ONLY ? VG_OCCLUSION_DEBUG_SKIP_POST
+			: debug == VirtualGeometryOcclusionDebug::UNSAFE_MIP				   ? VG_OCCLUSION_DEBUG_UNSAFE_MIP
+																				   : 0u;
+	}
+	mFrameViewProjection = input.ViewProjection;
+	mFrame = input.Frame;
+	mHistoryHzbValid = false;
+	const std::string log = std::string("active=") + (occlusion.Active ? "1" : "0") + (reason.empty() ? std::string() : " reason=" + reason)
+		+ " debug=" + std::to_string(static_cast<int>(debug));
+	if (log != mLoggedOcclusion) {
+		std::cout << "VG_OCCLUSION " << log << std::endl;
+		mLoggedOcclusion = log;
+	}
+}
+
+bool VirtualGeometryRenderer::recordOcclusionPost(
+	RENDER::Renderer& renderer, const std::shared_ptr<RENDER::TextureInterface>& hzb, PROFILER::GpuStageProfiler* profiler) {
+	if (!mGpuFrame.Occlusion.Active || !hzb) {
+		return false;
+	}
+	const auto start = std::chrono::steady_clock::now();
+	// This frame's HZB (and the one rebuilt after the post draws, if the pipeline does so) is next frame's history.
+	mHistoryHzb = hzb;
+	mHistoryViewProjection = mFrameViewProjection;
+	mHistoryFrame = mFrame;
+	mHistoryHzbValid = true;
+	if (!mOcclusionPending) {
+		return false;
+	}
+	mGpuSelection.recordPost(renderer, mGpuFrame, hzb, profiler);
+	mOcclusionPostDone = true;
+	mStatistics.OcclusionPostMilliseconds = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+	return (mGpuFrame.Occlusion.DebugFlags & VG_OCCLUSION_DEBUG_SKIP_POST) == 0u;
+}
+
 void VirtualGeometryRenderer::endFrame() {
+	if (mOcclusionPending && !mOcclusionPostDone && !mOcclusionBroken) {
+		// Phase 1 may have rejected visible clusters and nothing re-tested them: keep occlusion off from now on.
+		std::cerr << "VG_OCCLUSION_POST_MISSED frame=" << mFrame << " (occlusion disabled)" << std::endl;
+		mOcclusionBroken = true;
+	}
+	mOcclusionPending = false;
+	mOcclusionPostDone = false;
 	mBatches.clear();
 	mInstances.clear();
 	mCandidates.clear();
@@ -368,6 +504,7 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 		candidate.Asset = asset;
 		candidate.World = world;
 		candidate.PreviousWorld = previousWorld;
+		candidate.ContinuousHistory = component.hasContinuousHistory();
 		candidate.Transform = MakeInstanceTransform(world, singleSided);
 		candidate.OwnerId = ownerId;
 		candidate.Threshold = component.getErrorThreshold() * mSettings.ThresholdScale;
@@ -375,12 +512,19 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 		mCandidates.push_back(std::move(candidate));
 	}
 
+	if (gpuSelection) {
+		resolveOcclusion(input);
+	}
+	else {
+		mGpuFrame.Occlusion = {};
+	}
 	if (gpuSelection && !mCandidates.empty() && !buildGpuFrame(renderer, input)) {
 		// A GPU limit was exceeded this frame (logged by buildGpuFrame): select on the CPU instead.
 		gpuSelection = false;
 		mActivePath = VirtualGeometrySelectionPath::CPU;
 		mBatches.clear();
 		mInstances.clear();
+		mGpuFrame.Occlusion = {};
 	}
 	if (gpuSelection) {
 		mStatistics.GpuSelection = true;
@@ -389,7 +533,11 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 			uploadFrame(renderer);
 			mGpuDrawActive = true;
 			mGpuFrameRecorded = true;
+			mOcclusionPending = mGpuFrame.Occlusion.Active;
 		}
+		mStatistics.OcclusionActive = mGpuFrame.Occlusion.Active;
+		mStatistics.OcclusionHistory = mGpuFrame.Occlusion.History;
+		mStatistics.OccludedCapacity = mGpuFrame.Occlusion.OccludedCapacity;
 		if (previousGpuStatistics) {
 			applyGpuStatistics(gpuStatistics, 1);
 		}
@@ -571,6 +719,12 @@ bool VirtualGeometryRenderer::buildGpuFrame(RENDER::Renderer& renderer, const Vi
 		// Same condition as CullClusters: setting, uniform non-mirrored scale with single-sided materials, perspective.
 		const bool coneCulling = mSettings.ConeCulling && candidate.Transform.ConeCulling && !input.View.Orthographic;
 		gpu.Flags = (coneCulling ? VG_CULL_INSTANCE_CONE_CULLING : 0u) | (lodView.Orthographic ? VG_CULL_INSTANCE_LOD_ORTHOGRAPHIC : 0u);
+		// Phase-1 occlusion tests the pose the previous HZB saw; a new instance (or one after a gap) has none.
+		if (frame.Occlusion.History && candidate.ContinuousHistory) {
+			gpu.Flags |= VG_CULL_INSTANCE_OCCLUSION_HISTORY;
+			CopyRows(candidate.PreviousWorld, gpu.PreviousRows);
+			gpu.PreviousParams[0] = MakeInstanceTransform(candidate.PreviousWorld, false).MaxScale;
+		}
 		gpu.DrawInstance = instanceIndex;
 		gpu.ClusterCount = static_cast<uint32_t>(asset->clusters().size());
 		gpu.SlotCount = asset->materialSlotCount();
@@ -623,6 +777,45 @@ bool VirtualGeometryRenderer::buildGpuFrame(RENDER::Renderer& renderer, const Vi
 	}
 	frame.DrawCapacity = static_cast<uint32_t>(drawCapacity);
 
+	if (frame.Occlusion.Active) {
+		// Post copies double the draw range; the occluded-cluster list of an asset holds at most its whole cut.
+		uint64_t occluded = 0;
+		bool fits = drawCapacity * 2 <= UINT32_MAX / sizeof(RENDER::DrawIndexedIndirectCommand);
+		for (auto& asset : frame.Assets) {
+			uint64_t cut = 0;
+			for (uint32_t slot = 0; slot < asset.Asset->materialSlotCount(); ++slot) {
+				cut += asset.Asset->cutBounds().Bound[slot];
+			}
+			const uint64_t capacity = cut * asset.InstanceCount;
+			fits = fits && capacity / 64 < features.MaxComputeWorkGroupCountX;
+			asset.OccludedBase = static_cast<uint32_t>(std::min<uint64_t>(occluded, UINT32_MAX));
+			asset.OccludedCapacity = static_cast<uint32_t>(std::min<uint64_t>(capacity, UINT32_MAX));
+			occluded += capacity;
+		}
+		fits = fits && occluded <= UINT32_MAX / 8;
+		if (!fits) {
+			std::cerr << "VG_OCCLUSION_GPU_LIMIT occluded list " << occluded << " / draws " << drawCapacity * 2
+					  << " exceed the GPU limits: occlusion off this frame" << std::endl;
+			frame.Occlusion.Active = false;
+			frame.Occlusion.History = false;
+			for (auto& gpu : frame.Instances) {
+				gpu.Flags &= ~uint32_t(VG_CULL_INSTANCE_OCCLUSION_HISTORY);
+			}
+		}
+		else {
+			frame.Occlusion.OccludedCapacity = static_cast<uint32_t>(occluded);
+		}
+	}
+	const auto debug = mHasEnvironmentOcclusionDebug ? mEnvironmentOcclusionDebug : mSettings.OcclusionDebug;
+	if (frame.Occlusion.Active && debug == VirtualGeometryOcclusionDebug::PHASE_COLORS) {
+		// vgGBuffer.vert paints records from DrawCapacity on (the post range) red.
+		float boundary = 0.0f;
+		std::memcpy(&boundary, &frame.DrawCapacity, sizeof(boundary));
+		for (auto& instance : mInstances) {
+			instance.Params = { OcclusionPhaseDebugMode, boundary, 0.0f, 0.0f };
+		}
+	}
+
 	auto& view = frame.View;
 	view = {};
 	view.FrustumCulling = mSettings.FrustumCulling && input.View.Frustum ? 1u : 0u;
@@ -652,6 +845,14 @@ void VirtualGeometryRenderer::applyGpuStatistics(const VirtualGeometryGpuStatist
 	for (uint32_t level = 0; level < 8; ++level) {
 		mStatistics.LodHistogram[level] = statistics.LodHistogram[level];
 	}
+	mStatistics.InstancesOccludedPhase1 = statistics.InstancesOccludedMain;
+	mStatistics.InstancesRevivedPhase2 = statistics.InstancesRevived;
+	mStatistics.ClustersOccludedPhase1 = statistics.ClustersOccludedMain;
+	mStatistics.ClustersRevivedPhase2 = statistics.ClustersRevived;
+	mStatistics.ClustersPostInstances = statistics.ClustersPostInstances;
+	mStatistics.ClustersOccludedPhase2 = statistics.ClustersOccludedPost;
+	mStatistics.Phase2Triangles = statistics.PostTriangles;
+	mStatistics.OccludedListOverflow = statistics.OccludedListOverflow;
 }
 
 void VirtualGeometryRenderer::uploadFrame(RENDER::Renderer& renderer) {
@@ -706,9 +907,23 @@ void VirtualGeometryRenderer::uploadFrame(RENDER::Renderer& renderer) {
 }
 
 void VirtualGeometryRenderer::drawGeometry(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings) {
+	drawBatches(renderer, bindings, false);
+}
+
+void VirtualGeometryRenderer::drawOcclusionPost(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings) {
+	if (!mOcclusionPostDone || !mGpuDrawActive || (mGpuFrame.Occlusion.DebugFlags & VG_OCCLUSION_DEBUG_SKIP_POST) != 0u) {
+		return;
+	}
+	drawBatches(renderer, bindings, true);
+}
+
+void VirtualGeometryRenderer::drawBatches(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings, bool post) {
 	if (mBatches.empty() || !mClusterMaterial || (!mDrawCount && !mGpuDrawActive)) {
 		return;
 	}
+	// Post segments: counters after the phase-1 ones, draws after the phase-1 range (VirtualGeometryGpuFrame).
+	const uint32_t postDrawOffset = post ? mGpuFrame.DrawCapacity : 0u;
+	const uint32_t postSegmentOffset = post ? static_cast<uint32_t>(mGpuFrame.Segments.size()) : 0u;
 	const auto& drawRecords = mGpuDrawActive ? mGpuSelection.drawRecordBuffer() : mDrawRecordBuffer;
 	const auto& drawIndexStream = mGpuDrawActive ? mGpuSelection.drawIndexStream() : mDrawIndexStream;
 	auto* driver = renderer.getDriver();
@@ -747,8 +962,8 @@ void VirtualGeometryRenderer::drawGeometry(RENDER::Renderer& renderer, const Vir
 		renderer.setPrimitiveMode(RENDER::PrimitiveMode::TRIANGLES);
 		if (mGpuDrawActive) {
 			// One draw per batch: the GPU wrote the segment and its counter; maxDrawCount is the segment capacity.
-			renderer.drawIndexedIndirectCount(mGpuSelection.indirectBuffer(), size_t(batch.FirstDraw) * stride, mGpuSelection.segmentCountBuffer(),
-				size_t(batch.Segment) * sizeof(uint32_t), drawCount, stride);
+			renderer.drawIndexedIndirectCount(mGpuSelection.indirectBuffer(), (size_t(batch.FirstDraw) + postDrawOffset) * stride,
+				mGpuSelection.segmentCountBuffer(), (size_t(batch.Segment) + postSegmentOffset) * sizeof(uint32_t), drawCount, stride);
 			++mStatistics.IndirectCalls;
 			mClusterMaterial->unbind();
 			continue;
