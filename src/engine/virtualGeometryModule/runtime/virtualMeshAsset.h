@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "virtualGeometryModule/format/vmeshIO.h"
+#include "virtualGeometrySelection.h"
 
 namespace IKIGAI::RENDER {
 class IndexBufferInterface;
@@ -22,7 +23,7 @@ struct VirtualMeshGpuBuffers {
 	std::shared_ptr<RENDER::VertexBufferInterface> Vertices = {};
 	// uint32_t[IndexCount]: every cluster of every LOD level plus the fallback ranges.
 	std::shared_ptr<RENDER::IndexBufferInterface> Indices = {};
-	// VMeshCluster[ClusterCount], unused by the M2 CPU selection; reserved for GPU culling (M4).
+	// VMeshCluster[ClusterCount], read directly by the GPU selection (vgClusterCull.comp.glsl).
 	std::shared_ptr<RENDER::StorageBufferInterface> Clusters = {};
 };
 
@@ -55,6 +56,8 @@ public:
 	const std::shared_ptr<RENDER::ModelInterface>& fallbackModel() const;
 	// Bytes of the cluster renderer buffers (0 without them).
 	size_t gpuBytes() const;
+	// Per-slot bound of the clusters one instance contributes to any LOD cut (computed and checked at load).
+	const VirtualGeometrySlotCutBounds& cutBounds() const;
 
 private:
 	void createFallbackModel(const VMeshData& data);
@@ -67,6 +70,7 @@ private:
 	uint32_t mFallbackTriangleCount = 0;
 	VirtualMeshGpuBuffers mGpu = {};
 	size_t mGpuBytes = 0;
+	VirtualGeometrySlotCutBounds mCutBounds = {};
 	std::shared_ptr<RENDER::ModelInterface> mFallbackModel = {};
 };
 }

@@ -99,6 +99,7 @@ VirtualMeshAsset::VirtualMeshAsset(std::string path, const VMeshData& data, bool
 			mLeafTriangleCount += cluster.IndexCount / 3;
 		}
 	}
+	mCutBounds = ComputeSlotCutBounds(mClusters, mHeader.MaterialSlotCount);
 	createFallbackModel(data);
 	if (createClusterBuffersFlag) {
 		createClusterBuffers(data);
@@ -145,6 +146,10 @@ const std::shared_ptr<RENDER::ModelInterface>& VirtualMeshAsset::fallbackModel()
 
 size_t VirtualMeshAsset::gpuBytes() const {
 	return mGpuBytes;
+}
+
+const VirtualGeometrySlotCutBounds& VirtualMeshAsset::cutBounds() const {
+	return mCutBounds;
 }
 
 void VirtualMeshAsset::createFallbackModel(const VMeshData& data) {

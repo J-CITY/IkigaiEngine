@@ -201,6 +201,9 @@ DriverDx12::~DriverDx12() {
 #endif
 	DriverDx12::end();
 	wait();
+	// Readback buffers hold D3D12MA allocations: release them while the allocator exists.
+	mPendingReadbacks.clear();
+	mFreeReadbacks.clear();
     mShuttingDown=true;
     mFrameGeneration.reset();
     #ifdef IKIGAI_USE_STREAMLINE

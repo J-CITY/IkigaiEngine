@@ -28,6 +28,8 @@ namespace RENDER {
 		[[nodiscard]] bool boundingSphereInFrustum(const BoundingSphere& boundingSphere, const ECS::Transform& transform) const;
 		[[nodiscard]] std::array<float, 4> getNearPlane() const;
 		[[nodiscard]] std::array<float, 4> getFarPlane() const;
+		// Plane i of make() (A, B, C, D with A*x + B*y + C*z + D >= 0 inside), i in [0, 6).
+		[[nodiscard]] std::array<float, 4> getPlane(size_t index) const;
 		[[nodiscard]] COLLISION::TYPE boundingSphereInFrustumCollide(const BoundingSphere& boundingSphere, const ECS::Transform& transform) const;
 		COLLISION::TYPE boundingSphereInFrustumCollide(const BoundingSphere& boundingSphere) const;
 

@@ -664,8 +664,8 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	auto chunks = scene.findDrawables(cameraPosition, cameraComponent.getCamera(), nullptr, mEmptyMaterial);
 	auto shadowChunks = scene.findAndSortDrawables(cameraPosition, mEmptyMaterial);
 	{
-		// Virtual geometry: CPU LOD selection and uploads before any stage; fallback meshes join the regular
-		// drawables (shadows/RT always, the view when the cluster path is unavailable).
+		// Virtual geometry: LOD selection (GPU compute passes or CPU) and uploads before any stage; fallback meshes join
+		// the regular drawables (shadows/RT always, the view when the cluster path is unavailable).
 		VG::VirtualGeometryFrameInput virtualGeometryInput;
 		virtualGeometryInput.View.CameraPosition = cameraPosition;
 		virtualGeometryInput.View.Frustum = &cameraComponent.getCamera().getFrustum();
@@ -673,6 +673,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		virtualGeometryInput.View.ProjectionScale = float(renderSize.y) * unjitteredProjection.getData()[1 * 4 + 1] * 0.5f;
 		virtualGeometryInput.View.ZNear = cameraComponent.getNear();
 		virtualGeometryInput.Frame = mFrameCount;
+		virtualGeometryInput.GpuProfiler = &mGpuProfiler;
 		virtualGeometryInput.GeometryStageActive
 			= std::any_of(mRenderPipeline->mStages.begin(), mRenderPipeline->mStages.end(), [](const auto& stage) {
 				  return stage->mDescriptor.Enabled && stage->mDrawContent == DrawContent::DEFERRED && stage->mName == "Geometry";

@@ -133,11 +133,19 @@ void ProfillerWindow::drawVirtualGeometry() {
         changed = true;
     }
     changed |= ImGui::SliderFloat("VG threshold scale", &settings.ThresholdScale, 0.0f, 16.0f);
+	int path = static_cast<int>(settings.SelectionPath);
+	if (ImGui::Combo("VG selection", &path, "Auto\0CPU\0GPU\0")) {
+		settings.SelectionPath = static_cast<VG::VirtualGeometrySelectionPath>(path);
+		changed = true;
+	}
     if (changed) renderer.setSettings(settings);
     const auto& frame = renderer.lastFrame();
     ImGui::Text("VG: %u instances (%u clusters, %u fallback, %u culled), %u visible clusters, %u triangles, %u indirect calls, CPU %.2f ms",
         frame.Instances, frame.ClusterInstances, frame.FallbackInstances, frame.InstancesCulled, frame.VisibleClusters,
         frame.VisibleTriangles, frame.IndirectCalls, frame.SelectionMilliseconds);
+	ImGui::Text("VG selection: %s, GPU counters %s (latency %u frames), overflow %u, draw capacity %u, buffers %.1f MB",
+		renderer.activeSelectionPath() == VG::VirtualGeometrySelectionPath::GPU ? "GPU" : "CPU", frame.GpuStatisticsValid ? "valid" : "n/a",
+		frame.GpuStatisticsLatency, frame.OverflowDraws, frame.DrawCapacity, double(frame.GpuSelectionBytes) / (1024.0 * 1024.0));
 }
 
 void ProfillerWindow::drawRenderStatistics() {

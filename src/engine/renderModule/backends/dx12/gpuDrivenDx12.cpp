@@ -2,6 +2,7 @@
 #ifdef DX12_BACKEND
 #include "storageBufferDx12.h"
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <limits>
@@ -66,7 +67,8 @@ void DriverDx12::configureGpuFeatures() {
 	result.BufferTransfer = true;
 	result.BufferReadback = true;
 	result.DrawIndirect = true;
-	result.DrawIndirectCount = true;
+	// Test switch (like IKIGAI_DISABLE_RAY_QUERY): report indirect count draws as unsupported.
+	result.DrawIndirectCount = !std::getenv("IKIGAI_DISABLE_DRAW_INDIRECT_COUNT");
 	result.DispatchIndirect = true;
 	result.MaxDrawIndirectCount = std::numeric_limits<uint32_t>::max();
 	D3D12_FEATURE_DATA_D3D12_OPTIONS1 options1 {};
@@ -190,6 +192,65 @@ std::vector<uint8_t> DriverDx12::readBuffer(const std::shared_ptr<StorageBufferI
 	const D3D12_RANGE written { 0, 0 };
 	readback.Get()->Unmap(0, &written);
 	return result;
+}
+
+uint64_t DriverDx12::requestBufferReadback(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size) {
+	auto& native = NativeBuffer(buffer, "requestBufferReadback");
+	if (!size) {
+		throw std::invalid_argument("requestBufferReadback: empty range");
+	}
+	CheckTransferSource(native, "requestBufferReadback");
+	CheckRange(native, offset, size, "requestBufferReadback");
+	const UINT64 completed = mFence ? mFence->GetCompletedValue() : 0;
+	// Abandoned tickets must not accumulate readback memory: drop the oldest completed ones.
+	constexpr size_t MaxPendingReadbacks = 64;
+	while (mPendingReadbacks.size() >= MaxPendingReadbacks && mPendingReadbacks.front().FenceValue <= completed) {
+		mPendingReadbacks.pop_front();
+	}
+	PendingReadbackDx12 pending;
+	pending.Ticket = mNextReadbackTicket++;
+	// wait() signals mFenceValue after executing the command list that contains this copy.
+	pending.FenceValue = mFenceValue;
+	pending.Size = size;
+	// Reuse collected READBACK buffers instead of creating a committed resource for every request.
+	const auto reusable
+		= std::find_if(mFreeReadbacks.begin(), mFreeReadbacks.end(), [size](const PendingReadbackDx12& free) { return free.Capacity >= size; });
+	if (reusable != mFreeReadbacks.end()) {
+		pending.Capacity = reusable->Capacity;
+		pending.Readback = std::move(reusable->Readback);
+		mFreeReadbacks.erase(reusable);
+	}
+	else {
+		pending.Capacity = size;
+		pending.Readback = d3dUtil::CreateBuffer(size, D3D12_HEAP_TYPE_READBACK);
+	}
+	native.transition(mCommandList.Get(), D3D12_RESOURCE_STATE_COPY_SOURCE);
+	mCommandList->CopyBufferRegion(pending.Readback.Get(), 0, native.getBuffer().Get(), offset, size);
+	const uint64_t ticket = pending.Ticket;
+	mPendingReadbacks.push_back(std::move(pending));
+	return ticket;
+}
+
+bool DriverDx12::collectBufferReadback(uint64_t ticket, std::vector<uint8_t>& bytes) {
+	const auto found = std::find_if(
+		mPendingReadbacks.begin(), mPendingReadbacks.end(), [ticket](const PendingReadbackDx12& pending) { return pending.Ticket == ticket; });
+	if (found == mPendingReadbacks.end() || !mFence || mFence->GetCompletedValue() < found->FenceValue) {
+		return false;
+	}
+	void* mapped = nullptr;
+	const D3D12_RANGE range { 0, static_cast<SIZE_T>(found->Size) };
+	ThrowIfFailed(found->Readback.Get()->Map(0, &range, &mapped));
+	bytes.resize(found->Size);
+	std::memcpy(bytes.data(), mapped, found->Size);
+	const D3D12_RANGE written { 0, 0 };
+	found->Readback.Get()->Unmap(0, &written);
+	// The GPU finished the copy: keep a few buffers for reuse, release the rest immediately.
+	constexpr size_t MaxFreeReadbacks = 8;
+	if (mFreeReadbacks.size() < MaxFreeReadbacks) {
+		mFreeReadbacks.push_back(std::move(*found));
+	}
+	mPendingReadbacks.erase(found);
+	return true;
 }
 
 void DriverDx12::flushRecordedCommands() {

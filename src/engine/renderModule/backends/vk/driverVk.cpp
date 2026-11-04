@@ -188,6 +188,8 @@ DriverVk::~DriverVk() {
 		mDevice.waitIdle();
 	}
 	wait();
+	// Readback staging buffers are VMA allocations: release them while the allocator exists.
+	mPendingReadbacks.clear();
 
 	mShuttingDown = true;
 	mFrameGeneration.reset();
@@ -2292,7 +2294,10 @@ void DriverVk::submit() {
 
 	mSemaphoreIndex = (mSemaphoreIndex + 1) % getCurrentSwapchainContext().frames.size();
 
+	// wait() blocks on the fence of the frame submitted above: its readback copies are complete afterwards.
+	const uint64_t submittedEpoch = mSubmissionEpoch++;
 	wait();
+	mCompletedEpoch = submittedEpoch;
 	if (mFrameGeneration) {
 		mFrameGeneration->waitForPresents();
 		mFrameGeneration->afterPresent();

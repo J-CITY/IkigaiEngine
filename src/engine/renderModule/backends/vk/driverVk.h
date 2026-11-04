@@ -1,5 +1,6 @@
 #pragma once
 #include <bitset>
+#include <deque>
 #include <memory>
 #include <unordered_set>
 #include <variant>
@@ -386,6 +387,21 @@ public:
 	void copyBuffer(const std::shared_ptr<StorageBufferInterface>& source, size_t sourceOffset,
 		const std::shared_ptr<StorageBufferInterface>& destination, size_t destinationOffset, size_t size) override;
 	std::vector<uint8_t> readBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size) override;
+	uint64_t requestBufferReadback(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size) override;
+	bool collectBufferReadback(uint64_t ticket, std::vector<uint8_t>& bytes) override;
+	// Asynchronous readbacks: each request records a copy into its own host-visible staging buffer. Submission epochs
+	// advance on every queue submission that is waited for (frame submit, flushRecordedCommands); a request is complete
+	// once the epoch it was recorded in has completed.
+	struct PendingReadbackVk {
+		uint64_t Ticket = 0;
+		uint64_t Epoch = 0;
+		size_t Size = 0;
+		VmaBuffer Staging;
+	};
+	std::deque<PendingReadbackVk> mPendingReadbacks;
+	uint64_t mNextReadbackTicket = 1;
+	uint64_t mSubmissionEpoch = 1;
+	uint64_t mCompletedEpoch = 0;
 	void drawIndexedIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset, uint32_t drawCount, uint32_t stride) override;
 	void drawIndexedIndirectCount(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset,
 		const std::shared_ptr<StorageBufferInterface>& count, size_t countOffset, uint32_t maxDrawCount, uint32_t stride) override;

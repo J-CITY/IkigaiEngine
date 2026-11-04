@@ -282,6 +282,15 @@ public:
 	virtual std::vector<uint8_t> readBuffer(const std::shared_ptr<StorageBufferInterface>&, size_t, size_t) {
 		throw UnsupportedGpuFeature("Buffer readback is unavailable on this backend");
 	}
+	// Non-blocking readback (per-frame statistics): records a copy of the range into driver-owned host memory at this
+	// point of the frame and returns a ticket. collectBufferReadback returns true with the bytes once the GPU finished
+	// that work (the ticket is consumed), false while it is pending or unknown. Never waits for the GPU.
+	virtual uint64_t requestBufferReadback(const std::shared_ptr<StorageBufferInterface>&, size_t, size_t) {
+		throw UnsupportedGpuFeature("Asynchronous buffer readback is unavailable on this backend");
+	}
+	virtual bool collectBufferReadback(uint64_t, std::vector<uint8_t>&) {
+		return false;
+	}
 	// Uses the currently bound shader, vertex and index buffers like drawIndexed.
 	virtual void drawIndexedIndirect(const std::shared_ptr<StorageBufferInterface>&, size_t, uint32_t, uint32_t) {
 		throw UnsupportedGpuFeature("Indirect draw is unavailable on this backend");
