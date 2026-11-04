@@ -1,8 +1,8 @@
 #include "gameRenderer.h"
 #include "coreModule/ecs/components/facialAnimationComponent.h"
 #include "coreModule/ecs/systems/environmentSystem.h"
-#include "environmentModule/surfaceWeather.h"
 #include "diagnostics/renderStatistics.h"
+#include "environmentModule/surfaceWeather.h"
 #include "indirectLighting/temporalDenoiseStage.h"
 #include "instanceBatch.h"
 #include "particles/particleRenderer.h"
@@ -11,6 +11,7 @@
 #include "renderGraph/computeStage.h"
 #include "renderGraph/screenProbeStage.h"
 #include "utilsModule/time/loadTimer.h"
+#include "virtualGeometry/virtualGeometryPostStage.h"
 #include "virtualGeometryModule/runtime/virtualGeometryRenderer.h"
 #if USE_PHYSICS_3D
 #include "physics/deformableRenderer.h"
@@ -679,6 +680,12 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			= std::any_of(mRenderPipeline->mStages.begin(), mRenderPipeline->mStages.end(), [](const auto& stage) {
 				  return stage->mDescriptor.Enabled && stage->mDrawContent == DrawContent::DEFERRED && stage->mName == "Geometry";
 			  });
+		// Two-phase HZB occlusion (M4-V2): phase 1 may reject only when the post stage runs this frame.
+		virtualGeometryInput.OcclusionPostStageActive = FindActiveVirtualGeometryPostStage(*mRenderPipeline, virtualGeometryInput.Hzb) != nullptr;
+		virtualGeometryInput.HistoryValid = temporalValid;
+		virtualGeometryInput.ViewProjection = viewProjection;
+		virtualGeometryInput.PreviousViewProjection = mPreviousViewProjection;
+		virtualGeometryInput.FallbackTexture = mEmptyTexture;
 		virtualGeometry().prepareFrame(*mContext.render, scene, virtualGeometryInput, chunks, shadowChunks);
 	}
 	for (auto i = mSkinningPoses.begin(); i != mSkinningPoses.end();) {
@@ -828,6 +835,23 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		auto stageProfile = mGpuProfiler.measure(stage->mName);
 		auto stageStatistics = RenderStatistics::Get().measureStage(stage->mName);
 		auto stageCpuProfile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("Stage::" + stage->mName) : nullptr;
+		if (stage->mDrawContent == DrawContent::VIRTUAL_GEOMETRY_POST) {
+			// Virtual geometry phase 2: compute outside the pass, then draw into the G-buffer without clearing it.
+			auto& render = *mContext.render;
+			const auto hzb = mRenderPipeline->mTextures.at(stage->mDescriptor.Bindings.at("Hzb"));
+			if (mVirtualGeometry && mVirtualGeometry->recordOcclusionPost(render, hzb, &mGpuProfiler)) {
+				render.setFrameBuffer(stage->mFrameBuffer);
+				const MATH::Vector2f size(float(stage->mFrameBuffer->getWidth()), float(stage->mFrameBuffer->getHeight()));
+				uboData.ViewportSize = size;
+				mEngineUbo->setData(uboData);
+				render.setViewport({ { 0, 0 }, size });
+				render.resetScissor();
+				mVirtualGeometry->drawOcclusionPost(render, { mEngineUbo, mFrameUbo, mEmptyTexture });
+				render.setFrameBuffer(nullptr);
+			}
+			stage->mExecuted = true;
+			return;
+		}
 		if (stage->mDrawContent == DrawContent::LIGHT_ACCUMULATION) {
 			auto& pass = mRenderPipeline->mLightPasses.at(stage->mDescriptor.LightPass);
 			bool rayShadows = false;
@@ -1739,6 +1763,7 @@ static RenderGraphPipeline::Descriptor ResolvePipelineSettings(const RenderGraph
 			produced.insert(writes.begin(), writes.end());
 		}
 	}
+	ValidateVirtualGeometryPostOrder(resolved.Stages);
 	return resolved;
 }
 
@@ -2255,6 +2280,9 @@ RenderGraphPipeline::StagesArr RenderGraphPipeline::loadStages(const std::vector
 					throw std::runtime_error("Missing FRAME_GENERATION binding: " + std::string(key));
 				}
 			}
+		}
+		if (desc.Draw == DrawContent::VIRTUAL_GEOMETRY_POST) {
+			ValidateVirtualGeometryPostStage(desc);
 		}
 		stage->mDescriptor = desc;
 		stage->mName = desc.Name;

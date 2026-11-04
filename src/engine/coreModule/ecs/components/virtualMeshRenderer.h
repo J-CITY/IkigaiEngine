@@ -81,6 +81,8 @@ public:
 	// Motion-vector history, render thread only. Returns the previous world matrix for this frame (the current
 	// one after a gap or on the first frame) and records the current matrix. Repeated calls in one frame agree.
 	MATH::Matrix4f advanceHistory(const MATH::Matrix4f& world, uint64_t frame);
+	// True when the last advanceHistory continued the previous frame (the returned matrix is a real previous pose).
+	bool hasContinuousHistory() const;
 
 	static auto GetMembers() {
 		return std::tuple {};
@@ -100,6 +102,7 @@ private:
 	MATH::Matrix4f mHistoryPreviousWorld = MATH::Matrix4f::Identity;
 	uint64_t mHistoryFrame = 0;
 	bool mHistoryValid = false;
+	bool mHistoryContinuous = false;
 };
 
 template <> inline std::string GetType<VirtualMeshRenderer>() {
