@@ -1,0 +1,36 @@
+name: Renderer core prerequisites
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-core:
+    name: Production core (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure without graphics SDKs or local test sources
+        run: cmake -S cmake/core -B build/core -DCMAKE_BUILD_TYPE=Release
+      - name: Build production task and coroutine libraries
+        run: cmake --build build/core --config Release --parallel 2
+
+  production-assets:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Verify versioned production inputs
+        run: python utils/assets/install_production_assets.py --verify
+      - name: Install into an empty asset directory
+        run: python utils/assets/install_production_assets.py --assets build/rc0-assets
