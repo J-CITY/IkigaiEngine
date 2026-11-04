@@ -2,6 +2,8 @@
 
 #include "coreModule/ecs/components/transform.h"
 
+#include <stdexcept>
+
 using namespace IKIGAI;
 using namespace IKIGAI::RENDER;
 
@@ -121,6 +123,13 @@ bool Frustum::boundingSphereInFrustum(const BoundingSphere& boundingSphere, cons
 
 std::array<float, 4> Frustum::getNearPlane() const {
 	return { data[FRONT][0], data[FRONT][1], data[FRONT][2], data[FRONT][3] };
+}
+
+std::array<float, 4> Frustum::getPlane(size_t index) const {
+	if (index >= 6) {
+		throw std::out_of_range("Frustum::getPlane index");
+	}
+	return { data[index][0], data[index][1], data[index][2], data[index][3] };
 }
 
 std::array<float, 4> Frustum::getFarPlane() const {

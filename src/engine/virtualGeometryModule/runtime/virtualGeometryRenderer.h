@@ -15,10 +15,16 @@
 #include "renderModule/backends/interface/gpuFeatures.h"
 #include "renderModule/backends/interface/materialInterface.h"
 #include "renderModule/backends/interface/vertexLayout.h"
+#include "renderModule/frustum.h"
+#include "virtualGeometryGpuSelection.h"
 #include "virtualGeometrySelection.h"
 
 namespace IKIGAI::SCENE_SYSTEM {
 class Scene;
+}
+
+namespace IKIGAI::PROFILER {
+class GpuStageProfiler;
 }
 
 namespace IKIGAI::RENDER {
@@ -33,6 +39,11 @@ struct RenderChunk;
 namespace IKIGAI::VG {
 class VirtualMeshAsset;
 
+// Where LOD selection and cluster culling run. AUTO picks GPU when the backend has compute, indirect dispatch and
+// indirect count draws and the selection shaders load; otherwise (and for CPU) the M2 CPU selection runs.
+// The environment variable IKIGAI_VG_SELECTION=cpu|gpu|auto overrides the setting (tests).
+enum class VirtualGeometrySelectionPath { AUTO = 0, CPU = 1, GPU = 2 };
+
 // Runtime switches of the virtual geometry renderer (typed descriptor; set by tools, tests and the editor).
 struct VirtualGeometrySettings {
 	// false draws every virtual mesh through its fallback mesh on the regular path.
@@ -45,6 +56,7 @@ struct VirtualGeometrySettings {
 	ECS::VirtualMeshDebugMode DebugOverride = ECS::VirtualMeshDebugMode::NONE;
 	// Multiplies every component threshold (quality scaling).
 	float ThresholdScale = 1.0f;
+	VirtualGeometrySelectionPath SelectionPath = VirtualGeometrySelectionPath::AUTO;
 
 	template <class C> static void serde(C& context, VirtualGeometrySettings& value) {
 		using namespace serde::attribute;
@@ -54,10 +66,18 @@ struct VirtualGeometrySettings {
 			.field(&VirtualGeometrySettings::FrustumCulling, "FrustumCulling", default_ { true })
 			.field(&VirtualGeometrySettings::ConeCulling, "ConeCulling", default_ { true })
 			.field(&VirtualGeometrySettings::DebugOverride, "DebugOverride", default_ { ECS::VirtualMeshDebugMode::NONE })
-			.field(&VirtualGeometrySettings::ThresholdScale, "ThresholdScale", default_ { 1.0f });
+			.field(&VirtualGeometrySettings::ThresholdScale, "ThresholdScale", default_ { 1.0f })
+			.field(&VirtualGeometrySettings::SelectionPath, "SelectionPath", default_ { VirtualGeometrySelectionPath::AUTO });
 	}
 };
 
+// Throws std::invalid_argument for out-of-range values (called by setSettings and after deserialization).
+void ValidateVirtualGeometrySettings(const VirtualGeometrySettings& settings);
+
+// Per-frame counters. On the GPU path, InstancesCulled, LodClusters, LodTriangles, VisibleClusters, VisibleTriangles,
+// FrustumCulledClusters, ConeCulledClusters, LodHistogram and OverflowDraws come from the GPU and are
+// GpuStatisticsLatency frames old (1: non-blocking readback of the previous frame); they stay zero
+// when GpuStatisticsValid is false. The other fields always describe the current frame.
 struct VirtualGeometryFrameStatistics {
 	uint32_t Instances = 0;
 	uint32_t ClusterInstances = 0;
@@ -75,6 +95,15 @@ struct VirtualGeometryFrameStatistics {
 	uint32_t IndirectCalls = 0;
 	uint32_t LodHistogram[8] = {};
 	double SelectionMilliseconds = 0.0;
+	bool GpuSelection = false;
+	bool GpuStatisticsValid = false;
+	uint32_t GpuStatisticsLatency = 0;
+	// Draws dropped because a segment was full (expected 0: segment capacities are proven bounds).
+	uint32_t OverflowDraws = 0;
+	// Sum of the draw segment capacities of the frame (upper bound of the indirect draws).
+	uint32_t DrawCapacity = 0;
+	// Bytes of the GPU selection buffers.
+	uint64_t GpuSelectionBytes = 0;
 };
 
 // Camera inputs for one frame of cluster selection.
@@ -83,6 +112,36 @@ struct VirtualGeometryFrameInput {
 	uint64_t Frame = 0;
 	// The pipeline has an enabled G-buffer stage that calls drawGeometry this frame.
 	bool GeometryStageActive = false;
+	// Optional GPU timestamps of the selection passes (stages VgInstanceCull and VgClusterCull).
+	PROFILER::GpuStageProfiler* GpuProfiler = nullptr;
+};
+
+// Inputs of the last GPU-selected frame, kept for equivalence tests against the CPU selection.
+struct VirtualGeometryGpuFrameRecord {
+	struct Instance {
+		int OwnerId = 0;
+		std::shared_ptr<VirtualMeshAsset> Asset = {};
+		// Culling transform (current world) and LOD-test transform (frozen world under FreezeLod).
+		VirtualGeometryInstanceTransform Transform = {};
+		VirtualGeometryInstanceTransform LodTransform = {};
+		// LOD view (Frustum is null: the LOD test does not use it).
+		VirtualGeometryView LodView = {};
+		float Threshold = 0.0f;
+	};
+	std::vector<Instance> Instances = {};
+	// Culling view of the frame; View.Frustum points to Frustum when HasFrustum.
+	RENDER::Frustum Frustum = {};
+	bool HasFrustum = false;
+	VirtualGeometryView View = {};
+	VirtualGeometrySelectionSettings Selection = {};
+};
+
+// Non-blocking capture of one GPU-selected frame (tests and debug tools): the inputs (Record; its View.Frustum is
+// null, use Record.Frustum) and readback tickets of the results.
+struct VirtualGeometryGpuCapture {
+	VirtualGeometryGpuFrameRecord Record = {};
+	std::vector<VirtualGeometryGpuSegment> Segments = {};
+	VirtualGeometryGpuCaptureTickets Tickets = {};
 };
 
 // Engine buffers the G-buffer shaders read (owned by GameRenderer).
@@ -117,6 +176,16 @@ public:
 	const VirtualGeometryFrameStatistics& lastFrame() const;
 	// False after the cluster shader or material failed to load; every instance then uses its fallback mesh.
 	bool clusterPathAvailable() const;
+	// Selection path used by the last prepareFrame.
+	VirtualGeometrySelectionPath activeSelectionPath() const;
+	// Inputs of the last GPU-selected frame.
+	const VirtualGeometryGpuFrameRecord& lastGpuFrame() const;
+	// Tests and debug tools: capture the last GPU-selected frame between frames, render at least one more frame,
+	// then collect its visible (instance, cluster) pairs (DrawInstance indexes Record.Instances) and statistics.
+	// captureGpuSelection returns an empty capture when the last frame was not GPU-selected.
+	VirtualGeometryGpuCapture captureGpuSelection(RENDER::Renderer& renderer);
+	bool collectGpuSelection(RENDER::Renderer& renderer, const VirtualGeometryGpuCapture& capture,
+		std::vector<VirtualGeometryGpuVisibleCluster>& visible, VirtualGeometryGpuStatistics& statistics);
 
 private:
 	struct InstanceGpu {
@@ -148,14 +217,45 @@ private:
 		std::vector<RENDER::DrawIndexedIndirectCommand> Commands = {};
 		std::vector<DrawRecordGpu> Records = {};
 		uint32_t FirstDraw = 0;
+		// CPU path: recorded draws. GPU path: segment capacity (maxDrawCount of drawIndexedIndirectCount).
 		uint32_t DrawCount = 0;
+		// GPU path: segment index (count buffer slot) and number of instances using the batch.
+		uint32_t Segment = 0;
+		uint32_t Instances = 0;
 	};
 	struct FrozenCut {
 		const VirtualMeshAsset* Asset = nullptr;
 		std::vector<uint32_t> Clusters = {};
 	};
+	// GPU FreezeLod: the LOD inputs of the frame the freeze started (the cut is a function of them).
+	struct FrozenLodView {
+		const VirtualMeshAsset* Asset = nullptr;
+		VirtualGeometryInstanceTransform Transform = {};
+		VirtualGeometryView View = {};
+		float Threshold = 0.0f;
+	};
+	// One cluster-path instance of the frame before selection.
+	struct InstanceCandidate {
+		ECS::VirtualMeshRenderer* Component = nullptr;
+		std::shared_ptr<VirtualMeshAsset> Asset = {};
+		MATH::Matrix4f World = MATH::Matrix4f::Identity;
+		MATH::Matrix4f PreviousWorld = MATH::Matrix4f::Identity;
+		VirtualGeometryInstanceTransform Transform = {};
+		int OwnerId = 0;
+		float Threshold = 0.0f;
+		ECS::VirtualMeshDebugMode DebugMode = ECS::VirtualMeshDebugMode::NONE;
+	};
 
 	bool ensureClusterMaterial();
+	VirtualGeometrySelectionPath resolveSelectionPath(RENDER::Renderer& renderer, bool clusterPath);
+	InstanceGpu makeInstanceGpu(const InstanceCandidate& candidate) const;
+	Batch& findBatch(const InstanceCandidate& candidate, uint32_t slot);
+	void selectOnCpu(const InstanceCandidate& candidate, const VirtualGeometryFrameInput& input, const VirtualGeometrySelectionSettings& selection,
+		VirtualGeometrySelectionStatistics& statistics);
+	// Builds the GPU tables; returns false (and logs) when a limit of the GPU path is exceeded.
+	bool buildGpuFrame(RENDER::Renderer& renderer, const VirtualGeometryFrameInput& input);
+	void applyGpuStatistics(const VirtualGeometryGpuStatistics& statistics, uint32_t latency);
+	bool mGpuFrameRecorded = false;
 	void appendFallback(ECS::VirtualMeshRenderer& component, const MATH::Matrix4f& world, const MATH::Matrix4f& previousWorld, int ownerId,
 		float distance, std::vector<RENDER::RenderChunk>& chunks) const;
 	void uploadFrame(RENDER::Renderer& renderer);
@@ -172,6 +272,8 @@ private:
 	std::map<BatchKey, Batch> mBatches = {};
 	std::vector<InstanceGpu> mInstances = {};
 	std::unordered_map<int, FrozenCut> mFrozenCuts = {};
+	std::unordered_map<int, FrozenLodView> mFrozenLodViews = {};
+	std::vector<InstanceCandidate> mCandidates = {};
 	std::vector<uint32_t> mScratchClusters = {};
 	std::vector<Batch*> mSlotBatches = {};
 	std::vector<RENDER::DrawIndexedIndirectCommand> mCommandScratch = {};
@@ -186,5 +288,16 @@ private:
 	uint32_t mDrawCapacity = 0;
 	uint32_t mDrawIndexCapacity = 0;
 	uint32_t mMaxDrawIndirectCount = 1;
+
+	// GPU selection (M4-V1).
+	VirtualGeometryGpuSelection mGpuSelection = {};
+	VirtualGeometryGpuFrame mGpuFrame = {};
+	VirtualGeometryGpuFrameRecord mGpuFrameRecord = {};
+	VirtualGeometrySelectionPath mActivePath = VirtualGeometrySelectionPath::CPU;
+	bool mGpuDrawActive = false;
+	bool mEnvironmentPathRead = false;
+	bool mHasEnvironmentPath = false;
+	VirtualGeometrySelectionPath mEnvironmentPath = VirtualGeometrySelectionPath::AUTO;
+	std::string mLoggedSelection = {};
 };
 }

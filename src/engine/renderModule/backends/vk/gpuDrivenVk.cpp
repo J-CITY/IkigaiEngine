@@ -3,6 +3,7 @@
 #include "helpers.h"
 #include "storageBufferVk.h"
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
@@ -78,6 +79,10 @@ void DriverVk::configureGpuFeatures(std::vector<const char*>& extensions) {
 	// multiDrawIndirect is passed through from the queried core features at device creation.
 	result.MaxDrawIndirectCount = coreFeatures.multiDrawIndirect ? core.limits.maxDrawIndirectCount : 1u;
 	result.DrawIndirectCount = vulkan12Device && vulkan12.drawIndirectCount && coreFeatures.multiDrawIndirect;
+	// Test switch (like IKIGAI_DISABLE_RAY_QUERY): report indirect count draws as unsupported.
+	if (std::getenv("IKIGAI_DISABLE_DRAW_INDIRECT_COUNT")) {
+		result.DrawIndirectCount = false;
+	}
 	if (result.DrawIndirectCount) {
 		mRTCoreFeatures.drawIndirectCount = VK_TRUE;
 	}
@@ -192,6 +197,54 @@ std::vector<uint8_t> DriverVk::readBuffer(const std::shared_ptr<StorageBufferInt
 	return result;
 }
 
+uint64_t DriverVk::requestBufferReadback(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size) {
+	auto& native = NativeBuffer(buffer, "requestBufferReadback");
+	if (!size) {
+		throw std::invalid_argument("requestBufferReadback: empty range");
+	}
+	CheckTransferSource(native, "requestBufferReadback");
+	CheckRange(native, offset, size, "requestBufferReadback");
+	// Abandoned tickets must not accumulate staging memory: drop the oldest completed ones.
+	constexpr size_t MaxPendingReadbacks = 64;
+	while (mPendingReadbacks.size() >= MaxPendingReadbacks && mPendingReadbacks.front().Epoch <= mCompletedEpoch) {
+		mPendingReadbacks.pop_front();
+	}
+	PendingReadbackVk pending;
+	pending.Ticket = mNextReadbackTicket++;
+	pending.Epoch = mSubmissionEpoch;
+	pending.Size = size;
+	pending.Staging = UtilityVk::CreateBuffer(size, vk::BufferUsageFlagBits::eTransferDst, UtilityVk::MemoryUsage::Staging);
+	auto& cmd = getCurrentFrame().mCommandBuffer;
+	beginTransferCommands(cmd);
+	vk::BufferCopy region;
+	region.setSrcOffset(offset).setDstOffset(0).setSize(size);
+	cmd.copyBuffer(*native.getBuffer(), *pending.Staging, { region });
+	UtilityVk::SetMemoryBarrier(cmd, vk::PipelineStageFlagBits2::eTransfer, vk::PipelineStageFlagBits2::eHost);
+	endTransferCommands(cmd);
+	const uint64_t ticket = pending.Ticket;
+	mPendingReadbacks.push_back(std::move(pending));
+	return ticket;
+}
+
+bool DriverVk::collectBufferReadback(uint64_t ticket, std::vector<uint8_t>& bytes) {
+	const auto found = std::find_if(
+		mPendingReadbacks.begin(), mPendingReadbacks.end(), [ticket](const PendingReadbackVk& pending) { return pending.Ticket == ticket; });
+	if (found == mPendingReadbacks.end() || found->Epoch > mCompletedEpoch) {
+		return false;
+	}
+	void* mapped = nullptr;
+	if (vmaMapMemory(mAllocator, found->Staging.allocation(), &mapped) != VK_SUCCESS) {
+		throw std::runtime_error("collectBufferReadback: staging map failed");
+	}
+	vmaInvalidateAllocation(mAllocator, found->Staging.allocation(), 0, VK_WHOLE_SIZE);
+	bytes.resize(found->Size);
+	std::memcpy(bytes.data(), mapped, found->Size);
+	vmaUnmapMemory(mAllocator, found->Staging.allocation());
+	// The copy completed, so the staging buffer can be released immediately.
+	mPendingReadbacks.erase(found);
+	return true;
+}
+
 void DriverVk::flushRecordedCommands() {
 	// Submits everything recorded so far in this frame and waits for it, then reopens the
 	// frame command buffer. The recorded prologue already transitioned the swapchain image,
@@ -205,6 +258,8 @@ void DriverVk::flushRecordedCommands() {
 	work.setWaitSemaphores(*acquired).setWaitDstStageMask(waitStage).setCommandBuffers(*frame.mCommandBuffer);
 	mQueue.submit(work);
 	mQueue.waitIdle();
+	// Everything recorded so far (including asynchronous readback copies) has completed.
+	mCompletedEpoch = mSubmissionEpoch++;
 	vk::SubmitInfo resignal;
 	resignal.setSignalSemaphores(*acquired);
 	mQueue.submit(resignal);

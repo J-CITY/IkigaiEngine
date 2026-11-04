@@ -1,6 +1,7 @@
 #pragma once
 #ifdef DX12_BACKEND
 #include <bitset>
+#include <deque>
 #include <dxgi1_6.h>
 #include <map>
 
@@ -251,6 +252,21 @@ public:
 	void copyBuffer(const std::shared_ptr<StorageBufferInterface>& source, size_t sourceOffset,
 		const std::shared_ptr<StorageBufferInterface>& destination, size_t destinationOffset, size_t size) override;
 	std::vector<uint8_t> readBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size) override;
+	uint64_t requestBufferReadback(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size) override;
+	bool collectBufferReadback(uint64_t ticket, std::vector<uint8_t>& bytes) override;
+	// Asynchronous readbacks: each request copies into its own READBACK-heap buffer; it is complete once mFence
+	// reached the value that wait() signals after the submission containing the copy.
+	struct PendingReadbackDx12 {
+		uint64_t Ticket = 0;
+		UINT64 FenceValue = 0;
+		size_t Size = 0;
+		// Bytes of Readback (>= Size): collected buffers are recycled for later requests.
+		size_t Capacity = 0;
+		Dx12Resource Readback {};
+	};
+	std::deque<PendingReadbackDx12> mPendingReadbacks {};
+	std::vector<PendingReadbackDx12> mFreeReadbacks {};
+	uint64_t mNextReadbackTicket = 1;
 	void drawIndexedIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset, uint32_t drawCount, uint32_t stride) override;
 	void drawIndexedIndirectCount(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset,
 		const std::shared_ptr<StorageBufferInterface>& count, size_t countOffset, uint32_t maxDrawCount, uint32_t stride) override;

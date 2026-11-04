@@ -67,4 +67,27 @@ void CullClusters(const std::vector<VMeshCluster>& clusters, const VirtualGeomet
 
 // True when the instance bounding sphere intersects the view frustum.
 bool IsInstanceVisible(const VMeshSphere& bounds, const VirtualGeometryInstanceTransform& instance, const VirtualGeometryView& view);
+
+// Upper bound of the clusters of each material slot that one instance can contribute to any LOD cut (sizes the
+// per-batch draw segments of the GPU selection).
+struct VirtualGeometrySlotCutBounds {
+	// Bound per material slot: the leaf-cluster count when Proven, otherwise every cluster of the slot.
+	std::vector<uint32_t> Bound = {};
+	std::vector<uint32_t> Clusters = {};
+	std::vector<uint32_t> Leaves = {};
+	std::vector<bool> Proven = {};
+	// Groups with more parents than children (or parents without children) plus clusters with non-monotone
+	// error/bounds; zero for a well-formed DAG.
+	uint32_t ViolatingGroups = 0;
+};
+
+// A cut is a set of clusters that covers every leaf lineage once. Starting from the all-leaves cut, every valid
+// cut is reached by coarsening groups one by one (the clusters of a group are replaced by the clusters its
+// simplification produced); each step changes the size of slot s by parents_s - children_s. The leaf count of a
+// slot therefore bounds every cut when, for every group, parents_s <= children_s. The cut chosen by the
+// per-cluster test is a valid cut when errors and bounds are monotone (Error <= ParentError and LodBounds inside
+// ParentLodBounds), so those are checked too. Groups are matched by the exact bits of (ParentError,
+// ParentLodBounds) of the children and (Error, LodBounds) of the parents. Any violation falls back to the
+// cluster count of the affected slot, which bounds every selection because a cluster is drawn at most once.
+VirtualGeometrySlotCutBounds ComputeSlotCutBounds(const std::vector<VMeshCluster>& clusters, uint32_t materialSlotCount);
 }
