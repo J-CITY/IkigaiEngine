@@ -1,0 +1,12 @@
+{
+  "ShaderPath": "/shaders/render/portable/vignette.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOu_Radius": 0.8,
+    "data_UBOu_Intensity": 0.35
+  }
+}

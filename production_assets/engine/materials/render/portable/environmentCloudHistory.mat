@@ -1,0 +1,17 @@
+{
+  "ShaderPath": "/shaders/render/portable/environmentCloudHistory.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOWind": {
+      "X": 1.0,
+      "Y": 0.2,
+      "Z": 1.5,
+      "W": 0.18
+    },
+    "data_UBOHistoryWeight": 0.8
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "ShaderPath": "/shaders/render/portable/ddgiSample.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Uniforms": {
+    "data_UBOOriginSpacing": {
+      "X": -6.0,
+      "Y": -1.0,
+      "Z": -6.0,
+      "W": 3.0
+    },
+    "data_UBOCounts": {
+      "X": 5,
+      "Y": 3,
+      "Z": 5,
+      "W": 64
+    }
+  }
+}

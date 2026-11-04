@@ -1,0 +1,16 @@
+{
+  "ShaderPath": "/shaders/render/ssr.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "FrontfaceCulling": false,
+  "Blendable": false,
+  "ColorWriting": true,
+  "GpuInstances": 1,
+  "IsDeferred": false,
+  "Uniforms": {
+    "data_UBOsteps": 10,
+    "data_UBOthickness": 0.5,
+    "data_UBOstartDistance": 2.0
+  }
+}

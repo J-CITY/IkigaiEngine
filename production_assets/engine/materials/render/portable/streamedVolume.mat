@@ -1,0 +1,20 @@
+{
+  "ShaderPath": "/shaders/render/portable/streamedVolume.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBODensity": 0.022,
+    "data_UBOScatteringAlbedo": 0.85,
+    "data_UBOAnisotropy": 0.3,
+    "data_UBOStrength": 1.0,
+    "data_UBOMaxDistance": 35.0,
+    "data_UBOSamples": 32,
+    "point_UBOBias": 0.025,
+    "point_UBONormalBias": 0.035,
+    "point_UBORadius": 0.04,
+    "point_UBOSamples": 12
+  }
+}

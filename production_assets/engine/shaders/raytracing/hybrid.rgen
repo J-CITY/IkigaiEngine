@@ -1,0 +1,83 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : require
+#include "frame.glsl"
+#include "surface.glsl"
+layout(location=0) rayPayloadEXT SurfacePayload hit;
+layout(location=1) rayPayloadEXT float visibility;
+layout(set=1,binding=0) uniform accelerationStructureEXT SceneAS;
+layout(set=2,binding=0,rgba32f) uniform image2D Output;
+layout(set=2,binding=1) uniform sampler2D Depth;
+layout(set=2,binding=2) uniform sampler2D Normals;
+layout(set=2,binding=3) uniform sampler2D Albedo;
+layout(set=2,binding=4) uniform sampler2D Roughness;
+layout(set=2,binding=5) uniform samplerCube Environment;
+#include "rtLighting.glsl"
+layout(std140,set=0,binding=4) uniform CurrentShadow {
+    mat4 Matrices[4];vec4 CascadeSplits,PositionRange,Settings,LightInfo;
+} engine_CurrentShadow;
+layout(push_constant) uniform Options {uint Mode;uint Samples;float Radius;float Bias;} settings;
+float visible(vec3 p,vec3 n,vec3 l,float distance) {
+    visibility=0;
+    traceRayEXT(SceneAS,gl_RayFlagsTerminateOnFirstHitEXT|gl_RayFlagsSkipClosestHitShaderEXT,255,0,0,1,p+n*settings.Bias,.001,l,max(distance,.002),1);
+    return visibility;
+}
+float rtLightVisibility(vec3 p,vec3 n,vec3 l,float distance) {return visible(p,n,l,distance);}
+vec3 shadeHit(vec3 v) {
+    return rtAccumulateDirectLight(hit.Emissive,hit.P,hit.N,v,hit.Albedo,hit.Roughness,hit.Metallic);
+}
+vec3 reflectedDirection(vec3 n,vec3 v,float rough) {
+    // GGX half-vector sampling. Directions rejected below the surface retain
+    // zero contribution; their probability must not be renormalized away.
+    float alpha=rough*rough,u=randomFloat(),phi=6.2831853*randomFloat();
+    float cosTheta=sqrt((1-u)/max(1+(alpha*alpha-1)*u,.00001));
+    float sinTheta=sqrt(max(0,1-cosTheta*cosTheta));
+    vec3 t=normalize(cross(abs(n.y)<.99?vec3(0,1,0):vec3(1,0,0),n));
+    vec3 h=normalize(t*(sinTheta*cos(phi))+cross(n,t)*(sinTheta*sin(phi))+n*cosTheta);
+    return reflect(-v,h);
+}
+void main() {
+    ivec2 pixel=ivec2(gl_LaunchIDEXT.xy),size=imageSize(Output);
+    if(any(greaterThanEqual(pixel,size)))return;
+    vec2 uv=(vec2(pixel)+.5)/vec2(size);float d=textureLod(Depth,uv,0).r;
+    if(d>=.999999){imageStore(Output,pixel,settings.Mode<=1u?vec4(1):vec4(0));return;}
+    vec3 p=worldPosition(uv,d),n=normalize(textureLod(Normals,uv,0).xyz),v=normalize(engine_UBO.ViewPos-p);
+    rngState=uint(pixel.x)+uint(pixel.y)*uint(size.x)+uint(engine_RayFrame.State.z)*9781u+17u;
+    uint samples=clamp(settings.Samples,1u,32u);
+    if(settings.Mode==0u) {
+        int i=int(engine_CurrentShadow.LightInfo.x);float sum=0;
+        if(i<0||i>=engine_Lights.lights.length()||engine_CurrentShadow.LightInfo.z<.5){imageStore(Output,pixel,vec4(1));return;}
+        Light light=engine_Lights.lights[i];
+        for(uint s=0u;s<samples;++s) {
+            vec3 delta=light.pos-p;float distance=length(delta);vec3 l=light.type==1?normalize(-light.forward):delta/max(distance,.001);
+            vec3 t=normalize(cross(abs(l.y)<.99?vec3(0,1,0):vec3(1,0,0),l));
+            float r=sqrt(randomFloat()),a=6.2831853*randomFloat();
+            float spread=light.type==1?settings.Radius:settings.Radius/max(distance,.001);
+            l=normalize(l+spread*r*(t*cos(a)+cross(l,t)*sin(a)));
+            sum+=visible(p,n,l,light.type==1?10000:distance-.002);
+        }
+        imageStore(Output,pixel,vec4(vec3(sum/float(samples)),1));return;
+    }
+    if(settings.Mode==1u) {
+        float sum=0;for(uint s=0u;s<samples;++s)sum+=visible(p,n,cosineDirection(n),settings.Radius);
+        imageStore(Output,pixel,vec4(vec3(sum/float(samples)),1));return;
+    }
+    vec3 sum=vec3(0);float rough=clamp(textureLod(Roughness,uv,0).r,.04,1);
+    vec4 material=textureLod(Albedo,uv,0);vec3 f0=mix(vec3(.04),material.rgb,material.a);
+    for(uint s=0u;s<samples;++s) {
+        vec3 direction=settings.Mode==2u?reflectedDirection(n,v,rough):cosineDirection(n);
+        float nl=max(dot(n,direction),0);if(nl<=0)continue;
+        hit.T=-1;traceRayEXT(SceneAS,gl_RayFlagsNoneEXT,255,0,0,0,p+n*settings.Bias,.001,direction,10000,0);
+        vec3 radiance=hit.T<0?textureLod(Environment,direction,0).rgb:shadeHit(-direction);
+        if(settings.Mode==2u) {
+            // BRDF / GGX-direction PDF: receiver Fresnel and geometry terms
+            // are applied here; compose must not multiply split-sum weight again.
+            vec3 h=normalize(v+direction);float nv=max(dot(n,v),.0001),nh=max(dot(n,h),.0001),vh=max(dot(v,h),0);
+            float k=(rough+1)*(rough+1)/8;
+            float g=nv/(nv*(1-k)+k)*nl/(nl*(1-k)+k);
+            vec3 fresnel=f0+(1-f0)*pow(1-vh,5);
+            sum+=radiance*fresnel*g*vh/max(nv*nh,.0001);
+        } else sum+=radiance; // cosine estimator for irradiance / pi
+    }
+    imageStore(Output,pixel,vec4(max(sum/float(samples),vec3(0)),1));
+}

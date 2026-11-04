@@ -1,0 +1,10 @@
+{
+  "PathTexture": [
+    "/textures/environment/test.hdr"
+  ],
+  "IsFloat": true,
+  "UseMipmap": false,
+  "PixelType": "RGBA_FLOAT",
+  "WrapS": "REPEAT",
+  "WrapT": "CLAMP_TO_EDGE"
+}

@@ -1,0 +1,11 @@
+{
+  "ShaderPath": "/shaders/render/portable/rayHybridCompose.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Uniforms": {
+    "data_UBOReflectionIsRT": 0,
+    "data_UBOIndirectIsRT": 0,
+    "data_UBOIndirectWeight": 1.0
+  }
+}

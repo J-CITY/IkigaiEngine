@@ -1,0 +1,78 @@
+{
+  "ShaderPath": "/shaders/render/portable/environmentCloudTransparentCube.shader",
+  "DepthTest": true,
+  "DepthWriting": false,
+  "BackfaceCulling": true,
+  "Blendable": true,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOu_Albedo": {
+      "X": 1,
+      "Y": 1,
+      "Z": 1,
+      "W": 1
+    },
+    "data_UBOu_TextureTiling": {
+      "X": 1,
+      "Y": 1
+    },
+    "data_UBOu_TextureOffset": {
+      "X": 0,
+      "Y": 0
+    },
+    "data_UBOu_Metallic": 0.0,
+    "data_UBOu_Roughness": 0.6,
+    "data_UBOu_EnableNormalMapping": false,
+    "data_UBOAmbient": {
+      "X": 0.03,
+      "Y": 0.03,
+      "Z": 0.03
+    },
+    "cloud_UBOLayer": {
+      "X": 6000.0,
+      "Y": 80.0,
+      "Z": 160.0,
+      "W": 2000.0
+    },
+    "cloud_UBODensity": {
+      "X": 0.6,
+      "Y": 0.025,
+      "Z": 0.007,
+      "W": 0.003
+    },
+    "cloud_UBOWind": {
+      "X": 1.0,
+      "Y": 0.2,
+      "Z": 1.5,
+      "W": 0.18
+    },
+    "cloud_UBOSunDirection": {
+      "X": 0.4,
+      "Y": 0.75,
+      "Z": 0.25,
+      "W": 8.0
+    },
+    "cloud_UBOSunColor": {
+      "X": 1.0,
+      "Y": 0.9,
+      "Z": 0.72,
+      "W": 0.5
+    },
+    "cloud_UBOLighting": {
+      "X": 0.25,
+      "Y": 1.0,
+      "Z": 16.0,
+      "W": 48.0
+    },
+    "cloud_UBOTurbulence": {
+      "X": 0.005,
+      "Y": 12.0,
+      "Z": 0.0,
+      "W": 0.0
+    },
+    "point_UBOBias": 0.025,
+    "point_UBONormalBias": 0.035,
+    "point_UBORadius": 0.04,
+    "point_UBOSamples": 12
+  }
+}

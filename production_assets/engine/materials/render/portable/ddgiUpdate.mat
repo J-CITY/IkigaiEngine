@@ -1,0 +1,12 @@
+{
+  "ShaderPath": "/shaders/render/portable/ddgiUpdate.shader",
+  "Uniforms": {
+    "data_UBOCounts": {
+      "X": 5,
+      "Y": 3,
+      "Z": 5,
+      "W": 64
+    },
+    "data_UBOHysteresis": 0.9
+  }
+}

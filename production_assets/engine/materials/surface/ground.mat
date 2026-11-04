@@ -1,0 +1,26 @@
+{
+  "ShaderPath": "/shaders/render/portable/vegetation.shader",
+  "IsDeferred": true,
+  "BackfaceCulling": true,
+  "PbrLayers": {
+    "Version": 1,
+    "AlphaMode": "Opaque",
+    "Layers": [
+      {
+        "AlbedoMap": "/textures/surface/ground.ppm",
+        "Roughness": 0.85,
+        "Weight": 1.0
+      }
+    ]
+  },
+  "Uniforms": {
+    "data_UBOu_Albedo": {
+      "X": 1.0,
+      "Y": 1.0,
+      "Z": 1.0,
+      "W": 1.0
+    },
+    "data_UBOu_Roughness": 0.85,
+    "data_UBOu_Metallic": 0.0
+  }
+}

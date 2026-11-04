@@ -1,0 +1,16 @@
+{
+  "ShaderPath": "/shaders/render/ssgi.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "FrontfaceCulling": false,
+  "Blendable": false,
+  "ColorWriting": true,
+  "GpuInstances": 1,
+  "IsDeferred": false,
+  "Uniforms": {
+    "data_UBOraySteps": 3,
+    "data_UBOintensity": 2.5,
+    "data_UBOdistance": 50.0
+  }
+}

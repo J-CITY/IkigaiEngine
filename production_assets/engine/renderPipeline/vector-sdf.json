@@ -1,0 +1,75 @@
+{
+  "Textures": [
+    {
+      "Name": "VectorColor",
+      "Size": "DISPLAY",
+      "Scale": 1,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_INT",
+        "Channels": 4,
+        "UseMipmap": false
+      }
+    },
+    {
+      "Name": "VectorDepth",
+      "Size": "DISPLAY",
+      "Scale": 1,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "DEPTH",
+        "PixelType": "DEPTH32_FLOAT",
+        "Channels": 1,
+        "UseMipmap": false
+      }
+    }
+  ],
+  "FrameBuffers": [
+    {
+      "Name": "VectorTarget",
+      "Textures": [
+        "VectorColor"
+      ],
+      "Depth": "VectorDepth"
+    }
+  ],
+  "StartStages": [],
+  "Stages": [
+    {
+      "Name": "VectorClear",
+      "Draw": "CLEAR",
+      "FrameBuffer": "VectorTarget",
+      "ClearColor": true,
+      "ClearDepth": true
+    },
+    {
+      "Name": "VectorWorld",
+      "Draw": "VECTOR_WORLD",
+      "FrameBuffer": "VectorTarget",
+      "ClearColor": false,
+      "ClearDepth": false
+    },
+    {
+      "Name": "VectorGUI",
+      "Draw": "GUI",
+      "FrameBuffer": "VectorTarget",
+      "ClearColor": false,
+      "ClearDepth": false
+    },
+    {
+      "Name": "Present",
+      "Draw": "QUAD",
+      "FrameBuffer": "",
+      "Material": "/materials/render/portable/copy.mat",
+      "Uniforms": {
+        "Scene": "VectorColor"
+      },
+      "ClearColor": true,
+      "ClearDepth": false
+    }
+  ],
+  "Name": "Vector SDF"
+}

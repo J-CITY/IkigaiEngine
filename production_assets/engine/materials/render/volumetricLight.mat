@@ -1,0 +1,19 @@
+{
+  "ShaderPath": "/shaders/render/volumetricLight.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "FrontfaceCulling": false,
+  "Blendable": false,
+  "ColorWriting": true,
+  "GpuInstances": 1,
+  "IsDeferred": false,
+  "Uniforms": {
+    "data_UBOmaxSteps": 0.0,
+    "data_UBOsampleStep": 0.0,
+    "data_UBOstepIncrement": 0.0,
+    "data_UBOmaxDistance": 0.0,
+    "data_UBOasymmetry": 0.0,
+    "data_UBOvoutmat": 0
+  }
+}

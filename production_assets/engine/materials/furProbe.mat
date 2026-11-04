@@ -1,0 +1,9 @@
+{
+  "ShaderPath": "/shaders/furProbe.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {}
+}

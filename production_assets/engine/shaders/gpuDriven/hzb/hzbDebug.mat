@@ -1,0 +1,12 @@
+{
+  "ShaderPath": "/shaders/gpuDriven/hzb/hzbDebug.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOMip": 0,
+    "data_UBOPower": 64.0
+  }
+}

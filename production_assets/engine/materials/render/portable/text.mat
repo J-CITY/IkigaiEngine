@@ -1,0 +1,9 @@
+{
+  "ShaderPath": "/shaders/render/portable/text.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": true,
+  "GpuInstances": 1,
+  "Uniforms": {}
+}

@@ -1,0 +1,3577 @@
+{
+  "Name": "lighting-demo-lite-legacy",
+  "Settings": {
+    "Textures": [],
+    "Materials": {
+      "/materials/render/portable/environmentCapture.mat": {
+        "data_UBOMode": 0,
+        "data_UBORotation": 0.0,
+        "data_UBOIntensity": 1.0,
+        "data_UBOSunDirection": {
+          "X": 0.4,
+          "Y": 0.75,
+          "Z": 0.25,
+          "W": 8.0
+        },
+        "data_UBOSunColor": {
+          "X": 1.0,
+          "Y": 0.9,
+          "Z": 0.72,
+          "W": 1.0
+        }
+      },
+      "/materials/render/portable/environmentCloudCapture.mat": {
+        "data_UBOMode": 0,
+        "data_UBORotation": 0.0,
+        "data_UBOIntensity": 1.0,
+        "data_UBOSunDirection": {
+          "X": 0.4,
+          "Y": 0.75,
+          "Z": 0.25,
+          "W": 8.0
+        },
+        "data_UBOSunColor": {
+          "X": 1.0,
+          "Y": 0.9,
+          "Z": 0.72,
+          "W": 1.0
+        }
+      },
+      "/materials/render/portable/environmentCloudHistory.mat": {
+        "data_UBOHistoryWeight": 0.8
+      },
+      "/materials/render/portable/environmentShapeNoise.mat": {
+        "data_UBOu_Seed": 17
+      },
+      "/materials/render/portable/environmentDetailNoise.mat": {
+        "data_UBOu_Seed": 29
+      },
+      "/materials/render/portable/pointShadowCube.mat": {
+        "data_UBONear": 0.1,
+        "data_UBOFar": 30.0
+      },
+      "/materials/render/portable/volumetricCube.mat": {
+        "data_UBODensity": 0.022,
+        "data_UBOScatteringAlbedo": 0.85,
+        "data_UBOAnisotropy": 0.3,
+        "data_UBOStrength": 1.0,
+        "data_UBOMaxDistance": 35.0,
+        "data_UBOSamples": 32,
+        "data_UBOLightLimit": 3
+      },
+      "/materials/render/portable/godRayMask.mat": {
+        "data_UBORadius": 0.018
+      },
+      "/materials/render/portable/godRayIntegrate.mat": {
+        "data_UBODecay": 0.985,
+        "data_UBODensity": 1.0
+      },
+      "/materials/render/portable/godRayCompose.mat": {
+        "data_UBOStrength": 0.5,
+        "data_UBOTint": {
+          "X": 1.0,
+          "Y": 0.85,
+          "Z": 0.65,
+          "W": 1.0
+        }
+      },
+      "/materials/render/portable/tonemap.mat": {
+        "data_UBOExposure": 0.8,
+        "data_UBOBloomStrength": 0.025
+      }
+    },
+    "Groups": [
+      {
+        "Materials": [
+          "/materials/render/portable/environmentClouds.mat",
+          "/materials/render/portable/environmentCloudCapture.mat",
+          "/materials/render/portable/environmentCloudTransparent.mat",
+          "/materials/render/portable/environmentCloudTransparentCube.mat"
+        ],
+        "Uniforms": {
+          "data_UBOLayer": {
+            "X": 6000.0,
+            "Y": 80.0,
+            "Z": 160.0,
+            "W": 2000.0
+          },
+          "data_UBODensity": {
+            "X": 0.6,
+            "Y": 0.025,
+            "Z": 0.007,
+            "W": 0.003
+          },
+          "data_UBOSunDirection": {
+            "X": 0.4,
+            "Y": 0.75,
+            "Z": 0.25,
+            "W": 8.0
+          },
+          "data_UBOSunColor": {
+            "X": 1.0,
+            "Y": 0.9,
+            "Z": 0.72,
+            "W": 0.5
+          },
+          "data_UBOLighting": {
+            "X": 0.25,
+            "Y": 1.0,
+            "Z": 16.0,
+            "W": 48.0
+          },
+          "data_UBOTurbulence": {
+            "X": 0.005,
+            "Y": 12.0,
+            "Z": 0.0,
+            "W": 0.0
+          }
+        },
+        "Rename": {
+          "/materials/render/portable/environmentCloudTransparent.mat": {
+            "data_UBOLayer": "cloud_UBOLayer",
+            "data_UBODensity": "cloud_UBODensity",
+            "data_UBOSunDirection": "cloud_UBOSunDirection",
+            "data_UBOSunColor": "cloud_UBOSunColor",
+            "data_UBOLighting": "cloud_UBOLighting",
+            "data_UBOTurbulence": "cloud_UBOTurbulence"
+          },
+          "/materials/render/portable/environmentCloudTransparentCube.mat": {
+            "data_UBOLayer": "cloud_UBOLayer",
+            "data_UBODensity": "cloud_UBODensity",
+            "data_UBOSunDirection": "cloud_UBOSunDirection",
+            "data_UBOSunColor": "cloud_UBOSunColor",
+            "data_UBOLighting": "cloud_UBOLighting",
+            "data_UBOTurbulence": "cloud_UBOTurbulence"
+          }
+        }
+      },
+      {
+        "Materials": [
+          "/materials/render/portable/environmentClouds.mat",
+          "/materials/render/portable/environmentCloudCapture.mat",
+          "/materials/render/portable/environmentCloudHistory.mat",
+          "/materials/render/portable/environmentCloudTransparent.mat",
+          "/materials/render/portable/environmentCloudTransparentCube.mat"
+        ],
+        "Uniforms": {
+          "data_UBOWind": {
+            "X": 1.0,
+            "Y": 0.2,
+            "Z": 1.5,
+            "W": 0.18
+          }
+        },
+        "Rename": {
+          "/materials/render/portable/environmentCloudTransparent.mat": {
+            "data_UBOWind": "cloud_UBOWind"
+          },
+          "/materials/render/portable/environmentCloudTransparentCube.mat": {
+            "data_UBOWind": "cloud_UBOWind"
+          }
+        }
+      },
+      {
+        "Name": "Point shadow filtering",
+        "Materials": [
+          "/materials/render/portable/lightingCube.mat",
+          "/materials/render/portable/forwardTransparentCube.mat",
+          "/materials/render/portable/environmentLightingCube.mat",
+          "/materials/render/portable/environmentTransparentCube.mat",
+          "/materials/render/portable/environmentCloudTransparentCube.mat",
+          "/materials/render/portable/volumetricCube.mat"
+        ],
+        "Uniforms": {
+          "point_UBOBias": 0.025,
+          "point_UBONormalBias": 0.035,
+          "point_UBORadius": 0.04,
+          "point_UBOSamples": 6
+        }
+      }
+    ]
+  },
+  "TemporalJitter": false,
+  "Textures": [
+    {
+      "Name": "Normals",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "Albedo",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "Roughness",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "Velocity",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "Depth",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "DEPTH",
+        "PixelType": "DEPTH32_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 1,
+        "MinFilter": "NEAREST",
+        "MagFilter": "NEAREST"
+      }
+    },
+    {
+      "Name": "DirectionalShadowColor",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 1024,
+        "Height": 1024,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "DirectionalShadow",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 1024,
+        "Height": 1024,
+        "TexType": "DEPTH",
+        "PixelType": "DEPTH32_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 1,
+        "MinFilter": "NEAREST",
+        "MagFilter": "NEAREST"
+      }
+    },
+    {
+      "Name": "SpotShadowColor",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 512,
+        "Height": 512,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "SpotShadow",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 512,
+        "Height": 512,
+        "TexType": "DEPTH",
+        "PixelType": "DEPTH32_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 1,
+        "MinFilter": "NEAREST",
+        "MagFilter": "NEAREST"
+      }
+    },
+    {
+      "Name": "AO",
+      "Scale": 0.5,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "ScreenShadow",
+      "Scale": 0.5,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "Lighting",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "Reflection",
+      "Scale": 0.5,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "Indirect",
+      "Scale": 0.5,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "Composed",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "Display",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "Bright",
+      "Scale": 0.5,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "BloomX",
+      "Scale": 0.5,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "Bloom",
+      "Scale": 0.5,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "Optional_volumetricLight",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "Optional_godRays",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      }
+    },
+    {
+      "Name": "Environment",
+      "Scale": 1,
+      "Persistent": true,
+      "Resource": {
+        "Width": 64,
+        "Height": 64,
+        "Depth": 6,
+        "Channels": 4,
+        "TexType": "TEXTURE_CUBE",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 7,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE"
+      }
+    },
+    {
+      "Name": "Irradiance",
+      "Scale": 1,
+      "Persistent": true,
+      "Resource": {
+        "Width": 16,
+        "Height": 16,
+        "Depth": 6,
+        "Channels": 4,
+        "TexType": "TEXTURE_CUBE",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 1,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE"
+      }
+    },
+    {
+      "Name": "Prefilter",
+      "Scale": 1,
+      "Persistent": true,
+      "Resource": {
+        "Width": 32,
+        "Height": 32,
+        "Depth": 6,
+        "Channels": 4,
+        "TexType": "TEXTURE_CUBE",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 6,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE"
+      }
+    },
+    {
+      "Name": "Brdf",
+      "Scale": 1,
+      "Persistent": true,
+      "Resource": {
+        "Width": 128,
+        "Height": 128,
+        "Depth": 1,
+        "Channels": 4,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 1,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE"
+      }
+    },
+    {
+      "Name": "HdrFallback",
+      "Scale": 1,
+      "Persistent": true,
+      "Resource": {
+        "Width": 1,
+        "Height": 1,
+        "Depth": 1,
+        "Channels": 4,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 1,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE",
+        "ColorData": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "Name": "EnvironmentSpecular",
+      "Scale": 1,
+      "Persistent": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "Depth": 1,
+        "Channels": 4,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 1,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE"
+      }
+    },
+    {
+      "Name": "EnvironmentDiffuse",
+      "Scale": 1,
+      "Persistent": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "Depth": 1,
+        "Channels": 4,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 1,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE"
+      }
+    },
+    {
+      "Name": "EnvironmentWeight",
+      "Scale": 1,
+      "Persistent": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "Depth": 1,
+        "Channels": 4,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 1,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE"
+      }
+    },
+    {
+      "Name": "EnvironmentScene",
+      "Scale": 1,
+      "Persistent": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "Depth": 1,
+        "Channels": 4,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 1,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE"
+      }
+    },
+    {
+      "Name": "PointShadowCube",
+      "Scale": 1,
+      "Persistent": false,
+      "Resource": {
+        "Width": 256,
+        "Height": 256,
+        "Depth": 6,
+        "Channels": 1,
+        "TexType": "TEXTURE_CUBE",
+        "PixelType": "R_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 1,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE",
+        "MagFilter": "NEAREST",
+        "MinFilter": "NEAREST"
+      }
+    },
+    {
+      "Name": "PointShadowDepth",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 256,
+        "Height": 256,
+        "TexType": "DEPTH",
+        "PixelType": "DEPTH32_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 1,
+        "MinFilter": "NEAREST",
+        "MagFilter": "NEAREST"
+      }
+    },
+    {
+      "Name": "Volume",
+      "Scale": 0.5,
+      "Persistent": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "Depth": 1,
+        "Channels": 4,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 1,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE"
+      }
+    },
+    {
+      "Name": "VolumeDepth",
+      "Scale": 0.5,
+      "Persistent": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "Depth": 1,
+        "Channels": 4,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 1,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE"
+      }
+    },
+    {
+      "Name": "GodMask",
+      "Scale": 0.5,
+      "Persistent": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "Depth": 1,
+        "Channels": 4,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 1,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE"
+      }
+    },
+    {
+      "Name": "GodRays",
+      "Scale": 0.5,
+      "Persistent": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "Depth": 1,
+        "Channels": 4,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 1,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE"
+      }
+    },
+    {
+      "Name": "CloudNeutral",
+      "Scale": 1,
+      "Persistent": true,
+      "Resource": {
+        "Width": 1,
+        "Height": 1,
+        "Depth": 1,
+        "Channels": 4,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 1,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE",
+        "ColorData": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          128,
+          63
+        ]
+      }
+    },
+    {
+      "Name": "DemoOutput",
+      "Scale": 1,
+      "Persistent": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "Depth": 1,
+        "Channels": 4,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "MipMapCount": 1,
+        "Storage": false,
+        "WrapS": "CLAMP_TO_EDGE",
+        "WrapT": "CLAMP_TO_EDGE",
+        "WrapR": "CLAMP_TO_EDGE"
+      }
+    }
+  ],
+  "FrameBuffers": [
+    {
+      "Name": "Geometry",
+      "Textures": [
+        "Velocity",
+        "Normals",
+        "Albedo",
+        "Roughness"
+      ],
+      "Depth": "Depth"
+    },
+    {
+      "Name": "DirectionalShadow",
+      "Textures": [
+        "DirectionalShadowColor"
+      ],
+      "Depth": "DirectionalShadow"
+    },
+    {
+      "Name": "SpotShadow",
+      "Textures": [
+        "SpotShadowColor"
+      ],
+      "Depth": "SpotShadow"
+    },
+    {
+      "Name": "AO",
+      "Textures": [
+        "AO"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "ScreenShadow",
+      "Textures": [
+        "ScreenShadow"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Reflection",
+      "Textures": [
+        "Reflection"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Indirect",
+      "Textures": [
+        "Indirect"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Composed",
+      "Textures": [
+        "Composed"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Display",
+      "Textures": [
+        "Display"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Bright",
+      "Textures": [
+        "Bright"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "BloomX",
+      "Textures": [
+        "BloomX"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Bloom",
+      "Textures": [
+        "Bloom"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Transparent",
+      "Textures": [
+        "Composed"
+      ],
+      "Depth": "Depth"
+    },
+    {
+      "Name": "Optional_volumetricLight",
+      "Textures": [
+        "Optional_volumetricLight"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Optional_godRays",
+      "Textures": [
+        "Optional_godRays"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "BrdfFrame",
+      "Textures": [
+        "Brdf"
+      ]
+    },
+    {
+      "Name": "EnvironmentLightingFrame",
+      "Textures": [
+        "Lighting",
+        "EnvironmentSpecular",
+        "EnvironmentDiffuse",
+        "EnvironmentWeight"
+      ]
+    },
+    {
+      "Name": "EnvironmentSceneFrame",
+      "Textures": [
+        "EnvironmentScene"
+      ]
+    },
+    {
+      "Name": "EnvironmentMip0Face0",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 0,
+      "Layer": 0
+    },
+    {
+      "Name": "EnvironmentMip0Face1",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 0,
+      "Layer": 1
+    },
+    {
+      "Name": "EnvironmentMip0Face2",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 0,
+      "Layer": 2
+    },
+    {
+      "Name": "EnvironmentMip0Face3",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 0,
+      "Layer": 3
+    },
+    {
+      "Name": "EnvironmentMip0Face4",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 0,
+      "Layer": 4
+    },
+    {
+      "Name": "EnvironmentMip0Face5",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 0,
+      "Layer": 5
+    },
+    {
+      "Name": "EnvironmentMip1Face0",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 1,
+      "Layer": 0
+    },
+    {
+      "Name": "EnvironmentMip1Face1",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 1,
+      "Layer": 1
+    },
+    {
+      "Name": "EnvironmentMip1Face2",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 1,
+      "Layer": 2
+    },
+    {
+      "Name": "EnvironmentMip1Face3",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 1,
+      "Layer": 3
+    },
+    {
+      "Name": "EnvironmentMip1Face4",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 1,
+      "Layer": 4
+    },
+    {
+      "Name": "EnvironmentMip1Face5",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 1,
+      "Layer": 5
+    },
+    {
+      "Name": "EnvironmentMip2Face0",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 2,
+      "Layer": 0
+    },
+    {
+      "Name": "EnvironmentMip2Face1",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 2,
+      "Layer": 1
+    },
+    {
+      "Name": "EnvironmentMip2Face2",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 2,
+      "Layer": 2
+    },
+    {
+      "Name": "EnvironmentMip2Face3",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 2,
+      "Layer": 3
+    },
+    {
+      "Name": "EnvironmentMip2Face4",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 2,
+      "Layer": 4
+    },
+    {
+      "Name": "EnvironmentMip2Face5",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 2,
+      "Layer": 5
+    },
+    {
+      "Name": "EnvironmentMip3Face0",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 3,
+      "Layer": 0
+    },
+    {
+      "Name": "EnvironmentMip3Face1",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 3,
+      "Layer": 1
+    },
+    {
+      "Name": "EnvironmentMip3Face2",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 3,
+      "Layer": 2
+    },
+    {
+      "Name": "EnvironmentMip3Face3",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 3,
+      "Layer": 3
+    },
+    {
+      "Name": "EnvironmentMip3Face4",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 3,
+      "Layer": 4
+    },
+    {
+      "Name": "EnvironmentMip3Face5",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 3,
+      "Layer": 5
+    },
+    {
+      "Name": "EnvironmentMip4Face0",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 4,
+      "Layer": 0
+    },
+    {
+      "Name": "EnvironmentMip4Face1",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 4,
+      "Layer": 1
+    },
+    {
+      "Name": "EnvironmentMip4Face2",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 4,
+      "Layer": 2
+    },
+    {
+      "Name": "EnvironmentMip4Face3",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 4,
+      "Layer": 3
+    },
+    {
+      "Name": "EnvironmentMip4Face4",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 4,
+      "Layer": 4
+    },
+    {
+      "Name": "EnvironmentMip4Face5",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 4,
+      "Layer": 5
+    },
+    {
+      "Name": "EnvironmentMip5Face0",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 5,
+      "Layer": 0
+    },
+    {
+      "Name": "EnvironmentMip5Face1",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 5,
+      "Layer": 1
+    },
+    {
+      "Name": "EnvironmentMip5Face2",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 5,
+      "Layer": 2
+    },
+    {
+      "Name": "EnvironmentMip5Face3",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 5,
+      "Layer": 3
+    },
+    {
+      "Name": "EnvironmentMip5Face4",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 5,
+      "Layer": 4
+    },
+    {
+      "Name": "EnvironmentMip5Face5",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 5,
+      "Layer": 5
+    },
+    {
+      "Name": "EnvironmentMip6Face0",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 6,
+      "Layer": 0
+    },
+    {
+      "Name": "EnvironmentMip6Face1",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 6,
+      "Layer": 1
+    },
+    {
+      "Name": "EnvironmentMip6Face2",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 6,
+      "Layer": 2
+    },
+    {
+      "Name": "EnvironmentMip6Face3",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 6,
+      "Layer": 3
+    },
+    {
+      "Name": "EnvironmentMip6Face4",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 6,
+      "Layer": 4
+    },
+    {
+      "Name": "EnvironmentMip6Face5",
+      "Textures": [
+        "Environment"
+      ],
+      "Mip": 6,
+      "Layer": 5
+    },
+    {
+      "Name": "IrradianceMip0Face0",
+      "Textures": [
+        "Irradiance"
+      ],
+      "Mip": 0,
+      "Layer": 0
+    },
+    {
+      "Name": "IrradianceMip0Face1",
+      "Textures": [
+        "Irradiance"
+      ],
+      "Mip": 0,
+      "Layer": 1
+    },
+    {
+      "Name": "IrradianceMip0Face2",
+      "Textures": [
+        "Irradiance"
+      ],
+      "Mip": 0,
+      "Layer": 2
+    },
+    {
+      "Name": "IrradianceMip0Face3",
+      "Textures": [
+        "Irradiance"
+      ],
+      "Mip": 0,
+      "Layer": 3
+    },
+    {
+      "Name": "IrradianceMip0Face4",
+      "Textures": [
+        "Irradiance"
+      ],
+      "Mip": 0,
+      "Layer": 4
+    },
+    {
+      "Name": "IrradianceMip0Face5",
+      "Textures": [
+        "Irradiance"
+      ],
+      "Mip": 0,
+      "Layer": 5
+    },
+    {
+      "Name": "PrefilterMip0Face0",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 0,
+      "Layer": 0
+    },
+    {
+      "Name": "PrefilterMip0Face1",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 0,
+      "Layer": 1
+    },
+    {
+      "Name": "PrefilterMip0Face2",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 0,
+      "Layer": 2
+    },
+    {
+      "Name": "PrefilterMip0Face3",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 0,
+      "Layer": 3
+    },
+    {
+      "Name": "PrefilterMip0Face4",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 0,
+      "Layer": 4
+    },
+    {
+      "Name": "PrefilterMip0Face5",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 0,
+      "Layer": 5
+    },
+    {
+      "Name": "PrefilterMip1Face0",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 1,
+      "Layer": 0
+    },
+    {
+      "Name": "PrefilterMip1Face1",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 1,
+      "Layer": 1
+    },
+    {
+      "Name": "PrefilterMip1Face2",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 1,
+      "Layer": 2
+    },
+    {
+      "Name": "PrefilterMip1Face3",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 1,
+      "Layer": 3
+    },
+    {
+      "Name": "PrefilterMip1Face4",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 1,
+      "Layer": 4
+    },
+    {
+      "Name": "PrefilterMip1Face5",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 1,
+      "Layer": 5
+    },
+    {
+      "Name": "PrefilterMip2Face0",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 2,
+      "Layer": 0
+    },
+    {
+      "Name": "PrefilterMip2Face1",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 2,
+      "Layer": 1
+    },
+    {
+      "Name": "PrefilterMip2Face2",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 2,
+      "Layer": 2
+    },
+    {
+      "Name": "PrefilterMip2Face3",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 2,
+      "Layer": 3
+    },
+    {
+      "Name": "PrefilterMip2Face4",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 2,
+      "Layer": 4
+    },
+    {
+      "Name": "PrefilterMip2Face5",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 2,
+      "Layer": 5
+    },
+    {
+      "Name": "PrefilterMip3Face0",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 3,
+      "Layer": 0
+    },
+    {
+      "Name": "PrefilterMip3Face1",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 3,
+      "Layer": 1
+    },
+    {
+      "Name": "PrefilterMip3Face2",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 3,
+      "Layer": 2
+    },
+    {
+      "Name": "PrefilterMip3Face3",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 3,
+      "Layer": 3
+    },
+    {
+      "Name": "PrefilterMip3Face4",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 3,
+      "Layer": 4
+    },
+    {
+      "Name": "PrefilterMip3Face5",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 3,
+      "Layer": 5
+    },
+    {
+      "Name": "PrefilterMip4Face0",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 4,
+      "Layer": 0
+    },
+    {
+      "Name": "PrefilterMip4Face1",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 4,
+      "Layer": 1
+    },
+    {
+      "Name": "PrefilterMip4Face2",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 4,
+      "Layer": 2
+    },
+    {
+      "Name": "PrefilterMip4Face3",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 4,
+      "Layer": 3
+    },
+    {
+      "Name": "PrefilterMip4Face4",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 4,
+      "Layer": 4
+    },
+    {
+      "Name": "PrefilterMip4Face5",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 4,
+      "Layer": 5
+    },
+    {
+      "Name": "PrefilterMip5Face0",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 5,
+      "Layer": 0
+    },
+    {
+      "Name": "PrefilterMip5Face1",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 5,
+      "Layer": 1
+    },
+    {
+      "Name": "PrefilterMip5Face2",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 5,
+      "Layer": 2
+    },
+    {
+      "Name": "PrefilterMip5Face3",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 5,
+      "Layer": 3
+    },
+    {
+      "Name": "PrefilterMip5Face4",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 5,
+      "Layer": 4
+    },
+    {
+      "Name": "PrefilterMip5Face5",
+      "Textures": [
+        "Prefilter"
+      ],
+      "Mip": 5,
+      "Layer": 5
+    },
+    {
+      "Name": "PointShadowFace0",
+      "Textures": [
+        "PointShadowCube"
+      ],
+      "Depth": "PointShadowDepth",
+      "Layer": 0
+    },
+    {
+      "Name": "PointShadowFace1",
+      "Textures": [
+        "PointShadowCube"
+      ],
+      "Depth": "PointShadowDepth",
+      "Layer": 1
+    },
+    {
+      "Name": "PointShadowFace2",
+      "Textures": [
+        "PointShadowCube"
+      ],
+      "Depth": "PointShadowDepth",
+      "Layer": 2
+    },
+    {
+      "Name": "PointShadowFace3",
+      "Textures": [
+        "PointShadowCube"
+      ],
+      "Depth": "PointShadowDepth",
+      "Layer": 3
+    },
+    {
+      "Name": "PointShadowFace4",
+      "Textures": [
+        "PointShadowCube"
+      ],
+      "Depth": "PointShadowDepth",
+      "Layer": 4
+    },
+    {
+      "Name": "PointShadowFace5",
+      "Textures": [
+        "PointShadowCube"
+      ],
+      "Depth": "PointShadowDepth",
+      "Layer": 5
+    },
+    {
+      "Name": "Volume",
+      "Textures": [
+        "Volume"
+      ]
+    },
+    {
+      "Name": "VolumeDepth",
+      "Textures": [
+        "VolumeDepth"
+      ]
+    },
+    {
+      "Name": "GodMask",
+      "Textures": [
+        "GodMask"
+      ]
+    },
+    {
+      "Name": "GodRays",
+      "Textures": [
+        "GodRays"
+      ]
+    },
+    {
+      "Name": "DemoOutput",
+      "Textures": [
+        "DemoOutput"
+      ]
+    }
+  ],
+  "Buffers": [],
+  "Stages": [
+    {
+      "Name": "DirectionalShadow",
+      "Draw": "SHADOW",
+      "Material": "/materials/render/portable/shadow.mat",
+      "FrameBuffer": "DirectionalShadow",
+      "Uniforms": {},
+      "ClearColor": true,
+      "ClearDepth": true,
+      "OverrideMaterial": true,
+      "ShadowType": "directional",
+      "ShadowRange": 100.0,
+      "ClearValue": {
+        "X": 1,
+        "Y": 1,
+        "Z": 1,
+        "W": 1
+      },
+      "Bypass": {}
+    },
+    {
+      "Name": "SpotShadow",
+      "Draw": "SHADOW",
+      "Material": "/materials/render/portable/shadow.mat",
+      "FrameBuffer": "SpotShadow",
+      "Uniforms": {},
+      "ClearColor": true,
+      "ClearDepth": true,
+      "OverrideMaterial": true,
+      "ShadowType": "spot",
+      "ShadowRange": 100.0,
+      "ClearValue": {
+        "X": 1,
+        "Y": 1,
+        "Z": 1,
+        "W": 1
+      },
+      "Bypass": {}
+    },
+    {
+      "Name": "PointShadowFace0",
+      "Draw": "SHADOW",
+      "Material": "/materials/render/portable/pointShadowCube.mat",
+      "FrameBuffer": "PointShadowFace0",
+      "Uniforms": {},
+      "Once": false,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": true,
+      "OverrideMaterial": true,
+      "ShadowType": "pointCube",
+      "ShadowFace": 0,
+      "ShadowLightId": 3,
+      "ClearValue": {
+        "X": 1.0,
+        "Y": 1.0,
+        "Z": 1.0,
+        "W": 1.0
+      },
+      "Bypass": {}
+    },
+    {
+      "Name": "PointShadowFace1",
+      "Draw": "SHADOW",
+      "Material": "/materials/render/portable/pointShadowCube.mat",
+      "FrameBuffer": "PointShadowFace1",
+      "Uniforms": {},
+      "Once": false,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": true,
+      "OverrideMaterial": true,
+      "ShadowType": "pointCube",
+      "ShadowFace": 1,
+      "ShadowLightId": 3,
+      "ClearValue": {
+        "X": 1.0,
+        "Y": 1.0,
+        "Z": 1.0,
+        "W": 1.0
+      },
+      "Bypass": {}
+    },
+    {
+      "Name": "PointShadowFace2",
+      "Draw": "SHADOW",
+      "Material": "/materials/render/portable/pointShadowCube.mat",
+      "FrameBuffer": "PointShadowFace2",
+      "Uniforms": {},
+      "Once": false,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": true,
+      "OverrideMaterial": true,
+      "ShadowType": "pointCube",
+      "ShadowFace": 2,
+      "ShadowLightId": 3,
+      "ClearValue": {
+        "X": 1.0,
+        "Y": 1.0,
+        "Z": 1.0,
+        "W": 1.0
+      },
+      "Bypass": {}
+    },
+    {
+      "Name": "PointShadowFace3",
+      "Draw": "SHADOW",
+      "Material": "/materials/render/portable/pointShadowCube.mat",
+      "FrameBuffer": "PointShadowFace3",
+      "Uniforms": {},
+      "Once": false,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": true,
+      "OverrideMaterial": true,
+      "ShadowType": "pointCube",
+      "ShadowFace": 3,
+      "ShadowLightId": 3,
+      "ClearValue": {
+        "X": 1.0,
+        "Y": 1.0,
+        "Z": 1.0,
+        "W": 1.0
+      },
+      "Bypass": {}
+    },
+    {
+      "Name": "PointShadowFace4",
+      "Draw": "SHADOW",
+      "Material": "/materials/render/portable/pointShadowCube.mat",
+      "FrameBuffer": "PointShadowFace4",
+      "Uniforms": {},
+      "Once": false,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": true,
+      "OverrideMaterial": true,
+      "ShadowType": "pointCube",
+      "ShadowFace": 4,
+      "ShadowLightId": 3,
+      "ClearValue": {
+        "X": 1.0,
+        "Y": 1.0,
+        "Z": 1.0,
+        "W": 1.0
+      },
+      "Bypass": {}
+    },
+    {
+      "Name": "PointShadowFace5",
+      "Draw": "SHADOW",
+      "Material": "/materials/render/portable/pointShadowCube.mat",
+      "FrameBuffer": "PointShadowFace5",
+      "Uniforms": {},
+      "Once": false,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": true,
+      "OverrideMaterial": true,
+      "ShadowType": "pointCube",
+      "ShadowFace": 5,
+      "ShadowLightId": 3,
+      "ClearValue": {
+        "X": 1.0,
+        "Y": 1.0,
+        "Z": 1.0,
+        "W": 1.0
+      },
+      "Bypass": {}
+    },
+    {
+      "Name": "Geometry",
+      "Draw": "DEFERRED",
+      "Material": "/materials/render/portable/gbuffer.mat",
+      "FrameBuffer": "Geometry",
+      "Uniforms": {},
+      "ClearColor": true,
+      "ClearDepth": true,
+      "OverrideMaterial": true,
+      "ClearValue": {
+        "X": 0,
+        "Y": 0,
+        "Z": 0,
+        "W": 0
+      },
+      "Bypass": {}
+    },
+    {
+      "Name": "SSAO",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/ssao.mat",
+      "FrameBuffer": "AO",
+      "Uniforms": {
+        "Depth": "Depth",
+        "Normals": "Normals"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "ClearValue": {
+        "X": 1,
+        "Y": 1,
+        "Z": 1,
+        "W": 1
+      },
+      "Bypass": {}
+    },
+    {
+      "Name": "ScreenSpaceShadows",
+      "Draw": "QUAD",
+      "FrameBuffer": "ScreenShadow",
+      "Uniforms": {},
+      "ClearColor": true,
+      "ClearDepth": false,
+      "ClearValue": {
+        "X": 1,
+        "Y": 1,
+        "Z": 1,
+        "W": 1
+      },
+      "Enabled": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "Lighting",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentLightingCube.mat",
+      "FrameBuffer": "EnvironmentLightingFrame",
+      "Uniforms": {
+        "Depth": "Depth",
+        "Normals": "Normals",
+        "Albedo": "Albedo",
+        "Roughness": "Roughness",
+        "AO": "AO",
+        "ScreenShadow": "ScreenShadow",
+        "DirectionalShadow": "DirectionalShadow",
+        "SpotShadow": "SpotShadow",
+        "PointShadow": "PointShadowCube",
+        "Irradiance": "Irradiance",
+        "Prefilter": "Prefilter",
+        "BrdfLut": "Brdf"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "EnvironmentSky",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentSky.mat",
+      "FrameBuffer": "EnvironmentSceneFrame",
+      "Uniforms": {
+        "Scene": "Lighting",
+        "Depth": "Depth",
+        "Environment": "Environment"
+      },
+      "Once": false,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "SSR",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/ssr.mat",
+      "FrameBuffer": "Reflection",
+      "Uniforms": {
+        "Depth": "Depth",
+        "Normals": "Normals",
+        "Scene": "EnvironmentScene",
+        "Roughness": "Roughness"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "ClearValue": {
+        "X": 0,
+        "Y": 0,
+        "Z": 0,
+        "W": 0
+      },
+      "Bypass": {}
+    },
+    {
+      "Name": "SSGI",
+      "Draw": "QUAD",
+      "FrameBuffer": "Indirect",
+      "Uniforms": {},
+      "ClearColor": true,
+      "ClearDepth": false,
+      "ClearValue": {
+        "X": 0,
+        "Y": 0,
+        "Z": 0,
+        "W": 0
+      },
+      "Enabled": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "Compose",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCompose.mat",
+      "FrameBuffer": "Composed",
+      "Uniforms": {
+        "Scene": "EnvironmentScene",
+        "Reflection": "Reflection",
+        "Indirect": "Indirect",
+        "Specular": "EnvironmentSpecular",
+        "Diffuse": "EnvironmentDiffuse",
+        "Weight": "EnvironmentWeight",
+        "Albedo": "Albedo"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "Transparent",
+      "Draw": "TRANSPARENT_GEOMETRY",
+      "Material": "/materials/render/portable/environmentTransparentCube.mat",
+      "FrameBuffer": "Transparent",
+      "Uniforms": {
+        "DirectionalShadow": "DirectionalShadow",
+        "SpotShadow": "SpotShadow",
+        "PointShadow": "PointShadowCube",
+        "Irradiance": "Irradiance",
+        "Prefilter": "Prefilter",
+        "BrdfLut": "Brdf"
+      },
+      "ClearColor": false,
+      "ClearDepth": false,
+      "OverrideMaterial": true,
+      "Bypass": {}
+    },
+    {
+      "Name": "VolumeDepth",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/copyDepth.mat",
+      "FrameBuffer": "VolumeDepth",
+      "Uniforms": {
+        "Depth": "Depth"
+      },
+      "Once": false,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "VolumeIntegrate",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/volumetricCube.mat",
+      "FrameBuffer": "Volume",
+      "Uniforms": {
+        "Depth": "Depth",
+        "DirectionalShadow": "DirectionalShadow",
+        "SpotShadow": "SpotShadow",
+        "PointShadow": "PointShadowCube",
+        "data_UBOSamples": 16
+      },
+      "Once": false,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "volumetricLight",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/volumetricCompose.mat",
+      "FrameBuffer": "Optional_volumetricLight",
+      "Uniforms": {
+        "Scene": "Composed",
+        "Depth": "Depth",
+        "Volume": "Volume",
+        "LowDepth": "VolumeDepth"
+      },
+      "Once": false,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "GodSourceMask",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/godRayMask.mat",
+      "FrameBuffer": "GodMask",
+      "Uniforms": {
+        "Depth": "Depth",
+        "Clouds": "CloudNeutral"
+      },
+      "Once": false,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "GodRadialIntegrate",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/godRayIntegrate.mat",
+      "FrameBuffer": "GodRays",
+      "Uniforms": {
+        "Mask": "GodMask",
+        "data_UBOSamples": 24
+      },
+      "Once": false,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "godRays",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/godRayCompose.mat",
+      "FrameBuffer": "Optional_godRays",
+      "Uniforms": {
+        "Scene": "Optional_volumetricLight",
+        "Rays": "GodRays",
+        "Mask": "GodMask"
+      },
+      "Once": false,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "BloomExtract",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/bright.mat",
+      "FrameBuffer": "Bright",
+      "Uniforms": {
+        "Scene": "Optional_godRays"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "BloomHorizontal",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/blur.mat",
+      "FrameBuffer": "BloomX",
+      "Uniforms": {
+        "Scene": "Bright",
+        "data_UBODirection": {
+          "X": 1.0,
+          "Y": 0.0
+        }
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "BloomVertical",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/blur.mat",
+      "FrameBuffer": "Bloom",
+      "Uniforms": {
+        "Scene": "BloomX",
+        "data_UBODirection": {
+          "X": 0.0,
+          "Y": 1.0
+        }
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "Tonemap",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/tonemap.mat",
+      "FrameBuffer": "Display",
+      "Uniforms": {
+        "Scene": "Optional_godRays",
+        "Bloom": "Bloom"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "PrepareDisplay",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/fxaa.mat",
+      "FrameBuffer": "DemoOutput",
+      "Uniforms": {
+        "Scene": "Display"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    },
+    {
+      "Name": "GUI",
+      "Draw": "GUI",
+      "ClearColor": false,
+      "ClearDepth": false,
+      "Uniforms": {},
+      "FrameBuffer": "DemoOutput",
+      "Bypass": {}
+    },
+    {
+      "Name": "Present",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/copy.mat",
+      "FrameBuffer": "",
+      "Uniforms": {
+        "Scene": "DemoOutput"
+      },
+      "Once": false,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {}
+    }
+  ],
+  "StartStages": [
+    {
+      "Name": "BrdfBake",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentBrdf.mat",
+      "FrameBuffer": "BrdfFrame",
+      "Uniforms": {},
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip0Face0",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip0Face0",
+      "Uniforms": {
+        "data_UBOFace": 0,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip0Face1",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip0Face1",
+      "Uniforms": {
+        "data_UBOFace": 1,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip0Face2",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip0Face2",
+      "Uniforms": {
+        "data_UBOFace": 2,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip0Face3",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip0Face3",
+      "Uniforms": {
+        "data_UBOFace": 3,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip0Face4",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip0Face4",
+      "Uniforms": {
+        "data_UBOFace": 4,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip0Face5",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip0Face5",
+      "Uniforms": {
+        "data_UBOFace": 5,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip1Face0",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip1Face0",
+      "Uniforms": {
+        "data_UBOFace": 0,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip1Face1",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip1Face1",
+      "Uniforms": {
+        "data_UBOFace": 1,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip1Face2",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip1Face2",
+      "Uniforms": {
+        "data_UBOFace": 2,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip1Face3",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip1Face3",
+      "Uniforms": {
+        "data_UBOFace": 3,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip1Face4",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip1Face4",
+      "Uniforms": {
+        "data_UBOFace": 4,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip1Face5",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip1Face5",
+      "Uniforms": {
+        "data_UBOFace": 5,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip2Face0",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip2Face0",
+      "Uniforms": {
+        "data_UBOFace": 0,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip2Face1",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip2Face1",
+      "Uniforms": {
+        "data_UBOFace": 1,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip2Face2",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip2Face2",
+      "Uniforms": {
+        "data_UBOFace": 2,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip2Face3",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip2Face3",
+      "Uniforms": {
+        "data_UBOFace": 3,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip2Face4",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip2Face4",
+      "Uniforms": {
+        "data_UBOFace": 4,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip2Face5",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip2Face5",
+      "Uniforms": {
+        "data_UBOFace": 5,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip3Face0",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip3Face0",
+      "Uniforms": {
+        "data_UBOFace": 0,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip3Face1",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip3Face1",
+      "Uniforms": {
+        "data_UBOFace": 1,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip3Face2",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip3Face2",
+      "Uniforms": {
+        "data_UBOFace": 2,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip3Face3",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip3Face3",
+      "Uniforms": {
+        "data_UBOFace": 3,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip3Face4",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip3Face4",
+      "Uniforms": {
+        "data_UBOFace": 4,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip3Face5",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip3Face5",
+      "Uniforms": {
+        "data_UBOFace": 5,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip4Face0",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip4Face0",
+      "Uniforms": {
+        "data_UBOFace": 0,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip4Face1",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip4Face1",
+      "Uniforms": {
+        "data_UBOFace": 1,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip4Face2",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip4Face2",
+      "Uniforms": {
+        "data_UBOFace": 2,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip4Face3",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip4Face3",
+      "Uniforms": {
+        "data_UBOFace": 3,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip4Face4",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip4Face4",
+      "Uniforms": {
+        "data_UBOFace": 4,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip4Face5",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip4Face5",
+      "Uniforms": {
+        "data_UBOFace": 5,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip5Face0",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip5Face0",
+      "Uniforms": {
+        "data_UBOFace": 0,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip5Face1",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip5Face1",
+      "Uniforms": {
+        "data_UBOFace": 1,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip5Face2",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip5Face2",
+      "Uniforms": {
+        "data_UBOFace": 2,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip5Face3",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip5Face3",
+      "Uniforms": {
+        "data_UBOFace": 3,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip5Face4",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip5Face4",
+      "Uniforms": {
+        "data_UBOFace": 4,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip5Face5",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip5Face5",
+      "Uniforms": {
+        "data_UBOFace": 5,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip6Face0",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip6Face0",
+      "Uniforms": {
+        "data_UBOFace": 0,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip6Face1",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip6Face1",
+      "Uniforms": {
+        "data_UBOFace": 1,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip6Face2",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip6Face2",
+      "Uniforms": {
+        "data_UBOFace": 2,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip6Face3",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip6Face3",
+      "Uniforms": {
+        "data_UBOFace": 3,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip6Face4",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip6Face4",
+      "Uniforms": {
+        "data_UBOFace": 4,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "EnvironmentMip6Face5",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentCapture.mat",
+      "FrameBuffer": "EnvironmentMip6Face5",
+      "Uniforms": {
+        "data_UBOFace": 5,
+        "Equirectangular": "HdrFallback"
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "IrradianceMip0Face0",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentIrradiance.mat",
+      "FrameBuffer": "IrradianceMip0Face0",
+      "Uniforms": {
+        "data_UBOFace": 0,
+        "Environment": "Environment",
+        "data_UBOSamples": 32
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "IrradianceMip0Face1",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentIrradiance.mat",
+      "FrameBuffer": "IrradianceMip0Face1",
+      "Uniforms": {
+        "data_UBOFace": 1,
+        "Environment": "Environment",
+        "data_UBOSamples": 32
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "IrradianceMip0Face2",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentIrradiance.mat",
+      "FrameBuffer": "IrradianceMip0Face2",
+      "Uniforms": {
+        "data_UBOFace": 2,
+        "Environment": "Environment",
+        "data_UBOSamples": 32
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "IrradianceMip0Face3",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentIrradiance.mat",
+      "FrameBuffer": "IrradianceMip0Face3",
+      "Uniforms": {
+        "data_UBOFace": 3,
+        "Environment": "Environment",
+        "data_UBOSamples": 32
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "IrradianceMip0Face4",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentIrradiance.mat",
+      "FrameBuffer": "IrradianceMip0Face4",
+      "Uniforms": {
+        "data_UBOFace": 4,
+        "Environment": "Environment",
+        "data_UBOSamples": 32
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "IrradianceMip0Face5",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentIrradiance.mat",
+      "FrameBuffer": "IrradianceMip0Face5",
+      "Uniforms": {
+        "data_UBOFace": 5,
+        "Environment": "Environment",
+        "data_UBOSamples": 32
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip0Face0",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip0Face0",
+      "Uniforms": {
+        "data_UBOFace": 0,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.0
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip0Face1",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip0Face1",
+      "Uniforms": {
+        "data_UBOFace": 1,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.0
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip0Face2",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip0Face2",
+      "Uniforms": {
+        "data_UBOFace": 2,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.0
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip0Face3",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip0Face3",
+      "Uniforms": {
+        "data_UBOFace": 3,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.0
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip0Face4",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip0Face4",
+      "Uniforms": {
+        "data_UBOFace": 4,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.0
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip0Face5",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip0Face5",
+      "Uniforms": {
+        "data_UBOFace": 5,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.0
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip1Face0",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip1Face0",
+      "Uniforms": {
+        "data_UBOFace": 0,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.2
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip1Face1",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip1Face1",
+      "Uniforms": {
+        "data_UBOFace": 1,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.2
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip1Face2",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip1Face2",
+      "Uniforms": {
+        "data_UBOFace": 2,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.2
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip1Face3",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip1Face3",
+      "Uniforms": {
+        "data_UBOFace": 3,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.2
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip1Face4",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip1Face4",
+      "Uniforms": {
+        "data_UBOFace": 4,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.2
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip1Face5",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip1Face5",
+      "Uniforms": {
+        "data_UBOFace": 5,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.2
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip2Face0",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip2Face0",
+      "Uniforms": {
+        "data_UBOFace": 0,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.4
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip2Face1",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip2Face1",
+      "Uniforms": {
+        "data_UBOFace": 1,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.4
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip2Face2",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip2Face2",
+      "Uniforms": {
+        "data_UBOFace": 2,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.4
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip2Face3",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip2Face3",
+      "Uniforms": {
+        "data_UBOFace": 3,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.4
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip2Face4",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip2Face4",
+      "Uniforms": {
+        "data_UBOFace": 4,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.4
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip2Face5",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip2Face5",
+      "Uniforms": {
+        "data_UBOFace": 5,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.4
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip3Face0",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip3Face0",
+      "Uniforms": {
+        "data_UBOFace": 0,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.6
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip3Face1",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip3Face1",
+      "Uniforms": {
+        "data_UBOFace": 1,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.6
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip3Face2",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip3Face2",
+      "Uniforms": {
+        "data_UBOFace": 2,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.6
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip3Face3",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip3Face3",
+      "Uniforms": {
+        "data_UBOFace": 3,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.6
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip3Face4",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip3Face4",
+      "Uniforms": {
+        "data_UBOFace": 4,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.6
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip3Face5",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip3Face5",
+      "Uniforms": {
+        "data_UBOFace": 5,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.6
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip4Face0",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip4Face0",
+      "Uniforms": {
+        "data_UBOFace": 0,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.8
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip4Face1",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip4Face1",
+      "Uniforms": {
+        "data_UBOFace": 1,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.8
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip4Face2",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip4Face2",
+      "Uniforms": {
+        "data_UBOFace": 2,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.8
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip4Face3",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip4Face3",
+      "Uniforms": {
+        "data_UBOFace": 3,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.8
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip4Face4",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip4Face4",
+      "Uniforms": {
+        "data_UBOFace": 4,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.8
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip4Face5",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip4Face5",
+      "Uniforms": {
+        "data_UBOFace": 5,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 0.8
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip5Face0",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip5Face0",
+      "Uniforms": {
+        "data_UBOFace": 0,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 1.0
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip5Face1",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip5Face1",
+      "Uniforms": {
+        "data_UBOFace": 1,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 1.0
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip5Face2",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip5Face2",
+      "Uniforms": {
+        "data_UBOFace": 2,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 1.0
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip5Face3",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip5Face3",
+      "Uniforms": {
+        "data_UBOFace": 3,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 1.0
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip5Face4",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip5Face4",
+      "Uniforms": {
+        "data_UBOFace": 4,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 1.0
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrefilterMip5Face5",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/environmentPrefilter.mat",
+      "FrameBuffer": "PrefilterMip5Face5",
+      "Uniforms": {
+        "data_UBOFace": 5,
+        "Environment": "Environment",
+        "data_UBOSamples": 32,
+        "data_UBORoughness": 1.0
+      },
+      "Once": true,
+      "DispatchTexture": "",
+      "ClearColor": true,
+      "ClearDepth": false
+    }
+  ]
+}

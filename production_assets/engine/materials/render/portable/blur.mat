@@ -1,0 +1,14 @@
+{
+  "ShaderPath": "/shaders/render/portable/blur.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBODirection": {
+      "X": 1,
+      "Y": 0
+    }
+  }
+}

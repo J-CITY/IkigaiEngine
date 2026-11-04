@@ -1,0 +1,38 @@
+{
+  "ShaderPath": "/shaders/render/deferredGBuffer.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "FrontfaceCulling": false,
+  "Blendable": false,
+  "ColorWriting": true,
+  "GpuInstances": 1,
+  "IsDeferred": false,
+  "Uniforms": {
+    "data_UBOengine_IsPBR": false,
+    "data_UBOu_Albedo": {
+      "X": 1.0,
+      "Y": 1.0,
+      "Z": 1.0,
+      "W": 1.0
+    },
+    "data_UBOu_Metallic": 1.0,
+    "data_UBOu_Roughness": 1.0,
+    "data_UBOu_TextureTiling": {
+      "X": 1.0,
+      "Y": 1.0
+    },
+    "data_UBOu_TextureOffset": {
+      "X": 0.0,
+      "Y": 0.0
+    },
+    "data_UBOu_Specular": {
+      "X": 1.0,
+      "Y": 1.0,
+      "Z": 1.0
+    },
+    "data_UBOu_Shininess": 100.0,
+    "data_UBOu_HeightScale": 0.0,
+    "data_UBOu_EnableNormalMapping": false
+  }
+}

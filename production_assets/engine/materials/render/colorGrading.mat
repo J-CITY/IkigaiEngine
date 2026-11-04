@@ -1,0 +1,28 @@
+{
+  "ShaderPath": "/shaders/render/colorGrading.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "FrontfaceCulling": false,
+  "Blendable": false,
+  "ColorWriting": true,
+  "GpuInstances": 1,
+  "IsDeferred": false,
+  "Uniforms": {
+    "data_UBOu_ChannelR": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.0
+    },
+    "data_UBOu_ChannelG": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.0
+    },
+    "data_UBOu_ChannelB": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.0
+    }
+  }
+}

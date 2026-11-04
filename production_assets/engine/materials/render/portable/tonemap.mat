@@ -1,0 +1,13 @@
+{
+  "ShaderPath": "/shaders/render/portable/tonemap.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOBloomStrength": 0.08,
+    "data_UBOExposure": 1.0,
+    "data_UBOGamma": 2.2
+  }
+}

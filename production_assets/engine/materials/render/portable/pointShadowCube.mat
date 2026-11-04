@@ -1,0 +1,26 @@
+{
+  "ShaderPath": "/shaders/render/portable/pointShadowCube.shader",
+  "DepthTest": true,
+  "DepthWriting": true,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOu_Albedo": {
+      "X": 1,
+      "Y": 1,
+      "Z": 1,
+      "W": 1
+    },
+    "data_UBOu_TextureTiling": {
+      "X": 1,
+      "Y": 1
+    },
+    "data_UBOu_TextureOffset": {
+      "X": 0,
+      "Y": 0
+    },
+    "data_UBONear": 0.1,
+    "data_UBOFar": 30.0
+  }
+}

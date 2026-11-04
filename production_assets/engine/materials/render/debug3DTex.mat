@@ -1,0 +1,19 @@
+{
+  "ShaderPath": "/shaders/render/debug3DTex.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "FrontfaceCulling": false,
+  "Blendable": false,
+  "ColorWriting": true,
+  "GpuInstances": 1,
+  "IsDeferred": false,
+  "Uniforms": {
+    "data_UBOnear_plane": 0.0,
+    "data_UBOfar_plane": 0.0,
+    "data_UBOlayer": 0,
+    "data_UBOisPerspective": 0,
+    "data_UBOisRGB": 0,
+    "data_UBOis3D": 0
+  }
+}

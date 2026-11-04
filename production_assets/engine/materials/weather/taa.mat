@@ -1,0 +1,12 @@
+{
+  "ShaderPath": "/shaders/weather/taa.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOHistoryWeight": 0.85,
+    "data_UBODepthThreshold": 0.005
+  }
+}

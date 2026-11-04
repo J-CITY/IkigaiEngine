@@ -1,0 +1,13 @@
+{
+  "ShaderPath": "/shaders/render/portable/ssao.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBORadius": 0.5,
+    "data_UBOBias": 0.025,
+    "data_UBOSamples": 16
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "ShaderPath": "/shaders/render/portable/environmentShapeNoise.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Uniforms": {
+    "data_UBOu_Size": 64,
+    "data_UBOu_Seed": 17
+  }
+}

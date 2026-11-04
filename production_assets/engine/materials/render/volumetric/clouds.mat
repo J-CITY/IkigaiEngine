@@ -1,0 +1,58 @@
+{
+  "ShaderPath": "/shaders/render/volumetric/clouds.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "FrontfaceCulling": false,
+  "Blendable": false,
+  "ColorWriting": true,
+  "GpuInstances": 1,
+  "IsDeferred": false,
+  "Uniforms": {
+    "data_UBOu_PlanetCenter": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.0
+    },
+    "data_UBOu_PlanetRadius": 0.0,
+    "data_UBOu_CloudMinHeight": 0.0,
+    "data_UBOu_CloudMaxHeight": 0.0,
+    "data_UBOu_ShapeNoiseScale": 0.0,
+    "data_UBOu_DetailNoiseScale": 0.0,
+    "data_UBOu_DetailNoiseModifier": 0.0,
+    "data_UBOu_TurbulenceNoiseScale": 0.0,
+    "data_UBOu_TurbulenceAmount": 0.0,
+    "data_UBOu_CloudCoverage": 0.0,
+    "data_UBOu_WindAngle": 0.0,
+    "data_UBOu_WindSpeed": 0.0,
+    "data_UBOu_WindShearOffset": 0.0,
+    "data_UBOu_MaxNumSteps": 0.0,
+    "data_UBOu_LightStepLength": 0.0,
+    "data_UBOu_LightConeRadius": 0.0,
+    "data_UBOengine_u_SunDir": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.0
+    },
+    "data_UBOu_SunColor": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.0
+    },
+    "data_UBOu_CloudBaseColor": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.0
+    },
+    "data_UBOu_CloudTopColor": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.0
+    },
+    "data_UBOu_Precipitation": 0.0,
+    "data_UBOu_AmbientLightFactor": 0.0,
+    "data_UBOu_SunLightFactor": 0.0,
+    "data_UBOu_HenyeyGreensteinGForward": 0.0,
+    "data_UBOu_HenyeyGreensteinGBackward": 0.0
+  }
+}

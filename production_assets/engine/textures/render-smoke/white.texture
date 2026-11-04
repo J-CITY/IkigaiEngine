@@ -1,0 +1,14 @@
+{
+  "Width": 1,
+  "Height": 1,
+  "Channels": 4,
+  "ColorData": [
+    255,
+    255,
+    255,
+    255
+  ],
+  "TexType": "TEXTURE_2D",
+  "PixelType": "RGBA_INT",
+  "UseMipmap": false
+}

@@ -1,0 +1,12 @@
+{
+  "ShaderPath": "/shaders/render/portable/ssgi.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBORadius": 48.0,
+    "data_UBOStrength": 1.0
+  }
+}

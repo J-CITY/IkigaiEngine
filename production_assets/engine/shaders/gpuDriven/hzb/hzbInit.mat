@@ -1,0 +1,7 @@
+{
+  "ShaderPath": "/shaders/gpuDriven/hzb/hzbInit.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Uniforms": {}
+}

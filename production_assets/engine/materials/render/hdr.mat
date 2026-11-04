@@ -1,0 +1,16 @@
+{
+  "ShaderPath": "/shaders/render/hdr.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "FrontfaceCulling": false,
+  "Blendable": false,
+  "ColorWriting": true,
+  "GpuInstances": 1,
+  "IsDeferred": false,
+  "Uniforms": {
+    "data_UBOu_UseHDR": false,
+    "data_UBOu_Exposure": 0.0,
+    "data_UBOu_Gamma": 0.0
+  }
+}

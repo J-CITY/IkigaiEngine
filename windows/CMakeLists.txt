@@ -352,8 +352,8 @@ endif()
 
 target_link_libraries(${APP_NAME} PRIVATE ${LIBS_TO_LINK})
 include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/Upscalers.cmake")
-include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/Materials.cmake")
-ikigai_attach_material_assets(${APP_NAME})
+include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/ProductionAssets.cmake")
+ikigai_attach_production_assets(${APP_NAME})
 
 # Some bundled dependencies cache their output directory. Keep alternate backend
 # builds runnable when ENGINE_RUNTIME_OUTPUT_DIRECTORY points at another folder.

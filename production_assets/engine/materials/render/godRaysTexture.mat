@@ -1,0 +1,18 @@
+{
+  "ShaderPath": "/shaders/render/godRaysTexture.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "FrontfaceCulling": false,
+  "Blendable": false,
+  "ColorWriting": true,
+  "GpuInstances": 1,
+  "IsDeferred": false,
+  "Uniforms": {
+    "data_UBOu_Color": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.0
+    }
+  }
+}

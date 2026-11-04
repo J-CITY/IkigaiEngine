@@ -1,0 +1,21 @@
+{
+  "ShaderPath": "/shaders/render/portable/vegetation.shader",
+  "IsDeferred": true,
+  "BackfaceCulling": true,
+  "PbrLayers": {
+    "Version": 1,
+    "AlphaMode": "Blend",
+    "Layers": []
+  },
+  "Uniforms": {
+    "data_UBOu_Albedo": {
+      "X": 0.045,
+      "Y": 0.2,
+      "Z": 0.28,
+      "W": 0.7
+    },
+    "data_UBOu_Roughness": 0.16,
+    "data_UBOu_Metallic": 0.0
+  },
+  "DepthWriting": false
+}

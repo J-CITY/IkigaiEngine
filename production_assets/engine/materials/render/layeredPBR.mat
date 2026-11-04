@@ -1,0 +1,13 @@
+{
+  "ShaderPath": "/shaders/render/layeredPBR.shader",
+  "Uniforms": {
+    "data_UBOu_Albedo": {
+      "X": 0.65,
+      "Y": 0.65,
+      "Z": 0.65,
+      "W": 1.0
+    },
+    "data_UBOu_Metallic": 1.0,
+    "data_UBOu_Roughness": 0.25
+  }
+}

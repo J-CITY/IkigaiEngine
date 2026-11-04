@@ -1,0 +1,2 @@
+# Preserve exact delivery bytes so SHA-256 manifests work on every checkout.
+/production_assets/** -text

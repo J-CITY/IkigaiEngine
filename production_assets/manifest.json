@@ -1,0 +1,4051 @@
+{
+  "schemaVersion": 1,
+  "bundleVersion": "renderer-rc0-2026-11-04",
+  "files": [
+    {
+      "path": "engine/materials/aerialProbe.mat",
+      "size": 193,
+      "sha256": "b4d3fa068f833dfc9024fa532eddc48caf01e6c0cb224858a1abf1d963663d18"
+    },
+    {
+      "path": "engine/materials/environmentBenchmark/fur.mat",
+      "size": 560,
+      "sha256": "c605acc25408bc95f7be70542449d98a1e9f36371cb6f2306d458caa232d19ed"
+    },
+    {
+      "path": "engine/materials/furProbe.mat",
+      "size": 190,
+      "sha256": "0e06211cd4091ffe1e01ae7c46c7b5d4a93db815a56e6f81c6acef93b1d9d3ed"
+    },
+    {
+      "path": "engine/materials/indirectLighting/rayDenoiseMotion.mat",
+      "size": 304,
+      "sha256": "2fbb86783e70a45cff9afa4fe66790693ed6bb93dc62dee866b9e7cec0c2c4be"
+    },
+    {
+      "path": "engine/materials/lighting-demo/Cutout.mat",
+      "size": 622,
+      "sha256": "fb5c5b6ef9cd1ef25337737dfa3c10742300330852c2cd67c09a3527cc48750c"
+    },
+    {
+      "path": "engine/materials/lighting-demo/Glass.mat",
+      "size": 720,
+      "sha256": "567f90241a00aacd9da4a050cd50a0e42e4c331686992077e3bb11ba2d7bda54"
+    },
+    {
+      "path": "engine/materials/lighting-demo/Metal.mat",
+      "size": 621,
+      "sha256": "fc4a146bf714e9d199d889b1d81d653b81f9626ce5d67df0084fc24da8ebccca"
+    },
+    {
+      "path": "engine/materials/lighting-demo/Ochre.mat",
+      "size": 620,
+      "sha256": "731f0e528e77ea84d4c3bbbf47e4382d9015f2b4cc1b33b6cddc4a707122aad9"
+    },
+    {
+      "path": "engine/materials/lighting-demo/Stone.mat",
+      "size": 620,
+      "sha256": "353a49b558c1857b38ce505432df28cc90bd14c66b30cd8de2730c8fc401fbb0"
+    },
+    {
+      "path": "engine/materials/pbr-gpu-parent.mat",
+      "size": 562,
+      "sha256": "1d72528bd106abe3cddc801a4ab99ec20b77156a16775e8d477503a592bed61d"
+    },
+    {
+      "path": "engine/materials/presetProbe.mat",
+      "size": 193,
+      "sha256": "e263f4b7f41b6125490aa6ddbb5f1e2fb34a877c0c04b24f154d442f55c2294c"
+    },
+    {
+      "path": "engine/materials/qualityFur.mat",
+      "size": 560,
+      "sha256": "c605acc25408bc95f7be70542449d98a1e9f36371cb6f2306d458caa232d19ed"
+    },
+    {
+      "path": "engine/materials/qualityProbe.mat",
+      "size": 194,
+      "sha256": "7436dbc114d1277513674359a54bb0d5f69f7393f06facf7208891aec58ad90e"
+    },
+    {
+      "path": "engine/materials/render/GBuffer.mat",
+      "size": 277,
+      "sha256": "4622c02537b428247c33fc4570ead2d5cb4975c7ba7f38bdd362b60434881688"
+    },
+    {
+      "path": "engine/materials/render/Unlit.mat",
+      "size": 531,
+      "sha256": "a098e97fc48510ca46ee050e735780b93d762728c2ef03cc253454a6883c49c1"
+    },
+    {
+      "path": "engine/materials/render/base.mat",
+      "size": 274,
+      "sha256": "d0fd4b250dca1cb599474011f21fe661aeb129b3fa417f3f50cdfb56861f100c"
+    },
+    {
+      "path": "engine/materials/render/bloom.mat",
+      "size": 312,
+      "sha256": "471aef211df225919ec4aeb9309b0a6cfdf557bbe1c4c76425b27817916a0a53"
+    },
+    {
+      "path": "engine/materials/render/blur.mat",
+      "size": 311,
+      "sha256": "687f3db39f933933afe16e8371f66fdfc25f7488b361ec961c895929105121e0"
+    },
+    {
+      "path": "engine/materials/render/brdf.mat",
+      "size": 274,
+      "sha256": "9c3cfdd867304bd9fc3e020e679c732a88232550d482275a75053d7123dc7a3a"
+    },
+    {
+      "path": "engine/materials/render/bright.mat",
+      "size": 276,
+      "sha256": "f8631eaa5d6c494c79a29f4f85ccbd0abf9698ebf800b0b7a1c0c87fd2c2638b"
+    },
+    {
+      "path": "engine/materials/render/chromaticAbberation.mat",
+      "size": 396,
+      "sha256": "15f903abddd7957890ae926c8464fa5975d59f421741598508d6d75db267c522"
+    },
+    {
+      "path": "engine/materials/render/colorGrading.mat",
+      "size": 546,
+      "sha256": "a49ad3b9afbae0779e907e9a42efa11deebd404aafd558f4e1607fb006ae55d5"
+    },
+    {
+      "path": "engine/materials/render/debug3DTex.mat",
+      "size": 453,
+      "sha256": "23b141ad36e7129bb317f36f1528271490e658bb6a31f019d95487d6a4f274dc"
+    },
+    {
+      "path": "engine/materials/render/deferredGBuffer.mat",
+      "size": 843,
+      "sha256": "6b44f6dbaa4636dfda5e12db7525f6c3f7874641137ba78b4eee31b3807553c4"
+    },
+    {
+      "path": "engine/materials/render/deferredLightning.mat",
+      "size": 327,
+      "sha256": "92f8be9923a51d5200631452ed6ad02ac6b5e8755eab39e02e4b3df01402a473"
+    },
+    {
+      "path": "engine/materials/render/deferredLightningPbr.mat",
+      "size": 362,
+      "sha256": "e29bbe13874db25ee89d6ea956e8d61fffb12c25dbd611dbbb8783894bf5e547"
+    },
+    {
+      "path": "engine/materials/render/depthOfField.mat",
+      "size": 439,
+      "sha256": "551f441d669d206599bc33f20c8e12a32fd5fb32edd8a17abccab69fe73debb8"
+    },
+    {
+      "path": "engine/materials/render/dilation.mat",
+      "size": 351,
+      "sha256": "6e494f93ca8c92768868c88b16e831b106813ccd75b159e8982b63952b126bab"
+    },
+    {
+      "path": "engine/materials/render/dirShadow.mat",
+      "size": 279,
+      "sha256": "6ab4e7b8c3e0250186b21e6390c47973b730ea4b35daa3e252d6fa62c19e5b1c"
+    },
+    {
+      "path": "engine/materials/render/dirShadow2.mat",
+      "size": 280,
+      "sha256": "931e699c8d93b37652d89a5ac0dd5a574068402afc11684dcddbfb22ace8bc8c"
+    },
+    {
+      "path": "engine/materials/render/equirectangularToCubemap.mat",
+      "size": 294,
+      "sha256": "fe2ecf343aec6910f9e304308137c4a22428cef0abb673459ed47d64bf039140"
+    },
+    {
+      "path": "engine/materials/render/filmGrain.mat",
+      "size": 279,
+      "sha256": "2fb09999d8b41825e94f36f7f4eba72b11f5d899132a2cfc3295efc9a061e017"
+    },
+    {
+      "path": "engine/materials/render/fog.mat",
+      "size": 273,
+      "sha256": "4f66210efc41c8f25f0989be692c46b813f8e6e0355aff72b13d58dba576a963"
+    },
+    {
+      "path": "engine/materials/render/fxaa.mat",
+      "size": 310,
+      "sha256": "352b1a333017a93a8e6216af2a11d01b1051b4e147dc679d38996e600032f782"
+    },
+    {
+      "path": "engine/materials/render/godRays.mat",
+      "size": 401,
+      "sha256": "5cc714c8108dd262d015206a4203bdb10ba9cba93dc408e64746c207b49bbc5a"
+    },
+    {
+      "path": "engine/materials/render/godRaysTexture.mat",
+      "size": 371,
+      "sha256": "fdf352eefba936b55ea8009d6935ed4ececcbebeaa4ee603f40ec4315f0332e7"
+    },
+    {
+      "path": "engine/materials/render/grid.mat",
+      "size": 274,
+      "sha256": "de71dc8917bff5c43ada3957b08c4b20c30bf9f6e70eb34409aa28c48bebf5c1"
+    },
+    {
+      "path": "engine/materials/render/gui/spine.mat",
+      "size": 279,
+      "sha256": "96aacc238f6aac385eda8bb57a747fbb46df67c35b06b8fd3e0d354875361bad"
+    },
+    {
+      "path": "engine/materials/render/gui/sprite.mat",
+      "size": 280,
+      "sha256": "da0d33b038d7d3467ad155d03885c70312ac8f7f4483f90fd0fd5a8ac6df97d5"
+    },
+    {
+      "path": "engine/materials/render/gui/text.mat",
+      "size": 278,
+      "sha256": "84dae1f22c30b99037b659ae00e3c29556bfe65232439f7e8bc70a69efc9420d"
+    },
+    {
+      "path": "engine/materials/render/hdr.mat",
+      "size": 369,
+      "sha256": "86d75f64904552a20eaed5617f54aeb37ef5f99665f093fd5903abbc6b59a0ce"
+    },
+    {
+      "path": "engine/materials/render/hdrSkyboxShader.mat",
+      "size": 285,
+      "sha256": "fed6a1a576465bc117108abd1070129ffc3cc32be54d951586e7ab0f34c57cad"
+    },
+    {
+      "path": "engine/materials/render/irradianceConvolution.mat",
+      "size": 291,
+      "sha256": "771d451b7b3fc9db6f5029934ca5b019fda2239517a3bab8f2434add815041ce"
+    },
+    {
+      "path": "engine/materials/render/layeredPBR.mat",
+      "size": 252,
+      "sha256": "0eddbe68f31ca5e99558742c2f1f42a2aaf8fb52b351b4704e315629bf0d0b66"
+    },
+    {
+      "path": "engine/materials/render/layeredPBRPaint.mat",
+      "size": 513,
+      "sha256": "0e9281b62835dded7c210f376aa1da278c530036b0056d95ad757132958103a1"
+    },
+    {
+      "path": "engine/materials/render/motionBlur.mat",
+      "size": 280,
+      "sha256": "e3f62d8bde439bb39947e696230eb208d23160e73d14d580144c8982da6d8c8d"
+    },
+    {
+      "path": "engine/materials/render/outline.mat",
+      "size": 412,
+      "sha256": "40de946120e3caddcb05a5ddd8d670209685258174ef919f05a9d4e97c5aee4c"
+    },
+    {
+      "path": "engine/materials/render/pixelize.mat",
+      "size": 351,
+      "sha256": "25cfcf3aabb507266181b0562da146a9f1364a1400a8e711988746e1f9fc3dd2"
+    },
+    {
+      "path": "engine/materials/render/pointShadow.mat",
+      "size": 281,
+      "sha256": "2a3f389093731fef8f1ff29a1a0e8af94832dea2677afed9d4b2815cc206d38d"
+    },
+    {
+      "path": "engine/materials/render/portable/atmosphereAerial.mat",
+      "size": 216,
+      "sha256": "b653bfd457c91eec432c9005e8b44f4c8db919bfbf72a97147dff3ad9c09c021"
+    },
+    {
+      "path": "engine/materials/render/portable/atmosphereSkyView.mat",
+      "size": 217,
+      "sha256": "795bebca535b84eb03dacd1bc9006dbfd225afcaa641236fa1f04b56248d70aa"
+    },
+    {
+      "path": "engine/materials/render/portable/atmosphereTransmittance.mat",
+      "size": 223,
+      "sha256": "5191cd2e98e8f1c8768809faa3cdafea3e0ca715483786a56dff2d1ab2f13b36"
+    },
+    {
+      "path": "engine/materials/render/portable/blur.mat",
+      "size": 270,
+      "sha256": "6b8552add6562f8a91d25aeab2679ddb788d882a3dbbad31bbec4af912c2e6ec"
+    },
+    {
+      "path": "engine/materials/render/portable/bright.mat",
+      "size": 238,
+      "sha256": "5d156e5cb85d4f4dbf99d604ca0d4f7c80c0b85e5e834c2095583ff553175612"
+    },
+    {
+      "path": "engine/materials/render/portable/chromaticAbberation.mat",
+      "size": 325,
+      "sha256": "4335d6d18962e74693a9f60012068b6c4f13e3549b92caf9b1e26bf5b5457cf2"
+    },
+    {
+      "path": "engine/materials/render/portable/colorGrading.mat",
+      "size": 474,
+      "sha256": "7100d247da25e8fce4768b0ada19193e3c8b7529ee7d2361f8d09bc1607f134a"
+    },
+    {
+      "path": "engine/materials/render/portable/compose.mat",
+      "size": 205,
+      "sha256": "31a7af532dd98a1369dbc98367b48ca6900effc6a50e328f4315b74501509c21"
+    },
+    {
+      "path": "engine/materials/render/portable/copy.mat",
+      "size": 202,
+      "sha256": "aa4170a2645deb737a8426a6e97472ca67eb3233673b462ac1b7007c81c16f04"
+    },
+    {
+      "path": "engine/materials/render/portable/copyDepth.mat",
+      "size": 207,
+      "sha256": "98be207e9b64c96fcefb0b2d58bc37afe0344c9d957538f213860b1081406d55"
+    },
+    {
+      "path": "engine/materials/render/portable/ddgiSample.mat",
+      "size": 371,
+      "sha256": "79cf6b980c4b411f7991b1dad49e1387f59205514eb574ca77b3b67f7ff9ddaa"
+    },
+    {
+      "path": "engine/materials/render/portable/ddgiUpdate.mat",
+      "size": 215,
+      "sha256": "325e4fee163f6430a6443b71818f46f1dc138ec0405aafd13e3c898f41dcd3db"
+    },
+    {
+      "path": "engine/materials/render/portable/depthOfField.mat",
+      "size": 308,
+      "sha256": "394abaf785c41437a9e42f76f518e580b25b5d2c13775c2208933a78f2914520"
+    },
+    {
+      "path": "engine/materials/render/portable/dilation.mat",
+      "size": 279,
+      "sha256": "0cda2a5779d74f9b60a6b2752aa383b9fb554ba07a6ae8d5c8d377054694e9f6"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentBrdf.mat",
+      "size": 245,
+      "sha256": "5c63241eead264aef744f67860e350896334f308a37dda47026cc3a49d9c76c5"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentCapture.mat",
+      "size": 539,
+      "sha256": "40893f581bbefdeedd5b5d78dc38eaf9c5a7edc4b5061ba5fa450327ff90e507"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentCloudCapture.mat",
+      "size": 1070,
+      "sha256": "601500db9c5f72f25d6d0a9600392d11e6221cab68a759303fd972a6f023e183"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentCloudCompose.mat",
+      "size": 221,
+      "sha256": "fa9d7747f0b4a0bdaac3e78d85a106acb1eb95991985902e0822922cd2747ecf"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentCloudHistory.mat",
+      "size": 358,
+      "sha256": "d0f3a22428d0e603d150b1623ecbb5ea58c54f85789e8f81e4025fa339ff5b4c"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentCloudShadowMap.mat",
+      "size": 216,
+      "sha256": "e775c1ac020574681b2d6393242465b42b4e54acd11a0f182690bd8f06ebe8a3"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentCloudTransparent.mat",
+      "size": 1402,
+      "sha256": "7b966b77191d7d0788b4d41f8068dd75da558612d2fec683d4957abdc4129538"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentCloudTransparentCube.mat",
+      "size": 1529,
+      "sha256": "7c39fb5159c74fcab9cb1851be9591d8b77c5917862ba3016cdf8f78779994f4"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentClouds.mat",
+      "size": 955,
+      "sha256": "6ca9cbaf14c86656952ec05c4afc8949ab38828d24a1e9405e7ad6ccd10b7fe7"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentCompose.mat",
+      "size": 256,
+      "sha256": "ceda7a4e41d827861bcb7055c153e236234a3baec261a87013db20ab393f6114"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentDetailNoise.mat",
+      "size": 232,
+      "sha256": "3001ae14f36802b698c35a7d260b90c4615d262c08c1ad32995270fbca61b788"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentIrradiance.mat",
+      "size": 275,
+      "sha256": "76cf57aa96d71176b8ba3821db89e1a85897a967e0bc111b7b670022a2b6bda7"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentLighting.mat",
+      "size": 399,
+      "sha256": "abe9297accfb27bbd084dedf9f6374f6adb3a46d1ad038bb79921a5ab859f007"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentLightingCube.mat",
+      "size": 526,
+      "sha256": "3ce8c55d91f7bc9d6aaebd5e0905fa27f8975d1127003eb18e21a07ee574c629"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentMaterialProbe.mat",
+      "size": 222,
+      "sha256": "27cceef1db368e927ada8c575bc684ef1f1052dae35f082bd4e7971f09b7ba6e"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentPrefilter.mat",
+      "size": 305,
+      "sha256": "c83cb462d8989b62f16ecf413bf29060ad558810cec3904c17cbc5038cf3b5f2"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentShapeNoise.mat",
+      "size": 231,
+      "sha256": "2c45abd05400cac624b68b6dbd74badddf13c1e8b3837a5a680e9748154960d5"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentSky.mat",
+      "size": 212,
+      "sha256": "4f65e1cd3cab653f3a7bcf65584ced4b72dd93a68c75962278535942ef0183c9"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentTaa.mat",
+      "size": 289,
+      "sha256": "7731b0198230a90d4e02d4e092a7070bd4268254d59082fa6df724f783989110"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentTransparent.mat",
+      "size": 653,
+      "sha256": "96fd0a5ff12e227b3144fece8eca974f60003662b4fdd62d5d6eca6e6c90a0d2"
+    },
+    {
+      "path": "engine/materials/render/portable/environmentTransparentCube.mat",
+      "size": 780,
+      "sha256": "f1b7d318efa0c1fecb2ceb3561bbcc3f16170fe42f95a981838a09ee37476ab0"
+    },
+    {
+      "path": "engine/materials/render/portable/filmGrain.mat",
+      "size": 207,
+      "sha256": "01fa53ad5b2e296d8b54aa84485ed040e5bf6cbf403488bd64f74e298fb30f5e"
+    },
+    {
+      "path": "engine/materials/render/portable/fog.mat",
+      "size": 349,
+      "sha256": "c1bae236a76a3f861dbe88796647bbbf285eabfb118aab1704542f5e39cf4daa"
+    },
+    {
+      "path": "engine/materials/render/portable/forwardTransparent.mat",
+      "size": 649,
+      "sha256": "6c8758b0559bbd64e1097447ceb870ff3950a0abb1b71a9eb22d42f23b9e8a2f"
+    },
+    {
+      "path": "engine/materials/render/portable/forwardTransparentCube.mat",
+      "size": 776,
+      "sha256": "f108ad6dc2f12b79288dc0302d02fd3715d7479de31ff5fd8337b9ae2b1bc24d"
+    },
+    {
+      "path": "engine/materials/render/portable/frameGenMotion.mat",
+      "size": 288,
+      "sha256": "2a344cdf5063ba33e3d34a792f4029ee6017fdf948ba750f909358eddd78f33d"
+    },
+    {
+      "path": "engine/materials/render/portable/frameGenPresent.mat",
+      "size": 249,
+      "sha256": "48c7ee7f033fb541a8fc98e9504ea8c7f27e933999369a9c98fdbe665c8bb58e"
+    },
+    {
+      "path": "engine/materials/render/portable/fxaa.mat",
+      "size": 202,
+      "sha256": "fe9ae1ed6405e1edabc44ca8471153db6529e174af2efb63a18da9fbbfed89ff"
+    },
+    {
+      "path": "engine/materials/render/portable/gbuffer.mat",
+      "size": 551,
+      "sha256": "a882c39a0d946ffc85b63971301175aa8aa4ab0f85c573204d51acd6ea491578"
+    },
+    {
+      "path": "engine/materials/render/portable/gbufferEmissive.mat",
+      "size": 629,
+      "sha256": "9a55ed63f67c6a2ffd3850b37f6c608d50aaa658df03e02c25b85761b10a7949"
+    },
+    {
+      "path": "engine/materials/render/portable/godRayCompose.mat",
+      "size": 344,
+      "sha256": "dc9071da8f2e5ade00f633d0088018b414869fcb0ba4614e9998c6dd7a69b2de"
+    },
+    {
+      "path": "engine/materials/render/portable/godRayIntegrate.mat",
+      "size": 302,
+      "sha256": "fc089b971740ce4c16e7843ca653ae42de406e8f22f8f26536f479296fdd3fe1"
+    },
+    {
+      "path": "engine/materials/render/portable/godRayMask.mat",
+      "size": 241,
+      "sha256": "b15510423309ee51c1e23b5af8f01de531b1b01cfbebc2957cd31107207c1da8"
+    },
+    {
+      "path": "engine/materials/render/portable/godRays.mat",
+      "size": 266,
+      "sha256": "35985c3940696f67426f7b90c4d21f7360e3ac7b8b76fd13f34cd7e7857c8601"
+    },
+    {
+      "path": "engine/materials/render/portable/gui.mat",
+      "size": 200,
+      "sha256": "87469cf402bd16d5908e5a98fee90b7c8debacd7099dbfc2f376af00593ca9f2"
+    },
+    {
+      "path": "engine/materials/render/portable/lighting.mat",
+      "size": 388,
+      "sha256": "7ccf28c782d0d10b531b39051a4eba83854f3100f5306ffe1c6c8f7550af976c"
+    },
+    {
+      "path": "engine/materials/render/portable/lightingCube.mat",
+      "size": 515,
+      "sha256": "321eb886bc974070bf25a40dc91d21c3f1722b0db44d6479893e4f4d3166d9c5"
+    },
+    {
+      "path": "engine/materials/render/portable/motionBlur.mat",
+      "size": 241,
+      "sha256": "81eaf7816a89250b34bf4644bfab319c998067c13396410bdb207b9937979edf"
+    },
+    {
+      "path": "engine/materials/render/portable/outline.mat",
+      "size": 397,
+      "sha256": "6e888060fa55ba681381a006cb85f03add26e20a43340a81e3d42f01bfad3348"
+    },
+    {
+      "path": "engine/materials/render/portable/particleMesh.mat",
+      "size": 201,
+      "sha256": "6f396b5494e78f0dca2b9f10346ebbe27daf391e8230fc7426f0e2e2d46b522a"
+    },
+    {
+      "path": "engine/materials/render/portable/particles.mat",
+      "size": 198,
+      "sha256": "3e143e75ed177ab079a79cd98f812119df1043faff524e70b10dc77148dd4850"
+    },
+    {
+      "path": "engine/materials/render/portable/pixelize.mat",
+      "size": 279,
+      "sha256": "2aaaea4f622281082a63de5e57fe566b74842544725f8d86c472d6b48eee135c"
+    },
+    {
+      "path": "engine/materials/render/portable/pointShadowCube.mat",
+      "size": 502,
+      "sha256": "be749fed23dbfd39d100dcfc1486f943c5d9114d97eee67117f34fba8f9db861"
+    },
+    {
+      "path": "engine/materials/render/portable/pointShadowProbe.mat",
+      "size": 394,
+      "sha256": "054c9085760e37dcdb3fd6bb6cc06661ee50701092e46db53dc575976fe5a4c4"
+    },
+    {
+      "path": "engine/materials/render/portable/posterize.mat",
+      "size": 207,
+      "sha256": "9dc01bef782205c3db8347919aa4c3e6e0d1c4665a0e6c62aab7b6fc7b3ac1fb"
+    },
+    {
+      "path": "engine/materials/render/portable/rayAccumulate.mat",
+      "size": 168,
+      "sha256": "f782821a3dd3671c7cd57d97a8dd8045045311fe75937b0ffabb6b58ae9355c9"
+    },
+    {
+      "path": "engine/materials/render/portable/rayDenoise.mat",
+      "size": 299,
+      "sha256": "3d9cb8d56cac45316ec2ead65102df80efe776e6a43b6eeaa01eba794f976c27"
+    },
+    {
+      "path": "engine/materials/render/portable/rayHybridCompose.mat",
+      "size": 276,
+      "sha256": "a1f6e29b0e4e69a7a3a2063dfbaa59129d597a51d58a71b88c3bf722655d9cdc"
+    },
+    {
+      "path": "engine/materials/render/portable/rayReflectionFallback.mat",
+      "size": 176,
+      "sha256": "3aee99e25522643e43d268d719524a20dffd92d4242996d0bfb5b87489ec19c8"
+    },
+    {
+      "path": "engine/materials/render/portable/sdfText.mat",
+      "size": 168,
+      "sha256": "423f1d6baab5de539bcc53bca9a0abac63e4f416e31095ebdcbf0276ba58d2c7"
+    },
+    {
+      "path": "engine/materials/render/portable/shadow.mat",
+      "size": 440,
+      "sha256": "3456cb2b0036ea8761c7c4a49c03991bbeee679389945021c8e4446d461d1c75"
+    },
+    {
+      "path": "engine/materials/render/portable/sharpen.mat",
+      "size": 205,
+      "sha256": "c52dbe3b776847bbfde832a74db6b14be5d230669b63624e7ac1ac8bc1c19d48"
+    },
+    {
+      "path": "engine/materials/render/portable/ssao.mat",
+      "size": 289,
+      "sha256": "4989eb082b3375d68e99e64e03f9a283ec288befdef288674480a7a6330c5ab9"
+    },
+    {
+      "path": "engine/materials/render/portable/ssgi.mat",
+      "size": 264,
+      "sha256": "a57fc20b5acb2800a099c5ddd78ec7e544b586175fbd30037afc76387bfb8c81"
+    },
+    {
+      "path": "engine/materials/render/portable/ssr.mat",
+      "size": 289,
+      "sha256": "f7663495c5251d93bfaca0eb1270b044f5b5ad008cd00035f7fadcca4cf41fde"
+    },
+    {
+      "path": "engine/materials/render/portable/sss.mat",
+      "size": 293,
+      "sha256": "25c112b4e8c3ba971bbd3cabab9c92b7e888510f575522659cf82c4d6172d696"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedCloudSurface.mat",
+      "size": 965,
+      "sha256": "f00b544c8ab499b1bafef5fb1db9756cc98dbd624766ab945e25b5bdf7764f2a"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedDirect.mat",
+      "size": 517,
+      "sha256": "08af6793dd16bc138bfb2f8b08518de9f2e55c3c77bc8f88105ce1a21b9b6a87"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedDirectRt.mat",
+      "size": 476,
+      "sha256": "2a2e93aac3bfe2770a00485b725c297c1b0276dc4bb2ef9bfa0059092c58e2bb"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedExtinction.mat",
+      "size": 413,
+      "sha256": "89dab5b2b6785db34c9212d0ba77854d475ae099bff2040effde75e75da88e2f"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedFog.mat",
+      "size": 209,
+      "sha256": "defd91f2bb8ecda5de3997686630c75dea5663249df3cd07ea85c33c38a0421b"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedIndirect.mat",
+      "size": 519,
+      "sha256": "4daf55d47ff8bc8e0143ea5593ad32da0bffbfb9de56d8edc88f83676253bb42"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedLightingCompose.mat",
+      "size": 221,
+      "sha256": "d07c18834829e16700f09ce20a5c7b563bf85198707f6f21cbb6202d32948a5b"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedLightingComposeEmissive.mat",
+      "size": 221,
+      "sha256": "6415cb48f2524fa4964ad4ff171864df8be919b0011a2735e75b33f6fddde7bc"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedPeel.mat",
+      "size": 582,
+      "sha256": "2d0cc832dbb2e1799e5ec5fe0dc449cfa5902b2d7bad1f0d609c15ee0ba60af6"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedPointProbe.mat",
+      "size": 396,
+      "sha256": "24467ce61e38f733c332cf94ea1b27dd50275551fcb33aff5cf36a68ce3b8e16"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedProjectedShadow.mat",
+      "size": 457,
+      "sha256": "e8b829f479bb5617edc0ab6c69d7f1497ce02723d1efb8062c6fb2cf29556035"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedSurface.mat",
+      "size": 213,
+      "sha256": "ac1895a7c19817b79347b7889840dae0e015ef675167c0ef5e2190c559edbd62"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedTransparentCompose2.mat",
+      "size": 263,
+      "sha256": "70586f86613bbb2ff6abbf73a383d7a31f5a56d3d6ee7ba6eaccf68fc6b2df0e"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedTransparentCompose4.mat",
+      "size": 263,
+      "sha256": "8eda26f6e1cb717bab15be60ec9097c925874f8f3a30013f094b4030cbf7345a"
+    },
+    {
+      "path": "engine/materials/render/portable/streamedVolume.mat",
+      "size": 532,
+      "sha256": "9fe3e8ef29e969a649933a23e8c398dcd3482dd35e635479d3eb052485d48672"
+    },
+    {
+      "path": "engine/materials/render/portable/taa.mat",
+      "size": 278,
+      "sha256": "ddecf0754bfaa2a2a4aa8de42cc980b375639bbb833902964049a8b49a60cafa"
+    },
+    {
+      "path": "engine/materials/render/portable/text.mat",
+      "size": 201,
+      "sha256": "2a1d54e85c7ecefec7c3e76448e9422344ab5ddc6fcb6c94910e74f27db8c02f"
+    },
+    {
+      "path": "engine/materials/render/portable/tonemap.mat",
+      "size": 301,
+      "sha256": "81582926aac1b164f6741ac3835ee5ca826a92f95ed3784bd180b00b32d85a01"
+    },
+    {
+      "path": "engine/materials/render/portable/upscaleReactive.mat",
+      "size": 213,
+      "sha256": "1d6f09aef7a77c9fadaf2e88931e69ac61609903237dd321c5441feaf2967d50"
+    },
+    {
+      "path": "engine/materials/render/portable/upscaleVelocity.mat",
+      "size": 213,
+      "sha256": "09bc23eb9360c6801a8a8a4166347c939a7ad2756cae527129c597ad17b032cc"
+    },
+    {
+      "path": "engine/materials/render/portable/vector.mat",
+      "size": 167,
+      "sha256": "bc23949f2523346d31892f2a22355a9f8fcf1559f77ae8e6cedf449fe53f3d9c"
+    },
+    {
+      "path": "engine/materials/render/portable/vignette.mat",
+      "size": 273,
+      "sha256": "167fac97cdee99f174b7dea1456eb3e7705846ec9c27447edb188fb0f1704a1a"
+    },
+    {
+      "path": "engine/materials/render/portable/volumetricCompose.mat",
+      "size": 215,
+      "sha256": "817283eb0bdbdd95a7ca3218191f9859530610c7b61eb4849abbcbcd6825cfa4"
+    },
+    {
+      "path": "engine/materials/render/portable/volumetricCube.mat",
+      "size": 562,
+      "sha256": "b0f84699210d0537e4175112d4cb87773208e9b723acea5f32b8ca20f35ca6d5"
+    },
+    {
+      "path": "engine/materials/render/portable/volumetricLight.mat",
+      "size": 370,
+      "sha256": "38d9cf91cf14c698e52abf273cb5de6097f76609d2842c606dd062c422872bd5"
+    },
+    {
+      "path": "engine/materials/render/posterize.mat",
+      "size": 279,
+      "sha256": "b2a90ff872b35cf8383a48327108bf012015726d75f922992fcd14739ce0acfe"
+    },
+    {
+      "path": "engine/materials/render/prefilterShader.mat",
+      "size": 319,
+      "sha256": "a0d69306c23ab568bf6ce77bcf8729256ca045bfdbe39d5b0bbd8a1724e27172"
+    },
+    {
+      "path": "engine/materials/render/renderToScreen.mat",
+      "size": 284,
+      "sha256": "92838a3d50f72f6f7cec6c87ed80c26159267b2a296ec7ddc60d17a48077373c"
+    },
+    {
+      "path": "engine/materials/render/sharpen.mat",
+      "size": 277,
+      "sha256": "7c01937f032c451a1695c9f75d981ab3185cc14d88011b9c1b85117141000369"
+    },
+    {
+      "path": "engine/materials/render/spotShadow.mat",
+      "size": 280,
+      "sha256": "7554772d69e25cb01d8450526268ff446661d7067d1b5972aecda878f7330322"
+    },
+    {
+      "path": "engine/materials/render/ssao.mat",
+      "size": 274,
+      "sha256": "9077d24c6c93743ba4430d672c249514dac4b5ec53095fcf8561df2096d397f7"
+    },
+    {
+      "path": "engine/materials/render/ssaoBlur.mat",
+      "size": 278,
+      "sha256": "30b522fa840ef514fa8bb4f7324f25287e61147ce79f45d07cf5b53675761eb5"
+    },
+    {
+      "path": "engine/materials/render/ssgi.mat",
+      "size": 367,
+      "sha256": "23f5935251fede458b0847dc37795f7b16ec9ba4d559210a7c9089e47489ed9a"
+    },
+    {
+      "path": "engine/materials/render/ssgiApply.mat",
+      "size": 279,
+      "sha256": "2cdee9d5783f127babd1dae7c7151c4eaaa9224de7f56ceb309c42014219564f"
+    },
+    {
+      "path": "engine/materials/render/ssr.mat",
+      "size": 368,
+      "sha256": "4e4b9bd2579a126f3836328a678652e1766ac14dbdf0bf8b7553015720c96157"
+    },
+    {
+      "path": "engine/materials/render/ssrApply.mat",
+      "size": 278,
+      "sha256": "8127223bd2a35b481b8d7a94c0b6577633b68fcf1cdc037df1a90aca7f5bb7b3"
+    },
+    {
+      "path": "engine/materials/render/sss.mat",
+      "size": 361,
+      "sha256": "b12c357a347aa7ceb4531b0cdf26d41d352db7e5ec95427a5705bcccd96351bf"
+    },
+    {
+      "path": "engine/materials/render/sssApply.mat",
+      "size": 278,
+      "sha256": "c362b96a7ea3c91d30ee99b4e4a4ba5b23369a45d82b63a89ed7001bc6cc7f1e"
+    },
+    {
+      "path": "engine/materials/render/standard.mat",
+      "size": 736,
+      "sha256": "e879a03cb0ff8126cc8e8ba66fd84a9f98510d172f935a7cac7414e49693a2fc"
+    },
+    {
+      "path": "engine/materials/render/standardLines.mat",
+      "size": 283,
+      "sha256": "281d04fad2ff5da3d232700789a1faee18237e7e56927fc0af0311010403d442"
+    },
+    {
+      "path": "engine/materials/render/standardPBR.mat",
+      "size": 681,
+      "sha256": "5b373d66ea96030437a95903b2265142acbc625ea771c035d3676ecbb56e005e"
+    },
+    {
+      "path": "engine/materials/render/taa.mat",
+      "size": 273,
+      "sha256": "87d4156850a23831de26d6e39fceab4eac0925f3f698f652fc2b75b1b830d457"
+    },
+    {
+      "path": "engine/materials/render/vignette.mat",
+      "size": 344,
+      "sha256": "6773b78574f2be0ad07c53e7b79a21584f21c7c39f5276f633c4e3e0830206c0"
+    },
+    {
+      "path": "engine/materials/render/volumetric/clouds.mat",
+      "size": 1532,
+      "sha256": "618c9229318cea8a544113424ebbf2406a8af7e462dce15ea3946acc3032bf61"
+    },
+    {
+      "path": "engine/materials/render/volumetric/detail_noise.mat",
+      "size": 322,
+      "sha256": "e8a05e43c1cedc69707249a8cd7410bcfbfc04d288952a4a4834ceb792c67a53"
+    },
+    {
+      "path": "engine/materials/render/volumetric/shape_noise.mat",
+      "size": 321,
+      "sha256": "3078e39ed7ca67818eb0a1f22e5eccda46caa91a35cf4cad9bfca0ff13a6162a"
+    },
+    {
+      "path": "engine/materials/render/volumetric/triangle.mat",
+      "size": 289,
+      "sha256": "3e17edf8f9597d380035feea9d53b49fffed7b09edc3f128e798bff926996e18"
+    },
+    {
+      "path": "engine/materials/render/volumetricLight.mat",
+      "size": 476,
+      "sha256": "0a7c215cc162fce98d173c9790a33206aa8c2a4582a896501466cc653a41c401"
+    },
+    {
+      "path": "engine/materials/render/volumetricLight2.mat",
+      "size": 477,
+      "sha256": "31b4e6835506615b216b78df2f6895da0812c0944965ddfa804192c372edc60c"
+    },
+    {
+      "path": "engine/materials/render/vrCamera.mat",
+      "size": 278,
+      "sha256": "f39749f9d89bd1f1faa0dfebea451c83509ee30aff1400720b9b590e7030d742"
+    },
+    {
+      "path": "engine/materials/surface/bark.mat",
+      "size": 402,
+      "sha256": "21cb25a5670b2e6e98d710441cc1c621eb4c4535c127b501cb8654cc578ef29d"
+    },
+    {
+      "path": "engine/materials/surface/forest.mat",
+      "size": 527,
+      "sha256": "ea10095e4282843d87c34f9a3ed68335b5a9221c634736eff4c012ebe8f6c588"
+    },
+    {
+      "path": "engine/materials/surface/garden/backdrop.mat",
+      "size": 445,
+      "sha256": "b99b7f2c36465078991f23a6f14d11850caf7165f78ae0167230a7c31b5f8c79"
+    },
+    {
+      "path": "engine/materials/surface/garden/bark.mat",
+      "size": 625,
+      "sha256": "277e1d8c77eafd37c1431737a6237940e9747dbf5993902aa8ba84bac541f50c"
+    },
+    {
+      "path": "engine/materials/surface/garden/grass-dry.mat",
+      "size": 826,
+      "sha256": "f4fc60a0c421da64627a8ed8574536a6743a10cb3ce6ea73d14a3b5e2c1846fb"
+    },
+    {
+      "path": "engine/materials/surface/garden/grass.mat",
+      "size": 820,
+      "sha256": "59f9f89ce64da74aba3f3151568db4af6f7c09acdd8feb2d3271c22e01a85e4c"
+    },
+    {
+      "path": "engine/materials/surface/garden/leaves-warm.mat",
+      "size": 825,
+      "sha256": "89bfcdbb227cf6e48292a1c473da71867fd71308e20afa3093f04bc168964619"
+    },
+    {
+      "path": "engine/materials/surface/garden/leaves.mat",
+      "size": 819,
+      "sha256": "aff3f55f7ac5785f69d87a7dfa2a70c4270f6a0e1dad716a8acc2a1e24f19553"
+    },
+    {
+      "path": "engine/materials/surface/garden/meadow.mat",
+      "size": 631,
+      "sha256": "426c641a780d26cce674729f4b4a5720d3c77ddaa2f2f1dabbcccc5f1326c711"
+    },
+    {
+      "path": "engine/materials/surface/garden/petal.mat",
+      "size": 702,
+      "sha256": "987c5187488c4070ff628d4ae918052040479d799a07eef7df03e87b2ed02002"
+    },
+    {
+      "path": "engine/materials/surface/garden/rock.mat",
+      "size": 625,
+      "sha256": "27dd5990ae37bf23bccbc47153189b7bd57512fe7e7d25516b7de755f73af40c"
+    },
+    {
+      "path": "engine/materials/surface/garden/sand.mat",
+      "size": 625,
+      "sha256": "2ddbcfd270c673c260e43942b24643e58858ff268d1983f563b04e91b5ae5ecd"
+    },
+    {
+      "path": "engine/materials/surface/garden/soil.mat",
+      "size": 625,
+      "sha256": "76d93197416ae5e616e17698a9f592e6da337b49256d4270c6297da33492f88e"
+    },
+    {
+      "path": "engine/materials/surface/garden/stem.mat",
+      "size": 703,
+      "sha256": "97ccfc7b2da26bfebe9bf5bbc7d3be422fe3d5f13e29045386d18a919881c179"
+    },
+    {
+      "path": "engine/materials/surface/ground.mat",
+      "size": 527,
+      "sha256": "3c4fadb23a5d0de219222218c92b9dac3e6b0b5801096e3252ebe5c2dca3f006"
+    },
+    {
+      "path": "engine/materials/surface/leaves.mat",
+      "size": 566,
+      "sha256": "824e5f6ee38f4f05cf0920279ed9fe221acd71bd6f8c82816a4e2b64689f4729"
+    },
+    {
+      "path": "engine/materials/surface/rock.mat",
+      "size": 525,
+      "sha256": "4e09e3a70d14c73f671ab4f5ba4033334a502bec8d1e28e569a407d753cf9caf"
+    },
+    {
+      "path": "engine/materials/surface/sand.mat",
+      "size": 525,
+      "sha256": "4a1a965864171bcd0a7a79855e8f256f603d779033783377d426c9e6300649e5"
+    },
+    {
+      "path": "engine/materials/surface/snow.mat",
+      "size": 525,
+      "sha256": "7b28d39c12453a752ec57adfe07cae871f98302845854e3c396886026fdf2921"
+    },
+    {
+      "path": "engine/materials/surface/water.mat",
+      "size": 426,
+      "sha256": "ba91d98e7f0a923405f9f074edac413e9b76b6fc68022be610b49ad55b9fa32a"
+    },
+    {
+      "path": "engine/materials/weather/foliage.mat",
+      "size": 540,
+      "sha256": "57243111fc9621cf396c05817643bcb0ffe4f39228c71582ca22c060cb818ca4"
+    },
+    {
+      "path": "engine/materials/weather/fur.mat",
+      "size": 534,
+      "sha256": "2ace7580dd592be7bd7e13e93c4b21457445b58482c45fc816e3c47934d3ac89"
+    },
+    {
+      "path": "engine/materials/weather/grass.mat",
+      "size": 538,
+      "sha256": "ae4165afff17e926c54f1a8c2abb844e9b01b965d13d472a7c992ce79f208a83"
+    },
+    {
+      "path": "engine/materials/weather/ground.mat",
+      "size": 369,
+      "sha256": "5328b1afc9a1f22a6b5cab226a490a335b18b0b9a86628540a8997797cd3355e"
+    },
+    {
+      "path": "engine/materials/weather/interactor.mat",
+      "size": 369,
+      "sha256": "3cf18d6cc7a57bf87a133dcb972295d07b81090e270493f8085fa6f0d994bd82"
+    },
+    {
+      "path": "engine/materials/weather/precipitation.mat",
+      "size": 152,
+      "sha256": "dc52008aa76476a9675785d3a9d7133f5ce77bdce2d9af61316553328a10d570"
+    },
+    {
+      "path": "engine/materials/weather/taa.mat",
+      "size": 260,
+      "sha256": "d68fa7d0317830a41e679ac5934a520d341f47134fdfeb6f9b99341341179a03"
+    },
+    {
+      "path": "engine/renderPipeline/environment-clouds-dynamic.json",
+      "size": 420895,
+      "sha256": "6b0fa93b07b64a4eca3f7a2b622ddf92d94cf7b4549bd175f887da2462974f65"
+    },
+    {
+      "path": "engine/renderPipeline/environment-clouds-lite.json",
+      "size": 354210,
+      "sha256": "b2a92f4268a18da772f1cbdb350adec3b5fb89cc9b6a1c4c44289e80db92d91d"
+    },
+    {
+      "path": "engine/renderPipeline/environment-clouds.json",
+      "size": 368426,
+      "sha256": "eba9bf3430ca685069055d8b428b13fd5826ec411ca2b9512977764fcdbd1739"
+    },
+    {
+      "path": "engine/renderPipeline/environment-hdr.json",
+      "size": 104213,
+      "sha256": "27e59625a3947cc9a1e420642e6fec97e4b3270c69a9660f4c05633696007edf"
+    },
+    {
+      "path": "engine/renderPipeline/environment-ibl.json",
+      "size": 104075,
+      "sha256": "7c17815fbd0529f51daaa8c750d04a69338e30ee3556e4552c378d72c2f51aeb"
+    },
+    {
+      "path": "engine/renderPipeline/hybrid-all.json",
+      "size": 163578,
+      "sha256": "a8d12b3772c8c9a9de593866e46aaf0bb5f9d8084f15067f0beec8cacc8b7fdb"
+    },
+    {
+      "path": "engine/renderPipeline/hybrid-ao.json",
+      "size": 153218,
+      "sha256": "40e612cac29e12b44212630ac8934218cca5e8834c1a05738d6dc5a0557d1552"
+    },
+    {
+      "path": "engine/renderPipeline/hybrid-ddgi-all.json",
+      "size": 166387,
+      "sha256": "cd64d0fb9e71e71f3b73b6789a4060258aa6423378d8f65066f21dc553f8bf66"
+    },
+    {
+      "path": "engine/renderPipeline/hybrid-ddgi.json",
+      "size": 156187,
+      "sha256": "c51cf4d2b838f7da5421fffd6505f0e48256cba0e565f9aaa8b9a271bf14723d"
+    },
+    {
+      "path": "engine/renderPipeline/hybrid-gi.json",
+      "size": 153381,
+      "sha256": "4a38d999f9fc74cc71671bfb39b4f7b357bdcac157ba19044fd715b599d463e9"
+    },
+    {
+      "path": "engine/renderPipeline/hybrid-reflections.json",
+      "size": 154358,
+      "sha256": "9185e4da2f352b9285136442f7a39f051d851d30928a0c9fd417dbb9ac8ce586"
+    },
+    {
+      "path": "engine/renderPipeline/hybrid-shadows.json",
+      "size": 154402,
+      "sha256": "ac7a3bc69973d02c2aaa8e8702a7ee03211629cd00dc0405f1f9c74e75e8db91"
+    },
+    {
+      "path": "engine/renderPipeline/lighting-demo-clouds-legacy.json",
+      "size": 351570,
+      "sha256": "06bfa2dd345c47271a8c2d4f071262e1360e4b3bd41bf9df32a2efc65af839be"
+    },
+    {
+      "path": "engine/renderPipeline/lighting-demo-clouds.json",
+      "size": 383105,
+      "sha256": "0d575c64efd64dcb99c9d4a08b83f92e67803822e3cc96b63d92dba5538496b2"
+    },
+    {
+      "path": "engine/renderPipeline/lighting-demo-legacy.json",
+      "size": 104157,
+      "sha256": "7ccbcd646dd5c4f20c7f4ecf5ea7e239261ca17c2fee00dbc38c479656e0b4e0"
+    },
+    {
+      "path": "engine/renderPipeline/lighting-demo-lite-legacy.json",
+      "size": 88063,
+      "sha256": "c93517104693511a6d52c2a902473fb05188c47a0966ff607adb1e7a1d435774"
+    },
+    {
+      "path": "engine/renderPipeline/lighting-demo-lite.json",
+      "size": 118797,
+      "sha256": "8f15c3f4c5051b0bc420d01b319487d42c7503d2ad952c5520d98107232d57f1"
+    },
+    {
+      "path": "engine/renderPipeline/lighting-demo.json",
+      "size": 156672,
+      "sha256": "1b9b9ac6596f39a08fc6054860b2c34c3d21ac98a60ea4cdc1ee2a21f44fba7a"
+    },
+    {
+      "path": "engine/renderPipeline/migrated-all-post.json",
+      "size": 32437,
+      "sha256": "49bf5ed1bfe031ef3882b7ff782af39f6c5faacb3b75186fa36b853a18def3c3"
+    },
+    {
+      "path": "engine/renderPipeline/migrated-frame-generation.json",
+      "size": 40129,
+      "sha256": "4bb931010753bed089a148ef88696e0d68d3902f9e3d2ce2189fad3874681836"
+    },
+    {
+      "path": "engine/renderPipeline/migrated-lite.json",
+      "size": 32093,
+      "sha256": "0a85246b884934be93180d17a5c476b0b57591c11584d460619731105e76db50"
+    },
+    {
+      "path": "engine/renderPipeline/migrated-upscale.json",
+      "size": 36796,
+      "sha256": "e4ac8f273fcc9dec640759e22b1fd14e2224eaaeddd80e29060cb2980cb03516"
+    },
+    {
+      "path": "engine/renderPipeline/migrated.json",
+      "size": 31971,
+      "sha256": "bb48bfba7fd13793d03916c7346a580212299ce1ca88b6c483313782f189195e"
+    },
+    {
+      "path": "engine/renderPipeline/rendering/hybrid-ddgi-emissive.json",
+      "size": 163824,
+      "sha256": "8ed7df876d744657b618868dd34ed35a336b938f7272f8a5567f6adae312e27c"
+    },
+    {
+      "path": "engine/renderPipeline/rendering/hybrid-gi-emissive-probe.json",
+      "size": 161717,
+      "sha256": "3085157003e921fbc9317a132b6f77965dee638a4b0693d313ff7199a2015bd0"
+    },
+    {
+      "path": "engine/renderPipeline/rendering/hybrid-gi-emissive.json",
+      "size": 160887,
+      "sha256": "3e8baf38124696f3e7fd16b87d6b8c4f88cbcb26eba6b13540f4004bb3000d1d"
+    },
+    {
+      "path": "engine/renderPipeline/rendering/hybrid-gi-motion.json",
+      "size": 159649,
+      "sha256": "5c1bbb84f9593a8fbb84406d93176c173f6716722840e68f4d9224f96ff885d2"
+    },
+    {
+      "path": "engine/renderPipeline/rendering/hybrid-reflections-motion.json",
+      "size": 160660,
+      "sha256": "e63fb90f85de0c2514bd272f8b59c4a722aa76116b2f101718493c32c42b4b78"
+    },
+    {
+      "path": "engine/renderPipeline/rendering/hybrid-sp-rt.json",
+      "size": 174188,
+      "sha256": "8f7fe6f728d5adbabfb9b0968030ebf94805b85340553e56c58506e40ca3bc4a"
+    },
+    {
+      "path": "engine/renderPipeline/rendering/hybrid-sp.json",
+      "size": 173591,
+      "sha256": "d5a93f6f387e93d0835929d67da086b3b13d25d75e838b1fe33a077683c8277b"
+    },
+    {
+      "path": "engine/renderPipeline/rendering/vg-occlusion.json",
+      "size": 371588,
+      "sha256": "3755c08ee358354746a1ab0b069e28e9c8c454bead1bd9062612e52d7f5cc8cb"
+    },
+    {
+      "path": "engine/renderPipeline/vector-sdf.json",
+      "size": 1568,
+      "sha256": "865c7ea8acea361b5c5b3937978fa25822a557e64eb51deeb52b0970c7dd88d0"
+    },
+    {
+      "path": "engine/renderPipeline/weather.json",
+      "size": 369427,
+      "sha256": "be320c5071e9438865a695db9ac4c1c23adf4484d59a87b2510ae145566af200"
+    },
+    {
+      "path": "engine/shaders/aerialProbe.frag.glsl",
+      "size": 2006,
+      "sha256": "9f4ccd1801628aa391a5bfed62977738a8c488fc9042a0df1b5a915fd691b3f3"
+    },
+    {
+      "path": "engine/shaders/aerialProbe.shader",
+      "size": 137,
+      "sha256": "fbac62d439d536b7710cfcb56fb0df438cde6c480f2d8922e51598edf6c3ccb1"
+    },
+    {
+      "path": "engine/shaders/dx12/testShader.fs",
+      "size": 1006,
+      "sha256": "844999892a9e118a9a9d09a07f6206785cb148558fcb3cceeefc767dd0cf7fd8"
+    },
+    {
+      "path": "engine/shaders/dx12/testShader.vs",
+      "size": 996,
+      "sha256": "f8f9c1f3bb487ecb7c85edb604314746ca30e55a6af3fcbeaea1b83d17fd42f7"
+    },
+    {
+      "path": "engine/shaders/empty.frag.glsl",
+      "size": 202,
+      "sha256": "02b0879205d918a22bfcf9b36ce903d09991919bf1ec7ed1cdc2c8217204f659"
+    },
+    {
+      "path": "engine/shaders/empty.shader",
+      "size": 85,
+      "sha256": "cc2097e3cc8294eec39bf344b81b1a4313fc41c983aa8603a2946433c2c6b3f7"
+    },
+    {
+      "path": "engine/shaders/empty.vert.glsl",
+      "size": 611,
+      "sha256": "c07de90a5677d75195369a39975360275424ab4b29340acbf2591a5fc0ad00c2"
+    },
+    {
+      "path": "engine/shaders/furProbe.frag.glsl",
+      "size": 388,
+      "sha256": "08d68c611088f5d8744d4f54f4fe3489d9533a2a8242c4d5d0edeb8c02482b55"
+    },
+    {
+      "path": "engine/shaders/furProbe.shader",
+      "size": 196,
+      "sha256": "e89bbc01bfb046871085aa7688d324ac2418bc1aec1a0ad1518649c6b9453ddf"
+    },
+    {
+      "path": "engine/shaders/furProbe.vert.glsl",
+      "size": 510,
+      "sha256": "de08ec2054fca261f1dbf90e026f9e4a1ae8ebb09b5e9842f3ea84dc612420a1"
+    },
+    {
+      "path": "engine/shaders/gl/testShader.frag",
+      "size": 474,
+      "sha256": "1b59f45053c20db2ae6ad6202278c709f6a50d051fa652cf913e4165c5e59b08"
+    },
+    {
+      "path": "engine/shaders/gl/testShader.vert",
+      "size": 515,
+      "sha256": "81193100ba9bc3280cb446237a635422a763a33b1a7157550e652884c265e8c8"
+    },
+    {
+      "path": "engine/shaders/gpuDriven/hzb/hzbDebug.frag.glsl",
+      "size": 597,
+      "sha256": "26ab3871e63ed6bf3541e6baad1e421f1c84ef57a794c0317ba7950881ad9be0"
+    },
+    {
+      "path": "engine/shaders/gpuDriven/hzb/hzbDebug.mat",
+      "size": 248,
+      "sha256": "e63891bac1956d6e882bae8aa48e6f9318dab82c82182d43b304ed830684e5f7"
+    },
+    {
+      "path": "engine/shaders/gpuDriven/hzb/hzbDebug.shader",
+      "size": 144,
+      "sha256": "a83e80db8d2951b26ce00e5e37169d2ad017cda920117105d17f1555687e8208"
+    },
+    {
+      "path": "engine/shaders/gpuDriven/hzb/hzbInit.comp.glsl",
+      "size": 560,
+      "sha256": "3f5184f6be08836fe358cb90bd57cc4ac8e90854d409dc698f7ae06347b1a504"
+    },
+    {
+      "path": "engine/shaders/gpuDriven/hzb/hzbInit.mat",
+      "size": 153,
+      "sha256": "94890a5dbf076c17d01ce5e338d88bf45b12ecb41c0ff1268bc97c5b74373a28"
+    },
+    {
+      "path": "engine/shaders/gpuDriven/hzb/hzbInit.shader",
+      "size": 79,
+      "sha256": "61da033614484ccfde2c69f49dbcfb14c583281a367df4a7f7a72a7b9390e362"
+    },
+    {
+      "path": "engine/shaders/gpuDriven/hzb/hzbReduce.comp.glsl",
+      "size": 1266,
+      "sha256": "0e3589f5e65fe26eca362b976830bcb9996d6e133a775adc629127b08dfad2d3"
+    },
+    {
+      "path": "engine/shaders/gpuDriven/hzb/hzbReduce.mat",
+      "size": 155,
+      "sha256": "4b02fbccf294dbebb02692ba1dbc0cbf1ec8d4fe48d68a134dab11132ecbff19"
+    },
+    {
+      "path": "engine/shaders/gpuDriven/hzb/hzbReduce.shader",
+      "size": 81,
+      "sha256": "112cdc9b7168f641c4fe934ebcae5232b148d4397bfba3f2985063c685ec09d4"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/denoise/giTemporal.comp.glsl",
+      "size": 5997,
+      "sha256": "a0a2f67745842e7302c0d77da50a41733b7250d5575905714aa30a22cc98d770"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/denoise/giTemporal.mat",
+      "size": 167,
+      "sha256": "7573f353548a6a4e3d9c32588d465893b0d37a09adf77aa0c7b53e20c418351f"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/denoise/giTemporal.shader",
+      "size": 93,
+      "sha256": "8bb69674d3214cff5741c037a8c0ec2f5ff0a040feda245338d2f3868c9bdf47"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/denoise/temporalCommon.glsl",
+      "size": 4513,
+      "sha256": "b8ba96a8c518424827472b77bfacd462e7f8ce99e18feeb8b0551bc0f30cbc70"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/denoise/temporalDenoiseSettings.glsl",
+      "size": 977,
+      "sha256": "87f248b7cf65890532f0e5b5d4e7c1e923ba163992c93f11096bccc37491025f"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/rayDenoiseMotion.frag.glsl",
+      "size": 3924,
+      "sha256": "60c8aa1edf737d12afc356b5515f320224350b49235723da982866ca51fec7f1"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/rayDenoiseMotion.shader",
+      "size": 161,
+      "sha256": "8930d911ebe0a8446d85be30415ad8b37544f835d175e94971bb20c59920e1d6"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/screenProbeCommon.glsl",
+      "size": 1789,
+      "sha256": "136e6689585296244c7a29d078952a5587414276a82e843f1fde2c36cb1780d6"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/screenProbeMath.glsl",
+      "size": 4865,
+      "sha256": "cad9f68f94bef04451027f4654629992eb8520def701bed89ac22ac2913005e7"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/screenProbeSettings.glsl",
+      "size": 1161,
+      "sha256": "689576c8379b0903c93083b9bb30235297f2a0f8e644db511122a799f5412ce3"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spHzbClosest.comp.glsl",
+      "size": 1130,
+      "sha256": "5e9eebba4442d9d0619fd6dbe772d3a90848904b1b5e4bd8d3614c5ed162bb98"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spHzbClosest.mat",
+      "size": 174,
+      "sha256": "291ecf52f23229a681d232ad8a80c179b2233bf7234549d01859e723d32838f2"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spHzbClosest.shader",
+      "size": 100,
+      "sha256": "cc572f1dd230041830a7ac8e7912e2d72b31f669584453e04c18ae7daf8b0443"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spIntegrate.comp.glsl",
+      "size": 1587,
+      "sha256": "abb1368fedb80d2e90026f8505256f2c876c6b17f56baff9b84a07d93618587f"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spIntegrate.mat",
+      "size": 173,
+      "sha256": "ec3a65dcfc77a62be4fd5fa62eed06a87dac29af1218f515b8fe2b6df0f39de4"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spIntegrate.shader",
+      "size": 99,
+      "sha256": "05c695fd3f45d6ee36dde64bb36ba2e746d7ee2bc6706bd73ed825bcb8fb3dd9"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spPlace.comp.glsl",
+      "size": 1773,
+      "sha256": "ae9d222b5ea68a7d82036af921494a63e8c4e44537390165a5aead45dd887e21"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spPlace.mat",
+      "size": 169,
+      "sha256": "f544747a0d6213e43a2ee1ea493aa0e24630a8b2d06773cedb5156212d9ac6f1"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spPlace.shader",
+      "size": 95,
+      "sha256": "9a3888bb9537709fa3ff517d5c94884fc9f3daafea11fcf1cd71ad502ba7e258"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spProbeTemporal.comp.glsl",
+      "size": 8296,
+      "sha256": "ca9bb393c5f3b1049d3440fdd4a4981ec1d8e5e0ccc7dfa329c1e2fcb4d7e31c"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spProbeTemporal.mat",
+      "size": 177,
+      "sha256": "4a2ee2906c99f87c5ccacc3112b63f2ade19d0230a03d9973bfe48050e068e38"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spProbeTemporal.shader",
+      "size": 103,
+      "sha256": "3c3121cc3322e741ce60a2ceba90a5243a6a4cc9cda53f5ba79e77b5a7d81c78"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spRayQueryTrace.comp",
+      "size": 8280,
+      "sha256": "d2331b742bf232513c0a7b1d162665d896f5643e9966a7362c3c5937c08a0e31"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spRayQueryTrace.shader",
+      "size": 161,
+      "sha256": "47033c8d5f9ba68b4de5e3bb2ab054b71441f6f8e25f216bbca832e48e9e674e"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spSpatial.comp.glsl",
+      "size": 2263,
+      "sha256": "836bc03e75516cd26dba786812486e339f79cefc1c6eea7c231c1671c71d43d3"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spSpatial.mat",
+      "size": 171,
+      "sha256": "04080e9dd59c6952b9686e5a6efedb931230f86124780154284dac1d8be41816"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spSpatial.shader",
+      "size": 97,
+      "sha256": "6125591cee52202494e13e676cab9ffdb0907e1b20d5019c8b4b0153e2ff1154"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spTemporal.comp.glsl",
+      "size": 7639,
+      "sha256": "f77b39e714e0d6f1afa92797d8a2469e80c9d69ef245262ab8e031bea9b13c52"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spTemporal.mat",
+      "size": 172,
+      "sha256": "2c8122941b33ec79b2dfba7b857079ffcf2720811de15b61a4d27492f4556352"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spTemporal.shader",
+      "size": 98,
+      "sha256": "e6d5c005f18b20ac70af9b948bc01f724a1da481fbe43afafb291535264f3fbc"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spTrace.comp.glsl",
+      "size": 6755,
+      "sha256": "80c4c06a52e14120e47f2647dd29f8d5c826a936902776962c22270157de9049"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spTrace.mat",
+      "size": 169,
+      "sha256": "4d1441aaea622e2ccbde84fd0d3df85f639faab3284d66757b4342957037ee7a"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spTrace.shader",
+      "size": 95,
+      "sha256": "bd4e9d43a3bbc49500d3dee739ebd616f041842d16101c1358be0867afd798e3"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spUpsample.comp.glsl",
+      "size": 3186,
+      "sha256": "2e874f6b6bac7cdab97bad1a0cb7b9193e9a44260d72e84b7591851229d4bd58"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spUpsample.mat",
+      "size": 172,
+      "sha256": "11a90a4da390ec6bfe564a16d4c3ca21a1e115d905305b49ee37cf5cac36667e"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spUpsample.shader",
+      "size": 98,
+      "sha256": "011ebf002f02d75d7fd85adf2e5a9e9118199e3fe49b2e85dbd662e8f9559484"
+    },
+    {
+      "path": "engine/shaders/presetProbe.frag.glsl",
+      "size": 766,
+      "sha256": "d0888be8d2e34500774fd65b3b723b3c67f3d6048f29f1d3610395d964fd1d7e"
+    },
+    {
+      "path": "engine/shaders/presetProbe.shader",
+      "size": 137,
+      "sha256": "22eda3e8a08418daf2bb9a17b7bbe65cd1489cad40fa2c02cf923c084bd7c113"
+    },
+    {
+      "path": "engine/shaders/qualityProbe.frag.glsl",
+      "size": 1291,
+      "sha256": "24ceff634cc9f51da2235c8a63210af6c361c2d26874fb9cd002f69ff7db29c9"
+    },
+    {
+      "path": "engine/shaders/qualityProbe.shader",
+      "size": 138,
+      "sha256": "f1213681a3dbd72c3fbe29b3c1a0f8b36eb7df597023df9ff47ae21b99f708d5"
+    },
+    {
+      "path": "engine/shaders/raytracing/alpha.rahit",
+      "size": 765,
+      "sha256": "a4c7453d7ec99544f157974d8a11c0ebf2c0721e6478f81f5cd5b18c058de6cd"
+    },
+    {
+      "path": "engine/shaders/raytracing/buildTriangles.comp",
+      "size": 1892,
+      "sha256": "e67f4d87bc8f39e3dceacde5f1aebfff745453466c3b7f7ae8ebc228a7cb03e5"
+    },
+    {
+      "path": "engine/shaders/raytracing/buildTriangles.shader",
+      "size": 104,
+      "sha256": "020ac5e26adb08f9ee5227290991c36f5c383a2e20c91486dbd71ce2798e9270"
+    },
+    {
+      "path": "engine/shaders/raytracing/callable.rgen",
+      "size": 264,
+      "sha256": "0d9a80522d6021f03c4614c542b334c38d0f466431a0661817b23a562da3c3d8"
+    },
+    {
+      "path": "engine/shaders/raytracing/callable.shader",
+      "size": 658,
+      "sha256": "a501335dc47e7f3fed6a3970c6e9aef948c486fb8f27dfbaab19675938996c06"
+    },
+    {
+      "path": "engine/shaders/raytracing/color.rcall",
+      "size": 218,
+      "sha256": "2aa5c5a16c43ff8dde08cb445246b7c70ad790230699d9b584856021e4e91e5e"
+    },
+    {
+      "path": "engine/shaders/raytracing/ddgi.rgen",
+      "size": 3393,
+      "sha256": "2e9631d893ed0da865090f844bbc125c2a14c18d6d4b208ee9842f8948c7f8c0"
+    },
+    {
+      "path": "engine/shaders/raytracing/ddgi.shader",
+      "size": 1031,
+      "sha256": "45e4e3469b6ccaf60de5f2872b88d3763c7c98e0105df9b397a329c3b7668128"
+    },
+    {
+      "path": "engine/shaders/raytracing/ddgiSample.glsl",
+      "size": 1661,
+      "sha256": "dcdfcb4052581bdcdf5485035bb872cb643a92f2e7f1ab431b6e3d4c62c7e6c1"
+    },
+    {
+      "path": "engine/shaders/raytracing/frame.glsl",
+      "size": 1168,
+      "sha256": "20d2cec0393c5ca0b2fdc5bdcc32554bf1e5eb51a304666688f1e54a435a3b81"
+    },
+    {
+      "path": "engine/shaders/raytracing/hybrid.rgen",
+      "size": 4905,
+      "sha256": "3f6d79ba2c1c63c25558981e43ab41bb6f0acca357a6c0487af38f195a36ca02"
+    },
+    {
+      "path": "engine/shaders/raytracing/hybrid.shader",
+      "size": 1033,
+      "sha256": "dbdfc4f247df75ab2c7b115289acd2ad66ba4a78931407c6126a233530e23c3c"
+    },
+    {
+      "path": "engine/shaders/raytracing/pathTrace.rgen",
+      "size": 3716,
+      "sha256": "0cd3fdd4693d04405eeda4b6a46c81502ad083bf21a65eba6b4a18b1c24997d4"
+    },
+    {
+      "path": "engine/shaders/raytracing/pathTrace.shader",
+      "size": 1036,
+      "sha256": "304cb5955656a85f08cc3e58c5dae5439507677ab511565caa1f2e45b5689f01"
+    },
+    {
+      "path": "engine/shaders/raytracing/procedural.rahit",
+      "size": 542,
+      "sha256": "c59e6cad4adb750a96b973191408ffe0e580fda90b750f9968866f2c7fa77976"
+    },
+    {
+      "path": "engine/shaders/raytracing/procedural.rchit",
+      "size": 541,
+      "sha256": "89c56aa2e564ba04594f88021f2fecf171ca5c94bd297317b3d17409e8ee6f20"
+    },
+    {
+      "path": "engine/shaders/raytracing/procedural.rgen",
+      "size": 643,
+      "sha256": "24835ae5e96774c463b05ca568482cd6e4ed5d0a49d5bdd8f90bdf635228d5dd"
+    },
+    {
+      "path": "engine/shaders/raytracing/procedural.rint",
+      "size": 254,
+      "sha256": "d8e1fc56a4c421aa359571ee781ca603c85580960bc2b49e42215d34a8991eec"
+    },
+    {
+      "path": "engine/shaders/raytracing/procedural.rmiss",
+      "size": 216,
+      "sha256": "2dfc96925350a002a1fa6096ea40a798c871a35cc34e3d17b9db4d1859af8d48"
+    },
+    {
+      "path": "engine/shaders/raytracing/procedural.shader",
+      "size": 695,
+      "sha256": "1dd8269406fe899b29b714ea6afcd27068b792739850f69edd090aa874be1fbe"
+    },
+    {
+      "path": "engine/shaders/raytracing/record.rgen",
+      "size": 247,
+      "sha256": "ef21d96b076a56473c44d654b5784db4b8d56ba4d3337ef2696f640aaf18f4a4"
+    },
+    {
+      "path": "engine/shaders/raytracing/record.shader",
+      "size": 751,
+      "sha256": "8115710f2cf28cc10f72a691a35fa1eb50c0430779db826d7f7a49f7373fb7fb"
+    },
+    {
+      "path": "engine/shaders/raytracing/rtLighting.glsl",
+      "size": 2066,
+      "sha256": "485ae837017e650473d27e3febbb57d5df41ddba273b3aa757df23ecbc5c7a87"
+    },
+    {
+      "path": "engine/shaders/raytracing/skinVertices.comp",
+      "size": 1050,
+      "sha256": "53d95ec3ecbf329e48d16c2c85d604becc55ea639cfab2c45c5c2cb08984b399"
+    },
+    {
+      "path": "engine/shaders/raytracing/skinVertices.shader",
+      "size": 102,
+      "sha256": "d8ced549a46ea9b0ad403ce1a49614a7fe18be22e3214fbf286e77410bed76a4"
+    },
+    {
+      "path": "engine/shaders/raytracing/skinningCheck.rgen",
+      "size": 1924,
+      "sha256": "32cca86dc57cb48a9058b716e24cb0c31f377c2f7724ba352ed09ed99979d5a7"
+    },
+    {
+      "path": "engine/shaders/raytracing/skinningCheck.shader",
+      "size": 842,
+      "sha256": "11a95f43a9583bf22ff248f0484cb5133980c23c7e8acad1ff1e29dfa0d63835"
+    },
+    {
+      "path": "engine/shaders/raytracing/surface.glsl",
+      "size": 106,
+      "sha256": "6b01d0fc9cf0af28d1f9a58ce4e836ae0c943e4b1c15b9ef5bae858227c3b77f"
+    },
+    {
+      "path": "engine/shaders/raytracing/surface.rchit",
+      "size": 1363,
+      "sha256": "6b3ec8b74191b47f0959be8dd9244bfd2e6f3ed1a881e88814fe8df30df20eeb"
+    },
+    {
+      "path": "engine/shaders/raytracing/surface.rmiss",
+      "size": 204,
+      "sha256": "901066d497856f1551118181a65ae81aad94968d55e84a5e867a86407b0935ff"
+    },
+    {
+      "path": "engine/shaders/raytracing/visibility.comp",
+      "size": 3785,
+      "sha256": "7be5524520cae3541934678ba88f5c883f9ae6df3dd6257c0a4ded34a91fe3f1"
+    },
+    {
+      "path": "engine/shaders/raytracing/visibility.rmiss",
+      "size": 133,
+      "sha256": "bf688e868e5d55b0ebb8f0626c2ee78fddbd8a051e53ca5eb70acd0f61eeafd6"
+    },
+    {
+      "path": "engine/shaders/raytracing/visibility.shader",
+      "size": 138,
+      "sha256": "def175337db9619048086bc448d173eed23c4b8dd752ef9d16d8a9dc6f99088c"
+    },
+    {
+      "path": "engine/shaders/render/GBuffer.frag.glsl",
+      "size": 1612,
+      "sha256": "dba5bd3c88eb657b74e6f47626bf0fe44137ce65ab8a87c361872adde6cbf44b"
+    },
+    {
+      "path": "engine/shaders/render/GBuffer.shader",
+      "size": 130,
+      "sha256": "bb260e87bfcd281e5d3f8a92431eb788ee430745dc6816534434fc45dbdeb3d4"
+    },
+    {
+      "path": "engine/shaders/render/GBuffer.vert.glsl",
+      "size": 4373,
+      "sha256": "99dfc98102d02d764acf6e442c36d4908a94ef6a874465e126ed459d45283127"
+    },
+    {
+      "path": "engine/shaders/render/Unlit.frag.glsl",
+      "size": 618,
+      "sha256": "b6b3f405e1d4d128963acd7724ce53f252a24847b798d3f4cc39a0943b006909"
+    },
+    {
+      "path": "engine/shaders/render/Unlit.shader",
+      "size": 126,
+      "sha256": "c4d722c0baeb3dc8005ecdcf64b28bba2b9e922b9b79f75e0467e3328669a0b0"
+    },
+    {
+      "path": "engine/shaders/render/Unlit.vert.glsl",
+      "size": 869,
+      "sha256": "fac1ef46cf4423be71ec13ffb1206a6fa58b8fca85ff9e3ea4164d8181b0c524"
+    },
+    {
+      "path": "engine/shaders/render/base.shader",
+      "size": 73,
+      "sha256": "8b927c7ff0b59d3d4795468c8014bec5f63da6de27867001282adca8697c618f"
+    },
+    {
+      "path": "engine/shaders/render/base.vert.glsl",
+      "size": 273,
+      "sha256": "fd5bb31c0641ba581b086a04bbbc9dbafe8cc25d118aa9845d7d392bb65a56a0"
+    },
+    {
+      "path": "engine/shaders/render/bloom.frag.glsl",
+      "size": 590,
+      "sha256": "360f1eb1aa5259a232fa46887810daae030659d158a0e396720d4efc92f3d266"
+    },
+    {
+      "path": "engine/shaders/render/bloom.shader",
+      "size": 126,
+      "sha256": "9b4a82ea77f40329274688466169a3fa1660c7e02ed595b6c3be6e8a6128aadb"
+    },
+    {
+      "path": "engine/shaders/render/bloom.vert.glsl",
+      "size": 319,
+      "sha256": "aea00e8b0627c35b12fc8fb94bd66ba5ac3f9908931519b935faa175a4714233"
+    },
+    {
+      "path": "engine/shaders/render/blur.frag.glsl",
+      "size": 1157,
+      "sha256": "2695586f90df19e1323fc4e0d29b45a53eb5f9fb9aa406482c39db0ee40557da"
+    },
+    {
+      "path": "engine/shaders/render/blur.shader",
+      "size": 124,
+      "sha256": "cbeda4bfbcd85c936fa96c1293b3862dca711a9ec14f1d6039238217fb7bef83"
+    },
+    {
+      "path": "engine/shaders/render/blur.vert.glsl",
+      "size": 319,
+      "sha256": "d629c5867c06307677989ebabfd0f5f50dc3887d9e3e5997a476dd12bc123bd3"
+    },
+    {
+      "path": "engine/shaders/render/brdf.frag.glsl",
+      "size": 2930,
+      "sha256": "4be9cfb5e154eb11ca1efcd64bd83371e3fb00f8889d6c59c3bb46228d052782"
+    },
+    {
+      "path": "engine/shaders/render/brdf.shader",
+      "size": 124,
+      "sha256": "5ea86025a8564590b4158f58b5d3ef4c5106f3465f72f43d46b3f42f2038d942"
+    },
+    {
+      "path": "engine/shaders/render/brdf.vert.glsl",
+      "size": 270,
+      "sha256": "ff47c9e0c6e323a066ead6bd23ad1a43c0adaf3849035e76dc20ff7a93683f68"
+    },
+    {
+      "path": "engine/shaders/render/bright.frag.glsl",
+      "size": 483,
+      "sha256": "ee3ab83cf1239e160c1a7df17b2b5233848d8677c00b024ae37691bde610688f"
+    },
+    {
+      "path": "engine/shaders/render/bright.shader",
+      "size": 128,
+      "sha256": "aad5c666e350db8787c0655d011f5ee9849ad798a7026eb0510b61c13a607c7e"
+    },
+    {
+      "path": "engine/shaders/render/bright.vert.glsl",
+      "size": 227,
+      "sha256": "d958a31c43fa78049b8393e6452948c03d295097d9cb04cb6361d1bfbc553a33"
+    },
+    {
+      "path": "engine/shaders/render/chromaticAbberation.frag.glsl",
+      "size": 1862,
+      "sha256": "fa0e28b1cd88382dbcedca1381f88abb3b69ed1f1e220da6794f773139bbe9ac"
+    },
+    {
+      "path": "engine/shaders/render/chromaticAbberation.shader",
+      "size": 154,
+      "sha256": "51ad3f14172bc80457f2aafa8655393a1bde4f91d4f054f2b3de431f4fe6485d"
+    },
+    {
+      "path": "engine/shaders/render/chromaticAbberation.vert.glsl",
+      "size": 336,
+      "sha256": "9a62d3d0ab70991f61a2323f197c9c01a814a492c3340d260f283fab2cd93c55"
+    },
+    {
+      "path": "engine/shaders/render/colorGrading.frag.glsl",
+      "size": 649,
+      "sha256": "6bba0ae5785ab122a4a52f58e4bffd500f5bc3a7a820c1876ff96359ae305461"
+    },
+    {
+      "path": "engine/shaders/render/colorGrading.shader",
+      "size": 140,
+      "sha256": "77fb3a81ac123466fdbdde849495545ab2e2999651ebf663d29c93ce6d5a1e37"
+    },
+    {
+      "path": "engine/shaders/render/colorGrading.vert.glsl",
+      "size": 363,
+      "sha256": "0bb9d42ea4191a7ea1a77c416b1cfd5c3a56932f52a0799f3138b924b7a1284e"
+    },
+    {
+      "path": "engine/shaders/render/debug3DTex.frag.glsl",
+      "size": 1591,
+      "sha256": "f267148131ab01bfede3b006157477444d5147eb4b9ff09aa00bcf0cebce607b"
+    },
+    {
+      "path": "engine/shaders/render/debug3DTex.shader",
+      "size": 136,
+      "sha256": "709815eb6cc83ddff6f3705113d2bf558d8c03dbe41de668f4c489234a2d1bb3"
+    },
+    {
+      "path": "engine/shaders/render/debug3DTex.vert.glsl",
+      "size": 465,
+      "sha256": "f843764b4a7e5e1bd0b254757c4d59024288f490a9b33221d59424e795049209"
+    },
+    {
+      "path": "engine/shaders/render/deferredGBuffer.frag.glsl",
+      "size": 3722,
+      "sha256": "a46445b54b508fd35f69e2a56e5a72569fb03a4e9795de8ef8b677b55578cd58"
+    },
+    {
+      "path": "engine/shaders/render/deferredGBuffer.shader",
+      "size": 146,
+      "sha256": "350ed4b1a836e0d7ef8ee65c663a8ef9245d301a17795f5a63e7a0db83c71b2a"
+    },
+    {
+      "path": "engine/shaders/render/deferredGBuffer.vert.glsl",
+      "size": 4631,
+      "sha256": "e2b63b040b1ce07dc2ad23c0271004f532ec3e906b8a7bfe961494e370965fca"
+    },
+    {
+      "path": "engine/shaders/render/deferredLightning.frag.glsl",
+      "size": 27258,
+      "sha256": "6f60f997422826d7cdbf70c33fbc2cea591add1365e72922de39efa05de8cb84"
+    },
+    {
+      "path": "engine/shaders/render/deferredLightning.shader",
+      "size": 150,
+      "sha256": "820239cfda0e23812324c80a0e9eed9ad14d872c62f4629ac7ca0b4cc89e7073"
+    },
+    {
+      "path": "engine/shaders/render/deferredLightning.vert.glsl",
+      "size": 1581,
+      "sha256": "ca42ec332f5c162818a17d8c7419d4a715874e2478085090483a6b395ccb5e24"
+    },
+    {
+      "path": "engine/shaders/render/deferredLightningPbr.frag.glsl",
+      "size": 29288,
+      "sha256": "64a352946bc3d6abfe3f7fc52d613088056a01527c9fcb0011a892afe199d190"
+    },
+    {
+      "path": "engine/shaders/render/deferredLightningPbr.shader",
+      "size": 156,
+      "sha256": "de1c5dd9902192a781459d5c860b38b62bfbc98d2a7ad0e729d7213305a2b742"
+    },
+    {
+      "path": "engine/shaders/render/deferredLightningPbr.vert.glsl",
+      "size": 1604,
+      "sha256": "3cc8a44b56552cad679f9fd180f2bbc79a4a2e28a61abc7db2b59dcd95f92171"
+    },
+    {
+      "path": "engine/shaders/render/depthOfField.frag.glsl",
+      "size": 1205,
+      "sha256": "866a9a8044a258c7a93d58eeaa0cabfbb107fcdce8ee363752ecade60b30663a"
+    },
+    {
+      "path": "engine/shaders/render/depthOfField.shader",
+      "size": 140,
+      "sha256": "5c90a395d24cefbf6f4e8c18e5f481ced6b696bc3001fa80d26a200cccf03cb3"
+    },
+    {
+      "path": "engine/shaders/render/depthOfField.vert.glsl",
+      "size": 338,
+      "sha256": "b4190986330c62654ed30dde38874fa09fce2a6ca4a8704f073e52d815b5c7d6"
+    },
+    {
+      "path": "engine/shaders/render/dilation.frag.glsl",
+      "size": 1311,
+      "sha256": "eb140cef5ed8912cc673b35345d4f9e0de4cee4df29b918fa4cf0f45cb127d43"
+    },
+    {
+      "path": "engine/shaders/render/dilation.shader",
+      "size": 132,
+      "sha256": "9fc1744bbd597395f815959261584c77148f3f7d0e94b2bbe74a01149210f5e2"
+    },
+    {
+      "path": "engine/shaders/render/dilation.vert.glsl",
+      "size": 319,
+      "sha256": "8ba153e303c13fc96220cea4f86bf669aa3d73adeb67d1740d26c01461b3d5a3"
+    },
+    {
+      "path": "engine/shaders/render/dirShadow.frag.glsl",
+      "size": 198,
+      "sha256": "a312f2d77120763f63e221d6b54fb71395f68a98667c3b24ee68bc964a709d6f"
+    },
+    {
+      "path": "engine/shaders/render/dirShadow.geom.glsl",
+      "size": 480,
+      "sha256": "ee46113739a07ff0ff79e406f0ce322d402a80e5cf1e3be5940039a95bdeddab"
+    },
+    {
+      "path": "engine/shaders/render/dirShadow.shader",
+      "size": 227,
+      "sha256": "777f1dab93c01485295e6813caf49f0cbe9d2dfc3777cecd6a88deea6725e434"
+    },
+    {
+      "path": "engine/shaders/render/dirShadow.vert.glsl",
+      "size": 841,
+      "sha256": "a422b2acd3001c9616509e2cfb84dcb36e02448ac6616f26f1dd54623ae961af"
+    },
+    {
+      "path": "engine/shaders/render/dirShadow2.frag.glsl",
+      "size": 179,
+      "sha256": "042301a63493d4878d7884fcac27c67ac31612384d1777b441f620d054ea9f55"
+    },
+    {
+      "path": "engine/shaders/render/dirShadow2.shader",
+      "size": 136,
+      "sha256": "f65eabb269e13c3fb2f92364097c6f343470338a3978365bbb99e9b0d548763f"
+    },
+    {
+      "path": "engine/shaders/render/dirShadow2.vert.glsl",
+      "size": 838,
+      "sha256": "a0dea99f9533f429b2a778d96192287355c8e5e705473c2771f9e937a5d813f7"
+    },
+    {
+      "path": "engine/shaders/render/equirectangularToCubemap.frag.glsl",
+      "size": 695,
+      "sha256": "d317b547773d68aaa8376e061d178de02c81eda06ffb8fda717ad998237f57a0"
+    },
+    {
+      "path": "engine/shaders/render/equirectangularToCubemap.shader",
+      "size": 164,
+      "sha256": "790a89b77e18297cc3f66460aee5d7aa16bbf4305b51e1ef95a2ac6f66bc9d99"
+    },
+    {
+      "path": "engine/shaders/render/equirectangularToCubemap.vert.glsl",
+      "size": 398,
+      "sha256": "e55f3dcce87b5a32110611bb604e035f6d12a2c5eb9693c93c170532d10b1330"
+    },
+    {
+      "path": "engine/shaders/render/filmGrain.frag.glsl",
+      "size": 1021,
+      "sha256": "ec41aa11ff536a27a2b5f11a1d9b656cc54254dff7bb95927c58d141f81b4e19"
+    },
+    {
+      "path": "engine/shaders/render/filmGrain.shader",
+      "size": 134,
+      "sha256": "584a004b0e59e12493958574e90551043641c8f9594d317f4b2c4b2e376007d5"
+    },
+    {
+      "path": "engine/shaders/render/filmGrain.vert.glsl",
+      "size": 227,
+      "sha256": "d958a31c43fa78049b8393e6452948c03d295097d9cb04cb6361d1bfbc553a33"
+    },
+    {
+      "path": "engine/shaders/render/fog.frag.glsl",
+      "size": 1406,
+      "sha256": "5f786f78faca484a3fb734259c03785444eba83f8b9eb9ac21adf09d2988bae6"
+    },
+    {
+      "path": "engine/shaders/render/fog.shader",
+      "size": 122,
+      "sha256": "1d80939a6f5c2e278aaaafee0a4fe875ce1049699f136719d2e1fa652769058f"
+    },
+    {
+      "path": "engine/shaders/render/fog.vert.glsl",
+      "size": 470,
+      "sha256": "857e49794d5db935875329a4a62ece65781445f60deb59470a33d76133fbd939"
+    },
+    {
+      "path": "engine/shaders/render/fullscreen.vert.glsl",
+      "size": 191,
+      "sha256": "60cb575805d91b86538751969157572f30ffc19f496cbd0cdab46943efd54ecd"
+    },
+    {
+      "path": "engine/shaders/render/fxaa.frag.glsl",
+      "size": 2665,
+      "sha256": "a0ead0630dfcfaac8b2fd6477e503ef4bf1925d1c1dd138019220fecaed6e45b"
+    },
+    {
+      "path": "engine/shaders/render/fxaa.shader",
+      "size": 124,
+      "sha256": "ca9b7508b0631613286096cbf01f9bb1775d710e9e948ff093f14edc111d5a13"
+    },
+    {
+      "path": "engine/shaders/render/fxaa.vert.glsl",
+      "size": 318,
+      "sha256": "d9e7002b182693fcba41af32ebfe3ed3e69bfb5dc0f07270f35e553805711bf0"
+    },
+    {
+      "path": "engine/shaders/render/godRays.frag.glsl",
+      "size": 1585,
+      "sha256": "0f0b63d71df65c360d450de476af5f378a511061fd2d160c2f6a540895ea4eed"
+    },
+    {
+      "path": "engine/shaders/render/godRays.shader",
+      "size": 130,
+      "sha256": "c7bad8cd21753e15592a8876bbf0d45e424c20e85cd08b6daed80291f3405f14"
+    },
+    {
+      "path": "engine/shaders/render/godRays.vert.glsl",
+      "size": 390,
+      "sha256": "a0cd62870f2478b0abf3f3c61863b65523406fc6427cfb70860e651b5660a9aa"
+    },
+    {
+      "path": "engine/shaders/render/godRaysTexture.frag.glsl",
+      "size": 337,
+      "sha256": "274baffccc7ed8ae572bdab5e7bd7023be19d5d055c842b71f03b0f195cfaba4"
+    },
+    {
+      "path": "engine/shaders/render/godRaysTexture.shader",
+      "size": 144,
+      "sha256": "24c31d54a2cc81b21b44c9095b23597efc4a609baa644f4c9d661ac90cab1d87"
+    },
+    {
+      "path": "engine/shaders/render/godRaysTexture.vert.glsl",
+      "size": 1685,
+      "sha256": "e001031063635fc1102aa0737f3b46f9ffc17d5ea4ce42b47c547cdd50c064da"
+    },
+    {
+      "path": "engine/shaders/render/grid.frag.glsl",
+      "size": 2277,
+      "sha256": "5015e66a933bca63410a2a89650056f307e5c4735f163ca0f7a34db4fc0c5386"
+    },
+    {
+      "path": "engine/shaders/render/grid.shader",
+      "size": 124,
+      "sha256": "3f5d39fdf694968066996d5f0a8c11d3f489e499f75aa4137e0e77c796c8f5b5"
+    },
+    {
+      "path": "engine/shaders/render/grid.vert.glsl",
+      "size": 1021,
+      "sha256": "771256262e5532ab0f3f746801feb9335cb012372fcc5e8fc3ea358856d20bd6"
+    },
+    {
+      "path": "engine/shaders/render/gui/spine.frag.glsl",
+      "size": 447,
+      "sha256": "50f1d7c742722ef55bad94dd96614baaf1a4861ad6f225684e17b5a2135886b5"
+    },
+    {
+      "path": "engine/shaders/render/gui/spine.shader",
+      "size": 134,
+      "sha256": "8da31b232032db4f082c5df004137f0811f4db9ed9f97c940f8d8dbce4f0034e"
+    },
+    {
+      "path": "engine/shaders/render/gui/spine.vert.glsl",
+      "size": 566,
+      "sha256": "d1639e91148b60e8d3162c2e0de22eb06ae761d6f4a345e419b18f327eb4a789"
+    },
+    {
+      "path": "engine/shaders/render/gui/sprite.frag.glsl",
+      "size": 398,
+      "sha256": "192e6d868fa270c0fc782b26aabce529df9a36bf4a88d3af0369a11774c8cae3"
+    },
+    {
+      "path": "engine/shaders/render/gui/sprite.shader",
+      "size": 136,
+      "sha256": "01804358d9d3b94c6873f7035b5e7331b3dd2131f6d76a2d295bf2c2bb836f07"
+    },
+    {
+      "path": "engine/shaders/render/gui/sprite.vert.glsl",
+      "size": 502,
+      "sha256": "9014b9f88d74a6097af06b4b8b81467e7477d727966da9c59a47f8e6d501ef83"
+    },
+    {
+      "path": "engine/shaders/render/gui/text.frag.glsl",
+      "size": 470,
+      "sha256": "92a34709481fc9548d1f5cda05c932a19979f5baaaa3cf8f870c922d6e44fbab"
+    },
+    {
+      "path": "engine/shaders/render/gui/text.shader",
+      "size": 132,
+      "sha256": "6191ab14021d36337927ed863d2a7f255c872f3396222e62478af194adfe43a8"
+    },
+    {
+      "path": "engine/shaders/render/gui/text.vert.glsl",
+      "size": 507,
+      "sha256": "00e5746886f3c149f75c7f58ab0cfe2657f88b4f769ff5f759a3df61dbec2699"
+    },
+    {
+      "path": "engine/shaders/render/hdr.frag.glsl",
+      "size": 751,
+      "sha256": "d5ef5f8eac4ec16975d9dca2dad3ac5b670bd0bc919252bfb1c2ab5da9d85e2b"
+    },
+    {
+      "path": "engine/shaders/render/hdr.shader",
+      "size": 122,
+      "sha256": "11700d45836ee1bef775e22147e0a132c2a9c5aa94fdb60ceef3f57837ac9f02"
+    },
+    {
+      "path": "engine/shaders/render/hdr.vert.glsl",
+      "size": 360,
+      "sha256": "57ba1783c48a875246e105018f8601e59660acab871ee233c4bbbc8959dbb6e5"
+    },
+    {
+      "path": "engine/shaders/render/hdrSkyboxShader.frag.glsl",
+      "size": 456,
+      "sha256": "ce3aa537e6938bf7be9509860fd19eb5f8c468c3be1cf4c14bd3978920339a73"
+    },
+    {
+      "path": "engine/shaders/render/hdrSkyboxShader.shader",
+      "size": 146,
+      "sha256": "eba3296f812f9dc591e9780a5507b847093e32f2195a8aca5825ad1d10fa80da"
+    },
+    {
+      "path": "engine/shaders/render/hdrSkyboxShader.vert.glsl",
+      "size": 647,
+      "sha256": "8807be9dbb6bdf2af8afecb0d1a89c3b2b8637300b8f836356543f941315ea93"
+    },
+    {
+      "path": "engine/shaders/render/irradianceConvolution.frag.glsl",
+      "size": 1251,
+      "sha256": "dedede3376fdd4deab6b1a59f58f63667c7424db187f3a437601b3209d9e261f"
+    },
+    {
+      "path": "engine/shaders/render/irradianceConvolution.shader",
+      "size": 158,
+      "sha256": "b9fbf25edcf57667eecd4688e3111f1d9c4eaf99370c0d05bf6fbbb9b4780f85"
+    },
+    {
+      "path": "engine/shaders/render/irradianceConvolution.vert.glsl",
+      "size": 395,
+      "sha256": "ceb68faca6cc841ba36a3d443b45cd211ee534a8ea6534dc666137eca4d8a5c8"
+    },
+    {
+      "path": "engine/shaders/render/layeredPBR.frag.glsl",
+      "size": 28031,
+      "sha256": "00126df506b50e307932eca1e0ace6cce74c3be8e834916e195ae400597a93b5"
+    },
+    {
+      "path": "engine/shaders/render/layeredPBR.shader",
+      "size": 167,
+      "sha256": "1b810e89b738033704877d7b61973a9456ffca6776a6fdfa19a5e9b9a59203f3"
+    },
+    {
+      "path": "engine/shaders/render/lib/atmosphere.glsl",
+      "size": 8763,
+      "sha256": "44806d4fe478494b3a369a2022240dd59ab4a57517cae41093224fb3e5b75572"
+    },
+    {
+      "path": "engine/shaders/render/lib/cloudShadow.glsl",
+      "size": 957,
+      "sha256": "a68ebc283d92c9b1fa232c7d642d284532c1d3d409104f91d14336b0d063b84e"
+    },
+    {
+      "path": "engine/shaders/render/lib/cloudShadowDirect.glsl",
+      "size": 1795,
+      "sha256": "b5766c72c830b71dd27bb60890b04822524028336752a3cf4aad08b53211aab5"
+    },
+    {
+      "path": "engine/shaders/render/lib/deformation.glsl",
+      "size": 2973,
+      "sha256": "aaba97d0d53f70ad84884d55561b24e3985a97d074d7478b3f8528a6296095d8"
+    },
+    {
+      "path": "engine/shaders/render/lib/environment.glsl",
+      "size": 6487,
+      "sha256": "cfa1733c8bbd53d7f0abef91576bdb6043797dbfc183428441cefbce87647311"
+    },
+    {
+      "path": "engine/shaders/render/lib/environmentCloudDensity.glsl",
+      "size": 1187,
+      "sha256": "e449b811bccdd05dbacfc123350a18ecab1618662029aed2dbe08216ac27a03a"
+    },
+    {
+      "path": "engine/shaders/render/lib/environmentCloudLighting.glsl",
+      "size": 1054,
+      "sha256": "9239bb40114aa55d2ac30337b141a04ccec8d39791526a6eac54b293fede15f2"
+    },
+    {
+      "path": "engine/shaders/render/lib/environmentTaa.glsl",
+      "size": 2033,
+      "sha256": "faa76341441c1eb5a4e2a709629dfae0575453ce3be1e42ad30068aa81ad4d48"
+    },
+    {
+      "path": "engine/shaders/render/lib/instances.glsl",
+      "size": 1239,
+      "sha256": "9f3df8fc076a43b82fb6cfb1aa966818b48f4c14f600d5f499803528abe7cd49"
+    },
+    {
+      "path": "engine/shaders/render/lib/morph.glsl",
+      "size": 1843,
+      "sha256": "75727d0ff08f98c75c4c08f706d96a5f572be0f6f6e53fdc2de77d0eb2bad6ce"
+    },
+    {
+      "path": "engine/shaders/render/lib/pbrLayerBindings.glsl",
+      "size": 1743,
+      "sha256": "90b64f327f4c27fbff70d0af656a662d4956f102e840666015122e102887c723"
+    },
+    {
+      "path": "engine/shaders/render/lib/pbrLayerEvaluate.glsl",
+      "size": 1782,
+      "sha256": "7dafb6812b58166fbcbe96b74ddb54423142acd0bb9968fa2d839bb28a58baa2"
+    },
+    {
+      "path": "engine/shaders/render/lib/pbrLayers.glsl",
+      "size": 6204,
+      "sha256": "8bf3275e24d18827f93f98ea8fb0ce157051922b4d2d32a0f9f68a2b05e0d026"
+    },
+    {
+      "path": "engine/shaders/render/lib/surfaceWeather.glsl",
+      "size": 3616,
+      "sha256": "7d206d4349b647265d786c9858b40a7055177f238bb165eb5e92f13d7f9f7109"
+    },
+    {
+      "path": "engine/shaders/render/lib/thinSurface.glsl",
+      "size": 445,
+      "sha256": "ee59f68a522fc38565aee0540d1f50f30b883f9512380ee8a57ae6afe4d975b8"
+    },
+    {
+      "path": "engine/shaders/render/motionBlur.frag.glsl",
+      "size": 1257,
+      "sha256": "f26ad04875a7264d31d3efb673b2ea6d7348742f7688c47c9003041125d575bc"
+    },
+    {
+      "path": "engine/shaders/render/motionBlur.shader",
+      "size": 136,
+      "sha256": "8a737250f34879745b88db7b6b8cba7b61a3afe2c7d155565ed65a90a33bb103"
+    },
+    {
+      "path": "engine/shaders/render/motionBlur.vert.glsl",
+      "size": 279,
+      "sha256": "ff4c1dc07aec65d590291d3921c0976d3766ca09a038775467f7d860cfde4d4a"
+    },
+    {
+      "path": "engine/shaders/render/outline.frag.glsl",
+      "size": 2298,
+      "sha256": "874ed2fe5029e6415fe1dac1eb88b263843784887e7fb40139a599abe1072562"
+    },
+    {
+      "path": "engine/shaders/render/outline.shader",
+      "size": 130,
+      "sha256": "a25b46e5f9a0ecd30ecba72cfb3b381e38f02dec178a9b880155d5c9d74bd157"
+    },
+    {
+      "path": "engine/shaders/render/outline.vert.glsl",
+      "size": 333,
+      "sha256": "76e5576d14becf8df8e818b4ed1110137719d3c40e6e490dcea62ffa315bfa48"
+    },
+    {
+      "path": "engine/shaders/render/pixelize.frag.glsl",
+      "size": 900,
+      "sha256": "4e07f6a8e8f1c4acf623926bb7c45900717f20fc0bff757b17aa766d17d784c7"
+    },
+    {
+      "path": "engine/shaders/render/pixelize.shader",
+      "size": 132,
+      "sha256": "7c3157f8248cee2dcff41ddc2fa52b0e095ca53b47c67a964ada999fc832e0ee"
+    },
+    {
+      "path": "engine/shaders/render/pixelize.vert.glsl",
+      "size": 319,
+      "sha256": "8ba153e303c13fc96220cea4f86bf669aa3d73adeb67d1740d26c01461b3d5a3"
+    },
+    {
+      "path": "engine/shaders/render/pointShadow.frag.glsl",
+      "size": 484,
+      "sha256": "f3fc4716f858aa4f18fed6042b63e4d775f75986f1e1150e08488acb7f69ae43"
+    },
+    {
+      "path": "engine/shaders/render/pointShadow.geom.glsl",
+      "size": 679,
+      "sha256": "afb79b9d7673c20c68199415acf11baeffb01e4d66c63a2cf061b63b035e39f2"
+    },
+    {
+      "path": "engine/shaders/render/pointShadow.shader",
+      "size": 233,
+      "sha256": "e1c13777db323e15b22851c31fb63d04abe0d856b562889ca3460e88a9a70694"
+    },
+    {
+      "path": "engine/shaders/render/pointShadow.vert.glsl",
+      "size": 1512,
+      "sha256": "6de41bb0c7718580aa5cdd903b75b6cb15832afc8b23037bc95e1de7e6961e5f"
+    },
+    {
+      "path": "engine/shaders/render/portable/atmosphereAerial.frag.glsl",
+      "size": 689,
+      "sha256": "970d2e2a8172b78547ddd7b7f95087ee53d3cd5797a1f66f767856387dec45ac"
+    },
+    {
+      "path": "engine/shaders/render/portable/atmosphereAerial.shader",
+      "size": 160,
+      "sha256": "4a8091884d3854329b58e5aa157617cb3a9ef5ca350bdae03ca555a14264d851"
+    },
+    {
+      "path": "engine/shaders/render/portable/atmosphereSkyView.frag.glsl",
+      "size": 312,
+      "sha256": "8909bfe832d1e985d6368e04c1546954a9ec8c85c08f9e5bb48a908b89090f2a"
+    },
+    {
+      "path": "engine/shaders/render/portable/atmosphereSkyView.shader",
+      "size": 161,
+      "sha256": "03e3b4dba4f19f4d7411efd1d5db1053307f745f4ed41171cc3711c82f0f9f08"
+    },
+    {
+      "path": "engine/shaders/render/portable/atmosphereTransmittance.frag.glsl",
+      "size": 382,
+      "sha256": "c0c1c6ae72d1cf7a68baa743dee83355a2d4b3146d267467bc046e5ade03da40"
+    },
+    {
+      "path": "engine/shaders/render/portable/atmosphereTransmittance.shader",
+      "size": 167,
+      "sha256": "ad3389aa7921d78a1dfaf4ee7768c72fdf6455bd0fc5a2a7ef9e4d48e39fc4ff"
+    },
+    {
+      "path": "engine/shaders/render/portable/blur.frag.glsl",
+      "size": 880,
+      "sha256": "6fc224405a9788ed4910b446534f0d2898e2af9c0e06e92f2f4b7e547faa1de0"
+    },
+    {
+      "path": "engine/shaders/render/portable/blur.shader",
+      "size": 146,
+      "sha256": "361c91c99f45f01cbc9d1cf8af2420ee9db52176b91c2b4a0a651e723dd99835"
+    },
+    {
+      "path": "engine/shaders/render/portable/bright.frag.glsl",
+      "size": 696,
+      "sha256": "e8c98c4d1b6ccd80c8b6df77147d4163413cfd0ece7959cb2c49a88c5ec25710"
+    },
+    {
+      "path": "engine/shaders/render/portable/bright.shader",
+      "size": 148,
+      "sha256": "710d00a24d7f86fff8e0304d40e25858a284e651b109ed57d4332c1af37ce47f"
+    },
+    {
+      "path": "engine/shaders/render/portable/chromaticAbberation.frag.glsl",
+      "size": 1862,
+      "sha256": "fa0e28b1cd88382dbcedca1381f88abb3b69ed1f1e220da6794f773139bbe9ac"
+    },
+    {
+      "path": "engine/shaders/render/portable/chromaticAbberation.shader",
+      "size": 161,
+      "sha256": "7e4fe856cb920ab0bc01ece9fafc9207c0640e2104cfaa02680227d16b730bc2"
+    },
+    {
+      "path": "engine/shaders/render/portable/colorGrading.frag.glsl",
+      "size": 649,
+      "sha256": "6bba0ae5785ab122a4a52f58e4bffd500f5bc3a7a820c1876ff96359ae305461"
+    },
+    {
+      "path": "engine/shaders/render/portable/colorGrading.shader",
+      "size": 154,
+      "sha256": "ee3a9375bda704e4ce0a15059dd5e9866d71e86d95cd070f97ced7ef12929499"
+    },
+    {
+      "path": "engine/shaders/render/portable/compose.frag.glsl",
+      "size": 694,
+      "sha256": "1a1d7662c9156efc17fdfa736bd1083bb8a4cff5c6d0b5fe6698774a2adfc42c"
+    },
+    {
+      "path": "engine/shaders/render/portable/compose.shader",
+      "size": 149,
+      "sha256": "5c8b88c8b5f9398f774d791d71eae208b73b97e8b90b2be7dd5412a4eaff05b0"
+    },
+    {
+      "path": "engine/shaders/render/portable/copy.frag.glsl",
+      "size": 521,
+      "sha256": "ee25749082750ea034c90e3cb098cf5770152e0cfed45e81b2a526331db4e277"
+    },
+    {
+      "path": "engine/shaders/render/portable/copy.shader",
+      "size": 146,
+      "sha256": "45825f2217e87ed0689a814d79ee7f7a31798cda2d749d9e40c2bc3491cfd9b1"
+    },
+    {
+      "path": "engine/shaders/render/portable/copyDepth.frag.glsl",
+      "size": 533,
+      "sha256": "4c6262754e3909dfa709d6fca4323cd3a87bfb3cebf2cc2371a664a8b034cc83"
+    },
+    {
+      "path": "engine/shaders/render/portable/copyDepth.shader",
+      "size": 151,
+      "sha256": "c59838e25af25d335d9d7c1ea60c24e4e98c42b3db6e8108ebdb526422ade847"
+    },
+    {
+      "path": "engine/shaders/render/portable/ddgiSample.frag.glsl",
+      "size": 1127,
+      "sha256": "2a1f575c6210626d5e21344808784f969533b5e81bbc1590bab8889236e9f47a"
+    },
+    {
+      "path": "engine/shaders/render/portable/ddgiSample.shader",
+      "size": 154,
+      "sha256": "81e97f636902ee9f47ddd9050f089576159cfbfac64d69708f3a8e83f8b1b03d"
+    },
+    {
+      "path": "engine/shaders/render/portable/ddgiUpdate.comp.glsl",
+      "size": 2457,
+      "sha256": "bb4c7937e07d4775b359d8557425f5e430009cd3121867b6b0448584c7400139"
+    },
+    {
+      "path": "engine/shaders/render/portable/ddgiUpdate.shader",
+      "size": 89,
+      "sha256": "2e5a7a77d8946bbbfc0fa80d4c8da8854b3130cfb9c45d6a2533a20ef5c9eb34"
+    },
+    {
+      "path": "engine/shaders/render/portable/depthOfField.frag.glsl",
+      "size": 1850,
+      "sha256": "8a134de2270951ac12b947ee204550202f1dc6ec3e4471ac143f93a71959da32"
+    },
+    {
+      "path": "engine/shaders/render/portable/depthOfField.shader",
+      "size": 154,
+      "sha256": "ab53071168d159d55418e7c56db3c2dea5ea7b1cc251588837a22a3a4409d38e"
+    },
+    {
+      "path": "engine/shaders/render/portable/dilation.frag.glsl",
+      "size": 1311,
+      "sha256": "eb140cef5ed8912cc673b35345d4f9e0de4cee4df29b918fa4cf0f45cb127d43"
+    },
+    {
+      "path": "engine/shaders/render/portable/dilation.shader",
+      "size": 150,
+      "sha256": "3054beed38374585bcd7d344a964a02b848c7d6b6baba5dbdd98c53fd5b03535"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentBrdf.frag.glsl",
+      "size": 1700,
+      "sha256": "7d2ab58eee546a9de9730d5ba171bdaedbb20073e4406edd1057fd1584e4724e"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentBrdf.shader",
+      "size": 157,
+      "sha256": "d2f480395d0bc3e5c56bb29fd88597ec0fd6bd2db117d892e179fe59ef3ed759"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCapture.frag.glsl",
+      "size": 2739,
+      "sha256": "8a7b6bc86a8afafc7275b0b1309c990fdf1935e017ea9dc089a2f7c4730a5018"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCapture.shader",
+      "size": 160,
+      "sha256": "aa86faf22f087f2fb56bc1b2dd7d4a488dfe51eb2f1c9dace487bb0952f8ce41"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudCapture.frag.glsl",
+      "size": 7666,
+      "sha256": "1b3e65572d9a9925eab713cf39a6e7bd66aacf36d0a44cb0a95b9f40ff2f4b05"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudCapture.shader",
+      "size": 165,
+      "sha256": "33227ace45fa0c9a48ec682abeee8272bd36fb9e0c2888ccedb8eb9f5b629272"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudCompose.frag.glsl",
+      "size": 1176,
+      "sha256": "2720d295edda7ff52811101552ffc355edd32c010cbc7b10231662a0ef1bc669"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudCompose.shader",
+      "size": 165,
+      "sha256": "59a7fc6b742fe86b8eeea142d607163587ec5378c9e990df02257018d0d432e3"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudHistory.frag.glsl",
+      "size": 2535,
+      "sha256": "3ffe8d56a3ca9a5cea89db576ed8e0b86a13a796e2c631fed64c643eca467f5a"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudHistory.shader",
+      "size": 165,
+      "sha256": "b9dbe7517c100b026531a2f8fe8954af2024c4ad8bb3a1b0446bdc56fbfc0892"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudShadowMap.frag.glsl",
+      "size": 397,
+      "sha256": "bdaf25673337eb149f63ab4727f0c16dbd4a47369a145a54338ac2ceeb9ff7d2"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudShadowMap.shader",
+      "size": 163,
+      "sha256": "92dfe0c43ea3ae11c36950dfd4167ea62b76f894a2af8a570693daa512527ca8"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudTransparent.frag.glsl",
+      "size": 11995,
+      "sha256": "523e2b36ac20edfa355c792e31bf2f2ebd12f269c9bf0c50d5332b67bf00d06c"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudTransparent.shader",
+      "size": 280,
+      "sha256": "e45ba0595c3662a657b8dd9e7912c7cd038387d96725f3c2b285b9d372d91bdb"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudTransparent.vert.glsl",
+      "size": 3133,
+      "sha256": "d7da055f31dcd7c29dfdfe71a4a396e140dcbb0811113f22e4a17323af275284"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudTransparentCube.frag.glsl",
+      "size": 12699,
+      "sha256": "28b871a104f5dda5afbd49bf015f8224b4719ec5fb6859c29daeadc169f186d1"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudTransparentCube.shader",
+      "size": 194,
+      "sha256": "94fc8f07025b1ef49db4bdca6c0835e5f5145d16a441a4a494d2e7bf50b0d413"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudTransparentCube.vert.glsl",
+      "size": 3133,
+      "sha256": "d7da055f31dcd7c29dfdfe71a4a396e140dcbb0811113f22e4a17323af275284"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudTransparentLayered.frag.glsl",
+      "size": 12330,
+      "sha256": "a7e48be8c543572cf54b285cfd0515e00ba8e3087f5a0fdcf0e61068710d496d"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCloudTransparentLayered.shader",
+      "size": 225,
+      "sha256": "81a7b8d0606f02daa67a97d5ba9d5bc2cc2d1e3a25ee07e527b4d4b2c30c7ef0"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentClouds.frag.glsl",
+      "size": 6861,
+      "sha256": "ff24cc4ac0b94a1731357a49f1faf9e0e4992eb3bcdbba20cd26d62e7db6636b"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentClouds.shader",
+      "size": 159,
+      "sha256": "8692f7cf9c6a9b0d7aa211d8478032e46c26ab8c8f51761e8bb6ba834f6e41fe"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCompose.frag.glsl",
+      "size": 1422,
+      "sha256": "721c821f3799bb1fb6e9cf968849e0f547c6f0da24a56528fcc10ede357af690"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentCompose.shader",
+      "size": 160,
+      "sha256": "adf18dad55b766c7de966424bb71aea86e5d420a0be5c25b713732c2b99456b0"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentDetailNoise.comp.glsl",
+      "size": 3705,
+      "sha256": "38b69e7b3bf8070756b15061f4435d814179d6c39f8d9f31701d089beb7e9815"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentDetailNoise.shader",
+      "size": 99,
+      "sha256": "b388e8cd5bc4b1023ba89c74ea1d0f1f4f84db50d1231977ca8682c01522607b"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentIrradiance.frag.glsl",
+      "size": 2142,
+      "sha256": "fe3c40b0d1fe55a01eb12ad0c1858b4eab87580c6a6a71cba190b6279eddff16"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentIrradiance.shader",
+      "size": 163,
+      "sha256": "b1a8e95242973c93b6688f9d8addcc04d89f00a60863ce48aa668729dea605bb"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentLighting.frag.glsl",
+      "size": 6949,
+      "sha256": "fdb95ed58f962a4ab5e7d02fd42e25e0ab2175a82dcca62d4004aa7cd85dc7cc"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentLighting.shader",
+      "size": 161,
+      "sha256": "3c487305fa9e0fc46fa7901b876ab2a2358fd9dec91e25492f00534e81aaacf1"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentLightingCube.frag.glsl",
+      "size": 7733,
+      "sha256": "877020a584d52a3d6ac3dfaacdc5f42c6cb52cb78a29d356e5a36d5dac0a4172"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentLightingCube.shader",
+      "size": 165,
+      "sha256": "9b8262c1bad14cc78a50cff059b504391bedd4af2e5c03221709bf520f69a465"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentMaterialProbe.frag.glsl",
+      "size": 706,
+      "sha256": "f4aefc9dbc52ebe56cc47a8fcd704ae7262359ea8bd1276377f6fda4bb6320a8"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentMaterialProbe.shader",
+      "size": 166,
+      "sha256": "49f72e2fb836bbe72775f97f0c77118b6f0fea2c3f64e760b1a598ed78aced53"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentPrefilter.frag.glsl",
+      "size": 2626,
+      "sha256": "bba1f129d21077f41fe5cb115c802ac15894104e31e075b93ec54c9b6a8116d8"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentPrefilter.shader",
+      "size": 162,
+      "sha256": "9115d3fe3885415864d23faf4d3f251c421f34f44bd2a0199a06c22589e9e085"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentShapeNoise.comp.glsl",
+      "size": 3892,
+      "sha256": "509d1bc7c915b279fb19cdeb65f44a82b0916fce97b15a0a8519b29c191c9d89"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentShapeNoise.shader",
+      "size": 98,
+      "sha256": "3d72906b1a07743f55a7bbc20bd7006f03c1de986845fa5d5f6c4d03cd69fb12"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentSky.frag.glsl",
+      "size": 2145,
+      "sha256": "9299d5e56089befdd34a7256d28f42ddd46ce007daa2ca97343cecf922d81468"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentSky.shader",
+      "size": 156,
+      "sha256": "2689cfa7413c09e54053bbe37aad1ca912076d46a0f317122dfbac66c060e42c"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentTaa.frag.glsl",
+      "size": 53,
+      "sha256": "7faea08b6f46b810d191ae2f48935be05b42265b9f2eedaaa4938919df190fcf"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentTaa.shader",
+      "size": 156,
+      "sha256": "05bd328206008fa5007174eba51d8ece4dc69e19e0c437b6198a34c080ea6d2b"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentTransparent.frag.glsl",
+      "size": 6654,
+      "sha256": "72c7d9b01140987c6760f1f3f92b8ae49158e45983a20d14760a12e24980ad41"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentTransparent.shader",
+      "size": 265,
+      "sha256": "60aaf097b0d33ff0e2d1f23e5f550be77c41630f75e13a1176ab26a2ed5a3cf7"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentTransparent.vert.glsl",
+      "size": 3133,
+      "sha256": "d7da055f31dcd7c29dfdfe71a4a396e140dcbb0811113f22e4a17323af275284"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentTransparentCube.frag.glsl",
+      "size": 7438,
+      "sha256": "75314ab8cfba586f0f53fdf6a357bd2f3c9422c050331c04e49a1f190a81f7f1"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentTransparentCube.shader",
+      "size": 277,
+      "sha256": "76295ee853510884c97abf730ad0b0e234ea4862ebde0a5ef4393b393c4d28ad"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentTransparentCube.vert.glsl",
+      "size": 3133,
+      "sha256": "d7da055f31dcd7c29dfdfe71a4a396e140dcbb0811113f22e4a17323af275284"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentTransparentCubeLayered.frag.glsl",
+      "size": 7625,
+      "sha256": "fdf2fb9cbff806dfe3bfed52338383162abd14d20f528eb64ea439ba8ed52f77"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentTransparentCubeLayered.shader",
+      "size": 223,
+      "sha256": "32c6a2b2eb9a0384517509f8465276e0ee0606a6aef95cd704649ff3ebb459a8"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentTransparentLayered.frag.glsl",
+      "size": 6841,
+      "sha256": "ccc1b03fba156c146f98a927f3a2f0a8df6e44354868a7578090c8ee0c23527e"
+    },
+    {
+      "path": "engine/shaders/render/portable/environmentTransparentLayered.shader",
+      "size": 215,
+      "sha256": "fdbf6f96cf5fb673148cadac9e82e0d7d4725e252d07b1a058771dcaca64822c"
+    },
+    {
+      "path": "engine/shaders/render/portable/filmGrain.frag.glsl",
+      "size": 1021,
+      "sha256": "ec41aa11ff536a27a2b5f11a1d9b656cc54254dff7bb95927c58d141f81b4e19"
+    },
+    {
+      "path": "engine/shaders/render/portable/filmGrain.shader",
+      "size": 151,
+      "sha256": "6241f61398ad808c2bece5a032c572865b16974ca760a4c6fe2117cb54e98f1c"
+    },
+    {
+      "path": "engine/shaders/render/portable/fog.frag.glsl",
+      "size": 1571,
+      "sha256": "a23a547f53d51ff2397d96d28b06f5f7663c6a12396f294f324b1c93fa96b465"
+    },
+    {
+      "path": "engine/shaders/render/portable/fog.shader",
+      "size": 145,
+      "sha256": "a31e4d45a9c3396fdaad472cf05ec3d73648ff175ac5e0e44580a5ebc87a8221"
+    },
+    {
+      "path": "engine/shaders/render/portable/forwardTransparent.frag.glsl",
+      "size": 5924,
+      "sha256": "8e9638064f5e84c693461ca8da1e069a5021c6245790e899fbab86c72cd7e625"
+    },
+    {
+      "path": "engine/shaders/render/portable/forwardTransparent.shader",
+      "size": 253,
+      "sha256": "3fa007d3ee4276558971576cc44c04de097b196f425516b7b37e748019321f6f"
+    },
+    {
+      "path": "engine/shaders/render/portable/forwardTransparent.vert.glsl",
+      "size": 3133,
+      "sha256": "d7da055f31dcd7c29dfdfe71a4a396e140dcbb0811113f22e4a17323af275284"
+    },
+    {
+      "path": "engine/shaders/render/portable/forwardTransparentCube.frag.glsl",
+      "size": 6708,
+      "sha256": "125f0a00f88d336ed97fad904bddbf3da828a3f4da0a1d7d431768fcbb526c92"
+    },
+    {
+      "path": "engine/shaders/render/portable/forwardTransparentCube.shader",
+      "size": 265,
+      "sha256": "a556b1ec920b5b88cc02be76702ac34ec9cbca769ff5bfe362b4754fb3476129"
+    },
+    {
+      "path": "engine/shaders/render/portable/forwardTransparentCube.vert.glsl",
+      "size": 3133,
+      "sha256": "d7da055f31dcd7c29dfdfe71a4a396e140dcbb0811113f22e4a17323af275284"
+    },
+    {
+      "path": "engine/shaders/render/portable/forwardTransparentCubeLayered.frag.glsl",
+      "size": 6894,
+      "sha256": "5a56e011ff9f0d51bf1c7344d0146ec25d15e144fa85ff756c92542e4eef4214"
+    },
+    {
+      "path": "engine/shaders/render/portable/forwardTransparentCubeLayered.shader",
+      "size": 215,
+      "sha256": "2696adcdcf669864bb0c765d2bd3a72f6cdcc76d57f35171c6bd1293c02aac56"
+    },
+    {
+      "path": "engine/shaders/render/portable/forwardTransparentLayered.frag.glsl",
+      "size": 6110,
+      "sha256": "da03b2773fdc23383f2b78888b4dc6d3637ea6f30d0aedfb350820b7b717573f"
+    },
+    {
+      "path": "engine/shaders/render/portable/forwardTransparentLayered.shader",
+      "size": 207,
+      "sha256": "ca906976cf0e14bba99a71da5738020d28f2fc00f04638665cfbd8146fa68274"
+    },
+    {
+      "path": "engine/shaders/render/portable/frameGenMotion.frag.glsl",
+      "size": 498,
+      "sha256": "6142bd26a2017bb51ed05e4068e8e768257b553ff02b892208b3acf5ba50979d"
+    },
+    {
+      "path": "engine/shaders/render/portable/frameGenMotion.shader",
+      "size": 156,
+      "sha256": "1b75e86bbc5ed7ec7d55491624740dfa7642940f9aa0d5501cc7450569901331"
+    },
+    {
+      "path": "engine/shaders/render/portable/frameGenPresent.frag.glsl",
+      "size": 577,
+      "sha256": "6bec4a97f5138b141236db71a86185974451abf625a0f27b009923e6c90c70f3"
+    },
+    {
+      "path": "engine/shaders/render/portable/frameGenPresent.shader",
+      "size": 157,
+      "sha256": "dd34c5d3156e7bafae39e15ea518aeacd46773d3ab2eb1b09d899fc8f7e99290"
+    },
+    {
+      "path": "engine/shaders/render/portable/fullscreen.vert.glsl",
+      "size": 398,
+      "sha256": "c8ba0f6f3627efd12b9ac306a73b5405ab785f33d246b25ce93d52be6b2d7879"
+    },
+    {
+      "path": "engine/shaders/render/portable/fxaa.frag.glsl",
+      "size": 1083,
+      "sha256": "81711e19dfe8f0527a7fca74326b19244c9de6fcbdde1a39619acbf2b0203c80"
+    },
+    {
+      "path": "engine/shaders/render/portable/fxaa.shader",
+      "size": 146,
+      "sha256": "173c71e48b74b1cad23effe16c7d8a9cb74611961a3063891cdc2d691d4f861e"
+    },
+    {
+      "path": "engine/shaders/render/portable/gbuffer.frag.glsl",
+      "size": 1853,
+      "sha256": "386b3021f0d4364edaa88604077b14d0bc0a1dbcc5086a0e19cfca711e325a4e"
+    },
+    {
+      "path": "engine/shaders/render/portable/gbuffer.shader",
+      "size": 220,
+      "sha256": "f764794f7756c0ce0986fef61664de1ed5027655b40c032216447aab6ba30e6a"
+    },
+    {
+      "path": "engine/shaders/render/portable/gbuffer.vert.glsl",
+      "size": 3572,
+      "sha256": "51d1e01b465041a0218909ad62b9ab697b1da41cc5076c3741ec928fc72a3f20"
+    },
+    {
+      "path": "engine/shaders/render/portable/gbufferEmissive.frag.glsl",
+      "size": 2208,
+      "sha256": "3d6429d408434779710b1059ec23951de9a7ec1028f45ecb8528cc1f62acdaa0"
+    },
+    {
+      "path": "engine/shaders/render/portable/gbufferEmissive.shader",
+      "size": 150,
+      "sha256": "4fd5c00a3d5944570d64217a6b63aaf66ab6d781fb59e299b96450629086aeec"
+    },
+    {
+      "path": "engine/shaders/render/portable/gbufferLayered.frag.glsl",
+      "size": 2095,
+      "sha256": "fb99788769904e5a69b989f60c7cf376a03bd53ca5dbcea94f84c07cabe786a2"
+    },
+    {
+      "path": "engine/shaders/render/portable/gbufferLayered.shader",
+      "size": 185,
+      "sha256": "6c2b12fd9ad76804c44aaa1d594d3c576488cf67dea65624fb4dda2106ed197a"
+    },
+    {
+      "path": "engine/shaders/render/portable/godRayCompose.frag.glsl",
+      "size": 915,
+      "sha256": "baba1e9b89a99fcff22b3357940edc101893bff7cc997cca821459b0ab4fa81f"
+    },
+    {
+      "path": "engine/shaders/render/portable/godRayCompose.shader",
+      "size": 155,
+      "sha256": "c2cb7bb515ebcd1e4f906438daecf073f85fa85473498b17afcc57cff6488b42"
+    },
+    {
+      "path": "engine/shaders/render/portable/godRayIntegrate.frag.glsl",
+      "size": 1904,
+      "sha256": "bfd07c6cba3fbe910d0a27cd2120b49964fb92564569f0ba59a7fe994bc868a0"
+    },
+    {
+      "path": "engine/shaders/render/portable/godRayIntegrate.shader",
+      "size": 157,
+      "sha256": "46eb881c7253dc2c48871d180c1c46b754a1f11bad066aed0f7e7aaa4616a782"
+    },
+    {
+      "path": "engine/shaders/render/portable/godRayMask.frag.glsl",
+      "size": 1909,
+      "sha256": "29a4d67ebf2b973ab92ba861351a778ffe5bf313bf42ba1182eb9b737ddbd763"
+    },
+    {
+      "path": "engine/shaders/render/portable/godRayMask.shader",
+      "size": 152,
+      "sha256": "d44b82dbb50ef6f2971445eb521365d43a7abd02b486651902b0035754419181"
+    },
+    {
+      "path": "engine/shaders/render/portable/godRays.frag.glsl",
+      "size": 2191,
+      "sha256": "b64d038b2d4ddce86cd54ab35593768942e0f4fcd40395cd4b845849585d1f96"
+    },
+    {
+      "path": "engine/shaders/render/portable/godRays.shader",
+      "size": 149,
+      "sha256": "ab3b4c2269acee40485a5ae96dfd99bd5bf37b06524e3ce6bf43ba69685d8aec"
+    },
+    {
+      "path": "engine/shaders/render/portable/gui.frag.glsl",
+      "size": 211,
+      "sha256": "af456cee117f91adb3ff9c9f65b08c24d82a0d5d95f03908f7e5ef6d482c8b23"
+    },
+    {
+      "path": "engine/shaders/render/portable/gui.shader",
+      "size": 138,
+      "sha256": "9618c74f9974b72e18d3138814b1cda79c4003e10bf2cc28df0a8bb7fb31394f"
+    },
+    {
+      "path": "engine/shaders/render/portable/gui.vert.glsl",
+      "size": 377,
+      "sha256": "18227e3dd16a7da391fe2e58022cde63ac788a39473834017c7b828e2fc608b7"
+    },
+    {
+      "path": "engine/shaders/render/portable/lighting.frag.glsl",
+      "size": 5845,
+      "sha256": "520dfc93eeee940a07439765f51369fb91fca46284052e426e8ee1a3f1c368e3"
+    },
+    {
+      "path": "engine/shaders/render/portable/lighting.shader",
+      "size": 150,
+      "sha256": "1070801c0e54eeda0f05cc5f5de859ea9dcc0197d3d94be7f474f9b0b4a7bdab"
+    },
+    {
+      "path": "engine/shaders/render/portable/lightingCube.frag.glsl",
+      "size": 6629,
+      "sha256": "fc0e3cdc8885eb0e9c4a2d83347bbdbb5f686c51d6b4bfe39309b7eb2c16ba4e"
+    },
+    {
+      "path": "engine/shaders/render/portable/lightingCube.shader",
+      "size": 154,
+      "sha256": "8e67188006e74d2a89e84624040c958093031b3323ddbdcd6f65717302a5dd61"
+    },
+    {
+      "path": "engine/shaders/render/portable/motionBlur.frag.glsl",
+      "size": 1514,
+      "sha256": "ae01bf1d010cb5503f428938aeb75dea5c1325058d92ea9a590b4a68ca85a651"
+    },
+    {
+      "path": "engine/shaders/render/portable/motionBlur.shader",
+      "size": 152,
+      "sha256": "6dfe10728cbf892bc5f6ebcac278544f8ec008fce68c972b7e6dfc517d89d1f7"
+    },
+    {
+      "path": "engine/shaders/render/portable/outline.frag.glsl",
+      "size": 1191,
+      "sha256": "48e0e5e06fd89eb2bbc373d34f964421b89faf9e51a366ca9aaa14714fe62324"
+    },
+    {
+      "path": "engine/shaders/render/portable/outline.shader",
+      "size": 149,
+      "sha256": "d7fcb260f527995e064e52ad41df27d97c68f1202cb6431bd505e1df020ddf9a"
+    },
+    {
+      "path": "engine/shaders/render/portable/particleMesh.shader",
+      "size": 143,
+      "sha256": "cc0cdef62e41a88744a0395cd547cf37f882ef13fdf4c088b1221ec0f2590a0e"
+    },
+    {
+      "path": "engine/shaders/render/portable/particleMesh.vert.glsl",
+      "size": 748,
+      "sha256": "a5b1f711bdd2fdf3e0ed4c675a091bda06dc49c0ad307d10963f483d2c63e42b"
+    },
+    {
+      "path": "engine/shaders/render/portable/particles.shader",
+      "size": 140,
+      "sha256": "83d779462357c59690536676e40a260fc1bbdd89cca93b6025ab353e6d34eb89"
+    },
+    {
+      "path": "engine/shaders/render/portable/particles.vert.glsl",
+      "size": 670,
+      "sha256": "0767678ef56810ec2c6d993fa3d8f1b704435fc2553c023b5f103495205ff29f"
+    },
+    {
+      "path": "engine/shaders/render/portable/pixelize.frag.glsl",
+      "size": 900,
+      "sha256": "4e07f6a8e8f1c4acf623926bb7c45900717f20fc0bff757b17aa766d17d784c7"
+    },
+    {
+      "path": "engine/shaders/render/portable/pixelize.shader",
+      "size": 150,
+      "sha256": "c11cb89047dda136daf042c60d9173723125472782f10cde6d26ad5123298548"
+    },
+    {
+      "path": "engine/shaders/render/portable/pointShadowCube.frag.glsl",
+      "size": 946,
+      "sha256": "c1ef4726394a9a21cac3e6b21997908fb6006f333395af4fa39bfc16a1844fa2"
+    },
+    {
+      "path": "engine/shaders/render/portable/pointShadowCube.shader",
+      "size": 244,
+      "sha256": "ba8f3d9bf5a2257d116e49daca8914bf9326f127f9c3acc10535a2deae759307"
+    },
+    {
+      "path": "engine/shaders/render/portable/pointShadowCube.vert.glsl",
+      "size": 3281,
+      "sha256": "e9b8b4c8f6773a2075ec06f578717853d18090c5ed36717e08cc355364b922e5"
+    },
+    {
+      "path": "engine/shaders/render/portable/pointShadowCubeLayered.frag.glsl",
+      "size": 1004,
+      "sha256": "265337f0c281f7132d931cb1644067ac737744c3106c47599ebe0880473a420c"
+    },
+    {
+      "path": "engine/shaders/render/portable/pointShadowCubeLayered.shader",
+      "size": 201,
+      "sha256": "4f2972ee13ce542b80424ca68f9c81144eb488a0b9e6dc3c0e55eaaeefd2232d"
+    },
+    {
+      "path": "engine/shaders/render/portable/pointShadowProbe.frag.glsl",
+      "size": 2246,
+      "sha256": "c59f89f23ba49500cc686d9b151c3a6f5669e67280199a10342c1db486cf479d"
+    },
+    {
+      "path": "engine/shaders/render/portable/pointShadowProbe.shader",
+      "size": 158,
+      "sha256": "16bd1bf2f8df02c9b4ad6efd5fd8cfb5640fbe5c1d057351584ecee9afd85603"
+    },
+    {
+      "path": "engine/shaders/render/portable/posterize.frag.glsl",
+      "size": 1017,
+      "sha256": "e9a2fd561cff54fb0296dad35185f03f942549103f3dfdd1c835b552c9a96040"
+    },
+    {
+      "path": "engine/shaders/render/portable/posterize.shader",
+      "size": 151,
+      "sha256": "cf722e144038c8c39676f1cda0dcea264217d8c0860c5d07aefe1fc94abdb0bd"
+    },
+    {
+      "path": "engine/shaders/render/portable/rayAccumulate.frag.glsl",
+      "size": 637,
+      "sha256": "211dba85070d23351cd2d51206077f2040af13936769524639db5d26a0adc629"
+    },
+    {
+      "path": "engine/shaders/render/portable/rayAccumulate.shader",
+      "size": 157,
+      "sha256": "b887551d3cd0bc912e3621a00d18b50e3bbf775ad1b22f927e436ba320903267"
+    },
+    {
+      "path": "engine/shaders/render/portable/rayDenoise.frag.glsl",
+      "size": 3217,
+      "sha256": "cdee9669150ea4a300b2791ab12500aef90344c27ebfdf83442037945c4c7f59"
+    },
+    {
+      "path": "engine/shaders/render/portable/rayDenoise.shader",
+      "size": 154,
+      "sha256": "3aa3240873997df301d39f36658dd779024410f785c2fc1b5aee870d46bf0b90"
+    },
+    {
+      "path": "engine/shaders/render/portable/rayHybridCompose.frag.glsl",
+      "size": 2083,
+      "sha256": "0a5e882417d94c543c07968304b07b791dcd2583848d601fecf3da1f2a64e087"
+    },
+    {
+      "path": "engine/shaders/render/portable/rayHybridCompose.shader",
+      "size": 160,
+      "sha256": "d9e398e6ddb3324795ed9d80d52cfcde0bfe386616c808ab55b62a39dc43fe85"
+    },
+    {
+      "path": "engine/shaders/render/portable/rayReflectionFallback.frag.glsl",
+      "size": 327,
+      "sha256": "79cfdac51babd076631d6e9d1159f17f1bc0101f9ace93eff6c4d1b10cc23482"
+    },
+    {
+      "path": "engine/shaders/render/portable/rayReflectionFallback.shader",
+      "size": 165,
+      "sha256": "d4f0754c3916745d56a59d2cf19f9684c6d13d7e8603057cd401be610417271c"
+    },
+    {
+      "path": "engine/shaders/render/portable/sdfText.frag.glsl",
+      "size": 1121,
+      "sha256": "3cdfd0db1a12f3051eceb96ca649df21d09bd65519a54daa255e044ab9b35d86"
+    },
+    {
+      "path": "engine/shaders/render/portable/sdfText.shader",
+      "size": 122,
+      "sha256": "759314a3a106909ebe97d30dec428de98ec3ef2478904f50eb4d4459d91d788a"
+    },
+    {
+      "path": "engine/shaders/render/portable/sdfText.vert.glsl",
+      "size": 527,
+      "sha256": "db38a34d82d17216b6f84a26c12f31de674f93a79169b1b683b19be30ff25b9a"
+    },
+    {
+      "path": "engine/shaders/render/portable/shadow.frag.glsl",
+      "size": 567,
+      "sha256": "0c18a3bdc59ac46a860f1fadccddfca770f75422973501db618dbbe16201e7a8"
+    },
+    {
+      "path": "engine/shaders/render/portable/shadow.shader",
+      "size": 217,
+      "sha256": "0b87eae06d630e9bf64fd33d6de626c33509585bdf43bdba575cfb7405c678a6"
+    },
+    {
+      "path": "engine/shaders/render/portable/shadow.vert.glsl",
+      "size": 3223,
+      "sha256": "8e39a277db9effc8add54bd80c722b56a688b2adbfd935d599dc46f494855016"
+    },
+    {
+      "path": "engine/shaders/render/portable/shadowLayered.frag.glsl",
+      "size": 625,
+      "sha256": "c1537359262fd52b585a2bffd18ef8346986e52a09c3022dbbd0992e1a6c6f48"
+    },
+    {
+      "path": "engine/shaders/render/portable/shadowLayered.shader",
+      "size": 183,
+      "sha256": "1e3eaed6f51a50db952900cdfb746a1667f57697ebe9e73229ba741e78cf4393"
+    },
+    {
+      "path": "engine/shaders/render/portable/sharpen.frag.glsl",
+      "size": 936,
+      "sha256": "e963fc437a206de70a567d7b8bbec9e1222d09be111061e7828a46879271486c"
+    },
+    {
+      "path": "engine/shaders/render/portable/sharpen.shader",
+      "size": 149,
+      "sha256": "76a57521e70ffc6e6ce1029514111981eb44860b16163f760a45dc06779b4450"
+    },
+    {
+      "path": "engine/shaders/render/portable/ssao.frag.glsl",
+      "size": 2221,
+      "sha256": "267cd4aabc0db8698ef427c9c9c481cf1717c88df860007f7ed2cd4f03b47bf3"
+    },
+    {
+      "path": "engine/shaders/render/portable/ssao.shader",
+      "size": 146,
+      "sha256": "d29c36fae38df74188080898549f98b9d9c531556a14a268dfea82b716406497"
+    },
+    {
+      "path": "engine/shaders/render/portable/ssgi.frag.glsl",
+      "size": 2134,
+      "sha256": "e387263028c57df89c52035b64bfcf672c398e44cb80ff660b70c85c5c6eb33b"
+    },
+    {
+      "path": "engine/shaders/render/portable/ssgi.shader",
+      "size": 146,
+      "sha256": "a785cc6de6f6d69318aa63205233f5ef05e2dc849f213703ad9ec7462a99c8bd"
+    },
+    {
+      "path": "engine/shaders/render/portable/ssr.frag.glsl",
+      "size": 2099,
+      "sha256": "1a8dd7ade190ce10bb137471493097dc2a67c95ffb1a9d975890d1bc6e2ba896"
+    },
+    {
+      "path": "engine/shaders/render/portable/ssr.shader",
+      "size": 145,
+      "sha256": "538667c6ebf438c5a51517cef599cd171291e4ca86f83ada99f9ab027e7c29d8"
+    },
+    {
+      "path": "engine/shaders/render/portable/sss.frag.glsl",
+      "size": 2263,
+      "sha256": "98ed041e0786ac16a6747e70699e901e07210fae0ff81896917d24fee5a8e657"
+    },
+    {
+      "path": "engine/shaders/render/portable/sss.shader",
+      "size": 145,
+      "sha256": "33ed6160b85ee71cfce499787198fde4f8cacdbd5442ab240b7938fa60e1a032"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedCloudSurface.frag.glsl",
+      "size": 8431,
+      "sha256": "f27f61404a30786728445d8461851c05d01d5fe933a6e29977ec0ad41698a924"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedCloudSurface.shader",
+      "size": 162,
+      "sha256": "16b0350bdf4a76e68a9bae06c38f3c8d69a5fdb62b583736c3da793f39f666a7"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedDirect.frag.glsl",
+      "size": 5898,
+      "sha256": "72ab1c85b1837ff520c76cb3bb8f6430e99e67f7fe74982007bfa4b6807d2edc"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedDirect.shader",
+      "size": 156,
+      "sha256": "74920b5d7ae33836eb085286ee95dd4694147a9d4022bedc8dab485093346590"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedDirectRt.frag.glsl",
+      "size": 6002,
+      "sha256": "3d616f568b42f1e8e09c06b71f2e9e2dc64fa1f274a34c8c1742103fbf3f90bf"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedDirectRt.shader",
+      "size": 160,
+      "sha256": "df1a0cc2f72f7b2993d44b76bd7cdfe9a37617f3a41e1a4b04dcb52860ccec3a"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedExtinction.frag.glsl",
+      "size": 1528,
+      "sha256": "1ed1c1c032f75c8d0514c8e80bb6be376a707c0f518caefb23bc4690a105d353"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedExtinction.shader",
+      "size": 160,
+      "sha256": "e3f4af8b1b0fc586b6d51f43913576363b7f948f1f5459903446618dd9fb8f4a"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedFog.frag.glsl",
+      "size": 2264,
+      "sha256": "43f92a31772a2be2dbc0e38ea0ac530d87fcaa83786be4deefd191d4ac074cee"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedFog.shader",
+      "size": 153,
+      "sha256": "59ecc08808635f402fcfe513d42057547db6b9b94ccc2a96d1d33d7e278bb7ac"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedIndirect.frag.glsl",
+      "size": 3538,
+      "sha256": "a69f9abf47089f15355a04f4437bde2fc974ab401295f964bc0c5e876f68d575"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedIndirect.shader",
+      "size": 158,
+      "sha256": "121a9553a0750c90d4f959e726302de3b474b3b62eb5baafa7f090ed56a46d3a"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedLightingCompose.frag.glsl",
+      "size": 667,
+      "sha256": "a54b8db522162e861bf9de4949af355be33fc268413a85319bb8e7aa7d89dcce"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedLightingCompose.shader",
+      "size": 165,
+      "sha256": "fcb7a6d0eba5d49b1166e2ac52dc84a5fa4e06ead476518120f1e76bc6c734cd"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedLightingComposeEmissive.frag.glsl",
+      "size": 853,
+      "sha256": "04a8aeebf536335561b12e66cd33652e9049025e5565dd2a86e448a12cb7a4bd"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedLightingComposeEmissive.shader",
+      "size": 169,
+      "sha256": "d63f32b44763e7a715ca91f5640a3a532561e890ce1e215bd44011d427c63224"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedPeel.frag.glsl",
+      "size": 1793,
+      "sha256": "34ce211b1b7ce0ba1354e7b20a5bd5068c1121469d13cd60045a1a2c67508712"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedPeel.shader",
+      "size": 235,
+      "sha256": "4cee3ced29714ddc5a894653e7299e74df9441701d4542f152ff4fa72de96312"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedPeel.vert.glsl",
+      "size": 3133,
+      "sha256": "d7da055f31dcd7c29dfdfe71a4a396e140dcbb0811113f22e4a17323af275284"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedPeelLayered.frag.glsl",
+      "size": 1992,
+      "sha256": "e170486f0227b8607ccf0d822180b112a011c6f1477cf12e566e5b7e85713ce0"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedPeelLayered.shader",
+      "size": 195,
+      "sha256": "8c21b6f96979b04766389c862bfe09e9f2e2af8f3c7be59ec9f058023d96b920"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedPointProbe.frag.glsl",
+      "size": 4578,
+      "sha256": "78de33fea3915aec4246f291ce012b65383a8ea91560eb8b8fb126f8f45eb3f8"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedPointProbe.shader",
+      "size": 160,
+      "sha256": "aff2b3ea307a5fd88d979d6c711ed7fe1615adc7e74e5cfcb4d635a7b018cf11"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedProjectedShadow.frag.glsl",
+      "size": 359,
+      "sha256": "495cf49e3fd22267bd132ba7a1afaa736b20b6c219a86c2c8b4433576bf7bc06"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedProjectedShadow.shader",
+      "size": 178,
+      "sha256": "43923a7758b7accdb2fb0a84a653cb7b24fcc24d921d7ec7107fcbb49454be5f"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedProjectedShadow.vert.glsl",
+      "size": 2122,
+      "sha256": "d4a95f424b60a61101e886d341ce83e45a699e60ddca599499a35515cb440a7a"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedSurface.frag.glsl",
+      "size": 3101,
+      "sha256": "1af595d1c976a9f66b382bbb93b4abc0eb8d86ad763fba0453dc8a027565f30e"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedSurface.shader",
+      "size": 157,
+      "sha256": "a053759f0f4d39916f51acb942204625a686e229b99298f9751a012dc6f637ad"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedTransparentCompose2.frag.glsl",
+      "size": 1135,
+      "sha256": "1ec553bb72a5f5d8b3c638fe73d1f884bbab5572d3638784f88313767c3da484"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedTransparentCompose2.shader",
+      "size": 169,
+      "sha256": "0e17f5d88f3e579cc78395911f13847f1ba89c457dad2227e8ca2fda472aa252"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedTransparentCompose4.frag.glsl",
+      "size": 1467,
+      "sha256": "ccefc174e1e6ee90dcee7e5dc2361b3bf1669bd90bbbfc3c9bc157ffabfd6483"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedTransparentCompose4.shader",
+      "size": 169,
+      "sha256": "5462c116b8664eb8a3122564fa8c9681f5ca269871073e5c918986202906e1f0"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedVolume.frag.glsl",
+      "size": 6185,
+      "sha256": "3dcdec2e35b924914fc65c1a3439eb2013f844f5ac4790002c7db9db29f64fa8"
+    },
+    {
+      "path": "engine/shaders/render/portable/streamedVolume.shader",
+      "size": 156,
+      "sha256": "981b602826beb8721992634a4d2333916579c3ad2f9d68c261ba42d1fa6b4743"
+    },
+    {
+      "path": "engine/shaders/render/portable/taa.frag.glsl",
+      "size": 2098,
+      "sha256": "1b0b6491ce77d26e119714792581988d4bc894c3c499bb4345cfc5ffa635bb25"
+    },
+    {
+      "path": "engine/shaders/render/portable/taa.shader",
+      "size": 145,
+      "sha256": "d920e283876326d34e68bb4eccfdd7f4ba1e378a3c8a86e1e1a946ec0a99e9bf"
+    },
+    {
+      "path": "engine/shaders/render/portable/text.frag.glsl",
+      "size": 230,
+      "sha256": "9b3e1dceab664839fd7e9af6884ee4571b63bff79b94e5da8ae820be76922bfa"
+    },
+    {
+      "path": "engine/shaders/render/portable/text.shader",
+      "size": 140,
+      "sha256": "80fead8bb3bf3c6c949b1d133d1489e1facdd6577b55e62500629ea6c53a46a8"
+    },
+    {
+      "path": "engine/shaders/render/portable/text.vert.glsl",
+      "size": 377,
+      "sha256": "18227e3dd16a7da391fe2e58022cde63ac788a39473834017c7b828e2fc608b7"
+    },
+    {
+      "path": "engine/shaders/render/portable/tonemap.frag.glsl",
+      "size": 871,
+      "sha256": "5f13fde942c041169516a4125f39f2a6b8f9ddd217f46f1e7d9eaf313c264edf"
+    },
+    {
+      "path": "engine/shaders/render/portable/tonemap.shader",
+      "size": 149,
+      "sha256": "651c8a7678f950ef984ed9271192f2359e75484246a0dee097f6acab19cca046"
+    },
+    {
+      "path": "engine/shaders/render/portable/upscaleReactive.frag.glsl",
+      "size": 582,
+      "sha256": "c85a2787f938939d779a77fe51c12de23252ceebd212c7f6abd69c5d18f6f450"
+    },
+    {
+      "path": "engine/shaders/render/portable/upscaleReactive.shader",
+      "size": 157,
+      "sha256": "1099ab30345c7024c282b6877e9d4e197f603b6df07c093f16842ac1f0e9cb02"
+    },
+    {
+      "path": "engine/shaders/render/portable/upscaleVelocity.frag.glsl",
+      "size": 1241,
+      "sha256": "47ffb6f627806208fb75aaff74643ea5819045b1c6ea4d11ffcf6f891abc977e"
+    },
+    {
+      "path": "engine/shaders/render/portable/upscaleVelocity.shader",
+      "size": 157,
+      "sha256": "8da163eb5e761afe5dd92c922f19ecee001d621d99eed61d2d912c38fd6cfd3f"
+    },
+    {
+      "path": "engine/shaders/render/portable/vector.frag.glsl",
+      "size": 243,
+      "sha256": "7a989f90ef87c087587361325413f242a99786bc1c69c1d3f632c6c4c4248339"
+    },
+    {
+      "path": "engine/shaders/render/portable/vector.shader",
+      "size": 117,
+      "sha256": "455ef013c4015d69e496415b19bcaf2b6790ef3768750f0e36b686b270703989"
+    },
+    {
+      "path": "engine/shaders/render/portable/vegetation.shader",
+      "size": 178,
+      "sha256": "d0f96b516249b4bfee5eb906b6ed2b1d7fc84827a6845ff82ef8dfbfbe3896ab"
+    },
+    {
+      "path": "engine/shaders/render/portable/vignette.frag.glsl",
+      "size": 680,
+      "sha256": "ba45a7b47a6ac100320cb589c1b37ce9f9e42f076cb482e6ff89b17dfda54f15"
+    },
+    {
+      "path": "engine/shaders/render/portable/vignette.shader",
+      "size": 150,
+      "sha256": "38d635b3191db19047df7e63b2875e8ec20e4a981d1c89a169c46702841ed4da"
+    },
+    {
+      "path": "engine/shaders/render/portable/volumetricCompose.frag.glsl",
+      "size": 2080,
+      "sha256": "be055dc49ed49d284a188c4f37df0ad69f8070720b3fa7f42cfc64e784d9da57"
+    },
+    {
+      "path": "engine/shaders/render/portable/volumetricCompose.shader",
+      "size": 159,
+      "sha256": "e4b306e86a8fe224e3ecfdc6eedecef2167389633c4e382f07625e860e9c4f92"
+    },
+    {
+      "path": "engine/shaders/render/portable/volumetricCube.frag.glsl",
+      "size": 6282,
+      "sha256": "1aa08f337d2fb78e901e3e4b0f5652b52ff43d6c5ce0601eb53574c090ccdee2"
+    },
+    {
+      "path": "engine/shaders/render/portable/volumetricCube.shader",
+      "size": 156,
+      "sha256": "874f7b214a107ee0af6c5440ecbf2d0688e91c24b79f364d0b0c85ef6ae53baa"
+    },
+    {
+      "path": "engine/shaders/render/portable/volumetricLight.frag.glsl",
+      "size": 4355,
+      "sha256": "bfb1b0f3da60fcdde2dc97a6638cb83bb2b2a1fa2104bdf13ca412a027d76e47"
+    },
+    {
+      "path": "engine/shaders/render/portable/volumetricLight.shader",
+      "size": 157,
+      "sha256": "9a7161cda5efb184f4576a8d35f471f81d4eb0a2d9aca8c53e26d975783c6a22"
+    },
+    {
+      "path": "engine/shaders/render/posterize.frag.glsl",
+      "size": 1007,
+      "sha256": "e5afcaadd23ef63940c3116093e0c705c201a3cc3420eef938591971d25431d7"
+    },
+    {
+      "path": "engine/shaders/render/posterize.shader",
+      "size": 134,
+      "sha256": "6ad0ff61a50fefaf262b641011fb3c22688adbe48398b7d0b468a98a3bb274a1"
+    },
+    {
+      "path": "engine/shaders/render/posterize.vert.glsl",
+      "size": 227,
+      "sha256": "d958a31c43fa78049b8393e6452948c03d295097d9cb04cb6361d1bfbc553a33"
+    },
+    {
+      "path": "engine/shaders/render/prefilterShader.frag.glsl",
+      "size": 3193,
+      "sha256": "7922ecdccb95c8b70a24e94913de909a7eeff31a697f3056acdbbb4e7c2e66af"
+    },
+    {
+      "path": "engine/shaders/render/prefilterShader.shader",
+      "size": 146,
+      "sha256": "01dcae7d4ba5ced5b75de83a9ec1e3669448cd9440dbc027e443f21759c629a8"
+    },
+    {
+      "path": "engine/shaders/render/prefilterShader.vert.glsl",
+      "size": 411,
+      "sha256": "be2676489dafce2aa4c38a7f319ca77b5af158b87f8ae21f4a0cd96aa9a2bc4d"
+    },
+    {
+      "path": "engine/shaders/render/renderToScreen.frag.glsl",
+      "size": 323,
+      "sha256": "41d6d8bedc575c5f6208105bbd2149be84b1dc691a19ec7ff4a5d26fca6503f1"
+    },
+    {
+      "path": "engine/shaders/render/renderToScreen.shader",
+      "size": 144,
+      "sha256": "b17af2d4bb50719a0b05a13d6d2901b32773830663c4a9b25a2a81cc74eb7c9b"
+    },
+    {
+      "path": "engine/shaders/render/renderToScreen.vert.glsl",
+      "size": 275,
+      "sha256": "78f4fcbaad83815d4bc53ae2c2ca77e71e33e7cf07a4e439f546d7cafaadcb1b"
+    },
+    {
+      "path": "engine/shaders/render/sharpen.frag.glsl",
+      "size": 936,
+      "sha256": "e963fc437a206de70a567d7b8bbec9e1222d09be111061e7828a46879271486c"
+    },
+    {
+      "path": "engine/shaders/render/sharpen.shader",
+      "size": 130,
+      "sha256": "1f53d1ddd31d48009fa18bb748d28047ed1dcf133ec49d89b3df8058b7dea692"
+    },
+    {
+      "path": "engine/shaders/render/sharpen.vert.glsl",
+      "size": 227,
+      "sha256": "d958a31c43fa78049b8393e6452948c03d295097d9cb04cb6361d1bfbc553a33"
+    },
+    {
+      "path": "engine/shaders/render/spotShadow.frag.glsl",
+      "size": 200,
+      "sha256": "29ac1a06d9dfda35f457cbf3654b807533dfe265a0e7664b94dc00958b30c5b4"
+    },
+    {
+      "path": "engine/shaders/render/spotShadow.shader",
+      "size": 136,
+      "sha256": "b3f612d9320a6c035beba7a5516b480deb82fb200425de69ea138e406f8d4fb4"
+    },
+    {
+      "path": "engine/shaders/render/spotShadow.vert.glsl",
+      "size": 860,
+      "sha256": "9c73b3669a36c37061541ffee0290d82e07c15e15c387cd3a1aec4324799e2a1"
+    },
+    {
+      "path": "engine/shaders/render/ssao.frag.glsl",
+      "size": 1645,
+      "sha256": "664ff0f81e3b048ab072ba218b71154dff245becf0ca6a0e7468578233568b07"
+    },
+    {
+      "path": "engine/shaders/render/ssao.shader",
+      "size": 124,
+      "sha256": "4ce34d0af3467b9f0e6115c821d4e11cc0dab61c71ac3f06d3fa7698f42355dd"
+    },
+    {
+      "path": "engine/shaders/render/ssao.vert.glsl",
+      "size": 388,
+      "sha256": "d97200d1af5e10be95ee33a95e3c3156546384a6ed6df4e099261fe22dcd55cf"
+    },
+    {
+      "path": "engine/shaders/render/ssaoBlur.frag.glsl",
+      "size": 579,
+      "sha256": "1c03810e64245b55a5b43935cd050c148fc971e86b64075fa01de79875f18b48"
+    },
+    {
+      "path": "engine/shaders/render/ssaoBlur.shader",
+      "size": 132,
+      "sha256": "414b22ffa80f4ef22e78bec8400153aa8822ba255c7fdc2070fdd6f4ee9c6ff0"
+    },
+    {
+      "path": "engine/shaders/render/ssaoBlur.vert.glsl",
+      "size": 277,
+      "sha256": "69937586172398666409c1bb2524ba80c7f1863e9dc0262f3d4229532585e27b"
+    },
+    {
+      "path": "engine/shaders/render/ssgi.frag.glsl",
+      "size": 3891,
+      "sha256": "d727614a6e51268a57a0b09821c48bc6d9befe6ad4d6dd58b9445da5c5e89ada"
+    },
+    {
+      "path": "engine/shaders/render/ssgi.shader",
+      "size": 124,
+      "sha256": "cbf5cfcabc6b4240bb2ac105d491f96efce7439b8e3819e5eb7aca4f76e6d674"
+    },
+    {
+      "path": "engine/shaders/render/ssgi.vert.glsl",
+      "size": 405,
+      "sha256": "57f56c9b3aa0c88ff60cf0d0e59c196bad47b9b02e02c78a4b7dd65bbb337871"
+    },
+    {
+      "path": "engine/shaders/render/ssgiApply.frag.glsl",
+      "size": 976,
+      "sha256": "0f293053966792b5f2b0512b925ac68b5e5b07ba0b4c53fccd4fc829d7e7a244"
+    },
+    {
+      "path": "engine/shaders/render/ssgiApply.shader",
+      "size": 134,
+      "sha256": "b27f95b9fe386582c864f6f2b8c1d20cb76631a8dcbce66e4f67f22fecf0aec1"
+    },
+    {
+      "path": "engine/shaders/render/ssgiApply.vert.glsl",
+      "size": 278,
+      "sha256": "72a9bbfb92aa998c302c190a7114615cf8d00bac27a4cd351ab9a09c6cfbd67c"
+    },
+    {
+      "path": "engine/shaders/render/ssr.frag.glsl",
+      "size": 2973,
+      "sha256": "89aae9309d353566f892d1b49557733e58855611a5f0d9e05c89b858e400140b"
+    },
+    {
+      "path": "engine/shaders/render/ssr.shader",
+      "size": 122,
+      "sha256": "41a8ba1c7af810980b1ceae541675b40e8135d2133c0b137403e994d37f40f3c"
+    },
+    {
+      "path": "engine/shaders/render/ssr.vert.glsl",
+      "size": 406,
+      "sha256": "5b8bbaad528619893176722cb85a56b09b5d54392bf64d8fbc7d514a6fcf85d0"
+    },
+    {
+      "path": "engine/shaders/render/ssrApply.frag.glsl",
+      "size": 1438,
+      "sha256": "fa18690991d44c477c98de7101cad750b06c3bee502cb016aa768a7cdb58ce9e"
+    },
+    {
+      "path": "engine/shaders/render/ssrApply.shader",
+      "size": 132,
+      "sha256": "f0bf60ae3b7a61877fce2bfeb7924f68763ace4d5afd634f27c7844ccbd9d974"
+    },
+    {
+      "path": "engine/shaders/render/ssrApply.vert.glsl",
+      "size": 277,
+      "sha256": "bfc30838e72a35be32cd7b9fa01e8dbca39419edf12ac6c59732f39bdec4dde4"
+    },
+    {
+      "path": "engine/shaders/render/sss.frag.glsl",
+      "size": 4252,
+      "sha256": "df8a681f98a7bdf1d8ebcd65877032a2e09f13031c430ff0c96f0c6337597992"
+    },
+    {
+      "path": "engine/shaders/render/sss.shader",
+      "size": 122,
+      "sha256": "7210a2f6f6f7a574272d187d24580c8a62ccb76c007377c3d8e2c3bbd7ab8f25"
+    },
+    {
+      "path": "engine/shaders/render/sss.vert.glsl",
+      "size": 362,
+      "sha256": "7211d54319c6988da2cf536a0b3d679beba5fa4751054de3433a8fb5a7585494"
+    },
+    {
+      "path": "engine/shaders/render/sssApply.frag.glsl",
+      "size": 802,
+      "sha256": "895009e12b8128c924fbded7520cb91ed3497c5bbd33b73c34b1a96bb962a1df"
+    },
+    {
+      "path": "engine/shaders/render/sssApply.shader",
+      "size": 132,
+      "sha256": "71a4b749f462ba897a5edcd874e3c8ebb297173aa7e52f7398b4daff7a1873d7"
+    },
+    {
+      "path": "engine/shaders/render/sssApply.vert.glsl",
+      "size": 277,
+      "sha256": "2dfbcf863013f214bdf1f8a1fe22056ffc9b48e05d0bc4fff9dc102c689e3aad"
+    },
+    {
+      "path": "engine/shaders/render/standard.frag.glsl",
+      "size": 27793,
+      "sha256": "0a190d6d5df9c9ccfdd476a0c80230f6f75b67a5c59644c8f30c858cbf473146"
+    },
+    {
+      "path": "engine/shaders/render/standard.shader",
+      "size": 132,
+      "sha256": "f6d403ff77b188d4ca2ebb8020bd1b258c50bf2f6522c2126a8400029f420485"
+    },
+    {
+      "path": "engine/shaders/render/standard.vert.glsl",
+      "size": 4890,
+      "sha256": "49dfdd1f4d695ea5f47ca5a59b184c8f867b97d5142b1929b24e761234441a11"
+    },
+    {
+      "path": "engine/shaders/render/standardLines.frag.glsl",
+      "size": 217,
+      "sha256": "703c1f073ba8c8157f6c93ecea08520adec8795b232496fbac82cc097720a57b"
+    },
+    {
+      "path": "engine/shaders/render/standardLines.shader",
+      "size": 142,
+      "sha256": "1563162f08a2abc76ff8a1de8bac2ccaec7dc79b134ddbc646c71bb3e79800eb"
+    },
+    {
+      "path": "engine/shaders/render/standardLines.vert.glsl",
+      "size": 1637,
+      "sha256": "a88dbcb6ffeef4ffe34642a12946890bf820ca5a502d34e7a8f933ec7517d478"
+    },
+    {
+      "path": "engine/shaders/render/standardPBR.frag.glsl",
+      "size": 28467,
+      "sha256": "0cfc2342d59be959cd681ffa9f94781cc323f11383b6bb2202d651f6574ecbf8"
+    },
+    {
+      "path": "engine/shaders/render/standardPBR.shader",
+      "size": 138,
+      "sha256": "73f73317f47b529c6a8755c6b515c02ea4dac05250681c57f8f75085dda5500c"
+    },
+    {
+      "path": "engine/shaders/render/standardPBR.vert.glsl",
+      "size": 4900,
+      "sha256": "1eee253286241db328c7d3e38c42a7e45eb6d71e90164f286839c481e07d0d38"
+    },
+    {
+      "path": "engine/shaders/render/taa.frag.glsl",
+      "size": 6752,
+      "sha256": "19d9251f374ef37e1975ea7b81de584496b36f55bd24e5e7112d35137303902a"
+    },
+    {
+      "path": "engine/shaders/render/taa.shader",
+      "size": 122,
+      "sha256": "3e2fa622d4698c6dac9589f30a3632baaff6b7b8e88c718dc18125a320977a22"
+    },
+    {
+      "path": "engine/shaders/render/taa.vert.glsl",
+      "size": 480,
+      "sha256": "075092ac21fe99277ff593f8b327137a22f1e4fdc0ab1afd13f3f4d7484ef96e"
+    },
+    {
+      "path": "engine/shaders/render/vignette.frag.glsl",
+      "size": 680,
+      "sha256": "ba45a7b47a6ac100320cb589c1b37ce9f9e42f076cb482e6ff89b17dfda54f15"
+    },
+    {
+      "path": "engine/shaders/render/vignette.shader",
+      "size": 132,
+      "sha256": "14997f4b782a0ab9dd6f74df50ab4298788e3e17e6a681c8616022ee2f8f379e"
+    },
+    {
+      "path": "engine/shaders/render/vignette.vert.glsl",
+      "size": 342,
+      "sha256": "a80c9298e79782b51e9a6a9bb9855dd23a1cf6d449073226bdbc5ede050e1c08"
+    },
+    {
+      "path": "engine/shaders/render/volumetric/clouds.frag.glsl",
+      "size": 13241,
+      "sha256": "ab764324255733395be666adae77442968cb9e57de9eeaf46168107b5f365f91"
+    },
+    {
+      "path": "engine/shaders/render/volumetric/clouds.shader",
+      "size": 150,
+      "sha256": "49b807607894e1979971c0dc034ead827150a2bccf7f932ffaf65df4414df461"
+    },
+    {
+      "path": "engine/shaders/render/volumetric/clouds.vert.glsl",
+      "size": 1090,
+      "sha256": "1c1aa9fdb6303f7e928c9fc917bce3df79ca6548b3ed166e7c455b76077698f8"
+    },
+    {
+      "path": "engine/shaders/render/volumetric/detail_noise.comp.glsl",
+      "size": 3561,
+      "sha256": "11f8abb897e6778e3c68b8e752112f0496f1ee73103002005f9bb5c953af70a6"
+    },
+    {
+      "path": "engine/shaders/render/volumetric/detail_noise.shader",
+      "size": 93,
+      "sha256": "20f175cc273237e9b7c7b45b848e33636a5655b198e46036216be8edc4ad8efd"
+    },
+    {
+      "path": "engine/shaders/render/volumetric/shape_noise.comp.glsl",
+      "size": 3748,
+      "sha256": "087ef87429a2c8e9d99b6a5e99119e43c9a9e62094c358681e715cfd419c65b9"
+    },
+    {
+      "path": "engine/shaders/render/volumetric/shape_noise.shader",
+      "size": 92,
+      "sha256": "37c4d844b3990de4ad5e49ec17d93060f4f17018925c570cea1f5c084a744ee4"
+    },
+    {
+      "path": "engine/shaders/render/volumetric/triangle.shader",
+      "size": 88,
+      "sha256": "58a5364720e74942c12a57b58cdcf881b14f27febb889f593776f5cf41181255"
+    },
+    {
+      "path": "engine/shaders/render/volumetric/triangle.vert.glsl",
+      "size": 637,
+      "sha256": "86f76161dded0e974ccd3e041a7735923f8d4a757ef6e97cb199bda239db1ed3"
+    },
+    {
+      "path": "engine/shaders/render/volumetricLight.frag.glsl",
+      "size": 5344,
+      "sha256": "45f59532fc7e895848437f9f47216ac92246e9e844b19cb7bea7b1467d7a7493"
+    },
+    {
+      "path": "engine/shaders/render/volumetricLight.shader",
+      "size": 146,
+      "sha256": "26c55deae41c7e383241c7e4919366fb2869f718ce35ed1b905fbe846aee281b"
+    },
+    {
+      "path": "engine/shaders/render/volumetricLight.vert.glsl",
+      "size": 1418,
+      "sha256": "664d1e98858ea54fd9436f4fc74584adec7589d4d2a3b673317fa5c5c7a752bd"
+    },
+    {
+      "path": "engine/shaders/render/volumetricLight2.frag.glsl",
+      "size": 5345,
+      "sha256": "d760014e62da2f05da36093aba30b813ff09d631fef40be3aea3d20746a15a99"
+    },
+    {
+      "path": "engine/shaders/render/volumetricLight2.shader",
+      "size": 148,
+      "sha256": "8c6943a4816a3242e2436f11b7370a424253518d8e0b7d820b7a7da2941a5f0a"
+    },
+    {
+      "path": "engine/shaders/render/volumetricLight2.vert.glsl",
+      "size": 1418,
+      "sha256": "664d1e98858ea54fd9436f4fc74584adec7589d4d2a3b673317fa5c5c7a752bd"
+    },
+    {
+      "path": "engine/shaders/render/vrCamera.frag.glsl",
+      "size": 660,
+      "sha256": "a757f6548227ebed49c8ed69db12dc04cd8251525b08e75bb5951c9579671d3d"
+    },
+    {
+      "path": "engine/shaders/render/vrCamera.shader",
+      "size": 132,
+      "sha256": "40c0907617c4f39890367c1432d26a027c2607353365b004895f113fe4570691"
+    },
+    {
+      "path": "engine/shaders/render/vrCamera.vert.glsl",
+      "size": 275,
+      "sha256": "a174e1a1ff95a552c4239206319d8d4af3904a9928d2c94e4f8b7d23dd7a76d7"
+    },
+    {
+      "path": "engine/shaders/standart.frag.glsl",
+      "size": 8476,
+      "sha256": "23a14cff968d609d29d9f08ad2a7c284215fca5f877b3c29bda360b5f37d9194"
+    },
+    {
+      "path": "engine/shaders/standart.shader",
+      "size": 110,
+      "sha256": "78ccff0361b2ddfc8ca95788c56a052bb1a174c45e59627e139ad28745d848c6"
+    },
+    {
+      "path": "engine/shaders/standart.vert.glsl",
+      "size": 2256,
+      "sha256": "aba883c4a3b914fd23414644b9bc771f75f12b3faca288a403b221487d06b605"
+    },
+    {
+      "path": "engine/shaders/virtualGeometry/vgClusterCull.comp.glsl",
+      "size": 9076,
+      "sha256": "02cd6ec0a8818b2d2e8dd8e73aceaee876f1543a698b25d9e851cebda4841ae9"
+    },
+    {
+      "path": "engine/shaders/virtualGeometry/vgClusterCull.shader",
+      "size": 87,
+      "sha256": "d02edb7d5c83cf3a5dd96b00b486f77e9bcd40238c5f80e1aa8d3327f0075fac"
+    },
+    {
+      "path": "engine/shaders/virtualGeometry/vgClusterCullPost.comp.glsl",
+      "size": 3685,
+      "sha256": "4801a938ef375e4779cdddec4c1b8b800bed74f57de9761d66d8493ba4b7ab54"
+    },
+    {
+      "path": "engine/shaders/virtualGeometry/vgClusterCullPost.shader",
+      "size": 96,
+      "sha256": "e64bc7f280ac85a4edad69c7bf66892daf76e35648e720e9cda1289bed2281f4"
+    },
+    {
+      "path": "engine/shaders/virtualGeometry/vgCullCommon.glsl",
+      "size": 10627,
+      "sha256": "f257d9dbbe98c63e0d8272a0005dc90d4a9fa99bf3548478e5ae3f8742d80e1d"
+    },
+    {
+      "path": "engine/shaders/virtualGeometry/vgGBuffer.frag.glsl",
+      "size": 2008,
+      "sha256": "7aecaa725a1db37e5331269d8b93b05dd0c14de6964ff99cb64ceb02f311c39a"
+    },
+    {
+      "path": "engine/shaders/virtualGeometry/vgGBuffer.mat",
+      "size": 528,
+      "sha256": "c7b277e2d1d57e7d2dcd85ef685811056f1cd1981f4ee9803aa703787a210630"
+    },
+    {
+      "path": "engine/shaders/virtualGeometry/vgGBuffer.shader",
+      "size": 146,
+      "sha256": "65dbe7dfede484cedb3cf5db55dff2d0a41f08672b148fc0aa49a3c617be9cae"
+    },
+    {
+      "path": "engine/shaders/virtualGeometry/vgGBuffer.vert.glsl",
+      "size": 4008,
+      "sha256": "c861fe1d960b67b1f8dabe449bb637be85cc60b9c6955751693fca227f506718"
+    },
+    {
+      "path": "engine/shaders/virtualGeometry/vgInstanceCull.comp.glsl",
+      "size": 3166,
+      "sha256": "ee89b1976b4c2eaaaa62ca2e0c02c2703ed1fc00095f279d634b3e542d68a84a"
+    },
+    {
+      "path": "engine/shaders/virtualGeometry/vgInstanceCull.shader",
+      "size": 88,
+      "sha256": "336750c53309aecc42611f3d5ca64d8b095be39e846f4292c413cd1463247426"
+    },
+    {
+      "path": "engine/shaders/virtualGeometry/vgInstanceCullPost.comp.glsl",
+      "size": 2081,
+      "sha256": "e5d7d8f2f16bca8eedca2388923a3ab1ab070e70d0eaeee6a9d4091399ee1973"
+    },
+    {
+      "path": "engine/shaders/virtualGeometry/vgInstanceCullPost.shader",
+      "size": 97,
+      "sha256": "132372cbd2630fab92016130bcb4c6bdccf3473cd5c8c831172683195c84a9a3"
+    },
+    {
+      "path": "engine/shaders/vulkan/testShader.frag",
+      "size": 414,
+      "sha256": "a0e04809fd42c43f65aef4938f8bd9df797f3bd8e6a07b36e1ffadc3dfe991fd"
+    },
+    {
+      "path": "engine/shaders/vulkan/testShader.vert",
+      "size": 423,
+      "sha256": "08a6b8bd993e9352dbdaa486c48f1a6c4d4b49996363d042239007be98f4d018"
+    },
+    {
+      "path": "engine/shaders/weather/precipitation.frag.glsl",
+      "size": 1771,
+      "sha256": "8753652ea67e29064cc8a7b4b906113481b29e0c2f402712f2064e583db1cd34"
+    },
+    {
+      "path": "engine/shaders/weather/precipitation.shader",
+      "size": 142,
+      "sha256": "e06e81fd416fc4b948b677713eb7b965a3f902795f72dbd7c9ee12906a4416d6"
+    },
+    {
+      "path": "engine/shaders/weather/taa.frag.glsl",
+      "size": 90,
+      "sha256": "b786dc55f317809cdfc8014416a6d308c3ab99774d3e061695fa39e4ea307aa3"
+    },
+    {
+      "path": "engine/shaders/weather/taa.shader",
+      "size": 133,
+      "sha256": "644cc954f0212c91867b2db95a3ed130ba97118c84a38ea9d8c066303ecd0da3"
+    },
+    {
+      "path": "engine/textures/Debug/Editor/cube-white.png",
+      "size": 1334,
+      "sha256": "488edd539ea5031c518dea7be95b292ae47f156bc2b7764d2f267d5ed1a12dd7"
+    },
+    {
+      "path": "engine/textures/Debug/Editor/file-white.png",
+      "size": 971,
+      "sha256": "3e9925b635b18adf80fc6f79da779a0d8e708805474ba4c0716630339324d6c7"
+    },
+    {
+      "path": "engine/textures/Debug/Editor/folder-white.png",
+      "size": 744,
+      "sha256": "16dbdb953ea323010e4007936685864f5937c47a26a4e4fb1fdfb2be3f1be2ba"
+    },
+    {
+      "path": "engine/textures/Debug/Editor/font-white.png",
+      "size": 1371,
+      "sha256": "18e412db84cffa8c6f567a52e5560f22894ad61fd107bca143cba41f50ca3d1a"
+    },
+    {
+      "path": "engine/textures/Debug/Editor/image-white.png",
+      "size": 1163,
+      "sha256": "10ef3fca0a3cd470e582e29ee787fb66c69cde919a37d07031f5cf85e6c35649"
+    },
+    {
+      "path": "engine/textures/bricks.jpg",
+      "size": 51914,
+      "sha256": "bf0dc8bc512299748569236f6f4e416925561aa2cd60bb3fd276a7135a11903a"
+    },
+    {
+      "path": "engine/textures/color-noise.png",
+      "size": 61897,
+      "sha256": "553adaa71ee41923917ff00cb3fbf14a7f80257ef49b4c654a2b9bfe9c9b1136"
+    },
+    {
+      "path": "engine/textures/curlNoise.png",
+      "size": 38491,
+      "sha256": "e00e57e78d0f141b4a453871110f844413f87d1a663f8219a23c654b2482b806"
+    },
+    {
+      "path": "engine/textures/default.png",
+      "size": 198,
+      "sha256": "456c41dc340b7fb8ea7c321edc5c5549b1f59d87710b97bd3583a784301d57bd"
+    },
+    {
+      "path": "engine/textures/environment/curl.texture",
+      "size": 193867,
+      "sha256": "1f39345a0f38f48cd89eb98f620edb4f54507d33e823e51470356f22d99cce40"
+    },
+    {
+      "path": "engine/textures/environment/test.hdr",
+      "size": 8239,
+      "sha256": "6c398bc132889c1bf8f5d3e664ed0a6c9abd80b3e3da6096d0c0a61a82ac7107"
+    },
+    {
+      "path": "engine/textures/environment/test.texture",
+      "size": 191,
+      "sha256": "6d956c837e7bbf292d526b124277946aa76fab8703954d691c736b2b9f163a59"
+    },
+    {
+      "path": "engine/textures/lighting-demo/cutout.texture",
+      "size": 2642,
+      "sha256": "ea347374c9f0b14fd1415da8282387e8284f2851cc02bf4509b11914b2c9a0ba"
+    },
+    {
+      "path": "engine/textures/lighting-demo/legend.texture",
+      "size": 191,
+      "sha256": "58c368c92131e5e2179a510477434754380c4d74d48f7b8805c8fca9c3878a9f"
+    },
+    {
+      "path": "engine/textures/pbr-color.texture",
+      "size": 247,
+      "sha256": "67102605dc830696d61223ccd3c7ad1d4ba65db852a45601c20932794c458f3e"
+    },
+    {
+      "path": "engine/textures/pbr-high.texture",
+      "size": 248,
+      "sha256": "d8b39a6814b947c5ec7da93e91179f9ab7a791811e7614411a323d814c0b7ec9"
+    },
+    {
+      "path": "engine/textures/pbr-low.texture",
+      "size": 242,
+      "sha256": "c6e4114f6c0304a1e4a4d94d123f4659ffaf272c5f1a22a6c15f4e8e9598ac0e"
+    },
+    {
+      "path": "engine/textures/pbr-mask.texture",
+      "size": 245,
+      "sha256": "7b2aeb96091ff97331593683054c87d0cf4fa236d9da38deede1b9ff8449e26f"
+    },
+    {
+      "path": "engine/textures/pbr-normal.texture",
+      "size": 248,
+      "sha256": "6d37b5cfd639d0703de815a3145afb850885481733b5fcc7567a3d884b2e95b3"
+    },
+    {
+      "path": "engine/textures/pbr-orm.texture",
+      "size": 247,
+      "sha256": "f8ad597bb67cd7626e13313d11e37070a214e2d5ac0b8986da4afa38e17d56b0"
+    },
+    {
+      "path": "engine/textures/render-smoke/checker.ppm",
+      "size": 203,
+      "sha256": "67e79ad852e26fce7393532ab3b25e55fceff405e88cbe0d266a7cdb3b6cdb70"
+    },
+    {
+      "path": "engine/textures/render-smoke/white.texture",
+      "size": 194,
+      "sha256": "d1f7d599861736c345c34d60a9dc39d5ee4b9073891e7a17478fe01035f11421"
+    },
+    {
+      "path": "engine/textures/surface/forest.ppm",
+      "size": 3085,
+      "sha256": "cb4c441e24731cd1ab3055fe6e3c85c4b5edcaf53c904e4b46b46254d9226349"
+    },
+    {
+      "path": "engine/textures/surface/garden/bark-height.png",
+      "size": 81372,
+      "sha256": "29ede077be2686ab1f54db22a1ea16783f493c52b8a24a5b8f5f5889ec318173"
+    },
+    {
+      "path": "engine/textures/surface/garden/bark-normal.png",
+      "size": 150639,
+      "sha256": "56255288fc95a7106f3667d7bd2a234e3af95f7142b25948c24e5181583a2e7b"
+    },
+    {
+      "path": "engine/textures/surface/garden/bark.png",
+      "size": 96954,
+      "sha256": "c26ba4acf08b49680a80dcdb9fbe20ceb3059ba95975ae33d96abe3733b00ca5"
+    },
+    {
+      "path": "engine/textures/surface/garden/grass-normal.png",
+      "size": 23111,
+      "sha256": "14406b39ba62526d1de1c29f3abc656ad9b81aa61697fa4f26a02d27b34e01e8"
+    },
+    {
+      "path": "engine/textures/surface/garden/grass.png",
+      "size": 25035,
+      "sha256": "d368e69b30db1a5938987dffa8482d68c26b9784e80ed3439a016b417972d991"
+    },
+    {
+      "path": "engine/textures/surface/garden/leaf-normal.png",
+      "size": 57833,
+      "sha256": "c7eaacb489ffc2b3c3d59bd4ddced700f6b9963c1bb98549e5ba415b550d4387"
+    },
+    {
+      "path": "engine/textures/surface/garden/leaf.png",
+      "size": 79966,
+      "sha256": "1916fe3d9ee96c62f17eedf8fc34d1a008aff94deac9f29dfce295d4917c8ad0"
+    },
+    {
+      "path": "engine/textures/surface/garden/meadow-height.png",
+      "size": 72554,
+      "sha256": "0022bd252fa04d05b0612fbe10675b94227e6960bea13058ac65a55692345d26"
+    },
+    {
+      "path": "engine/textures/surface/garden/meadow-normal.png",
+      "size": 137278,
+      "sha256": "90c6cb2d2c38b9446a7404d0d65bb7c753f2f62b996de63c24dd92bed6efd1c9"
+    },
+    {
+      "path": "engine/textures/surface/garden/meadow.png",
+      "size": 69576,
+      "sha256": "8d759e40a1175b7bbba6c81527b6f70a9b84034dd55ff2069cdf7797a96195cc"
+    },
+    {
+      "path": "engine/textures/surface/garden/rock-height.png",
+      "size": 72554,
+      "sha256": "0022bd252fa04d05b0612fbe10675b94227e6960bea13058ac65a55692345d26"
+    },
+    {
+      "path": "engine/textures/surface/garden/rock-normal.png",
+      "size": 137278,
+      "sha256": "90c6cb2d2c38b9446a7404d0d65bb7c753f2f62b996de63c24dd92bed6efd1c9"
+    },
+    {
+      "path": "engine/textures/surface/garden/rock.png",
+      "size": 83119,
+      "sha256": "96ee5bda2638a1bfbd73d4885b2b6533325e8bdc4578ac70ba567e98c8a731eb"
+    },
+    {
+      "path": "engine/textures/surface/garden/sand-height.png",
+      "size": 72554,
+      "sha256": "0022bd252fa04d05b0612fbe10675b94227e6960bea13058ac65a55692345d26"
+    },
+    {
+      "path": "engine/textures/surface/garden/sand-normal.png",
+      "size": 137278,
+      "sha256": "90c6cb2d2c38b9446a7404d0d65bb7c753f2f62b996de63c24dd92bed6efd1c9"
+    },
+    {
+      "path": "engine/textures/surface/garden/sand.png",
+      "size": 90608,
+      "sha256": "9c277a14236364afbf3fde8c75a20e06bdb70991b8bed4fbb6c4c7216a9b84eb"
+    },
+    {
+      "path": "engine/textures/surface/garden/soil-height.png",
+      "size": 72554,
+      "sha256": "0022bd252fa04d05b0612fbe10675b94227e6960bea13058ac65a55692345d26"
+    },
+    {
+      "path": "engine/textures/surface/garden/soil-normal.png",
+      "size": 137278,
+      "sha256": "90c6cb2d2c38b9446a7404d0d65bb7c753f2f62b996de63c24dd92bed6efd1c9"
+    },
+    {
+      "path": "engine/textures/surface/garden/soil.png",
+      "size": 83161,
+      "sha256": "30344c242e62b1a989848ae42681b6ff08209119e4a7da5ea194c117f6e3d5fb"
+    },
+    {
+      "path": "engine/textures/surface/ground.ppm",
+      "size": 3085,
+      "sha256": "c75956ef3f9a8c77c0cf04c9832217cd2e0c2283969b917aba92782bc2d965c3"
+    },
+    {
+      "path": "engine/textures/surface/rock.ppm",
+      "size": 3085,
+      "sha256": "b0ca115ff38549a77bd78d70a84aba6f06dec07e77505a49a505b1645d1af622"
+    },
+    {
+      "path": "engine/textures/surface/sand.ppm",
+      "size": 3085,
+      "sha256": "6201803ed328f572952a874ab04725bd3afbd83d40dec25e339050e730046fdb"
+    },
+    {
+      "path": "engine/textures/surface/snow.ppm",
+      "size": 3085,
+      "sha256": "a5dd00307c3ea978f357b19aa1d88b12003f444d24a892abb4216d4df4d9735f"
+    },
+    {
+      "path": "engine/textures/texture.jpg",
+      "size": 77120,
+      "sha256": "663a43377a9d3b42a1925a17313b12e339b146d219a62c4c07a56c89032858bb"
+    }
+  ]
+}

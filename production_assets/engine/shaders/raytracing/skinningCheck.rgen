@@ -1,0 +1,36 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : require
+#include "surface.glsl"
+#include "frame.glsl"
+layout(location=0) rayPayloadEXT SurfacePayload hit;
+layout(set=1,binding=0) uniform accelerationStructureEXT SceneAS;
+layout(set=2,binding=0,rgba32f) uniform image2D Result;
+layout(set=2,binding=1) uniform sampler2D RasterDepth;
+layout(set=2,binding=2) uniform sampler2D RasterNormals;
+layout(set=2,binding=3,rgba32f) uniform image2D AttributeResult;
+layout(set=2,binding=4) uniform sampler2D RasterAlbedo;
+layout(set=2,binding=5) uniform sampler2D RasterRoughness;
+void main() {
+    ivec2 pixel=ivec2(gl_LaunchIDEXT.xy),size=imageSize(Result);
+    if(any(greaterThanEqual(pixel,size)))return;
+    vec2 uv=(vec2(pixel)+.5)/vec2(size);
+    vec3 origin=engine_UBO.ViewPos,direction=normalize(worldPosition(uv,1)-origin);
+    traceRayEXT(SceneAS,gl_RayFlagsNoneEXT,255,0,0,0,origin,.001,direction,10000,0);
+    float depth=texelFetch(RasterDepth,pixel,0).r;
+    float raster=depth<1?length(worldPosition(uv,depth)-origin):-1;
+    float error=hit.T<0&&raster<0?0:hit.T<0||raster<0?1:abs(hit.T-raster)/max(raster,.001);
+    imageStore(Result,pixel,vec4(error,hit.T,raster,raster>=0?1:0));
+    vec4 attributes=vec4(0);
+    if(raster>=0&&hit.T>=0&&error<.001) {
+        vec4 albedo=texelFetch(RasterAlbedo,pixel,0);
+        vec3 difference=abs(hit.Albedo-albedo.rgb);
+        // Closest-hit face-forwards normals for double-sided ray intersections.
+        vec3 rasterNormal=normalize(texelFetch(RasterNormals,pixel,0).xyz);
+        if(dot(rasterNormal,direction)>0)rasterNormal=-rasterNormal;
+        attributes=vec4(1-clamp(dot(hit.N,rasterNormal),-1,1),
+            max(difference.r,max(difference.g,difference.b)),
+            max(abs(hit.Metallic-albedo.a),abs(hit.Roughness-texelFetch(RasterRoughness,pixel,0).r)),1);
+    }
+    imageStore(AttributeResult,pixel,attributes);
+}

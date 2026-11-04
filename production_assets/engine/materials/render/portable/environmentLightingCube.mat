@@ -1,0 +1,24 @@
+{
+  "ShaderPath": "/shaders/render/portable/environmentLightingCube.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOAmbient": {
+      "X": 0.03,
+      "Y": 0.03,
+      "Z": 0.03
+    },
+    "data_UBOBackground": {
+      "X": 0.02,
+      "Y": 0.025,
+      "Z": 0.035
+    },
+    "point_UBOBias": 0.025,
+    "point_UBONormalBias": 0.035,
+    "point_UBORadius": 0.04,
+    "point_UBOSamples": 12
+  }
+}

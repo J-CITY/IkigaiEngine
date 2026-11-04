@@ -1,0 +1,16 @@
+{
+  "Width": 1,
+  "Height": 1,
+  "Channels": 4,
+  "TexType": "TEXTURE_2D",
+  "PixelType": "RGBA_INT",
+  "ColorData": [
+    0,
+    0,
+    0,
+    255
+  ],
+  "UseMipmap": false,
+  "MinFilter": "NEAREST",
+  "MagFilter": "NEAREST"
+}

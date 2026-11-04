@@ -1,0 +1,15 @@
+{
+  "ShaderPath": "/shaders/render/deferredLightningPbr.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "FrontfaceCulling": false,
+  "Blendable": false,
+  "ColorWriting": true,
+  "GpuInstances": 1,
+  "IsDeferred": false,
+  "Uniforms": {
+    "data_UBOu_UseIbl": false,
+    "data_UBOengine_UseSSAO": true
+  }
+}
