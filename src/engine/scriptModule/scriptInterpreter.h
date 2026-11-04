@@ -33,6 +33,8 @@ private:
 	sol::table sharedBindings {};
 	std::string scriptRootFolder;
 	std::vector<UTILS::WeakPtr<IKIGAI::ECS::ScriptComponent>> scripts;
+	EVENT::EventListener mCreatedListener {};
+	EVENT::EventListener mDestroyedListener {};
 	bool checkOk = false;
 };
 }

@@ -22,11 +22,18 @@ ScriptInterpreter::ScriptInterpreter(const std::string& scriptRootFolder)
 	: scriptRootFolder(scriptRootFolder) {
 	createLuaContextAndBindGlobals();
 
-	IKIGAI::ECS::ScriptComponentEvents::createdEvent.add(std::bind(&ScriptInterpreter::consider, this, std::placeholders::_1));
-	IKIGAI::ECS::ScriptComponentEvents::destroyedEvent.add(std::bind(&ScriptInterpreter::unconsider, this, std::placeholders::_1));
+	mCreatedListener = ECS::ScriptComponentEvents::createdEvent.add(std::bind(&ScriptInterpreter::consider, this, std::placeholders::_1));
+	try {
+		mDestroyedListener = ECS::ScriptComponentEvents::destroyedEvent.add(std::bind(&ScriptInterpreter::unconsider, this, std::placeholders::_1));
+	} catch (...) {
+		ECS::ScriptComponentEvents::createdEvent.removeListener(mCreatedListener);
+		throw;
+	}
 }
 
 ScriptInterpreter::~ScriptInterpreter() {
+	ECS::ScriptComponentEvents::createdEvent.removeListener(mCreatedListener);
+	ECS::ScriptComponentEvents::destroyedEvent.removeListener(mDestroyedListener);
 	destroyLuaContext();
 }
 
@@ -63,8 +70,9 @@ void ScriptInterpreter::destroyLuaContext() {
 			unregisterScript(*s);
 		}
 
-		luaState.reset();
+		// Registry references must be released while their Lua state is still alive.
 		sharedBindings = sol::lua_nil;
+		luaState.reset();
 		checkOk = false;
 	}
 }

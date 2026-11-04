@@ -152,26 +152,43 @@ void FileWatcher::workerLoop() {
 }
 
 void FileWatcher::applyUpdate() {
+	decltype(m_events) events;
 	{
 		const std::lock_guard lock(m_mutex);
-		for (auto& e : m_events) {
-			m_filesCallbacks[e.first].run(e.second);
-		}
-		m_events.clear();
+		events.swap(m_events);
 	}
+	for (const auto& [path, status] : events) {
+		std::optional<EVENT::Event<FileStatus>> callbacks;
+		{
+			const std::lock_guard lock(m_mutex);
+			if (const auto found = m_filesCallbacks.find(path); found != m_filesCallbacks.end()) {
+				callbacks.emplace(found->second);
+			}
+		}
+		// Reload callbacks may remove and re-register their own watches.
+		if (callbacks) {
+			callbacks->run(status);
+		}
+	}
+	decltype(deferredEvents) pending;
 	{
 		const std::lock_guard lock(m_mutexDeferred);
-		while (!deferredEvents.empty()) {
-			auto e = deferredEvents.front();
-			deferredEvents.pop();
+		pending.swap(deferredEvents);
+	}
+	while (!pending.empty()) {
+		auto event = std::move(pending.front());
+		pending.pop();
+		if (event.action == QueueEvent::Action::ADD) {
+			EVENT::Event<FileStatus>::ID listener {};
+			{
+				const std::lock_guard stateLock(m_mutex);
+				listener = _add(event.path, std::move(event.cb));
+			}
+			event.retCb(listener);
+		}
+		else {
 			const std::lock_guard stateLock(m_mutex);
-
-			if (e.action == QueueEvent::Action::ADD) {
-				e.retCb(_add(e.path, e.cb));
-			}
-			else {
-				_remove(e.path, e.id.value());
-			}
+			_remove(event.path, event.id.value());
 		}
 	}
 }
