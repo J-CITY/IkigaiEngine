@@ -343,6 +343,7 @@ public:
 	void draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) override;
 	std::vector<float> readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) override;
+	void renderGraphBarrier(bool uav) override;
 	// Texture infrastructure for GI/HZB (M1-4, M1-8); implemented in textureFeaturesVk.cpp.
 	void setStorageImage(size_t binding, std::shared_ptr<TextureInterface> texture, uint32_t mip, uint32_t layer) override;
 	// Sets StorageImageMipViews, HalfFloatTextures and SamplerMinMaxReduction.

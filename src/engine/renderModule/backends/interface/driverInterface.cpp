@@ -52,6 +52,10 @@ void DriverInterface::finishPresent() {
 	throw std::logic_error("Backend does not support threaded presentation");
 }
 
+void DriverInterface::renderGraphBarrier(bool) {
+	throw std::logic_error("Backend does not support explicit render graph barriers");
+}
+
 void DriverInterface::waitForCompletion(GpuCompletionToken token) {
 	requireOwnerThread();
 	mCompletion->validate(token);

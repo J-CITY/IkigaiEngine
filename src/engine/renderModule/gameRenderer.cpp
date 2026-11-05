@@ -808,12 +808,12 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 
 	// Re-establish physical resources before applying disabled-stage aliases.
 	mRenderPipeline->mTextures = mRenderPipeline->mAllocatedTextures;
-	std::function<void(std::unique_ptr<PipelineStage>&)> runStage;
-	runStage = [&](std::unique_ptr<PipelineStage>& stage) {
+	std::function<void(PipelineStage*)> runStage;
+	runStage = [&](PipelineStage* stage) {
 		if (!stage->mDescriptor.Enabled || (upscaleEnabled && (stage->mName == "TAA" || stage->mName == "fxaa"))) {
 			if (stage->mDrawContent == DrawContent::LIGHT_ACCUMULATION) {
 				for (auto& init : mRenderPipeline->mLightPasses.at(stage->mDescriptor.LightPass).InitStages) {
-					runStage(init);
+					runStage(init.get());
 				}
 				return;
 			}
@@ -876,7 +876,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 				rayShadows = (*provider)->mDescriptor.Enabled && bool((*provider)->mRayTracingProgram);
 			}
 			for (auto& init : pass.InitStages) {
-				runStage(init);
+				runStage(init.get());
 			}
 			int used = 0, shadowed = 0, rasterCaptures = 0;
 			struct RestoreCapture {
@@ -919,7 +919,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 						farPlane = capture->mDescriptor.ShadowRange;
 					}
 					if (hasShadow && !rayShadows) {
-						runStage(capture);
+						runStage(capture.get());
 						++rasterCaptures;
 						captured = true;
 					}
@@ -949,10 +949,10 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 				// Each queued resolve owns a distinct immutable buffer snapshot.
 				mCurrentShadowUbo = mContext.render->createUniformBuffer<CurrentShadowUBO>(mCurrentShadow);
 				for (auto& prepare : pass.PrepareStages) {
-					runStage(prepare);
+					runStage(prepare.get());
 				}
 				for (auto& resolve : pass.ResolveStages) {
-					runStage(resolve);
+					runStage(resolve.get());
 				}
 				++used;
 			}
@@ -1114,7 +1114,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		}
 		mOverrideMaterial = stage->mDescriptor.OverrideMaterial ? stage->mMaterial : nullptr;
 		mOverrideDefaults = stage->mDefaults;
-		mActiveStage = stage.get();
+		mActiveStage = stage;
 		for (const auto& [name, value] : stage->mDescriptor.Uniforms) {
 			std::visit(
 				[&](const auto& v) {
@@ -1208,12 +1208,16 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	auto submitCpuProfile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("GameRenderer::submitStages") : nullptr;
 	if (!mRenderPipeline->mIsInitialized) {
 		for (auto& stage : mRenderPipeline->mStartStages) {
-			runStage(stage);
+			runStage(stage.get());
 		}
 		mRenderPipeline->mIsInitialized = true;
 	}
-	for (auto& stage : mRenderPipeline->mStages) {
-		runStage(stage);
+	for (const auto& pass : mRenderPipeline->mGraphPlan.Schedule) {
+		if (!pass.Barriers.empty()) {
+			const bool uav = std::any_of(pass.Barriers.begin(), pass.Barriers.end(), [](const auto& barrier) { return barrier.Uav; });
+			mContext.render->execute([presentationDriver, uav] { presentationDriver->renderGraphBarrier(uav); });
+		}
+		runStage(mRenderPipeline->mStageIndex[pass.Id]);
 	}
 	if (mVirtualGeometry) {
 		mVirtualGeometry->endFrame();
@@ -1221,9 +1225,17 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	submitCpuProfile.reset();
 	auto& screenshot = CAPTURE::ScreenshotService::Get();
 	if (screenshot.pending() && !screenshot.textureName().empty()) {
-		const auto source = mRenderPipeline->mTextures.find(screenshot.textureName());
+		const auto& name = screenshot.textureName();
+		const auto& descriptor = mRenderPipeline->mDescriptor;
+		const auto source = mRenderPipeline->mTextures.find(name);
 		if (source == mRenderPipeline->mTextures.end()) {
-			screenshot.fail("Unknown screenshot texture: " + screenshot.textureName());
+			screenshot.fail("Unknown screenshot texture: " + name);
+		}
+		else if (descriptor.Graph.Enabled
+			&& std::find(descriptor.Graph.Exports.begin(), descriptor.Graph.Exports.end(), name) == descriptor.Graph.Exports.end()
+			&& std::none_of(descriptor.Textures.begin(), descriptor.Textures.end(),
+				[&](const auto& texture) { return texture.Name == name && texture.History; })) {
+			screenshot.fail("Screenshot texture is not exported by the render graph: " + name);
 		}
 		else {
 			screenshot.setSource(source->second);
@@ -1779,10 +1791,65 @@ static RenderGraphPipeline::Descriptor ResolvePipelineSettings(const RenderGraph
 	return resolved;
 }
 
+static void ValidateGraphMaterial(const PipelineStage& stage, const PipelineStage::Descriptor& descriptor) {
+	if (!stage.mMaterial) {
+		return;
+	}
+	using Access = GRAPH::Access;
+	using UniformType = ShaderReflection::UniformType;
+	const auto& reflection = stage.mMaterial->getShader()->getReflection();
+	const auto require = [&](const std::string& binding, const std::string& resource, bool bufferBinding) {
+		const auto id = reflection.mNameToUniforms.identifier(binding);
+		if (!reflection.mNameToUniforms.contains(id)) {
+			throw std::invalid_argument(descriptor.Name + " has no shader binding " + binding);
+		}
+		const auto& uniform = reflection.mUniforms.at(reflection.mNameToUniforms.at(id));
+		if (bufferBinding != (uniform.mType == UniformType::UNIFORM_BUFFER || uniform.mType == UniformType::STORAGE_BUFFER)) {
+			throw std::invalid_argument(descriptor.Name + " uses the wrong binding kind for " + binding);
+		}
+		Access access;
+		switch (uniform.mType) {
+		case UniformType::SAMPLER_2D:
+		case UniformType::SAMPLER_3D:
+		case UniformType::SAMPLER_CUBE:
+		case UniformType::SAMPLER_2D_ARRAY:
+			access = Access::SAMPLED;
+			break;
+		case UniformType::UNIFORM_BUFFER:
+			access = Access::UNIFORM;
+			break;
+		case UniformType::IMAGE_2D:
+		case UniformType::IMAGE_3D:
+		case UniformType::IMAGE_2D_ARRAY:
+		case UniformType::IMAGE_CUBE:
+		case UniformType::STORAGE_BUFFER:
+			access = uniform.mReadOnly ? Access::STORAGE_READ : Access::STORAGE_WRITE;
+			break;
+		default:
+			throw std::invalid_argument(descriptor.Name + " has an unsupported graph binding " + binding);
+		}
+		if (std::none_of(descriptor.ResourceUses.begin(), descriptor.ResourceUses.end(),
+				[&](const auto& use) { return use.Resource == resource && use.Mode == access; })) {
+			throw std::invalid_argument(descriptor.Name + " graph access disagrees with shader binding " + binding);
+		}
+	};
+	for (const auto& [binding, value] : descriptor.Uniforms) {
+		if (const auto* resource = std::get_if<std::string>(&value)) {
+			require(binding, *resource, false);
+		}
+	}
+	for (const auto& [binding, resource] : descriptor.BufferLinks) {
+		if (resource != "Lights") {
+			require(binding, resource, true);
+		}
+	}
+}
+
 RenderGraphPipeline::RenderGraphPipeline(const Descriptor& descriptor, Renderer& renderer, const std::string& pipelineAsset)
 	: mDescriptor(ResolvePipelineSettings(descriptor))
 	, mSourceDescriptor(descriptor)
 	, mPipelineAsset(pipelineAsset) {
+	mGraphPlan = compileGraph(mDescriptor);
 	if (!mPipelineAsset.empty()) {
 		mPipelineWriteTime = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().lastWriteTime(mPipelineAsset);
 	}
@@ -1805,6 +1872,13 @@ RenderGraphPipeline::RenderGraphPipeline(const Descriptor& descriptor, Renderer&
 		pass.ResolveStages = loadStages(descriptor.ResolveStages);
 	}
 	mStages = loadStages(mDescriptor.Stages);
+	mStageIndex.reserve(mStages.size());
+	for (const auto& stage : mStages) {
+		if (mDescriptor.Graph.Enabled) {
+			ValidateGraphMaterial(*stage, stage->mDescriptor);
+		}
+		mStageIndex.push_back(stage.get());
+	}
 }
 
 void GameRenderer::reloadPipelineSettings(const std::string& asset) {
@@ -1874,6 +1948,12 @@ void RenderGraphPipeline::reloadSettings(Renderer& renderer, const std::string& 
 		source.SettingsAsset = overrideAsset;
 	}
 	auto candidate = ResolvePipelineSettings(source);
+	auto graphPlan = compileGraph(candidate);
+	if (candidate.Graph.Enabled) {
+		for (size_t i = 0; i < candidate.Stages.size(); ++i) {
+			ValidateGraphMaterial(*mStageIndex[i], candidate.Stages[i]);
+		}
+	}
 	std::set<std::string> changedTextures, dirty;
 	for (size_t i = 0; i < candidate.Textures.size(); ++i) {
 		if (UTILS::ToJson(candidate.Textures[i]).unwrap() != UTILS::ToJson(mDescriptor.Textures[i]).unwrap()) {
@@ -1926,6 +2006,7 @@ void RenderGraphPipeline::reloadSettings(Renderer& renderer, const std::string& 
 		updateStages(pass.ResolveStages, descriptor.ResolveStages);
 	}
 	mDescriptor = std::move(candidate);
+	mGraphPlan = std::move(graphPlan);
 	mSourceDescriptor = std::move(source);
 	mSettingsOverrideAsset = overrideAsset;
 	if (changed) {

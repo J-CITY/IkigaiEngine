@@ -16,6 +16,7 @@
 #include "primitiveRender.h"
 #include "profilerModule/gpuStageProfiler.h"
 #include "renderGraph/computeStageDescriptor.h"
+#include "renderGraph/renderGraphDescriptor.h"
 #include "renderGraph/screenProbeSettings.h"
 #include <filesystem>
 
@@ -100,6 +101,9 @@ struct PipelineStage {
 		int RaygenRecord = 0;
 		std::map<std::string, std::string> Bindings;
 		std::vector<std::string> Reads, Writes;
+		std::vector<GRAPH::UseDescriptor> ResourceUses;
+		std::vector<std::string> After;
+		bool SideEffect = false;
 		std::vector<int> PushConstants;
 		std::string Unsupported = "ERROR";
 		int HitGroupOffset = 0;
@@ -143,6 +147,9 @@ struct PipelineStage {
 				.field(&Self::Bindings, "Bindings", default_ { decltype(Bindings) {} })
 				.field(&Self::Reads, "Reads", default_ { decltype(Reads) {} })
 				.field(&Self::Writes, "Writes", default_ { decltype(Writes) {} })
+				.field(&Self::ResourceUses, "ResourceUses", default_ { decltype(ResourceUses) {} })
+				.field(&Self::After, "After", default_ { decltype(After) {} })
+				.field(&Self::SideEffect, "SideEffect", default_ { false })
 				.field(&Self::PushConstants, "PushConstants", default_ { decltype(PushConstants) {} })
 				.field(&Self::Unsupported, "Unsupported", default_ { std::string { "ERROR" } })
 				.field(&Self::HitGroupOffset, "HitGroupOffset", default_ { 0 })
@@ -318,6 +325,7 @@ struct RenderGraphPipeline {
 		std::vector<PipelineStage::Descriptor> StartStages;
 		std::vector<PipelineStage::Descriptor> Stages;
 		std::vector<LightPassDescriptor> LightPasses;
+		GRAPH::Descriptor Graph;
 		// Screen probe gather parameters (hybrid-sp); disabled unless the pipeline enables the block.
 		ScreenProbeSettings ScreenProbes;
 		// Temporal denoiser settings blocks (indirectLighting/temporalDenoiseSettings.h), one uniform buffer per entry.
@@ -336,6 +344,7 @@ struct RenderGraphPipeline {
 				.field(&Self::Buffers, "Buffers", default_ { decltype(Buffers) {} })
 				.field(&Self::Stages, "Stages")
 				.field(&Self::LightPasses, "LightPasses", default_ { decltype(LightPasses) {} })
+				.field(&Self::Graph, "Graph", default_ { GRAPH::Descriptor {} })
 				.field(&Self::StartStages, "StartStages", default_ { decltype(StartStages) {} })
 				.field(&Self::ScreenProbes, "ScreenProbes", default_ { ScreenProbeSettings {} })
 				.field(&Self::TemporalDenoisers, "TemporalDenoisers", default_ { std::vector<TemporalDenoiseSettings> {} });
@@ -357,6 +366,9 @@ struct RenderGraphPipeline {
 
 	StagesArr mStartStages;
 	StagesArr mStages;
+	std::vector<PipelineStage*> mStageIndex;
+	GRAPH::Plan mGraphPlan;
+	static GRAPH::Plan compileGraph(const Descriptor& descriptor);
 	struct LightPass {
 		LightPassDescriptor Descriptor;
 		StagesArr InitStages, CaptureStages, PrepareStages, ResolveStages;

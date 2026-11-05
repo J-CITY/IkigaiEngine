@@ -2272,6 +2272,11 @@ void DriverVk::setClearColor(float r, float g, float b, float a) {
 	mClearColor = { r, g, b, a };
 }
 
+void DriverVk::renderGraphBarrier(bool) {
+	deactivateRenderPass();
+	UtilityVk::SetMemoryBarrier(getCurrentFrame().mCommandBuffer, vk::PipelineStageFlagBits2::eAllCommands, vk::PipelineStageFlagBits2::eAllCommands);
+}
+
 void DriverVk::submit() {
 	presentFrame();
 	waitForPresentedFrame();

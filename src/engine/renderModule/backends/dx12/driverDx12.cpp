@@ -734,6 +734,13 @@ void DriverDx12::dispatch(uint32_t x,uint32_t y,uint32_t z) {
     mCommandList->ResourceBarrier(1,&barrier);
 }
 
+void DriverDx12::renderGraphBarrier(bool uav) {
+	if (uav) {
+		const auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(nullptr);
+		mCommandList->ResourceBarrier(1, &barrier);
+	}
+}
+
 void DriverDx12::drawIndexed(uint32_t index_count, uint32_t index_offset, uint32_t instance_count) {
     if (!index_count || !instance_count) return;
     validateVertexDraw({index_count,index_offset,instance_count,0,0,true});

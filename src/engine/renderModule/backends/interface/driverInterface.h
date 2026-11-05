@@ -203,6 +203,7 @@ public:
 	virtual void setClearColor(const MATH::Vector4f& color) = 0;
 	virtual void setClearColor(float r, float g, float b, float a) = 0;
 	virtual void dispatch(uint32_t x, uint32_t y, uint32_t z) = 0;
+	virtual void renderGraphBarrier(bool uav);
 	virtual BindlessCapabilities bindlessCapabilities() const {
 		return {};
 	}
