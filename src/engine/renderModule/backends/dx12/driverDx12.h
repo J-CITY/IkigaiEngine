@@ -109,6 +109,7 @@ public:
 	void dispatchRayQueries(const RayTracingDispatch&) override;
 	void dispatchComputeProgram(const RayTracingDispatch&) override;
 	bool hasGraphComputeQueue() const noexcept override;
+	void retireShaderPipelines(size_t shaderId);
 	void dispatchGraphCompute(const RayTracingDispatch&) override;
 	void joinGraphCompute() override;
 	void executeRayProgram(const RayTracingDispatch&, bool compute, ID3D12GraphicsCommandList4* computeList = nullptr);

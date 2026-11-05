@@ -1,7 +1,8 @@
 #pragma once
 
-#include <vector>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace IKIGAI::RENDER {
 	class TextureInterface;
@@ -30,4 +31,6 @@ namespace IKIGAI::RENDER {
 		virtual const std::vector<std::shared_ptr<TextureInterface>>& getTextures() const = 0;
 		virtual const std::shared_ptr<TextureInterface>& getDepth() const = 0;
 	};
+
+	[[nodiscard]] std::string AttachmentSignatureKey(const FrameBufferInterface& framebuffer, unsigned samples);
 }

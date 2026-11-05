@@ -141,8 +141,28 @@ static const std::unordered_map<PixelFormat, vk::Format> FormatMap = {
 	{ PixelFormat::R11G11B10_FLOAT, vk::Format::eB10G11R11UfloatPack32 },
 };
 
-std::string DriverVk::State::getName() {
-	return std::to_string(mShader->getId()) + ":" + (mFrameBuffer ? std::to_string(mFrameBuffer->getId()) : "screen");
+std::string DriverVk::State::getName(const FrameBufferInterface& attachments) const {
+	return "g:" + std::to_string(mShader->getId()) + ":" + std::to_string(mShader->generation()) + ":" + AttachmentSignatureKey(attachments, 1);
+}
+
+void DriverVk::retireShaderPipelines(size_t shaderId) {
+	const auto shaderKey = std::to_string(shaderId) + ":";
+	for (auto state = mStates.begin(); state != mStates.end();) {
+		if (std::string_view(state->first).substr(2).starts_with(shaderKey)) {
+#if IKIGAI_ENABLE_MEMORY_TRACKING
+			const auto handle = PROFILER::GpuHandleValue(static_cast<VkPipeline>(*state->second));
+			if (auto token = mGpuPipelines.extract(handle); !token.empty()) {
+				token.mapped().markPending();
+				destroyDeferred(std::make_shared<PROFILER::GpuAllocationToken>(std::move(token.mapped())));
+			}
+#endif
+			destroyDeferred(std::move(state->second));
+			state = mStates.erase(state);
+		}
+		else {
+			++state;
+		}
+	}
 }
 
 DriverVk::VolkInitializer::VolkInitializer() {
@@ -1004,6 +1024,25 @@ void DriverVk::setPushConstant(ShaderType stage, uint32_t offset, uint32_t size,
 	}
 }
 
+static vk::PrimitiveTopology GraphicsTopology(const ShaderVk& shader, PrimitiveMode mode) {
+	if (*shader.mTessellationControlShaderModule || *shader.mTessellationEvaluationShaderModule) {
+		return vk::PrimitiveTopology::ePatchList;
+	}
+	static const std::unordered_map<PrimitiveMode, vk::PrimitiveTopology> TopologyMap = {
+		{ PrimitiveMode::POINTS, vk::PrimitiveTopology::ePointList },
+		{ PrimitiveMode::LINES, vk::PrimitiveTopology::eLineList },
+		{ PrimitiveMode::LINE_STRIP, vk::PrimitiveTopology::eLineStrip },
+		{ PrimitiveMode::TRIANGLES, vk::PrimitiveTopology::eTriangleList },
+		{ PrimitiveMode::TRIANGLE_STRIP, vk::PrimitiveTopology::eTriangleStrip },
+		{ PrimitiveMode::LINES_ADJACENCY, vk::PrimitiveTopology::eLineListWithAdjacency },
+		{ PrimitiveMode::LINE_STRIP_ADJACENCY, vk::PrimitiveTopology::eLineStripWithAdjacency },
+		{ PrimitiveMode::TRIANGLES_ADJACENCY, vk::PrimitiveTopology::eTriangleListWithAdjacency },
+		{ PrimitiveMode::TRIANGLE_STRIP_ADJACENCY, vk::PrimitiveTopology::eTriangleStripWithAdjacency },
+		{ PrimitiveMode::PATCHES, vk::PrimitiveTopology::ePatchList },
+	};
+	return TopologyMap.at(mode);
+}
+
 vk::raii::Pipeline DriverVk::createState(const State& pipeline_state) {
 	std::vector<vk::PipelineShaderStageCreateInfo> pipeline_shader_stage_create_info;
 	if (*pipeline_state.mShader->mVertexShaderModule) {
@@ -1037,10 +1076,7 @@ vk::raii::Pipeline DriverVk::createState(const State& pipeline_state) {
 				.setPName("main"));
 	}
 
-	auto topology = vk::PrimitiveTopology::eTriangleList;
-	if (*pipeline_state.mShader->mTessellationControlShaderModule || *pipeline_state.mShader->mTessellationEvaluationShaderModule) {
-		topology = vk::PrimitiveTopology::ePatchList;
-	}
+	const auto topology = GraphicsTopology(*pipeline_state.mShader, mPrimitiveMode);
 
 	auto pipeline_input_assembly_state_create_info = vk::PipelineInputAssemblyStateCreateInfo().setTopology(topology);
 
@@ -1221,29 +1257,7 @@ void DriverVk::EnsureTopology(vk::raii::CommandBuffer& cmdlist) {
 	}
 	clearDirty(Dirty::PRIMITIVE_MODE);
 
-	static const std::unordered_map<PrimitiveMode, vk::PrimitiveTopology> TopologyMap = {
-		{ PrimitiveMode::POINTS, vk::PrimitiveTopology::ePointList },
-		{ PrimitiveMode::LINES, vk::PrimitiveTopology::eLineList },
-		{ PrimitiveMode::LINE_STRIP, vk::PrimitiveTopology::eLineStrip },
-		{ PrimitiveMode::TRIANGLES, vk::PrimitiveTopology::eTriangleList },
-		{ PrimitiveMode::TRIANGLE_STRIP, vk::PrimitiveTopology::eTriangleStrip },
-		{ PrimitiveMode::LINES_ADJACENCY, vk::PrimitiveTopology::eLineListWithAdjacency },
-		{ PrimitiveMode::LINE_STRIP_ADJACENCY, vk::PrimitiveTopology::eLineStripWithAdjacency },
-		{ PrimitiveMode::TRIANGLES_ADJACENCY, vk::PrimitiveTopology::eTriangleListWithAdjacency },
-		{ PrimitiveMode::TRIANGLE_STRIP_ADJACENCY, vk::PrimitiveTopology::eTriangleStripWithAdjacency },
-		{ PrimitiveMode::PATCHES, vk::PrimitiveTopology::ePatchList },
-	};
-
-	auto topology = TopologyMap.at(mPrimitiveMode);
-
-	// Pipeline with tessellation is always created with ePatchList (see createState),
-	// dynamic topology must be the same class, otherwise Vulkan validation fails.
-	if (mCurrentState.mShader
-		&& (*mCurrentState.mShader->mTessellationControlShaderModule || *mCurrentState.mShader->mTessellationEvaluationShaderModule)) {
-		topology = vk::PrimitiveTopology::ePatchList;
-	}
-
-	cmdlist.setPrimitiveTopology(topology);
+	cmdlist.setPrimitiveTopology(GraphicsTopology(*mCurrentState.mShader, mPrimitiveMode));
 }
 
 void DriverVk::EnsureViewport(vk::raii::CommandBuffer& cmdlist) {
@@ -1442,7 +1456,9 @@ void DriverVk::EnsureStencilMode(vk::raii::CommandBuffer& cmdlist) {
 void DriverVk::EnsureGraphicsPipelineState(vk::raii::CommandBuffer& cmdlist) {
 	// The pipeline depends on the current shader and framebuffer, which can change between draws
 	// (setShader/setFrameBuffer do not raise the dirty flag), so compare by name as well.
-	const auto name = mCurrentState.getName() + ":" + vertexLayoutKey();
+	const auto& attachments = mCurrentState.mFrameBuffer ? mCurrentState.mFrameBuffer : getCurrentFrame().mFrameBuffer;
+	const auto topology = GraphicsTopology(*mCurrentState.mShader, mPrimitiveMode);
+	const auto name = mCurrentState.getName(*attachments) + ":" + vertexLayoutKey() + ":" + std::to_string(static_cast<int>(topology));
 	if (!isDirty(Dirty::PIPELINE) && name == mBoundPipelineName) {
 		return;
 	}
@@ -2435,7 +2451,7 @@ void DriverVk::EnsureComputeState(vk::raii::CommandBuffer& cmd) {
 	if (!*shader->mComputeShaderModule) {
 		throw std::runtime_error("Dispatch requires compute shader");
 	}
-	const std::string key = "compute:" + std::to_string(shader->getId());
+	const std::string key = "c:" + std::to_string(shader->getId()) + ":" + std::to_string(shader->generation());
 	if (!mStates.contains(key)) {
 		auto stage = vk::PipelineShaderStageCreateInfo()
 						 .setStage(vk::ShaderStageFlagBits::eCompute)

@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "bindlessInterface.h"
 #include "mathModule/math.h"
@@ -30,11 +31,13 @@ protected:
 	bool mSupportsPbrLayers = false;
 	unsigned mCompiledPbrLayerCount = 0;
 	std::string mPbrLayerVariant;
+	void swapCompiledInterface(ShaderInterface& replacement);
 
 public:
 	// Path to resource
 	std::string mPath;
 	std::map<ShaderType, std::string> mShaderPaths;
+	std::unordered_set<std::string> mSourceDependencies;
 
 	inline const ShaderReflection& getReflection() const {
 		return mReflection;

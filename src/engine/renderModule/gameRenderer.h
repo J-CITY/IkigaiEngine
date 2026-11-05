@@ -193,9 +193,34 @@ struct PipelineStage {
 	DrawContent mDrawContent;
 	std::map<std::string, UniformType> mUniforms;
 
-	std::map<std::string, std::string> mBufferLinks;
-	std::map<std::string, std::map<std::string, UniformType>> mBufferOverrides;
-	std::map<std::string, std::shared_ptr<UniformBufferInterface>> mOverrideBuffers;
+	struct ResolvedBindings {
+		struct Texture {
+			size_t Binding = 0;
+			const std::shared_ptr<TextureInterface>* Slot = nullptr;
+		};
+		struct UniformBuffer {
+			size_t Binding = 0;
+			const std::shared_ptr<UniformBufferInterface>* Slot = nullptr;
+		};
+		struct StorageBuffer {
+			size_t Binding = 0;
+			const std::shared_ptr<StorageBufferInterface>* Slot = nullptr;
+		};
+		struct OverrideBuffer {
+			size_t Binding = 0;
+			std::vector<uint8_t> Bytes;
+			std::shared_ptr<UniformBufferInterface> Buffer;
+		};
+		std::shared_ptr<ShaderInterface> Shader;
+		uint64_t Generation = 0;
+		std::vector<Texture> Textures;
+		std::vector<UniformBuffer> UniformBuffers;
+		std::vector<StorageBuffer> StorageBuffers;
+		std::vector<OverrideBuffer> Overrides;
+		std::vector<std::pair<std::string, MaterialInterface::UniformData>> Constants;
+		std::vector<size_t> Lights;
+	};
+	ResolvedBindings mResolved;
 	std::map<std::string, MaterialInterface::UniformData> mDefaults;
 };
 

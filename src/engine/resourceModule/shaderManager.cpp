@@ -8,34 +8,48 @@
 #include "serviceManager.h"
 #include "utilsModule/assertion.h"
 #include "utilsModule/jsonLoader.h"
+#include <cstring>
 #include <filesystem>
 #include <functional>
+#include <iostream>
 #include <regex>
 #include <resourceModule/fileSystem/fileSystem.h>
 #include <set>
 #include <sstream>
 
 namespace {
-std::string readProgramSource(const std::string& path, std::set<std::string>& stack, std::unordered_set<std::string>* dependencies = nullptr) {
+std::string readShaderSource(const std::string& input, std::set<std::string>& stack, std::unordered_set<std::string>* dependencies = nullptr) {
+	const auto path = std::filesystem::path(input).lexically_normal().generic_string();
 	if (dependencies) {
 		dependencies->insert(path);
 	}
 	if (!stack.insert(path).second) {
-		throw std::runtime_error("RT shader include cycle: " + path);
+		throw std::runtime_error("Shader include cycle: " + path);
 	}
 	auto& fs = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RESOURCES::FileSystem>();
 	if (!fs.isFileExist(path)) {
-		throw std::runtime_error("Missing RT shader: " + path);
+		throw std::runtime_error("Missing shader source: " + path);
 	}
 	std::string source = fs.getFile(path)->readStr();
-	const std::regex include(R"inc(^[ \t]*#include[ \t]+"([^"]+)"[^\n]*)inc");
+	uint32_t magic = 0;
+	if (source.size() >= sizeof(magic)) {
+		std::memcpy(&magic, source.data(), sizeof(magic));
+	}
+	if (magic == 0x07230203) {
+		if (stack.size() != 1) {
+			throw std::runtime_error("A shader include must contain source text: " + path);
+		}
+		stack.erase(path);
+		return source;
+	}
+	static const std::regex include(R"inc(^[ \t]*#[ \t]*include[ \t]+"([^"]+)"[^\n]*)inc");
 	std::string result, line;
 	std::istringstream stream(source);
 	while (std::getline(stream, line)) {
 		std::smatch match;
 		if (std::regex_match(line, match, include)) {
 			const auto child = (std::filesystem::path(path).parent_path() / match[1].str()).lexically_normal().generic_string();
-			result += readProgramSource(child, stack, dependencies);
+			result += readShaderSource(child, stack, dependencies);
 		}
 		else {
 			result += line;
@@ -44,60 +58,6 @@ std::string readProgramSource(const std::string& path, std::set<std::string>& st
 	}
 	stack.erase(path);
 	return result;
-}
-
-void preparePbrSources(IKIGAI::RENDER::ShaderResource& resource, std::unordered_set<std::string>* dependencies = nullptr) {
-	if (!resource.supportsPbrLayers) {
-		return;
-	}
-	if (resource.compiledPbrLayerCount > 3 || resource.useBinary) {
-		throw std::invalid_argument("Layered PBR requires source shaders and at most three additional layers");
-	}
-	for (const auto& [stage, path] : resource.getPaths()) {
-		std::set<std::string> stack;
-		auto source = readProgramSource(path, stack, dependencies);
-		const auto version = source.find("#version");
-		const auto end = source.find('\n', version);
-		if (version == std::string::npos || end == std::string::npos) {
-			throw std::invalid_argument("Missing GLSL version in " + path);
-		}
-		source.insert(end + 1, "#define IKIGAI_PBR_LAYER_COUNT " + std::to_string(resource.compiledPbrLayerCount) + "\n");
-		resource.sources[stage] = std::move(source);
-	}
-}
-std::string readFileWithInclude(const std::string& path) {
-	auto dir = std::filesystem::path { path }.parent_path();
-
-	if (!IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RESOURCES::FileSystem>().isFileExist(path)) {
-		return "";
-	}
-
-	auto content = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RESOURCES::FileSystem>().getFile(path)->readStr();
-
-	size_t start = 0;
-	size_t pos;
-	while ((pos = content.find("#include", start)) != std::string::npos) {
-		if (pos > 0 && content[pos - 1] == '/') {
-			start = pos + 1;
-			continue;
-		}
-		auto comma1 = content.find("\"", pos);
-		if (comma1 == std::string::npos) {
-			break; // or throw
-		}
-		auto comma2 = content.find("\"", comma1 + 1);
-		if (comma2 == std::string::npos) {
-			break; // or throw
-		}
-
-		auto includePath = std::string(content.begin() + comma1 + 1, content.begin() + comma2);
-		std::string fullIncludePath = (dir / includePath).lexically_normal().generic_string();
-		auto newContent = readFileWithInclude(fullIncludePath);
-		content.erase(pos, comma2 - pos + 1);
-		content.insert(pos, newContent);
-		start = pos + newContent.length();
-	}
-	return content;
 }
 
 IKIGAI::RESOURCES::ResourcePtr<IKIGAI::RENDER::ShaderInterface> GetDefaultPinkShader() {
@@ -137,6 +97,40 @@ void main() {
 }
 
 namespace IKIGAI::RESOURCES {
+std::unordered_set<std::string> ShaderLoader::ResolveSources(RENDER::ShaderResource& resource) {
+	std::unordered_set<std::string> dependencies;
+	if (!resource.path.empty()) {
+		dependencies.insert(resource.path);
+	}
+	if (resource.supportsPbrLayers && (resource.compiledPbrLayerCount > 3 || resource.useBinary)) {
+		throw std::invalid_argument("Layered PBR requires source shaders and at most three additional layers");
+	}
+	for (const auto& [stage, path] : resource.getPaths()) {
+		dependencies.insert(std::filesystem::path(path).lexically_normal().generic_string());
+		if (resource.sources.contains(stage)) {
+			continue;
+		}
+		std::set<std::string> stack;
+		auto source = readShaderSource(path, stack, &dependencies);
+		if (resource.supportsPbrLayers) {
+			const auto version = source.find("#version");
+			const auto end = source.find('\n', version);
+			if (version == std::string::npos || end == std::string::npos) {
+				throw std::invalid_argument("Missing GLSL version in " + path);
+			}
+			source.insert(end + 1, "#define IKIGAI_PBR_LAYER_COUNT " + std::to_string(resource.compiledPbrLayerCount) + "\n");
+		}
+		resource.sources.emplace(stage, std::move(source));
+	}
+	return dependencies;
+}
+
+void ShaderLoader::addFileWatchSubscribe(
+	const std::string& path, const std::unordered_set<std::string>& previous, std::weak_ptr<RENDER::ShaderInterface> shader) {
+	const auto current = shader.lock();
+	ResourceManager::addFileWatchSubscribe(path, current ? current->mSourceDependencies : previous, shader);
+}
+
 ResourcePtr<RENDER::ShaderInterface> ShaderLoader::loadMaterialShader(const std::string& path, unsigned additionalLayers) {
 	const auto normalizedPath = NormalizePath(path);
 	const auto key = normalizedPath + "@pbr-layers-" + std::to_string(additionalLayers);
@@ -152,10 +146,8 @@ ResourcePtr<RENDER::ShaderInterface> ShaderLoader::loadMaterialShader(const std:
 	}
 	resource.path = normalizedPath;
 	resource.compiledPbrLayerCount = additionalLayers;
-	std::unordered_set<std::string> dependencies { normalizedPath };
-	preparePbrSources(resource, &dependencies);
 	auto shader = CreateFromResource(resource, nullptr, createCacheDeleter(key));
-	addFileWatchSubscribe(key, dependencies, shader);
+	addFileWatchSubscribe(key, shader->mSourceDependencies, shader);
 	return registerResource(key, shader);
 }
 
@@ -201,7 +193,7 @@ RENDER::RayTracingProgramResource ShaderLoader::LoadProgramResource(const std::s
 			continue;
 		}
 		std::set<std::string> stack;
-		shader.Source = readProgramSource(shader.Path, stack);
+		shader.Source = readShaderSource(shader.Path, stack);
 	}
 	return resource;
 }
@@ -231,42 +223,28 @@ ResourcePtr<RENDER::ShaderInterface> ShaderLoader::createResource(const std::str
 	else if (type == ELoadingType::FILE || type == ELoadingType::MEMORY) {
 		// NOT SUPPORT
 	}
-	{
-		std::unordered_set<std::string> paths = { path };
-		for (auto& [type, shaderPath] : config.paths) {
-			paths.insert(shaderPath);
-		}
-		addFileWatchSubscribe(path, paths, res);
+	if (res) {
+		addFileWatchSubscribe(path, res->mSourceDependencies, res);
 	}
 
 	return res;
 }
 
-bool ShaderLoader::reloadResource(std::weak_ptr<RENDER::ShaderInterface> weakRes, const std::string& path) {
+bool ShaderLoader::reloadResource(std::weak_ptr<RENDER::ShaderInterface> weakRes, const std::string&) {
 	if (auto shader = weakRes.lock()) {
 		const auto sourcePath = shader->mPath;
-		std::unordered_set<std::string> paths = { sourcePath };
-		auto config = LoadConfig(sourcePath);
-		AddConfigToCache(sourcePath, config);
-		config.compiledPbrLayerCount = shader->compiledPbrLayerCount();
-		if (shader->supportsPbrLayers() && !config.supportsPbrLayers) {
-			throw std::runtime_error("Cannot remove layered PBR contract during shader reload: " + sourcePath);
-		}
-		preparePbrSources(config, &paths);
-
-		for (auto type : { RENDER::ShaderType::VERTEX, RENDER::ShaderType::FRAGMENT, RENDER::ShaderType::GEOMETRY,
-			 RENDER::ShaderType::TESSELLATION_CONTROL, RENDER::ShaderType::TESSELLATION_EVALUATION, RENDER::ShaderType::COMPUTE }) {
-			if (config.hasShader(type)) {
-				auto p = config.getShaderPath(type);
-				if (!config.supportsPbrLayers) {
-					config.sources[type] = readFileWithInclude(p);
-				}
-				paths.insert(p);
+		try {
+			auto config = LoadConfig(sourcePath);
+			config.compiledPbrLayerCount = shader->compiledPbrLayerCount();
+			if (shader->supportsPbrLayers() && !config.supportsPbrLayers) {
+				throw std::runtime_error("Cannot remove layered PBR contract during shader reload: " + sourcePath);
 			}
+			Recompile(*shader, config);
+			AddConfigToCache(sourcePath, config);
+			return true;
+		} catch (const std::exception& error) {
+			std::cerr << "Shader reload " << sourcePath << ": " << error.what() << '\n';
 		}
-		shader->recompile(config);
-		addFileWatchSubscribe(path, paths, weakRes);
-		return true;
 	}
 	return false;
 }
@@ -282,20 +260,8 @@ ResourcePtr<RENDER::ShaderInterface> ShaderLoader::CreateFromResource(
 		throw std::invalid_argument("Named shader modules/groups require a Program pipeline step: " + res.path);
 	}
 	auto& render = ServiceManager::Get<RENDER::Renderer>();
-	const std::string path = res.path;
-
 	auto resCopy = res;
-	if (resCopy.supportsPbrLayers && resCopy.sources.empty()) {
-		preparePbrSources(resCopy);
-	}
-	if (resCopy.sources.empty()) {
-		for (auto type : { RENDER::ShaderType::VERTEX, RENDER::ShaderType::FRAGMENT, RENDER::ShaderType::GEOMETRY,
-			 RENDER::ShaderType::TESSELLATION_CONTROL, RENDER::ShaderType::TESSELLATION_EVALUATION, RENDER::ShaderType::COMPUTE }) {
-			if (resCopy.hasShader(type)) {
-				resCopy.sources[type] = readFileWithInclude(resCopy.getShaderPath(type));
-			}
-		}
-	}
+	auto dependencies = ResolveSources(resCopy);
 
 	auto shader = render.createShader(resCopy, allocator, deleter);
 	if (!shader) {
@@ -305,6 +271,7 @@ ResourcePtr<RENDER::ShaderInterface> ShaderLoader::CreateFromResource(
 		ASSERT("Failed to compile shader from resource");
 		return GetDefaultPinkShader();
 	}
+	shader->mSourceDependencies = std::move(dependencies);
 	return shader;
 }
 
@@ -343,6 +310,9 @@ ResourcePtr<RENDER::ShaderInterface> ShaderLoader::CreateFromSource(const std::s
 }
 
 void ShaderLoader::Recompile(RENDER::ShaderInterface& shader, const RENDER::ShaderResource& res) {
-	shader.recompile(res);
+	auto prepared = res;
+	auto dependencies = ResolveSources(prepared);
+	shader.recompile(prepared);
+	shader.mSourceDependencies = std::move(dependencies);
 }
 }

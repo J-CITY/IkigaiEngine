@@ -200,7 +200,7 @@ public:
 		// std::optional<vk::Format> depth_stencil_format;
 		// std::vector<InputLayout> input_layouts;
 
-		std::string getName();
+		std::string getName(const FrameBufferInterface& attachments) const;
 	};
 
 	State mCurrentState;
@@ -277,6 +277,7 @@ public:
 	void begin() override;
 	void end() override;
 	vk::raii::Pipeline createState(const State& pipeline_state);
+	void retireShaderPipelines(size_t shaderId);
 	void EnsureVertexBuffers(vk::raii::CommandBuffer& cmdlist);
 	void EnsureIndexBuffer(vk::raii::CommandBuffer& cmdlist);
 	void EnsureTopology(vk::raii::CommandBuffer& cmdlist);

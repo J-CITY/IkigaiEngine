@@ -87,12 +87,7 @@ void FileWatcher::remove(const Path& path, EVENT::Event<FileStatus>::ID id) {
 
 void FileWatcher::removeDeferred(const Path& path, EVENT::Event<FileStatus>::ID id) {
 	const std::lock_guard lock(m_mutexDeferred);
-	auto& fs = ServiceManager::Get<FileSystem>();
 	const auto _path = path.string();
-	if (!fs.isFileExist(_path)) {
-		throw UTILS::EXEPTIONS::WrongPath(_path.c_str());
-		;
-	}
 	deferredEvents.push({ QueueEvent::Action::REMOVE, _path, nullptr, nullptr, id });
 }
 

@@ -18,6 +18,7 @@ namespace RESOURCES {
 	public:
 		ResourcePtr<RENDER::ShaderInterface> loadMaterialShader(const std::string& path, unsigned additionalLayers);
 		static RENDER::RayTracingProgramResource LoadProgramResource(const std::string& filePath);
+		static std::unordered_set<std::string> ResolveSources(RENDER::ShaderResource& resource);
 		static ResourcePtr<RENDER::ShaderInterface> Create(
 			const std::string& filePath, UTILS::IAllocator* allocator = nullptr, RENDER::ShaderDeleter deleter = nullptr);
 		static ResourcePtr<RENDER::ShaderInterface> CreateFromResource(
@@ -36,6 +37,8 @@ namespace RESOURCES {
 		virtual std::shared_ptr<RENDER::ShaderInterface> createResource(const std::string& path, ELoadingType type, std::any data) override;
 
 		bool reloadResource(std::weak_ptr<RENDER::ShaderInterface> weakRes, const std::string& path) override;
+		void addFileWatchSubscribe(
+			const std::string& path, const std::unordered_set<std::string>& previous, std::weak_ptr<RENDER::ShaderInterface> shader) override;
 	};
 }
 }

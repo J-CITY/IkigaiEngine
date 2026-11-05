@@ -1,7 +1,7 @@
 """Build a patched Vulkan FSR runtime from the pinned, unmodified submodule.
 
 The generated source/build live under utils/.pack. Fixes luma image format,
-storage-buffer descriptor pool capacity and per-image present semaphores.
+storage-buffer descriptor pool capacity and swapchain semaphore/UI lifetime.
 """
 
 # Support direct CLI invocation from any working directory.
@@ -22,8 +22,8 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 PIN='c6efa6bf7f2027b3ec94f28578bb5965eabb9e55'
 BASE=ROOT/'utils/.pack/fidelityfx-vulkan-patched'
-PATCHES=['luma-history-rgba16f','descriptor-pool-storage-buffer','present-semaphore-per-image']
-PATCH_REVISION=2
+PATCHES=['luma-history-rgba16f','descriptor-pool-storage-buffer','present-semaphore-per-image','swapchain-resource-cleanup']
+PATCH_REVISION=3
 PRESENT_SIGNAL='                                toSignal.add(presenter->frameRenderedSemaphores[realSwapchainImageIndex]);'
 
 
@@ -82,6 +82,72 @@ def repair_reused_present_patch(path):
     if repaired.count(PRESENT_SIGNAL)>1:raise RuntimeError(f'Ambiguous present semaphore patch: {path}')
     if repaired!=text:path.write_text(repaired,encoding='utf-8')
 
+
+def patch_swapchain_cleanup(swapchain):
+    implementation=swapchain/'FrameInterpolationSwapchainVK.cpp'
+    replace(implementation,
+            '    // semaphores used for present to wait until rendering is over\n'
+            '    for (uint32_t i = 0; i < FFX_FRAME_INTERPOLATION_SWAP_CHAIN_MAX_BUFFER_COUNT; ++i)\n'
+            '    {\n'
+            '        res = createSemaphoreFormat(presentInfo.frameRenderedSemaphores[i], "AMD FSR FrameRenderedSemaphore %d", i);\n'
+            '        EXIT_ON_VKRESULT_NOT_SUCCESS(res);\n'
+            '    }',
+            '    // Present semaphores are created once the real swapchain image count is known.')
+    replace(implementation,
+            '    // delete real swapchain\n',
+            '    releaseUiBlitGpuResources(nullptr);\n\n    // delete real swapchain\n')
+    replace(swapchain/'FrameInterpolationSwapchainVK_UiComposition.h',
+            'VkFormat ffxGetVkFormatFromSurfaceFormat(FfxSurfaceFormat fmt);',
+            'VkFormat ffxGetVkFormatFromSurfaceFormat(FfxSurfaceFormat fmt);\n'
+            'void releaseUiBlitGpuResources(const VkAllocationCallbacks* pAllocator);')
+    composition=swapchain/'FrameInterpolationSwapchainVK_UiComposition.cpp'
+    replace(composition,
+            '    for (uint32_t i = 0; i < _countof(s_uiCompositionDescriptorSets); ++i)\n'
+            '    {\n'
+            '        vkFreeDescriptorSets(s_uiCompositionDevice, s_uiCompositionDescriptorPool, 1, &s_uiCompositionDescriptorSets[i]);\n'
+            '        s_uiCompositionDescriptorSets[i] = VK_NULL_HANDLE;\n'
+            '    }',
+            '    if (s_uiCompositionDevice == VK_NULL_HANDLE)\n'
+            '        return;\n\n'
+            '    // Destroying the pool frees all of its descriptor sets.\n'
+            '    for (auto& descriptorSet : s_uiCompositionDescriptorSets)\n'
+            '        descriptorSet = VK_NULL_HANDLE;')
+    replace(composition,
+            '    for (uint32_t i = 0; i < _countof(s_uiCompositionImageViews); ++i)\n'
+            '    {\n'
+            '        vkDestroyImageView(s_uiCompositionDevice, s_uiCompositionImageViews[i], pAllocator);\n'
+            '        s_uiCompositionImageViews[i] = VK_NULL_HANDLE;\n'
+            '    }\n'
+            '    for (uint32_t i = 0; i < _countof(s_uiCompositionFramebuffers); ++i)\n'
+            '    {\n'
+            '        vkDestroyFramebuffer(s_uiCompositionDevice, s_uiCompositionFramebuffers[i], pAllocator);\n'
+            '        s_uiCompositionFramebuffers[i] = VK_NULL_HANDLE;\n'
+            '    }',
+            '    for (auto& framebuffer : s_uiCompositionFramebuffers)\n'
+            '    {\n'
+            '        vkDestroyFramebuffer(s_uiCompositionDevice, framebuffer, pAllocator);\n'
+            '        framebuffer = VK_NULL_HANDLE;\n'
+            '    }\n'
+            '    for (auto& imageView : s_uiCompositionImageViews)\n'
+            '    {\n'
+            '        vkDestroyImageView(s_uiCompositionDevice, imageView, pAllocator);\n'
+            '        imageView = VK_NULL_HANDLE;\n'
+            '    }\n'
+            '    s_uiCompositionDevice = VK_NULL_HANDLE;')
+    replace(composition,
+            '        if (s_uiCompositionDevice != VK_NULL_HANDLE)\n'
+            '        {\n'
+            '            // new device\n'
+            '            releaseUiBlitGpuResources(pAllocator);\n'
+            '        }\n'
+            '        else\n'
+            '        {\n'
+            '            s_uiCompositionDevice = device;\n'
+            '        }',
+            '        releaseUiBlitGpuResources(pAllocator);\n'
+            '        s_uiCompositionDevice = device;')
+
+
 def build_runtime(generator='Visual Studio 17 2022',parallel=3,reuse_source=False):
     sdk=ROOT/'3rd/FidelityFX-Vulkan'
     head=subprocess.check_output(['git','-C',str(sdk),'rev-parse','HEAD'],text=True).strip()
@@ -111,6 +177,7 @@ def build_runtime(generator='Visual Studio 17 2022',parallel=3,reuse_source=Fals
             PRESENT_SIGNAL+'\n                                toWait.add(acquireSemaphore);')
     replace(swapchain,'presentToSwapChain(presenter, realSwapchainImageIndex);',
             'presentToSwapChain(presenter, realSwapchainImageIndex, realSwapchainImageIndex);')
+    patch_swapchain_cleanup(swapchain.parent)
     env=vulkan_build_environment()
     run('cmake','-S',source/'ffx-api','-B',BASE/'build','-G',generator,'-A','x64','-DFFX_API_BACKEND=VK_X64',env=env)
     run('cmake','--build',BASE/'build','--config','Release','--target','amd_fidelityfx_vk','--parallel',parallel,env=env)

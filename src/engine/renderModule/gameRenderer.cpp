@@ -416,10 +416,20 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 		render->setShader(material->getShader());
 		material->bind(mEmptyTexture, true);
 		if (mOverrideMaterial && mActiveStage) {
-			const auto& reflection = material->getShader()->getReflection();
-			for (const auto& [name, value] : mActiveStage->mDescriptor.Uniforms) {
-				if (const auto* texture = std::get_if<std::string>(&value)) {
-					render->setTexture(reflection.mUniforms.at(reflection.mNameToUniforms.at(name)).mBind, mRenderPipeline->mTextures.at(*texture));
+			const auto shader = material->getShader();
+			if (mActiveStage->mResolved.Shader == shader) {
+				for (const auto& texture : mActiveStage->mResolved.Textures) {
+					render->setTexture(texture.Binding, *texture.Slot);
+				}
+			}
+			else {
+				// A layered surface can replace the stage's base shader with its variant.
+				const auto& reflection = shader->getReflection();
+				for (const auto& [name, value] : mActiveStage->mDescriptor.Uniforms) {
+					if (const auto* texture = std::get_if<std::string>(&value)) {
+						render->setTexture(
+							reflection.mUniforms.at(reflection.mNameToUniforms.at(name)).mBind, mRenderPipeline->mTextures.at(*texture));
+					}
 				}
 			}
 		}
@@ -808,7 +818,9 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	mContext.render->updateUniformBuffer(mShadowUbo, mShadowData);
 
 	// Re-establish physical resources before applying disabled-stage aliases.
-	mRenderPipeline->mTextures = mRenderPipeline->mAllocatedTextures;
+	for (const auto& [name, texture] : mRenderPipeline->mAllocatedTextures) {
+		mRenderPipeline->mTextures.at(name) = texture;
+	}
 	std::function<void(PipelineStage*)> runStage;
 	runStage = [&](PipelineStage* stage) {
 		if (!stage->mDescriptor.Enabled || (upscaleEnabled && (stage->mName == "TAA" || stage->mName == "fxaa"))) {
@@ -1116,17 +1128,8 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		mOverrideMaterial = stage->mDescriptor.OverrideMaterial ? stage->mMaterial : nullptr;
 		mOverrideDefaults = stage->mDefaults;
 		mActiveStage = stage;
-		for (const auto& [name, value] : stage->mDescriptor.Uniforms) {
-			std::visit(
-				[&](const auto& v) {
-					using T = std::decay_t<decltype(v)>;
-					if constexpr (!std::is_same_v<T, std::string>) {
-						auto key = name;
-						key.erase(std::remove(key.begin(), key.end(), '.'), key.end());
-						mOverrideDefaults[key] = v;
-					}
-				},
-				value);
+		for (const auto& [name, value] : stage->mResolved.Constants) {
+			mOverrideDefaults[name] = value;
 		}
 		if (stage->mDrawContent == DrawContent::SHADOW) {
 			captureShadows(*stage, shadowChunks, cameraPosition, size);
@@ -1869,6 +1872,119 @@ static void ValidateGraphMaterial(const PipelineStage& stage, const PipelineStag
 	}
 }
 
+static PipelineStage::ResolvedBindings ResolveStageBindings(
+	const RenderGraphPipeline& pipeline, const PipelineStage& stage, const PipelineStage::Descriptor& descriptor) {
+	PipelineStage::ResolvedBindings result;
+	if (!descriptor.Enabled || !stage.mMaterial || (stage.mCompute && stage.mCompute->Bypassed)) {
+		return result;
+	}
+	result.Shader = stage.mMaterial->getShader();
+	result.Generation = result.Shader->generation();
+	const auto& reflection = result.Shader->getReflection();
+	using UniformType = ShaderReflection::UniformType;
+	const auto findUniform = [&](const std::string& name) -> const ShaderReflection::Uniform& {
+		const auto id = reflection.mNameToUniforms.identifier(name);
+		if (!reflection.mNameToUniforms.contains(id)) {
+			throw std::invalid_argument(descriptor.Name + ": unknown shader binding " + name);
+		}
+		return reflection.mUniforms.at(reflection.mNameToUniforms.at(id));
+	};
+	for (const auto& [name, value] : descriptor.Uniforms) {
+		if (const auto* texture = std::get_if<std::string>(&value)) {
+			const auto& uniform = findUniform(name);
+			switch (uniform.mType) {
+			case UniformType::SAMPLER_2D:
+			case UniformType::SAMPLER_3D:
+			case UniformType::SAMPLER_CUBE:
+			case UniformType::SAMPLER_2D_ARRAY:
+			case UniformType::IMAGE_2D:
+			case UniformType::IMAGE_3D:
+			case UniformType::IMAGE_CUBE:
+			case UniformType::IMAGE_2D_ARRAY:
+				break;
+			default:
+				throw std::invalid_argument(descriptor.Name + ": texture requires a sampler or image binding " + name);
+			}
+			const auto slot = pipeline.mTextures.find(*texture);
+			if (slot == pipeline.mTextures.end()) {
+				throw std::invalid_argument(descriptor.Name + ": unknown texture resource " + *texture);
+			}
+			result.Textures.push_back({ uniform.mBind, &slot->second });
+		}
+		else {
+			auto key = name;
+			std::erase(key, '.');
+			std::visit(
+				[&](const auto& constant) {
+					using T = std::decay_t<decltype(constant)>;
+					if constexpr (!std::is_same_v<T, std::string>) {
+						result.Constants.emplace_back(key, constant);
+					}
+				},
+				value);
+		}
+	}
+	for (const auto& [name, buffer] : descriptor.BufferLinks) {
+		const auto& uniform = findUniform(name);
+		if (uniform.mType == UniformType::UNIFORM_BUFFER) {
+			const auto slot = pipeline.mUniformBuffers.find(buffer);
+			if (slot == pipeline.mUniformBuffers.end()) {
+				throw std::invalid_argument(descriptor.Name + ": unknown uniform buffer " + buffer);
+			}
+			result.UniformBuffers.push_back({ uniform.mBind, &slot->second });
+		}
+		else if (uniform.mType == UniformType::STORAGE_BUFFER) {
+			if (buffer == "Lights") {
+				result.Lights.push_back(uniform.mBind);
+			}
+			else {
+				const auto slot = pipeline.mStorageBuffers.find(buffer);
+				if (slot == pipeline.mStorageBuffers.end()) {
+					throw std::invalid_argument(descriptor.Name + ": unknown storage buffer " + buffer);
+				}
+				result.StorageBuffers.push_back({ uniform.mBind, &slot->second });
+			}
+		}
+		else {
+			throw std::invalid_argument(descriptor.Name + ": BufferLinks requires a buffer binding " + name);
+		}
+	}
+	for (const auto& [bufferName, members] : descriptor.BufferOverrides) {
+		const auto& uniform = findUniform(bufferName);
+		if (uniform.mType != UniformType::UNIFORM_BUFFER) {
+			throw std::invalid_argument(descriptor.Name + ": BufferOverrides requires a uniform buffer " + bufferName);
+		}
+		auto& resolved = result.Overrides.emplace_back();
+		resolved.Binding = uniform.mBind;
+		resolved.Bytes.resize(uniform.mSize);
+		for (const auto& [name, value] : members) {
+			const auto member
+				= std::find_if(uniform.mMembers.begin(), uniform.mMembers.end(), [&](const auto& field) { return field.mName == name; });
+			if (member == uniform.mMembers.end() || member->mArraySize > 1) {
+				throw std::invalid_argument(descriptor.Name + ": invalid buffer member " + name);
+			}
+			std::visit(
+				[&](const auto& constant) {
+					using T = std::decay_t<decltype(constant)>;
+					if constexpr (std::is_same_v<T, std::string>) {
+						throw std::invalid_argument("Textures cannot be buffer members");
+					}
+					else {
+						using Packed = std::conditional_t<std::is_same_v<T, bool>, int32_t, T>;
+						if (member->mOffset < 0 || member->mSize < sizeof(Packed)
+							|| static_cast<size_t>(member->mOffset) + sizeof(Packed) > resolved.Bytes.size()) {
+							throw std::invalid_argument(descriptor.Name + ": buffer member size mismatch " + name);
+						}
+						const auto packed = static_cast<Packed>(constant);
+						std::memcpy(resolved.Bytes.data() + member->mOffset, &packed, sizeof(packed));
+					}
+				},
+				value);
+		}
+	}
+	return result;
+}
+
 RenderGraphPipeline::RenderGraphPipeline(const Descriptor& descriptor, Renderer& renderer, const std::string& pipelineAsset)
 	: mDescriptor(ResolvePipelineSettings(descriptor))
 	, mSourceDescriptor(descriptor)
@@ -1882,6 +1998,12 @@ RenderGraphPipeline::RenderGraphPipeline(const Descriptor& descriptor, Renderer&
 	}
 	if (!descriptor.SettingsAsset.empty()) {
 		mSettingsWriteTime = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().lastWriteTime(descriptor.SettingsAsset);
+	}
+	for (const auto& texture : mDescriptor.Textures) {
+		mTextures.try_emplace(texture.Name);
+		if (texture.History) {
+			mTextures.try_emplace(texture.Name + "Previous");
+		}
 	}
 	CreatePipelineBuffers(*this, renderer);
 	CreateScreenProbeBuffer(*this, renderer);
@@ -1981,6 +2103,23 @@ void RenderGraphPipeline::reloadSettings(Renderer& renderer, const std::string& 
 			ValidateGraphMaterial(*mStageIndex[i], candidate.Stages[i]);
 		}
 	}
+	std::map<const PipelineStage*, PipelineStage::ResolvedBindings> bindings;
+	const auto prepareBindings = [&](const StagesArr& stages, const auto& descriptors) {
+		auto descriptor = descriptors.begin();
+		for (const auto& stage : stages) {
+			bindings.emplace(stage.get(), ResolveStageBindings(*this, *stage, *descriptor++));
+		}
+	};
+	prepareBindings(mStartStages, candidate.StartStages);
+	prepareBindings(mStages, candidate.Stages);
+	for (const auto& descriptor : candidate.LightPasses) {
+		const auto& pass = mLightPasses.at(descriptor.Name);
+		prepareBindings(pass.InitStages, descriptor.InitStages);
+		prepareBindings(pass.CaptureStages, descriptor.CaptureStages);
+		prepareBindings(pass.PrepareStages, descriptor.PrepareStages);
+		prepareBindings(pass.ResolveStages, descriptor.ResolveStages);
+	}
+
 	std::set<std::string> changedTextures, dirty;
 	for (size_t i = 0; i < candidate.Textures.size(); ++i) {
 		if (UTILS::ToJson(candidate.Textures[i]).unwrap() != UTILS::ToJson(mDescriptor.Textures[i]).unwrap()) {
@@ -2015,6 +2154,7 @@ void RenderGraphPipeline::reloadSettings(Renderer& renderer, const std::string& 
 				}
 			}
 			stage->mDescriptor = next;
+			stage->mResolved = std::move(bindings.at(stage.get()));
 			if (update) {
 				stage->mExecuted = false;
 				dirty.insert(outputs.begin(), outputs.end());
@@ -2307,7 +2447,9 @@ void RenderGraphPipeline::resize(Renderer& renderer, int width, int height) {
 			textures[t.Name + "Previous"] = create();
 		}
 	}
-	mTextures = std::move(textures);
+	for (auto& [name, texture] : textures) {
+		mTextures.at(name) = std::move(texture);
+	}
 	mAllocatedTextures = mTextures;
 	mAliasActivations = std::move(transient.Activations);
 	mAliasedTextures = std::move(transient.Names);
@@ -2486,7 +2628,6 @@ RenderGraphPipeline::StagesArr RenderGraphPipeline::loadStages(const std::vector
 		stage->mDescriptor = desc;
 		stage->mName = desc.Name;
 		stage->mDrawContent = desc.Draw;
-		stage->mBufferLinks = desc.BufferLinks;
 		if (desc.Draw == DrawContent::UPSCALE) {
 			if (desc.Once || desc.UpdateInterval != 1 || !desc.Program.empty()) {
 				throw std::runtime_error("UPSCALE must execute once each frame: " + desc.Name);
@@ -2587,6 +2728,7 @@ RenderGraphPipeline::StagesArr RenderGraphPipeline::loadStages(const std::vector
 		if (desc.Compute.usesExtensions()) {
 			LoadComputeStage(*this, *stage);
 		}
+		stage->mResolved = ResolveStageBindings(*this, *stage, desc);
 		result.push_back(std::move(stage));
 	}
 	return result;
@@ -2595,23 +2737,21 @@ RenderGraphPipeline::StagesArr RenderGraphPipeline::loadStages(const std::vector
 void GameRenderer::bindStage(PipelineStage& stage) {
 	auto& renderer = *mContext.render;
 	auto material = stage.mMaterial;
-	const auto& reflection = material->getShader()->getReflection();
+	const auto shader = material->getShader();
+	if (stage.mResolved.Shader != shader || stage.mResolved.Generation != shader->generation()) {
+		if (mRenderPipeline->mDescriptor.Graph.Enabled) {
+			ValidateGraphMaterial(stage, stage.mDescriptor);
+		}
+		stage.mResolved = ResolveStageBindings(*mRenderPipeline, stage, stage.mDescriptor);
+	}
+	const auto& reflection = shader->getReflection();
 	for (const auto& [name, value] : stage.mDefaults) {
 		material->set(name, value);
 	}
-	for (const auto& [name, value] : stage.mDescriptor.Uniforms) {
-		std::visit(
-			[&](const auto& v) {
-				using T = std::decay_t<decltype(v)>;
-				if constexpr (!std::is_same_v<T, std::string>) {
-					auto key = name;
-					key.erase(std::remove(key.begin(), key.end(), '.'), key.end());
-					material->set(key, v);
-				}
-			},
-			value);
+	for (const auto& [name, value] : stage.mResolved.Constants) {
+		material->set(name, value);
 	}
-	renderer.setShader(material->getShader());
+	renderer.setShader(shader);
 	renderer.setDepth({ material->isDepthTest() ? material->getDepthFunc() : DepthFunction::ALWAYS, material->isDepthWriting() });
 	renderer.setCull(material->isBackfaceCulling() ? CullFace::BACK : CullFace::NONE);
 	if (stage.mDescriptor.Additive) {
@@ -2624,70 +2764,23 @@ void GameRenderer::bindStage(PipelineStage& stage) {
 		renderer.resetBlending();
 	}
 	material->bind(mEmptyTexture, true);
-	for (const auto& [name, value] : stage.mDescriptor.Uniforms) {
-		if (const auto* texture = std::get_if<std::string>(&value)) {
-			if (!reflection.mNameToUniforms.contains(name)) {
-				throw std::runtime_error(stage.mName + ": unknown texture uniform " + name);
-			}
-			if (!mRenderPipeline->mTextures.contains(*texture)) {
-				throw std::runtime_error(stage.mName + ": unknown texture resource " + *texture);
-			}
-			renderer.setTexture(reflection.mUniforms.at(reflection.mNameToUniforms.at(name)).mBind, mRenderPipeline->mTextures.at(*texture));
-		}
+	for (const auto& texture : stage.mResolved.Textures) {
+		renderer.setTexture(texture.Binding, *texture.Slot);
 	}
-	for (const auto& [shaderName, bufferName] : stage.mBufferLinks) {
-		const auto& uniform = reflection.mUniforms.at(reflection.mNameToUniforms.at(shaderName));
-		if (uniform.mType == ShaderReflection::UniformType::UNIFORM_BUFFER) {
-			renderer.setUniformBuffer(uniform.mBind, mRenderPipeline->mUniformBuffers.at(bufferName));
-		}
-		else if (uniform.mType == ShaderReflection::UniformType::STORAGE_BUFFER) {
-			renderer.setStorageBuffer(uniform.mBind, (bufferName == "Lights" ? mLightSSBO : mRenderPipeline->mStorageBuffers.at(bufferName)));
-		}
-		else {
-			throw std::runtime_error("BufferLinks references a non-buffer uniform: " + shaderName);
-		}
+	for (const auto& buffer : stage.mResolved.UniformBuffers) {
+		renderer.setUniformBuffer(buffer.Binding, *buffer.Slot);
 	}
-	for (const auto& [bufferName, members] : stage.mDescriptor.BufferOverrides) {
-		const auto& uniform = reflection.mUniforms.at(reflection.mNameToUniforms.at(bufferName));
-		if (uniform.mType != ShaderReflection::UniformType::UNIFORM_BUFFER) {
-			throw std::runtime_error("BufferOverrides requires a uniform buffer: " + bufferName);
+	for (const auto& buffer : stage.mResolved.StorageBuffers) {
+		renderer.setStorageBuffer(buffer.Binding, *buffer.Slot);
+	}
+	for (const auto binding : stage.mResolved.Lights) {
+		renderer.setStorageBuffer(binding, mLightSSBO);
+	}
+	for (auto& buffer : stage.mResolved.Overrides) {
+		if (!buffer.Buffer) {
+			buffer.Buffer = renderer.createUniformBuffer(buffer.Bytes.data(), buffer.Bytes.size());
 		}
-		std::vector<uint8_t> data(uniform.mSize, 0);
-		for (const auto& [name, value] : members) {
-			const auto member = std::find_if(uniform.mMembers.begin(), uniform.mMembers.end(), [&](const auto& m) { return m.mName == name; });
-			if (member == uniform.mMembers.end() || member->mArraySize > 1) {
-				throw std::runtime_error("Invalid buffer member: " + name);
-			}
-			std::visit(
-				[&](const auto& v) {
-					using T = std::decay_t<decltype(v)>;
-					if constexpr (std::is_same_v<T, std::string>) {
-						throw std::runtime_error("Textures cannot be buffer members");
-					}
-					else {
-						if constexpr (std::is_same_v<T, bool>) {
-							if (member->mOffset + 4 > data.size()) {
-								throw std::runtime_error("Buffer member offset mismatch: " + name);
-							}
-							const int b = v;
-							std::memcpy(data.data() + member->mOffset, &b, 4);
-						}
-						else {
-							if (member->mOffset + sizeof(T) > data.size() || sizeof(T) > member->mSize) {
-								throw std::runtime_error("Buffer member size mismatch: " + name);
-							}
-							std::memcpy(data.data() + member->mOffset, &v, sizeof(T));
-						}
-					}
-				},
-				value);
-		}
-		auto& buffer = stage.mOverrideBuffers[bufferName];
-		if (!buffer) {
-			buffer = renderer.createUniformBuffer(nullptr, data.size());
-		}
-		mContext.render->updateUniformBuffer(buffer, data.data(), data.size());
-		renderer.setUniformBuffer(uniform.mBind, buffer);
+		renderer.setUniformBuffer(buffer.Binding, buffer.Buffer);
 	}
 	for (const auto& [name, buffer] :
 		std::map<std::string, std::shared_ptr<UniformBufferInterface>> { { "engine_RayFrame", mRayFrameUbo }, { "engine_UBO", mEngineUbo },

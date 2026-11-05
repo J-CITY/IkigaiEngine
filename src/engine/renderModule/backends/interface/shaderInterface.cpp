@@ -4,7 +4,50 @@
 #include "resourceStruct.h"
 #include "spirvCache.h"
 #include "utilsModule/time/loadTimer.h"
+#include <algorithm>
 #include <cstdint>
+#include <tuple>
+
+void IKIGAI::RENDER::ShaderInterface::swapCompiledInterface(ShaderInterface& replacement) {
+	// Materials own storage laid out by the original reflection. A reload may
+	// move descriptor slots, while changing their data layout needs a rebuild.
+	const auto compatible = [&] {
+		if (mBindingMode != replacement.mBindingMode || mVertexFetchMode != replacement.mVertexFetchMode
+			|| mBindlessCapacity != replacement.mBindlessCapacity || mReflection.mUniforms.size() != replacement.mReflection.mUniforms.size()) {
+			return false;
+		}
+		const auto& next = replacement.mReflection;
+		for (const auto& uniform : mReflection.mUniforms) {
+			if (!next.mNameToUniforms.contains(uniform.mName)) {
+				return false;
+			}
+			const auto& other = next.mUniforms.at(next.mNameToUniforms.at(uniform.mName));
+			if (uniform.mType != other.mType || uniform.mSize != other.mSize || uniform.mDescriptorCount != other.mDescriptorCount
+				|| uniform.mRuntimeArray != other.mRuntimeArray || uniform.mReadOnly != other.mReadOnly
+				|| !std::ranges::equal(uniform.mMembers, other.mMembers, [](const auto& a, const auto& b) {
+					   return std::tie(a.mName, a.mType, a.mOffset, a.mSize, a.mArraySize)
+						   == std::tie(b.mName, b.mType, b.mOffset, b.mSize, b.mArraySize);
+				   })) {
+				return false;
+			}
+		}
+		return true;
+	};
+	if (!compatible()) {
+		throw std::invalid_argument("Shader interface changed during hot reload: " + mPath);
+	}
+	using std::swap;
+	swap(mReflection, replacement.mReflection);
+	swap(mBindingMode, replacement.mBindingMode);
+	swap(mVertexFetchMode, replacement.mVertexFetchMode);
+	swap(mBindlessCapacity, replacement.mBindlessCapacity);
+	swap(mSupportsPbrLayers, replacement.mSupportsPbrLayers);
+	swap(mCompiledPbrLayerCount, replacement.mCompiledPbrLayerCount);
+	swap(mPbrLayerVariant, replacement.mPbrLayerVariant);
+	swap(mPath, replacement.mPath);
+	swap(mShaderPaths, replacement.mShaderPaths);
+	++mGeneration;
+}
 
 void IKIGAI::RENDER::ShaderInterface::configureResourceInterface(const ShaderResource& res) {
 	mSupportsPbrLayers = res.supportsPbrLayers;
@@ -502,8 +545,7 @@ std::vector<uint32_t> IKIGAI::RENDER::CompileGlslToSpirv(
 			? IKIGAI::RESOURCES::STORAGE::AppDataPath(IKIGAI::Config::ORGANIZATION, IKIGAI::Config::APPLICATION)
 			: std::filesystem::u8path(IKIGAI::Config::STORAGE_ROOT);
 		const auto version = glslang::GetVersion();
-		const auto compiler
-			= std::to_string(version.major) + "." + std::to_string(version.minor) + "." + std::to_string(version.patch) + "|" __DATE__ " " __TIME__;
+		const auto compiler = std::to_string(version.major) + "." + std::to_string(version.minor) + "." + std::to_string(version.patch);
 		const auto key = IKIGAI::RENDER::SHADER_CACHE::Key(compiler, static_cast<uint32_t>(stage), static_cast<uint32_t>(target), *source, preamble);
 		cachePath = root / "cache" / "spirv" / (key + ".bin");
 		auto cached = IKIGAI::RENDER::SHADER_CACHE::Read(cachePath);

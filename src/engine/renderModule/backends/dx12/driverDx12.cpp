@@ -1,8 +1,9 @@
-#include "utilsModule/memory/resourceAllocator.h"
 #include "driverDx12.h"
-#include "renderModule/backends/driverFactory.h"
-#include "vertexFormatsDx12.h"
 #include "captureModule/screenshot.h"
+#include "renderModule/backends/driverFactory.h"
+#include "utilsModule/memory/resourceAllocator.h"
+#include "utilsModule/time/loadTimer.h"
+#include "vertexFormatsDx12.h"
 #ifdef IKIGAI_USE_STREAMLINE
 #include "../streamlineRuntime.h"
 #endif
@@ -115,25 +116,15 @@ const static std::map<StencilOperation, D3D12_STENCIL_OP> StencilOperationMap = 
 
 std::string DriverDx12::State::getId() const {
 	std::string res;
-	res += std::to_string(mShader->getId());
-	res += ':';
-	if (mFrameBuffer) {
-		res += std::to_string(mFrameBuffer->getId());
-	}
-	else {
-		res += '-';
-	}
-	res += ':';
 	res += (char)mCullFace;
 	res += (char)mTriangleOrientation;
 	res += (char)mRasterization;
+	res += static_cast<char>(mDepth.has_value());
 	if (mDepth) {
 		res += mDepth->mWriteMask;
 		res += (char)mDepth->mFunc;
 	}
-	else {
-		res += "--";
-	}
+	res += static_cast<char>(mBlend.has_value());
 	if (mBlend) {
 		res += (char)mBlend->mColorFunc;
 		res += (char)mBlend->mColorSrc;
@@ -143,9 +134,7 @@ std::string DriverDx12::State::getId() const {
 		res += (char)mBlend->mAlphaDst;
 		res += (char)mBlend->mColorMask;
 	}
-	else {
-		res += "-------";
-	}
+	res += static_cast<char>(mStencil.has_value());
 	if (mStencil) {
 		res += mStencil->mReadMask;
 		res += (char)mStencil->mWriteMask;
@@ -154,10 +143,20 @@ std::string DriverDx12::State::getId() const {
 		res += (char)mStencil->mFunc;
 		res += (char)mStencil->mPass;
 	}
-	else {
-		res += "------";
-	}
 	return res;
+}
+
+void DriverDx12::retireShaderPipelines(size_t shaderId) {
+	const auto shaderKey = std::to_string(shaderId) + ":";
+	for (auto state = mStates.begin(); state != mStates.end();) {
+		if (std::string_view(state->first).substr(2).starts_with(shaderKey)) {
+			destroyDeferred(state->second);
+			state = mStates.erase(state);
+		}
+		else {
+			++state;
+		}
+	}
 }
 
 std::vector<CD3DX12_STATIC_SAMPLER_DESC> DriverDx12::GetStaticSamplers() {
@@ -1577,13 +1576,18 @@ void DriverDx12::applyState() {
 	auto shader = mCurrentState.mShader;
 	assert(shader);
 
-	if (!mStates.contains((mCurrentState.getId() + ":" + std::to_string(shader->generation()) + ":" + vertexLayoutKey()))) {
-		auto pipeline_state = createNewState(mCurrentState);
-		mStates[(mCurrentState.getId() + ":" + std::to_string(shader->generation()) + ":" + vertexLayoutKey())] = pipeline_state;
+	const bool isCompute = shader->mBlobs.contains(ShaderType::COMPUTE) && shader->mBlobs.at(ShaderType::COMPUTE)
+		&& !shader->mBlobs.contains(ShaderType::VERTEX) && !shader->mBlobs.contains(ShaderType::FRAGMENT);
+	auto key = std::string(isCompute ? "c:" : "g:") + std::to_string(shader->getId()) + ":" + std::to_string(shader->generation()) + ":";
+	if (!isCompute) {
+		const auto& attachments = mCurrentState.mFrameBuffer ? mCurrentState.mFrameBuffer : getDefaultFrameBuffer();
+		key += AttachmentSignatureKey(*attachments, 1) + ":" + vertexLayoutKey() + ":" + mCurrentState.getId();
 	}
-
-	const bool isCompute = shader->mBlobs.contains(ShaderType::COMPUTE) && shader->mBlobs.at(ShaderType::COMPUTE) &&
-		!shader->mBlobs.contains(ShaderType::VERTEX);
+	auto cached = mStates.find(key);
+	if (cached == mStates.end()) {
+		UTILS::LoadTimer timing(isCompute ? "compute-pipeline" : "graphics-pipeline", shader->mPath);
+		cached = mStates.emplace(key, createNewState(mCurrentState)).first;
+	}
 
 	std::shared_ptr<FrameBufferDx12> fb;
 
@@ -1614,7 +1618,7 @@ void DriverDx12::applyState() {
 			FALSE, &dsv_descriptor);
 	}
 
-	const auto state = mStates.at((mCurrentState.getId() + ":" + std::to_string(shader->generation()) + ":" + vertexLayoutKey())).Get();
+	const auto state = cached->second.Get();
 	mCommandList->SetPipelineState(state);
 	if (isCompute) {
 		mCommandList->SetComputeRootSignature(shader->getRootSignature().Get());

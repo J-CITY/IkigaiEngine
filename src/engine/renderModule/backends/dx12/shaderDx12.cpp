@@ -250,16 +250,16 @@ ShaderDx12::ShaderDx12(const ShaderResource& res) : ShaderDx12() {
 
 void ShaderDx12::recompile(const ShaderResource& res) {
 	requireOwnerThread();
-	mReflection = ShaderReflection();
-	mBlobs.clear();
-	mRootSignature.Reset();
-	mPushConstantRootIndex = -1;
-	mPushConstantDwords = 0;
-	ShaderResource patched = res;
-	if (!patched.sources.empty()) {
-		patched.spirvSources.clear();
-	}
-	create(patched);
+	auto* driver = d3dUtil::GetDriver();
+	auto replacement = std::make_shared<ShaderDx12>(res);
+	using std::swap;
+	swapCompiledInterface(*replacement);
+	swap(mBlobs, replacement->mBlobs);
+	swap(mRootSignature, replacement->mRootSignature);
+	swap(mPushConstantRootIndex, replacement->mPushConstantRootIndex);
+	swap(mPushConstantDwords, replacement->mPushConstantDwords);
+	driver->mRayDeferred.push_back(std::move(replacement));
+	driver->retireShaderPipelines(mId);
 }
 
 void ShaderDx12::create(const ShaderResource& res) {
@@ -269,7 +269,9 @@ void ShaderDx12::create(const ShaderResource& res) {
 	mReflection = ShaderReflection();
 
 	ShaderResource local = res;
-    if (!local.sources.empty() && !local.useBinary) local.spirvSources.clear();
+	if (!local.sources.empty()) {
+		local.spirvSources.clear();
+	}
 	const std::vector<std::string> defines;
 
 	if (!local.spirvSources.empty()) {

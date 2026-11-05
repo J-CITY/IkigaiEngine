@@ -9,9 +9,7 @@
 #ifdef VULKAN_BACKEND
 #include <cstring>
 #include <exception>
-#include <iomanip>
 #include <map>
-#include <sstream>
 
 #include "driverVk.h"
 #include "textureVk.h"
@@ -23,20 +21,11 @@
 #include <renderModule/backends/interface/resourceStruct.h>
 #include <resourceModule/fileSystem/fileSystem.h>
 #include <resourceModule/serviceManager.h>
+#include <resourceModule/shaderManager.h>
 #include <spirv.h>
 #include <spirv_reflect.h>
 
 namespace {
-// Конвертация vector<uint32_t> (SPIR-V) в hex-строку
-std::string SpirvToHex(const std::vector<uint32_t>& spirv) {
-	std::ostringstream oss;
-	oss << std::hex << std::setfill('0');
-	for (uint32_t word : spirv) {
-		oss << std::setw(8) << word;
-	}
-	return oss.str();
-}
-
 // Конвертация hex-строки обратно в vector<uint32_t>
 std::vector<uint32_t> HexToSpirv(const std::string& hex) {
 	std::vector<uint32_t> result;
@@ -191,12 +180,12 @@ std::shared_ptr<IKIGAI::RENDER::ShaderVk> IKIGAI::RENDER::ShaderVk::CreateFromPa
 }
 
 std::shared_ptr<IKIGAI::RENDER::ShaderVk> IKIGAI::RENDER::ShaderVk::Create(const ShaderResource& resource) {
-	const auto useBinary = resource.useBinary;
-	bool needSaveBinarySource = false;
+	auto prepared = resource;
+	auto dependencies = IKIGAI::RESOURCES::ShaderLoader::ResolveSources(prepared);
 	auto& fs = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RESOURCES::FileSystem>();
 
-	// Try load spirv bin
-	if (useBinary) {
+	// Preserve source-less packaged SPIR-V. Source-backed stages use the content-keyed compiler cache.
+	if (prepared.useBinary && prepared.sources.empty() && prepared.spirvSources.empty()) {
 		const auto cacheJsonPath = resource.path + ".spirv.json";
 		if (fs.isFileExist(cacheJsonPath)) {
 			if (auto file = fs.getFile(cacheJsonPath); file && file->isOpened()) {
@@ -208,11 +197,10 @@ std::shared_ptr<IKIGAI::RENDER::ShaderVk> IKIGAI::RENDER::ShaderVk::Create(const
 						for (const auto& [key, hexStr] : cache.stages) {
 							loaded[static_cast<ShaderType>(std::stoi(key))] = HexToSpirv(hexStr);
 						}
-						resource.spirvSources = std::move(loaded);
-						return IKIGAI::MEMORY::MakeShared<ShaderVk, IKIGAI::MEMORY::Category::Shader>(resource);
+						prepared.spirvSources = std::move(loaded);
 					} catch (const std::exception& e) {
 						LOG_ERROR << "Corrupted SPIR-V cache " << cacheJsonPath << ": " << e.what();
-						resource.spirvSources.clear();
+						prepared.spirvSources.clear();
 					}
 				}
 				else {
@@ -220,44 +208,9 @@ std::shared_ptr<IKIGAI::RENDER::ShaderVk> IKIGAI::RENDER::ShaderVk::Create(const
 				}
 			}
 		}
-		else {
-			needSaveBinarySource = true;
-		}
 	}
-
-	// Load sources
-	for (const auto& [type, path] : resource.paths) {
-		if (!path.empty()) {
-			auto file = fs.getFile(path);
-			if (file && file->isOpened()) {
-				resource.sources[ShaderResource::toEnum[type]] = file->readStr();
-			}
-			else {
-				LOG_ERROR << "Failed to load: " << path;
-			}
-		}
-	}
-
-	auto shader = IKIGAI::MEMORY::MakeShared<ShaderVk, IKIGAI::MEMORY::Category::Shader>(resource);
-
-	// Save spirv bin
-	if (needSaveBinarySource && !shader->mPath.empty() && !resource.spirvSources.empty()) {
-		const auto cacheJsonPath = shader->mPath + ".spirv.json";
-		if (!fs.isFileExist(cacheJsonPath)) {
-			SpirvCache cache;
-			for (const auto& [type, spirv] : resource.spirvSources) {
-				cache.stages[std::to_string(static_cast<int>(type))] = SpirvToHex(spirv);
-			}
-			if (auto resStr = IKIGAI::UTILS::ToJsonStr(cache, 2); !resStr.isErr()) {
-				if (auto file = fs.getFile(cacheJsonPath, IKIGAI::RESOURCES::FileMode::WRITE); file) {
-					file->write(resStr.unwrap());
-				}
-			}
-			else {
-				LOG_ERROR << "Failed to serialize SPIR-V cache: " << cacheJsonPath;
-			}
-		}
-	}
+	auto shader = IKIGAI::MEMORY::MakeShared<ShaderVk, IKIGAI::MEMORY::Category::Shader>(prepared);
+	shader->mSourceDependencies = std::move(dependencies);
 
 	return shader;
 }
@@ -272,12 +225,24 @@ IKIGAI::RENDER::ShaderVk::~ShaderVk() {
 
 void IKIGAI::RENDER::ShaderVk::recompile(const ShaderResource& res) {
 	requireOwnerThread();
-	clear();
-	// New sources must not be shadowed by SPIR-V compiled from the previous version
-	if (!res.sources.empty()) {
-		res.spirvSources.clear();
-	}
-	create(res);
+	auto* driver = UtilityVk::GetDriver();
+	auto replacement = std::make_shared<ShaderVk>(res);
+	using std::swap;
+	swapCompiledInterface(*replacement);
+	swap(mDescriptorSetLayout, replacement->mDescriptorSetLayout);
+	swap(mPipelineLayout, replacement->mPipelineLayout);
+	swap(mVertexShaderModule, replacement->mVertexShaderModule);
+	swap(mFragmentShaderModule, replacement->mFragmentShaderModule);
+	swap(mGeometryShaderModule, replacement->mGeometryShaderModule);
+	swap(mTessellationControlShaderModule, replacement->mTessellationControlShaderModule);
+	swap(mTessellationEvaluationShaderModule, replacement->mTessellationEvaluationShaderModule);
+	swap(mComputeShaderModule, replacement->mComputeShaderModule);
+	swap(mRequiredDescriptorBindings, replacement->mRequiredDescriptorBindings);
+#if IKIGAI_ENABLE_MEMORY_TRACKING
+	swap(mGpuModules, replacement->mGpuModules);
+#endif
+	driver->destroyDeferred(std::shared_ptr<void>(std::move(replacement)));
+	driver->retireShaderPipelines(mId);
 }
 
 void IKIGAI::RENDER::ShaderVk::clear() const { }
@@ -285,7 +250,7 @@ void IKIGAI::RENDER::ShaderVk::clear() const { }
 void IKIGAI::RENDER::ShaderVk::create(const ShaderResource& res) {
 	UTILS::LoadTimer timing("shader", res.path);
 	configureResourceInterface(res);
-	if (!res.sources.empty() && !res.useBinary) {
+	if (!res.sources.empty()) {
 		res.spirvSources.clear();
 	}
 	static size_t ID = 0;
