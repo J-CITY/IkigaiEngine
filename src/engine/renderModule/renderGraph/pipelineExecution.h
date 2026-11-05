@@ -1,5 +1,5 @@
 #pragma once
-#include "virtualGeometryModule/runtime/virtualGeometrySelectionPath.h"
+#include "submissionMode.h"
 #include <nlohmann/json_fwd.hpp>
 #include <optional>
 #include <serdepp/attribute/default.hpp>
@@ -12,7 +12,7 @@ inline constexpr unsigned MaxPipelineFramesInFlight = 4;
 
 struct PipelineExecution {
 	std::optional<int> FramesInFlight;
-	std::optional<VG::VirtualGeometrySelectionPath> DrivenMode;
+	std::optional<SubmissionMode> DrivenMode;
 	bool AsyncCompute = false;
 
 	template <class Context> static constexpr auto serde(Context& context, PipelineExecution& value) {

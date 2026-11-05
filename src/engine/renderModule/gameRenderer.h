@@ -40,6 +40,8 @@ class VectorRenderer;
 }
 namespace IKIGAI::RENDER {
 class ParticleRenderer;
+class GpuScene;
+struct GpuSceneDraw;
 }
 namespace IKIGAI::VG {
 class VirtualGeometryRenderer;
@@ -554,6 +556,10 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	PrimitiveRender mPrimitives;
 	std::shared_ptr<ParticleRenderer> mParticleRenderer;
 	std::shared_ptr<VG::VirtualGeometryRenderer> mVirtualGeometry;
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+	std::unique_ptr<GpuScene> mGpuScene;
+	PipelineStage* mGpuSceneStage = nullptr;
+#endif
 #if USE_PHYSICS_3D
 	std::shared_ptr<DeformableRenderer> mDeformableRenderer;
 #endif
@@ -562,6 +568,7 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	MATH::Vector2f mJitter {}, mPreviousJitter {};
 	const ECS::CameraComponent* mPreviousCamera = nullptr;
 	void bindStage(PipelineStage& stage);
+	void drawDrawable(const Drawable& drawable, const GpuSceneDraw* indirect);
 	void captureShadows(
 		PipelineStage& stage, const std::vector<RenderChunk>& casters, const MATH::Vector3f& cameraPosition, const MATH::Vector2f& size);
 	void renderGui(SCENE_SYSTEM::Scene& scene, bool worldVectors = false);

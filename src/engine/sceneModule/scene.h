@@ -41,6 +41,7 @@ class Model;
 enum class CullingOptions;
 struct LightOGL;
 struct Drawable;
+struct GpuSceneSnapshot;
 }
 
 namespace IKIGAI::SCENE_SYSTEM {
@@ -148,8 +149,8 @@ public:
 	std::vector<IKIGAI::RENDER::RenderChunk> findAndSortFrustumCulledDrawables(
 		const MATH::Vector3f& cameraPosition, const RENDER::Frustum& frustum, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial);
 
-	std::vector<IKIGAI::RENDER::RenderChunk> findAndSortDrawables(
-		const MATH::Vector3f& cameraPosition, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial);
+	std::vector<IKIGAI::RENDER::RenderChunk> findAndSortDrawables(const MATH::Vector3f& cameraPosition,
+		std::shared_ptr<RENDER::MaterialInterface> defaultMaterial, RENDER::GpuSceneSnapshot* gpuScene = nullptr);
 
 	IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::CameraComponent> findMainCamera();
 	// Advance once after all views have recorded a game frame.

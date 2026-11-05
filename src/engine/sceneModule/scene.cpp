@@ -36,6 +36,7 @@
 #include "coreModule/ecs/components/skeletalComponent.h"
 #include "coreModule/ecs/object.h"
 #include "renderModule/backends/interface/meshInterface.h"
+#include "renderModule/gpuScene.h"
 #include "renderModule/spatial/frustumBvh.h"
 #include "utilsModule/log/loggerDefine.h"
 #include <unordered_map>
@@ -1283,7 +1284,7 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledDrawable
 }
 
 std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(
-	const MATH::Vector3f& cameraPosition, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial) {
+	const MATH::Vector3f& cameraPosition, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial, RENDER::GpuSceneSnapshot* gpuScene) {
 	ChunkContext ctx;
 	ctx.init(getWorld());
 
@@ -1314,6 +1315,8 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(
 
 					const ECS::MaterialRenderer::MaterialList& materials = materialRenderer->getMaterials();
 
+					const bool gpuObject = gpuScene && !chunk.camera && !skeletonComp && DeformationPadding(*materialRenderer) == 0;
+					const auto behavior = modelRenderer.getFrustumBehaviour();
 					for (const auto mesh : model->getMeshes()) {
 						std::shared_ptr<RENDER::MaterialInterface> material;
 						if (mesh->getMaterialIndex() < MAX_MATERIAL_COUNT) {
@@ -1330,6 +1333,23 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(
 							if (auto facial = modelRenderer.obj->getComponent<ECS::FacialAnimationComponent>()) {
 								facial->bind(*model);
 								element.facialAnimation = facial.get();
+							}
+							if (gpuObject && !element.facialAnimation && !material->isBlendable() && material->getGPUInstances() == 1
+								&& material == materials.at(mesh->getMaterialIndex()) && mesh->getIndexCount() && mesh->getOffset() == 0
+								&& !mesh->vertexLayout() && mesh->morphTargets().empty() && material->pbrLayers().Layers.empty()
+								&& material->deformation().Mode == RENDER::DeformationMode::None) {
+								RENDER::BoundingSphere modelBounds { {}, -1.f };
+								RENDER::BoundingSphere meshBounds { {}, -1.f };
+								if (behavior != ECS::EFrustumBehaviour::DISABLED || gpuScene->UseBvhBounds) {
+									const auto& bounds = behavior == ECS::EFrustumBehaviour::CULL_CUSTOM ? modelRenderer.getCustomBoundingSphere()
+																										 : model->getBoundingSphere();
+									modelBounds = getGlobalBoundingSphere(bounds, transform);
+									if (!gpuScene->UseBvhBounds && behavior == ECS::EFrustumBehaviour::CULL_MESHES && model->getMeshes().size() > 1) {
+										meshBounds = getGlobalBoundingSphere(mesh->getBoundingSphere(), transform);
+									}
+								}
+								gpuScene->Instances.push_back(
+									{ element.OwnerId, mesh, material, { element.world, element.prevWorld, element.tint }, modelBounds, meshBounds });
 							}
 
 							if (material->isBlendable()) {

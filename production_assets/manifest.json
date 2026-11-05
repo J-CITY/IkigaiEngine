@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "bundleVersion": "renderer-rc0-2026-11-04",
+  "bundleVersion": "renderer-rc9-2026-11-05",
   "files": [
     {
       "path": "engine/materials/aerialProbe.mat",
@@ -2221,6 +2221,16 @@
       "path": "engine/shaders/render/pointShadow.vert.glsl",
       "size": 1512,
       "sha256": "6de41bb0c7718580aa5cdd903b75b6cb15832afc8b23037bc95e1de7e6961e5f"
+    },
+    {
+      "path": "engine/shaders/render/ordinary/cull.comp.glsl",
+      "size": 1441,
+      "sha256": "e344f674c3f9b5854bd6a7211965ea159b762cd139e964791a16b911a839f10b"
+    },
+    {
+      "path": "engine/shaders/render/ordinary/cull.shader",
+      "size": 78,
+      "sha256": "7a8dbe9384fb919275d3a977a746798fc37a4a92a01508733e2fd28c8ed38258"
     },
     {
       "path": "engine/shaders/render/portable/atmosphereAerial.frag.glsl",

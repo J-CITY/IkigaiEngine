@@ -3,6 +3,7 @@
 #include "coreModule/ecs/systems/environmentSystem.h"
 #include "diagnostics/renderStatistics.h"
 #include "environmentModule/surfaceWeather.h"
+#include "gpuScene.h"
 #include "indirectLighting/temporalDenoiseStage.h"
 #include "instanceBatch.h"
 #include "particles/particleRenderer.h"
@@ -177,6 +178,9 @@ void GameRenderer::Init() {
 void GameRenderer::renderScene() {
 
 	if (mContext.sceneManager->isTransitioning() || !mContext.sceneManager->hasCurrentScene()) {
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+		mGpuScene.reset();
+#endif
 		renderLoadingScene(mContext.sceneManager->getPresentedScene());
 		mPrimitives.clear();
 		return;
@@ -213,6 +217,9 @@ void GameRenderer::renderScene() {
 	if (mRenderedScene.lock() != scene.lifetime) {
 		resetTemporalHistory(HistoryReason::CameraCut);
 		mPreviousCamera = nullptr;
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+		mGpuScene.reset();
+#endif
 		mRenderedScene = scene.lifetime;
 	}
 	if (mRenderedTopologyRevision != scene.renderTopologyRevision) {
@@ -319,6 +326,10 @@ const GameRenderer::SkinningPose* GameRenderer::skinningPose(const Drawable& dra
 }
 
 void GameRenderer::drawDrawable(const Drawable& drawable) {
+	drawDrawable(drawable, nullptr);
+}
+
+void GameRenderer::drawDrawable(const Drawable& drawable, const GpuSceneDraw* indirect) {
 	auto material = mOverrideMaterial ? mOverrideMaterial : drawable.material;
 	if (!material || !drawable.mesh) {
 		return;
@@ -466,11 +477,14 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 			render->setUniformBuffer("engine_Surface", mSurfaceUbo);
 		}
 		if (reflected.contains("engine_InstanceTransforms")) {
-			const InstanceMetaGpu state { { drawable.instances ? float(drawable.instances->transforms().size()) : 0.0f, float(shellCount), 0, 0 },
-				drawable.tint };
+			const float instanceSource = indirect ? 1.f : drawable.instances ? float(drawable.instances->transforms().size()) : 0.f;
+			const InstanceMetaGpu state { { instanceSource, float(shellCount), 0, 0 }, drawable.tint };
 			mContext.render->updateUniformBuffer(mInstanceMetaUbo, state);
 			render->setUniformBuffer("engine_InstanceMeta", mInstanceMetaUbo);
-			render->setStorageBuffer("engine_InstanceTransforms", drawable.instances ? drawable.instances->buffer() : mEmptyInstanceBuffer);
+			render->setStorageBuffer("engine_InstanceTransforms",
+				indirect				 ? indirect->Transforms
+					: drawable.instances ? drawable.instances->buffer()
+										 : mEmptyInstanceBuffer);
 		}
 		if (reflected.contains("engine_UBO")) {
 			render->setUniformBuffer("engine_UBO", mEngineUbo);
@@ -536,8 +550,16 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 		// }
 		// drawable.mesh->unbind();
 
-		const unsigned instances = drawable.instances ? unsigned(drawable.instances->transforms().size()) : material->getGPUInstances();
-		render->draw(drawable.mesh, PrimitiveMode::TRIANGLES, instances * shellCount);
+		if (indirect) {
+			render->setPrimitiveMode(PrimitiveMode::TRIANGLES);
+			render->execute([mesh = drawable.mesh] { mesh->bind(); });
+			render->drawIndexedIndirect(indirect->Arguments, 0, 1, sizeof(DrawIndexedIndirectCommand));
+			render->execute([mesh = drawable.mesh] { mesh->unbind(); });
+		}
+		else {
+			const unsigned instances = drawable.instances ? unsigned(drawable.instances->transforms().size()) : material->getGPUInstances();
+			render->draw(drawable.mesh, PrimitiveMode::TRIANGLES, instances * shellCount);
+		}
 
 		// std::static_pointer_cast<ShaderGl>(material->getShader())->unbind();
 		material->unbind();
@@ -674,7 +696,31 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 
 	const auto& cameraPosition = cameraComponent.obj->getTransform()->getWorldPosition();
 	auto chunks = scene.findDrawables(cameraPosition, cameraComponent.getCamera(), nullptr, mEmptyMaterial);
-	auto shadowChunks = scene.findAndSortDrawables(cameraPosition, mEmptyMaterial);
+	GpuSceneSnapshot* gpuSnapshot = nullptr;
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+	GpuSceneSnapshot ordinary;
+	if (mGpuSceneStage && mGpuSceneStage->mDescriptor.Enabled) {
+		if (!mGpuScene) {
+			mGpuScene = std::make_unique<GpuScene>();
+		}
+		if (mGpuScene->available(*mContext.render)) {
+			ordinary.UseBvhBounds = cameraComponent.getCamera().isFrustumGeometryBVHCulling();
+			gpuSnapshot = &ordinary;
+		}
+	}
+	else {
+		mGpuScene.reset();
+	}
+#endif
+	auto shadowChunks = scene.findAndSortDrawables(cameraPosition, mEmptyMaterial, gpuSnapshot);
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+	if (gpuSnapshot) {
+		auto profile = mGpuProfiler.measure("Ordinary GPU cull");
+		const auto& camera = cameraComponent.getCamera();
+		const bool culling = ordinary.UseBvhBounds || camera.isFrustumGeometryCulling();
+		mGpuScene->prepare(*mContext.render, ordinary.Instances, culling ? &camera.getFrustum() : nullptr);
+	}
+#endif
 	{
 		// Virtual geometry: LOD selection (GPU compute passes or CPU) and uploads before any stage; fallback meshes join
 		// the regular drawables (shadows/RT always, the view when the cluster path is unavailable).
@@ -1163,14 +1209,22 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			renderGui(scene, true);
 		}
 		else {
+			const auto drawOpaque = [&](const Drawable& drawable) {
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+				if (gpuSnapshot && stage == mGpuSceneStage && mGpuScene->contains(drawable)) {
+					return;
+				}
+#endif
+				drawDrawable(drawable);
+			};
 			for (auto& chunk : chunks) {
 				if (stage->mDrawContent == DrawContent::FORWARD || stage->mDrawContent == DrawContent::DEFERRED
 					|| stage->mDrawContent == DrawContent::SHADOW) {
 					for (const auto& [distance, drawable] : chunk.opaqueDrawablesForward) {
-						drawDrawable(drawable);
+						drawOpaque(drawable);
 					}
 					for (const auto& [distance, drawable] : chunk.opaqueDrawablesDeferred) {
-						drawDrawable(drawable);
+						drawOpaque(drawable);
 					}
 				}
 				if (stage->mDrawContent == DrawContent::FORWARD || stage->mDrawContent == DrawContent::TRANSPARENT_GEOMETRY) {
@@ -1182,6 +1236,14 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 					}
 				}
 			}
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+			if (gpuSnapshot && stage == mGpuSceneStage) {
+				for (const auto& batch : mGpuScene->draws()) {
+					Drawable drawable { MATH::Matrix4f::Identity, MATH::Matrix4f::Identity, batch.Mesh, batch.Material };
+					drawDrawable(drawable, &batch.Buffers);
+				}
+			}
+#endif
 			if (stage->mDrawContent == DrawContent::DEFERRED && stage->mName == "Geometry" && mVirtualGeometry) {
 				mVirtualGeometry->drawGeometry(render, { mEngineUbo, mFrameUbo, mEmptyTexture });
 			}
@@ -1459,6 +1521,27 @@ void GameRenderer::setPipeline(std::unique_ptr<RenderGraphPipeline>&& renderPipe
 		renderPipeline->mHistory.invalidate(HistoryReason::PipelineReload);
 	}
 	mRenderPipeline = std::move(renderPipeline);
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+	mGpuSceneStage = nullptr;
+	mGpuScene.reset();
+	if (mRenderPipeline->mDescriptor.Execution.DrivenMode.value_or(SubmissionMode::CPU) != SubmissionMode::CPU) {
+		const auto geometry = std::ranges::find_if(mRenderPipeline->mStages, [](const auto& stage) {
+			return stage->mDrawContent == DrawContent::DEFERRED && stage->mName == "Geometry" && stage->mDescriptor.OverrideMaterial
+				&& stage->mMaterial && stage->mMaterial->hasShader() && !stage->mMaterial->isBlendable() && stage->mMaterial->getGPUInstances() == 1
+				&& stage->mMaterial->getShader()->mPath == "/shaders/render/portable/gbuffer.shader";
+		});
+		if (geometry != mRenderPipeline->mStages.end()) {
+			mGpuSceneStage = geometry->get();
+		}
+		else {
+			std::cout << "GPU_SCENE_FALLBACK requires the portable Geometry pass\n";
+		}
+	}
+#else
+	if (mRenderPipeline->mDescriptor.Execution.DrivenMode == SubmissionMode::GPU) {
+		std::cout << "GPU_SCENE_FALLBACK ordinary GPU submission is disabled in this build\n";
+	}
+#endif
 	mCloudShadowAnchorValid = false;
 	mCloudShadowNeedsUpdate = true;
 	mAtmosphereCache = {};
