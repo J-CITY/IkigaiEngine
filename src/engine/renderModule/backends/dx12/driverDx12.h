@@ -405,6 +405,10 @@ private:
 	void logAdapterOutputs(IDXGIAdapter* adapter);
 	void clearForDestroy();
 	void wait();
+	void presentFrame() override;
+	void waitForPresentedFrame() override;
+	void finishPresent() override;
+	void releaseCompletedFrame();
 
 	FrameInfo mFrameInfo;
 

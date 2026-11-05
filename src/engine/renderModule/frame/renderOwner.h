@@ -2,12 +2,13 @@
 #include <thread>
 
 namespace IKIGAI::RENDER {
-// Backend ownership is fixed before recording starts; coroutines do not transfer it.
+// Identifies the producer thread. Coroutines do not transfer its ownership.
 class RenderOwner final {
 public:
 	RenderOwner();
 	void requireCurrentThread() const;
 	[[nodiscard]] bool isCurrentThread() const noexcept;
+	[[nodiscard]] std::thread::id thread() const noexcept;
 
 private:
 	std::thread::id mThread;

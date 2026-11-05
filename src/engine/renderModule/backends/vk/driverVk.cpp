@@ -1375,6 +1375,11 @@ void DriverVk::EnsureGraphicsState(bool draw_indexed) {
 }
 
 void DriverVk::wait() {
+	waitForPresentedFrame();
+	releaseCompletedFrame();
+}
+
+void DriverVk::waitForPresentedFrame() {
 	auto it = mSwapchains.find(mCurrentWindowID);
 	if (it == mSwapchains.end() || it->second.frames.empty() || mFrameIndex >= it->second.frames.size()) {
 		return;
@@ -1384,6 +1389,14 @@ void DriverVk::wait() {
 	if (wait_result != vk::Result::eSuccess) {
 		throw std::runtime_error("Vulkan frame fence wait failed");
 	}
+}
+
+void DriverVk::releaseCompletedFrame() {
+	auto it = mSwapchains.find(mCurrentWindowID);
+	if (it == mSwapchains.end() || it->second.frames.empty() || mFrameIndex >= it->second.frames.size()) {
+		return;
+	}
+	auto& frame = it->second.frames.at(mFrameIndex);
 	if (frame.Completion.Value) {
 		completionSource()->completed(frame.Completion);
 	}
@@ -2260,6 +2273,12 @@ void DriverVk::setClearColor(float r, float g, float b, float a) {
 }
 
 void DriverVk::submit() {
+	presentFrame();
+	waitForPresentedFrame();
+	finishPresent();
+}
+
+void DriverVk::presentFrame() {
 	if (!mPresentationUIRendered) {
 		if (auto* imgui = IKIGAI::IMGUI::Get()) {
 			imgui->renderDrawData();
@@ -2311,11 +2330,13 @@ void DriverVk::submit() {
 #endif
 
 	mSemaphoreIndex = (mSemaphoreIndex + 1) % getCurrentSwapchainContext().frames.size();
+	++mSubmissionEpoch;
+}
 
-	// wait() blocks on the fence of the frame submitted above: its readback copies are complete afterwards.
-	const uint64_t submittedEpoch = mSubmissionEpoch++;
-	wait();
-	mCompletedEpoch = submittedEpoch;
+void DriverVk::finishPresent() {
+	// The frame fence also covers the readback copies.
+	releaseCompletedFrame();
+	mCompletedEpoch = mSubmissionEpoch - 1;
 	if (mFrameGeneration) {
 		mFrameGeneration->waitForPresents();
 		mFrameGeneration->afterPresent();

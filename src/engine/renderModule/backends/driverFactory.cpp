@@ -190,8 +190,11 @@ void SetCliRenderExecutorOverride(std::string_view name) {
 	else if (value == "deferred") {
 		gCliExecution = RenderSettings::Execution::DEFERRED;
 	}
+	else if (value == "threaded") {
+		gCliExecution = RenderSettings::Execution::THREADED;
+	}
 	else {
-		throw std::invalid_argument("Invalid render executor; expected immediate/deferred");
+		throw std::invalid_argument("Invalid render executor; expected immediate/deferred/threaded");
 	}
 }
 
@@ -238,6 +241,15 @@ void ResolveRenderBackend(RenderSettings& settings) {
 		}
 	}
 	ValidateBackendAvailable(settings.backend);
+	if (settings.execution != RenderSettings::Execution::IMMEDIATE && settings.backend != RenderSettings::Backend::VULKAN
+		&& settings.backend != RenderSettings::Backend::DIRECTX12) {
+		throw std::invalid_argument("Deferred and threaded rendering require Vulkan or DirectX 12");
+	}
+#if !defined(_WIN32) || defined(OCULUS)
+	if (settings.execution == RenderSettings::Execution::THREADED) {
+		throw std::invalid_argument("Threaded rendering is supported on Windows");
+	}
+#endif
 }
 
 std::unique_ptr<DriverInterface> CreateRenderDriver(RenderSettings::Backend backend, WINDOW::Window&) {

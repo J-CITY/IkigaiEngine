@@ -775,51 +775,78 @@ Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> DriverDx12::getCommandList() 
 }
 
 void DriverDx12::submit() {
-    // Defer transitions until after all graph passes, including RT/UAV writes.
-    // This list deliberately survives resize waits before the UI is submitted.
-    for(auto& texture:mImGuiTextures){
-        texture->setState(mCommandList.Get(),D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE|D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        mRayFrameResources.push_back(std::move(texture));
-    }
-    mImGuiTextures.clear();
-    mCommandList->SetDescriptorHeaps(1,mDescriptorHeap.GetAddressOf());
-	if (!mPresentationUIRendered)if (auto* imgui = IKIGAI::IMGUI::Get()) {
-		imgui->renderDrawData();
+	presentFrame();
+	waitForPresentedFrame();
+	finishPresent();
+}
+
+void DriverDx12::presentFrame() {
+	// Defer transitions until after all graph passes, including RT/UAV writes.
+	// This list deliberately survives resize waits before the UI is submitted.
+	for (auto& texture : mImGuiTextures) {
+		texture->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+		mRayFrameResources.push_back(std::move(texture));
+	}
+	mImGuiTextures.clear();
+	mCommandList->SetDescriptorHeaps(1, mDescriptorHeap.GetAddressOf());
+	if (!mPresentationUIRendered) {
+		if (auto* imgui = IKIGAI::IMGUI::Get()) {
+			imgui->renderDrawData();
+		}
 	}
 
 	end();
 	if (CAPTURE::ScreenshotService::Get().pending()) {
-        // Diagnostic readTexture uses a separate queue: finish rendering first.
-        ThrowIfFailed(mCommandQueue->Signal(mFence.Get(),mFenceValue));
-        ThrowIfFailed(mFence->SetEventOnCompletion(mFenceValue++,mFenceEvent));
-        WaitWithWindowMessages(mFenceEvent);
-        CAPTURE::ScreenshotService::Get().captureTexture(*this,getDefaultFrameBuffer()->getTextures().at(0));
-    }
+		// Diagnostic readTexture uses a separate queue: finish rendering first.
+		ThrowIfFailed(mCommandQueue->Signal(mFence.Get(), mFenceValue));
+		ThrowIfFailed(mFence->SetEventOnCompletion(mFenceValue++, mFenceEvent));
+		WaitWithWindowMessages(mFenceEvent);
+		CAPTURE::ScreenshotService::Get().captureTexture(*this, getDefaultFrameBuffer()->getTextures().at(0));
+	}
 	bool vsync = settings.frameGeneration.vsync;
 	if (settings.presentMode != RenderSettings::PresentMode::DEFAULT) {
 		// No tearing flag: MAILBOX and IMMEDIATE both present with sync interval 0.
 		vsync = settings.presentMode == RenderSettings::PresentMode::FIFO;
 	}
-    latencySubmitEnd();
+	latencySubmitEnd();
 #if defined(IKIGAI_USE_STREAMLINE) && (defined(DEBUG) || defined(_DEBUG))
-    Microsoft::WRL::ComPtr<ID3D12InfoQueue> sdkDiagnostics;
-    if(mSwapchains.at(mCurrentWindowID).streamline&&SUCCEEDED(mDevice.As(&sdkDiagnostics)))
-        sdkDiagnostics->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING,FALSE);
+	Microsoft::WRL::ComPtr<ID3D12InfoQueue> sdkDiagnostics;
+	if (mSwapchains.at(mCurrentWindowID).streamline && SUCCEEDED(mDevice.As(&sdkDiagnostics))) {
+		sdkDiagnostics->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, FALSE);
+	}
 #endif
 #ifdef IKIGAI_USE_STREAMLINE
-    if(mDlssRuntime)std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->marker(sl::PCLMarker::ePresentStart);
-    if(mDlssRuntime&&!mSwapchains.at(mCurrentWindowID).streamline)std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->commonPresentBefore();
+	if (mDlssRuntime) {
+		std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->marker(sl::PCLMarker::ePresentStart);
+	}
+	if (mDlssRuntime && !mSwapchains.at(mCurrentWindowID).streamline) {
+		std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->commonPresentBefore();
+	}
 #endif
 	mSwapchains[mCurrentWindowID].mSwapChain->Present(vsync ? 1 : 0, 0);
 #ifdef IKIGAI_USE_STREAMLINE
-    if(mDlssRuntime&&!mSwapchains.at(mCurrentWindowID).streamline)std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->commonPresentAfter();
-    if(mDlssRuntime)std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->marker(sl::PCLMarker::ePresentEnd);
+	if (mDlssRuntime && !mSwapchains.at(mCurrentWindowID).streamline) {
+		std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->commonPresentAfter();
+	}
+	if (mDlssRuntime) {
+		std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->marker(sl::PCLMarker::ePresentEnd);
+	}
 #endif
 	mFrameId = mSwapchains[mCurrentWindowID].mSwapChain->GetCurrentBackBufferIndex();
-	wait();
-    if(mFrameGeneration){mFrameGeneration->waitForPresents();mFrameGeneration->afterPresent();mFrameGenerationStatus=mFrameGeneration->status();}
+}
+
+void DriverDx12::finishPresent() {
+	releaseCompletedFrame();
+	if (mFrameGeneration) {
+		mFrameGeneration->waitForPresents();
+		mFrameGeneration->afterPresent();
+		mFrameGenerationStatus = mFrameGeneration->status();
+	}
 #if defined(IKIGAI_USE_STREAMLINE) && (defined(DEBUG) || defined(_DEBUG))
-    if(sdkDiagnostics)sdkDiagnostics->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING,TRUE);
+	Microsoft::WRL::ComPtr<ID3D12InfoQueue> sdkDiagnostics;
+	if (mSwapchains.at(mCurrentWindowID).streamline && SUCCEEDED(mDevice.As(&sdkDiagnostics))) {
+		sdkDiagnostics->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
+	}
 #endif
 	begin();
 }
@@ -1041,14 +1068,22 @@ std::shared_ptr<TextureInterface> DriverDx12::createTexture(const std::string& n
 	res.path = name;
 	res.useMipmap = generateMipmap;
 	res.pathTexture.push_back(name);
-	return TextureDx12::Create(res, std::vector<std::vector<uint8_t>>{data}, allocator, deleter);
+	return TextureDx12::Create(res, std::vector<std::vector<uint8_t>> { data }, allocator, deleter);
 }
 
 void DriverDx12::wait() {
+	waitForPresentedFrame();
+	releaseCompletedFrame();
+}
+
+void DriverDx12::waitForPresentedFrame() {
 	ThrowIfFailed(mCommandQueue->Signal(mFence.Get(), mFenceValue));
 	ThrowIfFailed(mFence->SetEventOnCompletion(mFenceValue, mFenceEvent));
 	WaitWithWindowMessages(mFenceEvent);
 	++mFenceValue;
+}
+
+void DriverDx12::releaseCompletedFrame() {
 	completionSource()->completed(completionSource()->lastSubmitted());
 	clearForDestroy();
 }

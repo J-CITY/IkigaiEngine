@@ -8,6 +8,7 @@
 #include "backends/interface/meshInterface.h"
 #include "diagnostics/renderStatistics.h"
 #include "executors/renderExecutor.h"
+#include "executors/renderTicket.h"
 #include "frame/frameContext.h"
 #include "frame/renderOwner.h"
 #include <deque>
@@ -205,6 +206,7 @@ struct CmdSetPushConstant : CommandHeader {
 	std::array<std::byte, 128> data {};
 };
 
+class RenderThread;
 class Renderer {
 	std::unique_ptr<RenderExecutorInterface> mExecutor;
 	DriverInterface* mDriver = nullptr;
@@ -218,14 +220,20 @@ class Renderer {
 	bool mShutdown = false;
 	bool mPreparingAccess = false;
 	bool mRetiringFrames = false;
+	std::unique_ptr<RenderThread> mRenderThread {};
+	RenderTicket mPendingPresent {};
 	void prepareBackendAccess();
 	void retireFrames(bool wait);
 	void finishFrame(GpuCompletionToken token);
 
 public:
-	Renderer(DriverInterface* driver, std::unique_ptr<RenderExecutorInterface> executor);
+	Renderer(DriverInterface* driver, std::unique_ptr<RenderExecutorInterface> executor, bool threaded = false);
 	~Renderer();
 	void beginFrame();
+	// Present on the window thread, then allow the fence wait to overlap producer work.
+	// A default ticket represents synchronous completion.
+	RenderTicket submitAsync();
+	void waitForPendingPresent();
 	void addView(RenderViewSnapshot view);
 	void shutdown();
 	bool hasActiveFrame() const;
@@ -506,13 +514,8 @@ public:
 
 	void cancel();
 
-	// Replay CPU packets; this does not wait for GPU completion.
-	void flush() {
-		mOwner.requireCurrentThread();
-		if (mExecutor) {
-			mExecutor->flush(mDriver);
-		}
-	}
+	// Replay CPU packets in order, synchronizing with any prior frame.
+	void flush();
 };
 } // namespace IKIGAI::RENDER
 

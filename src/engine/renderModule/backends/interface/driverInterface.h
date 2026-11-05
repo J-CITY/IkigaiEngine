@@ -59,7 +59,7 @@ struct RenderSettings {
 	// frameGeneration.vsync). FIFO forces vsync; MAILBOX/IMMEDIATE disable it
 	// (DX12 presents with sync interval 0 for both). Unsupported Vulkan modes fall back to FIFO.
 	enum class PresentMode { DEFAULT, FIFO, MAILBOX, IMMEDIATE };
-	enum class Execution { IMMEDIATE, DEFERRED };
+	enum class Execution { IMMEDIATE, DEFERRED, THREADED };
 	Backend backend = Backend::OPENGL;
 	PresentMode presentMode = PresentMode::DEFAULT;
 	Execution execution = Execution::IMMEDIATE;
@@ -113,9 +113,7 @@ protected:
 
 public:
 	virtual ~DriverInterface() = default;
-	void requireOwnerThread() const {
-		mOwner.requireCurrentThread();
-	}
+	void requireOwnerThread() const;
 	const GpuCompletionSource& completion() const noexcept {
 		return *mCompletion;
 	}
@@ -441,6 +439,16 @@ public:
 	inline static RenderSettings settings;
 
 private:
+	friend class Renderer;
+	friend class RenderResourceOwner;
+	// Vulkan and DX12 split the present path at the GPU fence. Window calls and
+	// post-fence housekeeping run on the producer.
+	virtual void presentFrame();
+	virtual void waitForPresentedFrame();
+	virtual void finishPresent();
+	void withReplayAccess(const std::function<void()>& work);
+	static std::thread::id resourceOwnerThread() noexcept;
+	static thread_local DriverInterface* sReplayDriver;
 	RenderOwner mOwner {};
 	std::shared_ptr<GpuCompletionSource> mCompletion = std::make_shared<GpuCompletionSource>();
 	std::function<void()> mAccessBoundary {};

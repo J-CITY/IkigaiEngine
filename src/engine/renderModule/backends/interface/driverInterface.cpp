@@ -2,6 +2,30 @@
 #include <stdexcept>
 
 namespace IKIGAI::RENDER {
+thread_local DriverInterface* DriverInterface::sReplayDriver = nullptr;
+
+void DriverInterface::requireOwnerThread() const {
+	if (sReplayDriver != this) {
+		mOwner.requireCurrentThread();
+	}
+}
+
+std::thread::id DriverInterface::resourceOwnerThread() noexcept {
+	return sReplayDriver ? sReplayDriver->mOwner.thread() : std::this_thread::get_id();
+}
+
+void DriverInterface::withReplayAccess(const std::function<void()>& work) {
+	struct ReplayScope {
+		DriverInterface*& Driver;
+		DriverInterface* Previous;
+		~ReplayScope() {
+			Driver = Previous;
+		}
+	} scope { sReplayDriver, sReplayDriver };
+	sReplayDriver = this;
+	work();
+}
+
 DriverInterface* DriverInterface::Get() {
 	if (sActive) {
 		sActive->prepareAccess();
@@ -11,9 +35,21 @@ DriverInterface* DriverInterface::Get() {
 
 void DriverInterface::prepareAccess() {
 	requireOwnerThread();
-	if (mAccessBoundary) {
+	if (sReplayDriver != this && mAccessBoundary) {
 		mAccessBoundary();
 	}
+}
+
+void DriverInterface::presentFrame() {
+	throw std::logic_error("Backend does not support threaded presentation");
+}
+
+void DriverInterface::waitForPresentedFrame() {
+	throw std::logic_error("Backend does not support threaded presentation");
+}
+
+void DriverInterface::finishPresent() {
+	throw std::logic_error("Backend does not support threaded presentation");
 }
 
 void DriverInterface::waitForCompletion(GpuCompletionToken token) {

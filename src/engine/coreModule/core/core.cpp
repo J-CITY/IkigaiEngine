@@ -242,17 +242,14 @@ Core::Core(const PlatformStartup& platform)
 	}
 
 	std::unique_ptr<RENDER::RenderExecutorInterface> executor;
-	if (RENDER::DriverInterface::settings.execution == RENDER::RenderSettings::Execution::DEFERRED) {
-		if (RENDER::DriverInterface::settings.backend != RENDER::RenderSettings::Backend::VULKAN
-			&& RENDER::DriverInterface::settings.backend != RENDER::RenderSettings::Backend::DIRECTX12) {
-			throw std::runtime_error("Deferred frame recording requires Vulkan or DirectX 12; use Immediate on this backend");
-		}
+	const auto execution = RENDER::DriverInterface::settings.execution;
+	if (execution != RENDER::RenderSettings::Execution::IMMEDIATE) {
 		executor = std::make_unique<RENDER::BufferedExecutor>();
 	}
 	else {
 		executor = std::make_unique<RENDER::ImmediateExecutor>();
 	}
-	render = std::make_unique<RENDER::Renderer>(driver.get(), std::move(executor));
+	render = std::make_unique<RENDER::Renderer>(driver.get(), std::move(executor), execution == RENDER::RenderSettings::Execution::THREADED);
 
 	std::cout << "Create driver\n";
 

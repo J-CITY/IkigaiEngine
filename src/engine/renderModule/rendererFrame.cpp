@@ -1,13 +1,27 @@
 #include "backends/interface/uniformBufferInterface.h"
+#include "executors/renderThread.h"
 #include "render.h"
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+#include <chrono>
 #include <cstring>
 #include <iostream>
 #include <limits>
 #include <optional>
 #include <stdexcept>
+#include <utility>
 
 namespace IKIGAI::RENDER {
 namespace {
+	struct AccessGuard {
+		bool& Active;
+		bool Previous = std::exchange(Active, true);
+		~AccessGuard() {
+			Active = Previous;
+		}
+	};
+
 	std::vector<std::byte> copyUpload(const void* data, size_t bytes) {
 		if (bytes && !data) {
 			throw std::invalid_argument("Upload data is null");
@@ -20,11 +34,17 @@ namespace {
 	}
 }
 
-Renderer::Renderer(DriverInterface* driver, std::unique_ptr<RenderExecutorInterface> executor)
+Renderer::Renderer(DriverInterface* driver, std::unique_ptr<RenderExecutorInterface> executor, bool threaded)
 	: mExecutor(std::move(executor))
 	, mDriver(driver) {
 	if (!mExecutor) {
 		throw std::invalid_argument("Renderer needs an executor");
+	}
+	if (threaded) {
+		if (!mDriver) {
+			throw std::invalid_argument("Threaded rendering needs a driver");
+		}
+		mRenderThread = std::make_unique<RenderThread>();
 	}
 	if (mDriver) {
 		mDriver->requireOwnerThread();
@@ -48,25 +68,36 @@ void Renderer::prepareBackendAccess() {
 	if (mDriver) {
 		mDriver->requireOwnerThread();
 	}
-	if (mExecutor->isExecuting() || mShutdown || mPreparingAccess) {
+	if (mExecutor->isExecuting() || mShutdown || mPreparingAccess || mRetiringFrames) {
 		return;
 	}
-	mPreparingAccess = true;
-	try {
-		if (!mActiveFrame) {
-			retireFrames(true);
-		}
-		flush();
-	} catch (...) {
-		mPreparingAccess = false;
-		throw;
+	waitForPendingPresent();
+	AccessGuard guard { mPreparingAccess };
+	if (!mActiveFrame) {
+		retireFrames(true);
 	}
-	mPreparingAccess = false;
+	flush();
 }
 
 DriverInterface* Renderer::getDriver() {
-	prepareBackendAccess();
+	if (!mDriver || DriverInterface::sReplayDriver != mDriver) {
+		prepareBackendAccess();
+	}
 	return mDriver;
+}
+
+void Renderer::flush() {
+	mOwner.requireCurrentThread();
+	waitForPendingPresent();
+	if (!mRenderThread) {
+		mExecutor->flush(mDriver);
+	}
+	else {
+		retireFrames(false);
+		if (mExecutor->pendingCommandCount()) {
+			mRenderThread->post([this] { mDriver->withReplayAccess([this] { mExecutor->flush(mDriver); }); }).get();
+		}
+	}
 }
 
 void Renderer::retireFrames(bool wait) {
@@ -80,6 +111,9 @@ void Renderer::retireFrames(bool wait) {
 			Active = false;
 		}
 	} guard { mRetiringFrames };
+	if (wait) {
+		waitForPendingPresent();
+	}
 	while (!mSubmittedFrames.empty()) {
 		auto& frame = mSubmittedFrames.front();
 		if (wait) {
@@ -98,9 +132,12 @@ void Renderer::beginFrame() {
 	if (!mDriver || mShutdown || mActiveFrame) {
 		throw std::logic_error("Cannot begin render frame");
 	}
-	flush();
-	// One serial frame slot until the backend allocators/state support multiple in-flight frames (RC5).
-	retireFrames(true);
+	// A new CPU snapshot can be built while the previous GPU frame is pending.
+	// The first native access joins it before any new recording is replayed.
+	if (!mPendingPresent.valid() || mExecutor->pendingCommandCount()) {
+		flush();
+		retireFrames(true);
+	}
 	auto commands = mFreeFrameCommands.empty() ? std::make_shared<RenderCommandBuffer>(64 * 1024, true) : mFreeFrameCommands.back();
 	if (!mFreeFrameCommands.empty()) {
 		mFreeFrameCommands.pop_back();
@@ -137,9 +174,27 @@ void Renderer::finishFrame(GpuCompletionToken token) {
 }
 
 void Renderer::submit() {
+	submitAsync();
+	waitForPendingPresent();
+}
+
+RenderTicket Renderer::submitAsync() {
 	mOwner.requireCurrentThread();
-	if (!mDriver) {
+	if (!mDriver || mShutdown) {
 		throw std::logic_error("Frame submission needs a driver");
+	}
+	if (mRenderThread) {
+		if (mActiveFrame) {
+			mActiveFrame->seal();
+		}
+		flush();
+		{
+			AccessGuard guard { mPreparingAccess };
+			mDriver->presentFrame();
+		}
+		finishFrame(mDriver->completion().lastSubmitted());
+		mPendingPresent = mRenderThread->post([driver = mDriver] { driver->waitForPresentedFrame(); });
+		return mPendingPresent;
 	}
 	auto receipt = std::make_shared<std::optional<GpuCompletionToken>>();
 	execute([driver = mDriver, receipt] {
@@ -155,6 +210,30 @@ void Renderer::submit() {
 		throw std::logic_error("Frame submission was cancelled before native execution");
 	}
 	finishFrame(**receipt);
+	return {};
+}
+
+void Renderer::waitForPendingPresent() {
+	mOwner.requireCurrentThread();
+	if (!mPendingPresent.valid()) {
+		return;
+	}
+#ifdef _WIN32
+	// DXGI may send synchronous window messages while the queue drains.
+	const auto ticket = mPendingPresent;
+	while (ticket.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
+		MSG message {};
+		PeekMessageW(&message, nullptr, 0, 0, PM_NOREMOVE);
+	}
+	// A sent message may have reached the renderer and finished this present.
+	if (!mPendingPresent.valid()) {
+		return;
+	}
+#endif
+	mPendingPresent.get();
+	mPendingPresent = {};
+	AccessGuard guard { mPreparingAccess };
+	mDriver->finishPresent();
 }
 
 bool Renderer::hasActiveFrame() const {
@@ -167,6 +246,13 @@ void Renderer::shutdown() {
 	if (mShutdown) {
 		return;
 	}
+	try {
+		waitForPendingPresent();
+	} catch (const std::exception& error) {
+		std::cerr << "Render thread present failed: " << error.what() << '\n';
+		mPendingPresent = {};
+	}
+	mRenderThread.reset();
 	if (mActiveFrame) {
 		mExecutor->cancel();
 		// A failed present may already have submitted work. Do not submit an ended native list twice.

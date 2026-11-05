@@ -96,6 +96,7 @@ bool App::runMainLoop() {
 			= IKIGAI::PROFILER::Profiler::IsEnabled() ? std::make_unique<IKIGAI::PROFILER::ProfilerSpy>("CoroutineScheduler::tick") : nullptr;
 		core.coroutineScheduler->tick(frameDt, timer.getDeltaTimeUnscaled());
 	}
+	core.render->waitForPendingPresent();
 	preUpdate(frameDt);
 
 	update(frameDt);
@@ -266,7 +267,7 @@ void App::update(std::chrono::duration<double> dt) {
 				SDL_GetPointerProperty(SDL_GetWindowProperties(core.window->getSDLWindow()), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
 		}
 #endif
-		RESOURCES::ServiceManager::Get<RENDER::Renderer>().submit();
+		core.render->submitAsync();
 	}
 #endif
 

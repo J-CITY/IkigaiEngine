@@ -422,6 +422,10 @@ private:
 	bool checkInstanceExtensionSupport(const std::vector<const char*>& extensionsToCheck);
 
 	void wait();
+	void presentFrame() override;
+	void waitForPresentedFrame() override;
+	void finishPresent() override;
+	void releaseCompletedFrame();
 	void createSwapchain(unsigned int windowID, uint32_t width, uint32_t height);
 	void createSwapchainFrames(unsigned windowID, const std::vector<vk::Image>&);
 	void nextFrame();
