@@ -220,9 +220,11 @@ class Renderer {
 	bool mShutdown = false;
 	bool mPreparingAccess = false;
 	bool mRetiringFrames = false;
+	bool mWaitingForPresent = false;
 	std::unique_ptr<RenderThread> mRenderThread {};
 	std::unique_ptr<RenderThread> mGpuWaitThread {};
-	RenderTicket mPendingPresent {};
+	std::deque<RenderTicket> mPendingPresents {};
+	void waitOldestPresent();
 	void prepareBackendAccess();
 	void retireFrames(bool wait);
 	void finishFrame(GpuCompletionToken token);

@@ -329,7 +329,8 @@ void VirtualGeometryRenderer::endFrame() {
 	mGpuDrawActive = false;
 }
 
-VirtualGeometrySelectionPath VirtualGeometryRenderer::resolveSelectionPath(RENDER::Renderer& renderer, bool clusterPath) {
+VirtualGeometrySelectionPath VirtualGeometryRenderer::resolveSelectionPath(
+	RENDER::Renderer& renderer, bool clusterPath, std::optional<VirtualGeometrySelectionPath> selectionPath) {
 	if (!mEnvironmentPathRead) {
 		mEnvironmentPathRead = true;
 		if (const char* value = std::getenv("IKIGAI_VG_SELECTION")) {
@@ -339,7 +340,7 @@ VirtualGeometrySelectionPath VirtualGeometryRenderer::resolveSelectionPath(RENDE
 			}
 		}
 	}
-	const auto requested = mHasEnvironmentPath ? mEnvironmentPath : mSettings.SelectionPath;
+	const auto requested = mHasEnvironmentPath ? mEnvironmentPath : selectionPath.value_or(mSettings.SelectionPath);
 	auto path = VirtualGeometrySelectionPath::CPU;
 	std::string reason;
 	if (!clusterPath) {
@@ -461,9 +462,9 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 	auto& components = scene.getWorld().getComponentManager()->getComponentsArray<ECS::VirtualMeshRenderer>();
 	const bool clusterPath = mSettings.Enabled && input.GeometryStageActive && IsVirtualGeometryGpuPathSupported() && ensureClusterMaterial();
 	mMaxDrawIndirectCount = clusterPath ? std::max(1u, renderer.gpuFeatures().MaxDrawIndirectCount) : 1u;
-	mActivePath = resolveSelectionPath(renderer, clusterPath);
+	mActivePath = resolveSelectionPath(renderer, clusterPath, input.SelectionPath);
 	bool gpuSelection = mActivePath == VirtualGeometrySelectionPath::GPU;
-	// The non-blocking readback of the previous GPU frame completed: that frame was waited for at its submit.
+	// Use the previous GPU statistics when the readback is ready.
 	VirtualGeometryGpuStatistics gpuStatistics;
 	const bool previousGpuStatistics = gpuSelection && mGpuSelection.takeStatistics(renderer, gpuStatistics);
 	mGpuFrameRecorded = false;

@@ -1,14 +1,15 @@
 #ifdef VULKAN_BACKEND
-#include "imguiBackend.h"
-#include <SDL3/SDL.h>
-#include <cstring>
-#include "windowModule/window/window.h"
-#include "renderModule/backends/vk/driverVk.h"
-#include "renderModule/backends/vk/textureVk.h"
-#include "renderModule/backends/vk/helpers.h"
 #include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_vulkan.h"
 #include "imgui.h"
+#include "imguiBackend.h"
+#include "renderModule/backends/vk/driverVk.h"
+#include "renderModule/backends/vk/helpers.h"
+#include "renderModule/backends/vk/textureVk.h"
+#include "windowModule/window/window.h"
+#include <SDL3/SDL.h>
+#include <algorithm>
+#include <cstring>
 
 namespace IKIGAI::IMGUI {
 	void ConfigureImGuiContext();
@@ -58,7 +59,7 @@ namespace {
 			initInfo.DescriptorPool = driverVk->mImguiPool;
 			initInfo.PipelineInfoMain.Subpass = 0;
 			initInfo.MinImageCount = 3;
-			initInfo.ImageCount = 3;
+			initInfo.ImageCount = std::max(3u, IKIGAI::RENDER::DriverInterface::settings.framesInFlight);
 			initInfo.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
 			initInfo.UseDynamicRendering = true;
 

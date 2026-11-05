@@ -345,6 +345,9 @@ void DriverDx12::init() {
         },D3D12_MESSAGE_CALLBACK_FLAG_NONE,nullptr,&mDebugCallbackCookie);
 #endif
 
+	if (settings.pipelined()) {
+		mRecordingSlots.resize(settings.framesInFlight);
+	}
 	createCommandList();
 	createTimestampQueries();
 	createDescriptorHeaps();
@@ -389,7 +392,7 @@ void DriverDx12::init() {
 void DriverDx12::createDescriptorHeaps() {
 	D3D12_DESCRIPTOR_HEAP_DESC descriptor {
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-		.NumDescriptors = TransientDescriptorStart + TransientDescriptorsPerFrame * (settings.pipelined() ? 2u : 1u),
+		.NumDescriptors = TransientDescriptorStart + TransientDescriptorsPerFrame * settings.framesInFlight,
 		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 	};
 	mDevice->CreateDescriptorHeap(&descriptor, IID_PPV_ARGS(&mDescriptorHeap));
@@ -399,7 +402,9 @@ void DriverDx12::createDescriptorHeaps() {
 	ThrowIfFailed(mDevice->CreateDescriptorHeap(&samplers, IID_PPV_ARGS(&mBindlessSamplerHeap)));
 	if (settings.pipelined()) {
 		mRecordingSlots.front().Samplers = mBindlessSamplerHeap;
-		ThrowIfFailed(mDevice->CreateDescriptorHeap(&samplers, IID_PPV_ARGS(mRecordingSlots.back().Samplers.GetAddressOf())));
+		for (size_t index = 1; index < mRecordingSlots.size(); ++index) {
+			ThrowIfFailed(mDevice->CreateDescriptorHeap(&samplers, IID_PPV_ARGS(mRecordingSlots[index].Samplers.GetAddressOf())));
+		}
 	}
 	mDescriptorIncSize = mDevice->GetDescriptorHandleIncrementSize(descriptor.Type);
 	mDescriptorHeapCPUHandle = mDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
@@ -482,7 +487,10 @@ void DriverDx12::createCommandList() {
 	ThrowIfFailed(mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(mCommandAllocator.GetAddressOf())));
 	if (settings.pipelined()) {
 		mRecordingSlots.front().Allocator = mCommandAllocator;
-		ThrowIfFailed(mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(mRecordingSlots.back().Allocator.GetAddressOf())));
+		for (size_t index = 1; index < mRecordingSlots.size(); ++index) {
+			ThrowIfFailed(
+				mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(mRecordingSlots[index].Allocator.GetAddressOf())));
+		}
 	}
 	ThrowIfFailed(mDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mCommandAllocator.Get(), nullptr, IID_PPV_ARGS(mCommandList.GetAddressOf())));
 	mCommandList->Close();
@@ -995,8 +1003,7 @@ void DriverDx12::setStorageBuffer(const std::string& name, std::shared_ptr<Stora
 }
 
 unsigned DriverDx12::swapchainImageCount() noexcept {
-	// One extra present image keeps a double-buffered recorder independent of WSI.
-	return DEFAULT_FB_SIZE + (settings.pipelined() ? 1 : 0);
+	return settings.pipelined() ? settings.framesInFlight + 1 : DEFAULT_FB_SIZE;
 }
 
 void DriverDx12::createSwapChain(unsigned int windowID, unsigned width, unsigned height, bool streamline) {

@@ -669,6 +669,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		// Virtual geometry: LOD selection (GPU compute passes or CPU) and uploads before any stage; fallback meshes join
 		// the regular drawables (shadows/RT always, the view when the cluster path is unavailable).
 		VG::VirtualGeometryFrameInput virtualGeometryInput;
+		virtualGeometryInput.SelectionPath = mRenderPipeline->mDescriptor.Execution.DrivenMode;
 		virtualGeometryInput.View.CameraPosition = cameraPosition;
 		virtualGeometryInput.View.Frustum = &cameraComponent.getCamera().getFrustum();
 		virtualGeometryInput.View.Orthographic = cameraComponent.getProjectionMode() == Camera::ProjectionMode::ORTHOGRAPHIC;
@@ -1849,6 +1850,9 @@ RenderGraphPipeline::RenderGraphPipeline(const Descriptor& descriptor, Renderer&
 	: mDescriptor(ResolvePipelineSettings(descriptor))
 	, mSourceDescriptor(descriptor)
 	, mPipelineAsset(pipelineAsset) {
+	if (const auto frames = mDescriptor.Execution.FramesInFlight; frames && *frames != static_cast<int>(DriverInterface::settings.framesInFlight)) {
+		throw std::invalid_argument("Pipeline Execution.FramesInFlight must match the startup pipeline; select this pipeline at launch");
+	}
 	mGraphPlan = compileGraph(mDescriptor);
 	if (!mPipelineAsset.empty()) {
 		mPipelineWriteTime = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().lastWriteTime(mPipelineAsset);

@@ -1,4 +1,6 @@
 #include "driverFactory.h"
+#include "renderModule/renderGraph/pipelineExecution.h"
+#include "utilsModule/jsonLoader.h"
 
 #include <algorithm>
 #include <cctype>
@@ -11,6 +13,15 @@
 
 namespace IKIGAI::RENDER {
 namespace {
+	struct PipelineExecutionAsset {
+		PipelineExecution Execution;
+
+		template <class Context> static constexpr auto serde(Context& context, PipelineExecutionAsset& value) {
+			serde::serde_struct(context, value)
+				.field(&PipelineExecutionAsset::Execution, "Execution", serde::attribute::default_ { PipelineExecution {} });
+		}
+	};
+
 	std::unordered_map<RenderSettings::Backend, CreateDriverFn>& backendFactories() {
 		static std::unordered_map<RenderSettings::Backend, CreateDriverFn> factories;
 		return factories;
@@ -244,6 +255,26 @@ void ResolveRenderBackend(RenderSettings& settings) {
 		}
 	}
 	ValidateBackendAvailable(settings.backend);
+	std::optional<int> frames;
+	if (!settings.pipeline.empty()) {
+		auto pipeline = UTILS::FromJson<PipelineExecutionAsset>(settings.pipeline);
+		if (pipeline.isErr()) {
+			throw std::invalid_argument("Render pipeline execution: " + pipeline.unwrapErr().text);
+		}
+		frames = pipeline.unwrap().Execution.FramesInFlight;
+	}
+	if (frames) {
+		if (*frames < 1 || *frames > static_cast<int>(MaxPipelineFramesInFlight)) {
+			throw std::invalid_argument("Pipeline Execution.FramesInFlight must be between 1 and 4");
+		}
+		if (*frames > 1) {
+			if (gCliExecution && *gCliExecution != RenderSettings::Execution::PIPELINED) {
+				throw std::invalid_argument("Pipeline Execution.FramesInFlight above 1 requires the pipelined render executor");
+			}
+			settings.execution = RenderSettings::Execution::PIPELINED;
+		}
+	}
+	settings.framesInFlight = frames ? static_cast<unsigned>(*frames) : (settings.pipelined() ? 2u : 1u);
 	if (settings.pipelined()
 		&& (settings.frameGeneration.technology != FrameGenerationType::OFF || settings.upscaler.technology != UpscalerType::OFF)) {
 		throw std::invalid_argument("Pipelined rendering requires frame generation and upscaling disabled");

@@ -10,6 +10,7 @@
 #include "frameBufferDx12.h"
 #include "renderModule/backends/interface/renderEnums.h"
 #include "renderModule/backends/interface/textureInterface.h"
+#include "renderModule/renderGraph/pipelineExecution.h"
 #include "shaderDx12.h"
 #include <array>
 #include <d3d12.h>
@@ -344,7 +345,7 @@ private:
 		std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, 2> TransferAllocators;
 		std::vector<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>> TransferLists;
 	};
-	std::array<RecordingSlot, 2> mRecordingSlots {};
+	std::vector<RecordingSlot> mRecordingSlots {};
 	size_t mRecordingSlot = 0;
 	// Upload pages are retired with mFenceValue in end() and recycled in begin() once the fence passed it.
 	std::unique_ptr<UploadRingDx12> mUploadRing;
@@ -352,7 +353,7 @@ private:
 
 	struct SwapchainContextDx12 {
 		Microsoft::WRL::ComPtr<IDXGISwapChain3> mSwapChain;
-		std::array<std::shared_ptr<FrameBufferDx12>, DEFAULT_FB_SIZE + 1> mDefaultFb;
+		std::array<std::shared_ptr<FrameBufferDx12>, MaxPipelineFramesInFlight + 1> mDefaultFb;
 		unsigned width = 0;
 		unsigned height = 0;
 		bool streamline = false;

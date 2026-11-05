@@ -29,7 +29,8 @@ namespace {
 			ImGui_ImplDX12_InitInfo info;
 			info.Device = driverDx12->getDevice().Get();
 			info.CommandQueue = driverDx12->getCommandQueue().Get();
-			info.NumFramesInFlight = IKIGAI::RENDER::DriverDx12::DEFAULT_FB_SIZE;
+			info.NumFramesInFlight
+				= std::max<unsigned>(IKIGAI::RENDER::DriverDx12::DEFAULT_FB_SIZE, IKIGAI::RENDER::DriverInterface::settings.framesInFlight);
 			info.RTVFormat = IKIGAI::RENDER::DriverDx12::DefaultTextureColorFormat;
 			info.DSVFormat = IKIGAI::RENDER::DriverDx12::DefaultDepthFormat;
 			info.SrvDescriptorHeap = driverDx12->getDescriptorHeap().Get();

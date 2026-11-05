@@ -2,17 +2,17 @@
 #include "renderModule/frame/renderOwner.h"
 #include "renderTicket.h"
 #include <condition_variable>
+#include <deque>
 #include <functional>
 #include <mutex>
-#include <optional>
 
 namespace IKIGAI::RENDER {
 class RenderThread final {
 public:
-	RenderThread();
+	explicit RenderThread(size_t capacity = 1);
 	~RenderThread();
 
-	// One slot, including work currently executing. Wait for its ticket before posting again.
+	// Capacity includes work currently executing.
 	[[nodiscard]] RenderTicket post(std::function<void()> work);
 
 private:
@@ -26,8 +26,9 @@ private:
 	RenderOwner mProducer {};
 	std::mutex mMutex {};
 	std::condition_variable mWake {};
-	std::optional<Job> mJob {};
-	bool mBusy = false;
+	std::deque<Job> mJobs {};
+	size_t mCapacity = 1;
+	size_t mOutstanding = 0;
 	bool mStopping = false;
 	std::thread mThread;
 };

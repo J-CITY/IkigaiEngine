@@ -144,6 +144,7 @@ public:
 		std::shared_ptr<FrameBufferVk> mFrameBuffer;
 		vk::raii::Semaphore mImageAcquiredSemaphore = nullptr;
 		vk::raii::Fence AcquireFence = nullptr;
+		GpuCompletionToken AcquireConsumed {};
 		vk::raii::Semaphore mRenderCompleteSemaphore = nullptr;
 		vk::raii::CommandBuffer mCommandBuffer = nullptr;
 	};

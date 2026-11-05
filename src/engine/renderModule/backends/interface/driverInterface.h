@@ -71,6 +71,7 @@ struct RenderSettings {
 	Backend backend = Backend::OPENGL;
 	PresentMode presentMode = PresentMode::DEFAULT;
 	Execution execution = Execution::IMMEDIATE;
+	unsigned framesInFlight = 1; // Resolved from the startup pipeline.
 	[[nodiscard]] bool pipelined() const noexcept {
 		return execution == Execution::PIPELINED;
 	}

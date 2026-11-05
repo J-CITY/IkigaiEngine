@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -18,6 +19,7 @@
 #include "renderModule/frustum.h"
 #include "virtualGeometryGpuSelection.h"
 #include "virtualGeometrySelection.h"
+#include "virtualGeometrySelectionPath.h"
 
 namespace IKIGAI::SCENE_SYSTEM {
 class Scene;
@@ -38,11 +40,6 @@ struct RenderChunk;
 
 namespace IKIGAI::VG {
 class VirtualMeshAsset;
-
-// Where LOD selection and cluster culling run. AUTO picks GPU when the backend has compute, indirect dispatch and
-// indirect count draws and the selection shaders load; otherwise (and for CPU) the M2 CPU selection runs.
-// The environment variable IKIGAI_VG_SELECTION=cpu|gpu|auto overrides the setting (tests).
-enum class VirtualGeometrySelectionPath { AUTO = 0, CPU = 1, GPU = 2 };
 
 // Debug modes of the two-phase HZB occlusion (M4-V2). PHASE_COLORS paints cluster albedo by the phase that drew it
 // (green: phase 1, red: phase 2). PHASE1_ONLY and UNSAFE_MIP are deliberately non-conservative negative controls of
@@ -138,6 +135,7 @@ struct VirtualGeometryFrameStatistics {
 // Camera inputs for one frame of cluster selection.
 struct VirtualGeometryFrameInput {
 	VirtualGeometryView View = {};
+	std::optional<VirtualGeometrySelectionPath> SelectionPath;
 	uint64_t Frame = 0;
 	// The pipeline has an enabled G-buffer stage that calls drawGeometry this frame.
 	bool GeometryStageActive = false;
@@ -297,7 +295,8 @@ private:
 	};
 
 	bool ensureClusterMaterial();
-	VirtualGeometrySelectionPath resolveSelectionPath(RENDER::Renderer& renderer, bool clusterPath);
+	VirtualGeometrySelectionPath resolveSelectionPath(
+		RENDER::Renderer& renderer, bool clusterPath, std::optional<VirtualGeometrySelectionPath> selectionPath);
 	InstanceGpu makeInstanceGpu(const InstanceCandidate& candidate) const;
 	Batch& findBatch(const InstanceCandidate& candidate, uint32_t slot);
 	void selectOnCpu(const InstanceCandidate& candidate, const VirtualGeometryFrameInput& input, const VirtualGeometrySelectionSettings& selection,

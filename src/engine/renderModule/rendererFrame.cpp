@@ -46,7 +46,7 @@ Renderer::Renderer(DriverInterface* driver, std::unique_ptr<RenderExecutorInterf
 		}
 		mRenderThread = std::make_unique<RenderThread>();
 		if (DriverInterface::settings.pipelined()) {
-			mGpuWaitThread = std::make_unique<RenderThread>();
+			mGpuWaitThread = std::make_unique<RenderThread>(DriverInterface::settings.framesInFlight);
 		}
 	}
 	if (mDriver) {
@@ -137,7 +137,7 @@ void Renderer::beginFrame() {
 	}
 	// A new CPU snapshot can be built while the previous GPU frame is pending.
 	// The first native access joins it before any new recording is replayed.
-	if (mGpuWaitThread || !mPendingPresent.valid() || mExecutor->pendingCommandCount()) {
+	if (mGpuWaitThread || mPendingPresents.empty() || mExecutor->pendingCommandCount()) {
 		flush();
 		retireFrames(!mGpuWaitThread);
 	}
@@ -198,18 +198,20 @@ RenderTicket Renderer::submitAsync() {
 		const auto token = mDriver->completion().lastSubmitted();
 		finishFrame(token);
 		if (mGpuWaitThread) {
-			// The second submission can overlap the first. Join the oldest
-			// before opening a third recording or reusing its completion lane.
-			waitForPendingPresent();
 			auto ticket = mGpuWaitThread->post(mDriver->presentedFrameWait(token));
-			mPendingPresent = ticket;
+			mPendingPresents.push_back(ticket);
 			AccessGuard guard { mPreparingAccess };
+			// Opening the next recording requires an available slot.
+			if (mPendingPresents.size() >= DriverInterface::settings.framesInFlight) {
+				waitOldestPresent();
+			}
 			mDriver->finishPresent();
 			retireFrames(false);
 			return ticket;
 		}
-		mPendingPresent = mRenderThread->post([driver = mDriver] { driver->waitForPresentedFrame(); });
-		return mPendingPresent;
+		auto ticket = mRenderThread->post([driver = mDriver] { driver->waitForPresentedFrame(); });
+		mPendingPresents.push_back(ticket);
+		return ticket;
 	}
 	auto receipt = std::make_shared<std::optional<GpuCompletionToken>>();
 	execute([driver = mDriver, receipt] {
@@ -230,23 +232,23 @@ RenderTicket Renderer::submitAsync() {
 
 void Renderer::waitForPendingPresent() {
 	mOwner.requireCurrentThread();
-	if (!mPendingPresent.valid()) {
-		return;
+	while (!mWaitingForPresent && !mPendingPresents.empty()) {
+		waitOldestPresent();
 	}
+}
+
+void Renderer::waitOldestPresent() {
+	AccessGuard waiting { mWaitingForPresent };
+	auto ticket = mPendingPresents.front();
 #ifdef _WIN32
 	// DXGI may send synchronous window messages while the queue drains.
-	const auto ticket = mPendingPresent;
 	while (ticket.wait_for(std::chrono::milliseconds(1)) != std::future_status::ready) {
 		MSG message {};
 		PeekMessageW(&message, nullptr, 0, 0, PM_NOREMOVE);
 	}
-	// A sent message may have reached the renderer and finished this present.
-	if (!mPendingPresent.valid()) {
-		return;
-	}
 #endif
-	mPendingPresent.get();
-	mPendingPresent = {};
+	ticket.get();
+	mPendingPresents.pop_front();
 	if (!mGpuWaitThread) {
 		AccessGuard guard { mPreparingAccess };
 		mDriver->finishPresent();
@@ -255,8 +257,13 @@ void Renderer::waitForPendingPresent() {
 
 void Renderer::pollPresent() {
 	mOwner.requireCurrentThread();
-	if (!mGpuWaitThread || (mPendingPresent.valid() && mPendingPresent.wait_for(std::chrono::seconds(0)) == std::future_status::ready)) {
+	if (!mGpuWaitThread) {
 		waitForPendingPresent();
+		return;
+	}
+	while (
+		!mWaitingForPresent && !mPendingPresents.empty() && mPendingPresents.front().wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+		waitOldestPresent();
 	}
 }
 
@@ -274,7 +281,7 @@ void Renderer::shutdown() {
 		waitForPendingPresent();
 	} catch (const std::exception& error) {
 		std::cerr << "Render thread present failed: " << error.what() << '\n';
-		mPendingPresent = {};
+		mPendingPresents.clear();
 	}
 	mRenderThread.reset();
 	mGpuWaitThread.reset();

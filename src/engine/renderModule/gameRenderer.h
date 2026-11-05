@@ -16,6 +16,7 @@
 #include "primitiveRender.h"
 #include "profilerModule/gpuStageProfiler.h"
 #include "renderGraph/computeStageDescriptor.h"
+#include "renderGraph/pipelineExecution.h"
 #include "renderGraph/renderGraphDescriptor.h"
 #include "renderGraph/screenProbeSettings.h"
 #include <filesystem>
@@ -326,6 +327,7 @@ struct RenderGraphPipeline {
 		std::vector<PipelineStage::Descriptor> Stages;
 		std::vector<LightPassDescriptor> LightPasses;
 		GRAPH::Descriptor Graph;
+		PipelineExecution Execution;
 		// Screen probe gather parameters (hybrid-sp); disabled unless the pipeline enables the block.
 		ScreenProbeSettings ScreenProbes;
 		// Temporal denoiser settings blocks (indirectLighting/temporalDenoiseSettings.h), one uniform buffer per entry.
@@ -345,6 +347,7 @@ struct RenderGraphPipeline {
 				.field(&Self::Stages, "Stages")
 				.field(&Self::LightPasses, "LightPasses", default_ { decltype(LightPasses) {} })
 				.field(&Self::Graph, "Graph", default_ { GRAPH::Descriptor {} })
+				.field(&Self::Execution, "Execution", default_ { PipelineExecution {} })
 				.field(&Self::StartStages, "StartStages", default_ { decltype(StartStages) {} })
 				.field(&Self::ScreenProbes, "ScreenProbes", default_ { ScreenProbeSettings {} })
 				.field(&Self::TemporalDenoisers, "TemporalDenoisers", default_ { std::vector<TemporalDenoiseSettings> {} });

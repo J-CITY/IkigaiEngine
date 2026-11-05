@@ -777,7 +777,7 @@ bool DriverVk::checkInstanceExtensionSupport(const std::vector<const char*>& ext
 
 void DriverVk::begin() {
 	working = true;
-	UniformBufferVk::BeginFrame(settings.pipelined() ? 2 : 1);
+	UniformBufferVk::BeginFrame(settings.framesInFlight);
 	mRayTracingFrameResources.clear();
 	// In pipelined mode submitted sets have moved to their owning frame.
 	mFrameDescriptorSets.clear();
@@ -867,6 +867,7 @@ void DriverVk::end() {
 	mAcquireWaitPending = false;
 	frame.Completion = completionSource()->submitted();
 	if (settings.pipelined()) {
+		getCurrentSwapchainContext().frames.at(mSemaphoreIndex).AcquireConsumed = frame.Completion;
 		frame.Epoch = mSubmissionEpoch++;
 		frame.DescriptorSets.swap(mFrameDescriptorSets);
 		frame.RayTracingResources.swap(mRayTracingFrameResources);
@@ -1520,6 +1521,9 @@ void DriverVk::createSwapchain(unsigned int windowID, uint32_t width, uint32_t h
 	// queued for display):
 
 	uint32_t desired_number_of_swapchain_images = surface_capabilities.minImageCount + 1;
+	if (settings.pipelined()) {
+		desired_number_of_swapchain_images = std::max(desired_number_of_swapchain_images, settings.framesInFlight + 1);
+	}
 
 	if ((surface_capabilities.maxImageCount > 0) && (desired_number_of_swapchain_images > surface_capabilities.maxImageCount)) {
 		// Application must settle for fewer images than desired:
@@ -1624,6 +1628,9 @@ void DriverVk::createSwapchainFrames(unsigned windowID, const std::vector<vk::Im
 void DriverVk::nextFrame() {
 	auto& ctx = getCurrentSwapchainContext();
 	const auto& acquireSlot = ctx.frames.at(mSemaphoreIndex);
+	if (acquireSlot.AcquireConsumed.Value) {
+		waitForCompletion(acquireSlot.AcquireConsumed);
+	}
 	const auto& image_acquired_semaphore = acquireSlot.mImageAcquiredSemaphore;
 	if (ctx.sdkAcquire) {
 		auto result = ctx.sdkAcquire(*image_acquired_semaphore, &mFrameIndex);
@@ -2419,9 +2426,6 @@ void DriverVk::presentFrame() {
 
 void DriverVk::finishPresent() {
 	if (settings.pipelined()) {
-		if (getCurrentSwapchainContext().frames.size() == 1) {
-			waitForCompletion(completion().lastSubmitted());
-		}
 		collectCompletedFrames();
 		nextFrame();
 		begin();
