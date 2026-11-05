@@ -204,7 +204,8 @@ namespace RENDER {
 		void begin() override;
 		std::vector<uint64_t> mBindlessResidentHandles;
 		void bindBindlessResources();
-		void end() override { };
+		void end() override;
+		void waitForCompletion(GpuCompletionToken token) override;
 		void submit() override;
 		void cleanup() override { };
 		void setBlending(const Blending& value) override {

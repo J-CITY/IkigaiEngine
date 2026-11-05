@@ -32,6 +32,7 @@ IKIGAI::RENDER::StorageBufferGl::~StorageBufferGl() {
 }
 
 void IKIGAI::RENDER::StorageBufferGl::setData(const void* data, size_t sz, size_t stride) {
+	requireOwnerThread();
 	const auto target = StorageBufferTarget();
 	if (!target || !mId) {
 		return;
@@ -45,6 +46,7 @@ void IKIGAI::RENDER::StorageBufferGl::setData(const void* data, size_t sz, size_
 }
 
 void IKIGAI::RENDER::StorageBufferGl::setSubData(const void* data, size_t sz, size_t offset) {
+	requireOwnerThread();
 	const auto target = StorageBufferTarget();
 	if (!target || !mId) {
 		return;

@@ -59,7 +59,7 @@ void GameRenderer::updateEnvironment(SCENE_SYSTEM::Scene& scene) {
 	else {
 		mCloudShadowAnchorValid = false;
 	}
-	mSurfaceWeatherUbo->setData(component ? component->surfaceWeather().gpu() : ENVIRONMENT::SurfaceWeatherGpu {});
+	mContext.render->updateUniformBuffer(mSurfaceWeatherUbo, component ? component->surfaceWeather().gpu() : ENVIRONMENT::SurfaceWeatherGpu {});
 	if (component) {
 		const bool transmittance = mAtmosphereTransmittanceStage && mAtmosphereTransmittanceStage->mDescriptor.Enabled
 			&& mRenderPipeline->mTextures.contains("AtmosphereTransmittance");
@@ -109,7 +109,7 @@ void GameRenderer::updateEnvironment(SCENE_SYSTEM::Scene& scene) {
 		mRenderPipeline->mHistory.invalidate(HistoryReason::EnvironmentChange, historyEffectBit(HistoryEffect::Presentation));
 		mAtmosphereCache = {};
 	}
-	mEnvironmentUbo->setData(mEnvironmentState);
+	mContext.render->updateUniformBuffer(mEnvironmentUbo, mEnvironmentState);
 	mInteractionState = {};
 	struct Source {
 		ECS::VegetationInteractorComponent* Component = nullptr;
@@ -143,7 +143,7 @@ void GameRenderer::updateEnvironment(SCENE_SYSTEM::Scene& scene) {
 		}
 	}
 	mInteractionState.Count.x = float(count);
-	mInteractionUbo->setData(mInteractionState);
+	mContext.render->updateUniformBuffer(mInteractionUbo, mInteractionState);
 }
 void GameRenderer::bindEnvironment(Renderer& renderer, const ShaderReflection& reflection) {
 	const auto& names = reflection.mNameToUniforms;

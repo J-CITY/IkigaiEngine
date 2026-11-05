@@ -10,6 +10,7 @@ struct ApplicationOptions {
 	std::string loadingScene;
 	std::string pipeline;
 	std::string renderBackend;
+	std::string renderExecutor {};
 	std::string upscaler;
 	std::string upscalerQuality;
 	std::string frameGeneration;

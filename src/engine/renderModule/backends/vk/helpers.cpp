@@ -14,6 +14,7 @@ using namespace IKIGAI::RENDER;
 
 DriverVk* UtilityVk::GetDriver() {
 	if (mDriver) {
+		mDriver->prepareAccess();
 		return mDriver;
 	}
 	return static_cast<DriverVk*>(DriverInterface::Get());

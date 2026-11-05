@@ -158,8 +158,9 @@ IKIGAI::RENDER::ShaderGl::Create(const ShaderResource &resource) {
 IKIGAI::RENDER::ShaderGl::ShaderGl(const ShaderResource &res) { create(res); }
 
 void IKIGAI::RENDER::ShaderGl::recompile(const ShaderResource &res) {
-  clear();
-  create(res);
+	requireOwnerThread();
+	clear();
+	create(res);
 }
 
 IKIGAI::RENDER::ShaderGl::~ShaderGl() { clear(); }

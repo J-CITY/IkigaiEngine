@@ -1,4 +1,5 @@
 #pragma once
+#include "renderResourceOwner.h"
 
 #include <optional>
 #include <string>
@@ -15,7 +16,7 @@ class UniformBufferInterface;
 class UniformVkInterface;
 struct UniformInform;
 
-class ShaderInterface {
+class ShaderInterface : protected RenderResourceOwner {
 public:
 	using Id = size_t;
 

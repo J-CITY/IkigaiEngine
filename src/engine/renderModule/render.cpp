@@ -262,6 +262,9 @@ void DispatchRenderCommand(const CommandHeader* command, DriverInterface* driver
 	if (!command) {
 		throw std::invalid_argument("Render command is null");
 	}
+	if (driver) {
+		driver->requireOwnerThread();
+	}
 	if (!driver && command->op != OpCode::LAMBDA && command->op != OpCode::EXIT) {
 		throw std::invalid_argument("Render command requires a driver");
 	}
@@ -279,12 +282,12 @@ void Renderer::setPushConstant(ShaderType stage, uint32_t offset, uint32_t dataS
 	push<CmdSetPushConstant>(OpCode::SET_PUSH_CONSTANT, stage, offset, dataSize, payload);
 }
 
-void Renderer::cancel() noexcept {
+void Renderer::cancel() {
+	mOwner.requireCurrentThread();
 	if (mExecutor) {
 		mExecutor->cancel();
 	}
 }
-
 }
 
 /*#include "frustum.h"

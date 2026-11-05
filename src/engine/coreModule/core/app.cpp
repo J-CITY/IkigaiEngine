@@ -249,6 +249,7 @@ void App::update(std::chrono::duration<double> dt) {
 #endif
 
 	if (presentationAllowed) {
+		core.render->beginFrame();
 		core.renderer->renderScene();
 	}
 
@@ -257,6 +258,7 @@ void App::update(std::chrono::duration<double> dt) {
 	RESOURCES::ServiceManager::Get<TASK::TaskSystem>().waitSync();
 #endif
 
+#ifndef OCULUS
 	if (presentationAllowed && RENDER::DriverInterface::settings.backend != RENDER::RenderSettings::Backend::OPENGL) {
 #if defined(_WIN32) && defined(USE_SDL)
 		if (TESTHOOK::focusPresentation) {
@@ -266,6 +268,7 @@ void App::update(std::chrono::duration<double> dt) {
 #endif
 		RESOURCES::ServiceManager::Get<RENDER::Renderer>().submit();
 	}
+#endif
 
 	// EDITOR
 #ifdef USE_EDITOR
@@ -278,17 +281,29 @@ void App::update(std::chrono::duration<double> dt) {
 	// core.window->update();
 #endif
 #else
+	core.render->beginFrame();
 	core.window->update([this](XrCompositionLayerProjectionView& layerView, render_target_t& rtarget, XrPosef& stagePose, uint32_t viewID) {
 		static_cast<RENDER::GameRenderer*>(core.renderer.get())->renderSceneOculus(layerView, rtarget, stagePose, viewID);
+		core.render->flush();
 	});
+	core.render->submit();
 #endif
 
+	if (presentationAllowed && core.sceneManager->hasCurrentScene() && !core.sceneManager->isTransitioning()) {
+		core.sceneManager->getCurrentScene().commitRenderTransforms();
+	}
 	core.sceneManager->update();
 }
 
 void App::postUpdate(std::chrono::duration<double> dt) {
 
 	core.window->draw();
+#ifndef OCULUS
+	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL && core.render->hasActiveFrame()) {
+		// The GL window renders ImGui here. Include it in the serial completion boundary.
+		core.render->submit();
+	}
+#endif
 	core.sceneManager->notifyPresented();
 
 #if defined(USE_SDL) || defined(OCULUS)

@@ -302,7 +302,8 @@ void IKIGAI::RENDER::TextureVk::releaseResources() {
 }
 
 void IKIGAI::RENDER::TextureVk::recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) {
-    ++mRevision;
+	requireOwnerThread();
+	++mRevision;
 	// Освобождаем старые VK-ресурсы (отложенно)
 	releaseResources();
 
@@ -611,6 +612,7 @@ static uint32_t GetFormatChannelSize(IKIGAI::RENDER::PixelFormat format) {
 
 void IKIGAI::RENDER::TextureVk::setData(uint32_t width, uint32_t height, PixelFormat format, const std::vector<void*>& data,
 	uint32_t mip_level, uint32_t offset_x, uint32_t offset_y) {
+	requireOwnerThread();
 	UtilityVk::GetDriver()->deactivateRenderPass();
 
 	auto channels = GetFormatChannelsCount(format);

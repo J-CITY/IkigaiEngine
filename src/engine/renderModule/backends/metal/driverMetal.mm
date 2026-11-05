@@ -317,6 +317,13 @@ namespace IKIGAI::RENDER {
             auto buffers=std::move(mBindlessArgumentBuffers);mBindlessArgumentBuffers.clear();
             [mCurrentCommandBuffer addCompletedHandler:^(id<MTLCommandBuffer>) { (void)resources;(void)buffers; }];
         }
+		auto completion = completionSource();
+		const auto token = completion->submitted();
+		[mCurrentCommandBuffer addCompletedHandler:^(id<MTLCommandBuffer> command) {
+			if (command.status == MTLCommandBufferStatusCompleted) {
+				completion->completed(token);
+			}
+		}];
 		[mCurrentCommandBuffer commit];
 		mCurrentCommandBuffer = nil;
 		mCurrentDrawable = nil;
@@ -338,6 +345,20 @@ namespace IKIGAI::RENDER {
 		}
 		end();
 		begin();
+	}
+
+	void DriverMetal::waitForCompletion(GpuCompletionToken token) {
+		requireOwnerThread();
+		completionSource()->validate(token);
+		if (!completionSource()->isComplete(token)) {
+			id<MTLCommandBuffer> barrier = [mCommandQueue commandBuffer];
+			[barrier commit];
+			[barrier waitUntilCompleted];
+			if (barrier.status != MTLCommandBufferStatusCompleted) {
+				throw std::runtime_error("Metal completion wait failed");
+			}
+			completionSource()->completed(completionSource()->lastSubmitted());
+		}
 	}
 
 	void DriverMetal::cleanup() {

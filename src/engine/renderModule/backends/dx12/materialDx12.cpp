@@ -4,6 +4,7 @@
 
 #include "d3dUtil.h"
 #include "driverDx12.h"
+#include "renderModule/render.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
 #include "resourceModule/shaderManager.h"
@@ -157,7 +158,7 @@ void MaterialDx12::fillUniforms(std::shared_ptr<TextureInterface> defaultTexture
 		return;
 	}
 	auto& shaderInfo = mShader->getReflection();
-	auto driver = d3dUtil::GetDriver();
+	auto& renderer = RESOURCES::ServiceManager::Get<Renderer>();
 	for (const auto& uniform : shaderInfo.mUniforms) {
 		if (mShader->isBindlessResource(uniform)) {
 			continue;
@@ -180,7 +181,7 @@ void MaterialDx12::fillUniforms(std::shared_ptr<TextureInterface> defaultTexture
 				tex = defaultTexture;
 			}
 			if (tex) {
-				driver->setTexture(uniform.mBind, tex);
+				renderer.setTexture(uniform.mBind, tex);
 			}
 		} break;
 		case ShaderReflection::UniformType::UNIFORM_BUFFER: {
@@ -218,10 +219,10 @@ void MaterialDx12::fillUniforms(std::shared_ptr<TextureInterface> defaultTexture
 							},
 							mUniforms.at(key));
 					}
-					buffer->setData(bufferData.data(), bufferData.size());
+					renderer.updateUniformBuffer(buffer, bufferData.data(), bufferData.size());
 				}
 			}
-			driver->setUniformBuffer(uniform.mBind, buffer);
+			renderer.setUniformBuffer(uniform.mBind, buffer);
 		} break;
 		case ShaderReflection::UniformType::STORAGE_BUFFER: {
 			// TODO: material now support only set ssbo external

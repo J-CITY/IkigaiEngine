@@ -57,6 +57,10 @@ class DriverDx12 : public IKIGAI::RENDER::DriverInterface {
 	};
 
 public:
+	void waitForCompletion(GpuCompletionToken token) override;
+	bool hasOpenRecording() const noexcept override {
+		return mRecording;
+	}
 	static constexpr int DEFAULT_FB_SIZE = 2;
 	static constexpr DXGI_FORMAT DefaultTextureColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 	static constexpr DXGI_FORMAT DefaultDepthFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
@@ -358,6 +362,7 @@ private:
 	Microsoft::WRL::ComPtr<IDXGIFactory6> mDxgiFactory;
 
 	unsigned int mFrameId = 0;
+	bool mRecording = false;
 	HANDLE mFenceEvent = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12Fence> mFence;
 	UINT64 mFenceValue {};

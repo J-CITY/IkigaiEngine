@@ -38,6 +38,7 @@ StorageBufferVk::~StorageBufferVk() {
 	}
 }
 void StorageBufferVk::setData(const void* data, size_t count, size_t stride) {
+	requireOwnerThread();
 	const size_t bytes = CheckedBufferSizeVk(count, stride);
 	if (!bytes) {
 		return;
@@ -51,6 +52,7 @@ void StorageBufferVk::setData(const void* data, size_t count, size_t stride) {
 	}
 }
 void StorageBufferVk::setSubData(const void* data, size_t bytes, size_t offset) {
+	requireOwnerThread();
 	if (!bytes) {
 		return;
 	}

@@ -123,6 +123,7 @@ void IKIGAI::RENDER::MaterialGl::generateUniformsData() {
 }
 
 void IKIGAI::RENDER::MaterialGl::fillUniforms(std::shared_ptr<TextureInterface> defaultTexture, bool useTextures) {
+	auto& renderer = RESOURCES::ServiceManager::Get<Renderer>();
 	textureSlot = 0;
 
 	auto& shaderInfo = mShader->getReflection();
@@ -163,7 +164,7 @@ void IKIGAI::RENDER::MaterialGl::fillUniforms(std::shared_ptr<TextureInterface> 
 							mUniforms[uniform.mName + member.mName]);
 					}
 				}
-				mUniformBuffers[uniform.mName]->setData(bufferData.data(), bufferData.size());
+				renderer.updateUniformBuffer(mUniformBuffers[uniform.mName], bufferData.data(), bufferData.size());
 
 				auto& render = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RENDER::Renderer>();
 				render.setUniformBuffer(uniform.mBind, std::static_pointer_cast<UniformBufferInterface>(mUniformBuffers[uniform.mName]));

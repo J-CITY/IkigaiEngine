@@ -12,6 +12,9 @@ public:
 	void cancel() noexcept;
 	[[nodiscard]] size_t pendingCommandCount() const noexcept;
 	[[nodiscard]] size_t reservedBytes() const noexcept;
+	void beginFrame(std::shared_ptr<RenderCommandBuffer> commands);
+	void endFrame();
+	[[nodiscard]] bool isExecuting() const noexcept;
 
 	template <typename T, typename... Args> void submit(DriverInterface* driver, OpCode op, Args&&... args) {
 		static_assert(std::is_base_of_v<CommandHeader, T> && std::is_aggregate_v<T>);
@@ -24,7 +27,7 @@ public:
 				return ::new (storage) T { { op, sizeof(T) }, std::forward<Args>(args)... };
 			}
 		};
-		mCommands.append(
+		mCommands->append(
 			driver, sizeof(T), alignof(T), [](void* storage, void* context) { return (*static_cast<decltype(construct)*>(context))(storage); },
 			&construct, [](CommandHeader* command) noexcept { std::destroy_at(static_cast<T*>(command)); });
 		onSubmitted(driver);
@@ -37,7 +40,8 @@ protected:
 
 private:
 	CommandDispatch mDispatch = nullptr;
-	RenderCommandBuffer mCommands;
+	std::shared_ptr<RenderCommandBuffer> mStandaloneCommands;
+	std::shared_ptr<RenderCommandBuffer> mCommands;
 };
 
 class ImmediateExecutor final : public RenderExecutorInterface {

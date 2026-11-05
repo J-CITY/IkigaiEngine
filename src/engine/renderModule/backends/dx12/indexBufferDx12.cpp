@@ -34,6 +34,7 @@ void IKIGAI::RENDER::IndexBufferDx12::unbind() {
 }
 
 void IKIGAI::RENDER::IndexBufferDx12::setData(const void* data, size_t sz, size_t stride) {
+	requireOwnerThread();
 	if (sz * stride > mSizeByte) {
 		mSize = sz;
 		mStride = stride;

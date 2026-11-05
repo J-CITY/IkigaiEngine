@@ -16,7 +16,7 @@ void ResolveTemporalDenoisers(const RenderGraphPipeline::Descriptor& descriptor)
 void CreateTemporalDenoiseBuffers(RenderGraphPipeline& pipeline, Renderer& renderer);
 // Per frame, before the stages run: HistoryValid = frameHistoryValid && the entry's effect history is valid
 // (HistoryValidity). Uploads only on change.
-void UpdateTemporalDenoiseBuffers(RenderGraphPipeline& pipeline, bool frameHistoryValid);
+void UpdateTemporalDenoiseBuffers(Renderer& renderer, RenderGraphPipeline& pipeline, bool frameHistoryValid);
 // Light change detection for pipelines with a GI denoiser but no ray traced light list (hybrid-sp): raises
 // HistoryReason::LightChange when the scene light data differs from the previous frame. The first frame only records.
 void DetectTemporalDenoiseLightChange(RenderGraphPipeline& pipeline, const std::vector<LightOGL>& lights);

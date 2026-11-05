@@ -23,13 +23,17 @@ IKIGAI::RENDER::UniformBufferVk::~UniformBufferVk() {
 }
 
 void IKIGAI::RENDER::UniformBufferVk::setData(const void* data, size_t sz, size_t offset) {
-    if (!sz) return;
-    if (!data || offset > std::numeric_limits<size_t>::max() - sz)
-        throw std::invalid_argument("Invalid uniform buffer update");
-    mSizeByte = std::max(mSizeByte, offset + sz);
-    mBytes.resize(mSizeByte);
-    std::memcpy(mBytes.data() + offset, data, sz);
-    snapshot();
+	requireOwnerThread();
+	if (!sz) {
+		return;
+	}
+	if (!data || offset > std::numeric_limits<size_t>::max() - sz) {
+		throw std::invalid_argument("Invalid uniform buffer update");
+	}
+	mSizeByte = std::max(mSizeByte, offset + sz);
+	mBytes.resize(mSizeByte);
+	std::memcpy(mBytes.data() + offset, data, sz);
+	snapshot();
 }
 
 void IKIGAI::RENDER::UniformBufferVk::snapshot() {

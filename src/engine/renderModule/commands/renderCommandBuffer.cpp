@@ -48,9 +48,13 @@ struct RenderCommandBuffer::Impl {
 	DriverInterface* boundDriver = nullptr;
 	bool busy = false;
 	bool cancelRequested = false;
+	bool retainExecuted = false;
+	size_t nextCommand = 0;
+	bool sealed = false;
 
-	explicit Impl(size_t bytes)
-		: blockSize(bytes) {
+	explicit Impl(size_t bytes, bool retain)
+		: blockSize(bytes)
+		, retainExecuted(retain) {
 		if (!blockSize) {
 			throw std::invalid_argument("Render command block size must be positive");
 		}
@@ -89,6 +93,8 @@ struct RenderCommandBuffer::Impl {
 			}
 		}
 		entries.clear();
+		nextCommand = 0;
+		sealed = false;
 		for (auto& block : blocks) {
 			block->used = 0;
 		}
@@ -96,19 +102,37 @@ struct RenderCommandBuffer::Impl {
 		boundDriver = nullptr;
 		cancelRequested = false;
 	}
+	void cancelPending() noexcept {
+		if (!retainExecuted || nextCommand == 0) {
+			const bool wasSealed = sealed;
+			clear();
+			sealed = wasSealed;
+			return;
+		}
+		for (size_t index = nextCommand; index < entries.size(); ++index) {
+			if (auto* command = std::exchange(entries[index].command, nullptr)) {
+				entries[index].destroy(command);
+			}
+		}
+		entries.resize(nextCommand);
+		cancelRequested = false;
+	}
 };
 
-RenderCommandBuffer::RenderCommandBuffer(size_t blockSize)
-	: mImpl(std::make_unique<Impl>(blockSize)) { }
+RenderCommandBuffer::RenderCommandBuffer(size_t blockSize, bool retainExecuted)
+	: mImpl(std::make_unique<Impl>(blockSize, retainExecuted)) { }
 
 RenderCommandBuffer::~RenderCommandBuffer() {
-	cancel();
+	reset();
 }
 
 void RenderCommandBuffer::append(DriverInterface* driver, size_t size, size_t alignment, Construct construct, void* context, Destroy destroy) {
 	auto& state = *mImpl;
 	state.checkIdle();
 	state.checkDriver(driver);
+	if (state.sealed) {
+		throw std::logic_error("Cannot append to a sealed frame command buffer");
+	}
 	if (size < sizeof(CommandHeader) || alignment < alignof(CommandHeader) || !std::has_single_bit(alignment) || !construct || !destroy) {
 		throw std::invalid_argument("Invalid render command allocation");
 	}
@@ -131,13 +155,13 @@ void RenderCommandBuffer::append(DriverInterface* driver, size_t size, size_t al
 		command = nullptr;
 		state.boundDriver = driver;
 		if (state.cancelRequested) {
-			state.clear();
+			state.cancelPending();
 		}
 	} catch (...) {
 		if (command) {
 			destroy(command);
 		}
-		state.clear();
+		state.cancelPending();
 		throw;
 	}
 }
@@ -151,24 +175,34 @@ void RenderCommandBuffer::execute(DriverInterface* driver, CommandDispatch dispa
 	}
 	Impl::BusyGuard guard(state);
 	try {
-		for (auto& entry : state.entries) {
-			auto* command = std::exchange(entry.command, nullptr);
+		while (state.nextCommand < state.entries.size()) {
+			auto& entry = state.entries[state.nextCommand++];
+			auto* command = entry.command;
+			if (!state.retainExecuted) {
+				entry.command = nullptr;
+			}
 			try {
 				dispatch(command, driver);
 			} catch (...) {
-				entry.destroy(command);
+				if (!state.retainExecuted) {
+					entry.destroy(command);
+				}
 				throw;
 			}
-			entry.destroy(command);
+			if (!state.retainExecuted) {
+				entry.destroy(command);
+			}
 			if (state.cancelRequested) {
 				break;
 			}
 		}
 	} catch (...) {
-		state.clear();
+		state.cancelPending();
 		throw;
 	}
-	state.clear();
+	if (state.cancelRequested || !state.retainExecuted) {
+		state.cancelPending();
+	}
 }
 
 void RenderCommandBuffer::cancel() noexcept {
@@ -178,11 +212,33 @@ void RenderCommandBuffer::cancel() noexcept {
 		return;
 	}
 	Impl::BusyGuard guard(state);
+	state.cancelPending();
+}
+
+void RenderCommandBuffer::reset() noexcept {
+	auto& state = *mImpl;
+	if (state.busy) {
+		std::terminate();
+	}
+	Impl::BusyGuard guard(state);
 	state.clear();
 }
 
 size_t RenderCommandBuffer::pendingCommandCount() const noexcept {
-	return mImpl->entries.size();
+	return mImpl->entries.size() - mImpl->nextCommand;
+}
+
+void RenderCommandBuffer::seal() {
+	mImpl->checkIdle();
+	mImpl->sealed = true;
+}
+
+bool RenderCommandBuffer::isExecuting() const noexcept {
+	return mImpl->busy;
+}
+
+bool RenderCommandBuffer::retainsExecuted() const noexcept {
+	return mImpl->retainExecuted;
 }
 
 size_t RenderCommandBuffer::reservedBytes() const noexcept {

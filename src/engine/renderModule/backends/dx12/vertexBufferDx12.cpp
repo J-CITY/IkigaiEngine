@@ -37,6 +37,7 @@ void IKIGAI::RENDER::VertexBufferDx12::unbind() {
 }
 
 void IKIGAI::RENDER::VertexBufferDx12::setData(const void* data, size_t sz, size_t stride) {
+	requireOwnerThread();
 	if (sz * stride > mSizeByte) {
 		mSize = sz;
 		mStride = stride;

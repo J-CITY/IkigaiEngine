@@ -51,6 +51,7 @@ void IKIGAI::RENDER::VertexBufferGl::unbind() {
 }
 
 void IKIGAI::RENDER::VertexBufferGl::setData(const void* data, size_t sz, size_t stride) {
+	requireOwnerThread();
 	bind();
 	glBufferData(GL_ARRAY_BUFFER, sz * stride, data, INTERNAL::UsageTypeMap[static_cast<int>(mType)]);
 #if IKIGAI_ENABLE_MEMORY_TRACKING
@@ -75,6 +76,7 @@ void IKIGAI::RENDER::VertexBufferGl::bindIAttribute(unsigned index, int size, un
 }
 
 void IKIGAI::RENDER::VertexBufferGl::setSubData(long long offset, long long size, const void* data) {
+	requireOwnerThread();
 	bind();
 	glBufferSubData(GL_ARRAY_BUFFER, offset, size, data);
 }

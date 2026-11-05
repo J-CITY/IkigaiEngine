@@ -660,7 +660,24 @@ void IKIGAI::RENDER::DriverGl::applyState() {
 }
 
 void IKIGAI::RENDER::DriverGl::submit() {
+	end();
 	begin();
+}
+
+void IKIGAI::RENDER::DriverGl::end() {
+	requireOwnerThread();
+	const auto token = completionSource()->submitted();
+	glFinish();
+	completionSource()->completed(token);
+}
+
+void IKIGAI::RENDER::DriverGl::waitForCompletion(GpuCompletionToken token) {
+	requireOwnerThread();
+	completionSource()->validate(token);
+	if (!completionSource()->isComplete(token)) {
+		glFinish();
+		completionSource()->completed(completionSource()->lastSubmitted());
+	}
 }
 void IKIGAI::RENDER::DriverGl::setFrameBuffer(std::shared_ptr<FrameBufferInterface> frameBuffer) {
 	if (frameBuffer) {

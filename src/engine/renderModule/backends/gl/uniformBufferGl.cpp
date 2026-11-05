@@ -30,6 +30,7 @@ IKIGAI::RENDER::UniformBufferGl::~UniformBufferGl() {
 }
 
 void IKIGAI::RENDER::UniformBufferGl::setData(const void* data, size_t sz, size_t offset) {
+	requireOwnerThread();
 	if (offset > mSizeByte || sz > mSizeByte - offset || (!data && sz)) {
 		throw std::invalid_argument("Invalid OpenGL uniform buffer update");
 	}

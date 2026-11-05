@@ -1,6 +1,8 @@
 #include "gpuStageProfiler.h"
 #include "coreModule/graphicsWrapper.hpp"
 #include "renderModule/backends/interface/driverInterface.h"
+#include "renderModule/render.h"
+#include "resourceModule/serviceManager.h"
 #include <algorithm>
 #include <array>
 #include <deque>
@@ -14,6 +16,14 @@ namespace {
 	constexpr std::size_t MaximumStages = 512;
 	constexpr std::size_t MaximumRetainedSamples = 4096;
 	constexpr std::uint64_t MinimumFrameDelay = 3;
+	void writeTimestamp(RENDER::DriverInterface* driver, uint32_t index) {
+		if (RESOURCES::ServiceManager::Check<RENDER::Renderer>()) {
+			RESOURCES::ServiceManager::Get<RENDER::Renderer>().execute([driver, index] { driver->writeTimestamp(index); });
+		}
+		else {
+			driver->writeTimestamp(index);
+		}
+	}
 	bool glSupported() {
 #if defined(OPENGL_BACKEND) && !defined(USING_GLES)
 		if (!RENDER::DriverInterface::Get() || RENDER::DriverInterface::settings.backend != RENDER::RenderSettings::Backend::OPENGL) {
@@ -215,7 +225,7 @@ GpuStageProfiler::Scope GpuStageProfiler::measure(std::string_view name) {
 		query.Generation = mImpl->Generation;
 		query.Ended = false;
 		mImpl->Pending.push_back(slot);
-		mImpl->Driver->writeTimestamp(static_cast<std::uint32_t>(slot * 2));
+		writeTimestamp(mImpl->Driver, static_cast<std::uint32_t>(slot * 2));
 		return Scope(this, slot);
 	}
 #if defined(OPENGL_BACKEND) && !defined(USING_GLES)
@@ -247,7 +257,7 @@ GpuStageProfiler::Scope GpuStageProfiler::measure(std::string_view name) {
 }
 void GpuStageProfiler::end(std::size_t slot) {
 	if (mImpl->Driver) {
-		mImpl->Driver->writeTimestamp(static_cast<std::uint32_t>(slot * 2 + 1));
+		writeTimestamp(mImpl->Driver, static_cast<std::uint32_t>(slot * 2 + 1));
 		mImpl->Queries[slot].Ended = true;
 		return;
 	}

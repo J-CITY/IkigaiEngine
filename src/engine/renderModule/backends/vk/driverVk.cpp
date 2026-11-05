@@ -819,7 +819,9 @@ void DriverVk::begin() {
 }
 
 void DriverVk::end() {
-	// gContext->working = false;
+	if (!working) {
+		return;
+	}
 
 	deactivateRenderPass();
 
@@ -836,8 +838,9 @@ void DriverVk::end() {
 	// vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR);
 
 	getCurrentFrame().mCommandBuffer.end();
+	working = false;
 
-	const auto& frame = getCurrentFrame();
+	auto& frame = getCurrentFrame();
 
 	mDevice.resetFences({ *frame.fence });
 
@@ -854,6 +857,7 @@ void DriverVk::end() {
 						   .setSignalSemaphores(*frame.mRenderCompleteSemaphore);
 
 	mQueue.submit(submit_info, *frame.fence);
+	frame.Completion = completionSource()->submitted();
 }
 
 void DriverVk::setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) {
@@ -1377,13 +1381,27 @@ void DriverVk::wait() {
 	}
 	auto& frame = it->second.frames.at(mFrameIndex);
 	auto wait_result = mDevice.waitForFences({ *frame.fence }, true, UINT64_MAX);
-	(void)wait_result;
+	if (wait_result != vk::Result::eSuccess) {
+		throw std::runtime_error("Vulkan frame fence wait failed");
+	}
+	if (frame.Completion.Value) {
+		completionSource()->completed(frame.Completion);
+	}
 	// Retiring a TLAS can release BLAS/mesh owners which themselves enqueue
 	// buffers for retirement. Do not mutate the vector being destroyed.
 	while (!frame.destroyDeferred.empty()) {
 		auto retired = std::move(frame.destroyDeferred);
 		frame.destroyDeferred.clear();
 		retired.clear();
+	}
+}
+
+void DriverVk::waitForCompletion(GpuCompletionToken token) {
+	requireOwnerThread();
+	completionSource()->validate(token);
+	if (!completionSource()->isComplete(token)) {
+		mDevice.waitIdle();
+		completionSource()->completed(completionSource()->lastSubmitted());
 	}
 }
 

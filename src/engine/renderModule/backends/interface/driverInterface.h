@@ -1,4 +1,6 @@
 #pragma once
+#include "renderModule/frame/gpuCompletion.h"
+#include "renderModule/frame/renderOwner.h"
 #include "vertexLayout.h"
 
 #include <bitset>
@@ -57,8 +59,10 @@ struct RenderSettings {
 	// frameGeneration.vsync). FIFO forces vsync; MAILBOX/IMMEDIATE disable it
 	// (DX12 presents with sync interval 0 for both). Unsupported Vulkan modes fall back to FIFO.
 	enum class PresentMode { DEFAULT, FIFO, MAILBOX, IMMEDIATE };
+	enum class Execution { IMMEDIATE, DEFERRED };
 	Backend backend = Backend::OPENGL;
 	PresentMode presentMode = PresentMode::DEFAULT;
+	Execution execution = Execution::IMMEDIATE;
 	std::string pipeline;
 	UpscalerSettings upscaler;
 	FrameGenerationSettings frameGeneration;
@@ -68,6 +72,7 @@ struct RenderSettings {
 		serde::serde_struct(context, value)
 			.field(&RenderSettings::backend, "backend", default_ { Backend::OPENGL })
 			.field(&RenderSettings::pipeline, "pipeline", default_ { std::string {} })
+			.field(&RenderSettings::execution, "execution", default_ { Execution::IMMEDIATE })
 			.field(&RenderSettings::upscaler, "upscaler", default_ { UpscalerSettings {} })
 			.field(&RenderSettings::frameGeneration, "frameGeneration", default_ { FrameGenerationSettings {} })
 			.field(&RenderSettings::presentMode, "presentMode", default_ { PresentMode::DEFAULT });
@@ -102,9 +107,23 @@ protected:
 	};
 
 	std::bitset<static_cast<int>(Dirty::SIZE)> mDirty;
+	std::shared_ptr<GpuCompletionSource> completionSource() const {
+		return mCompletion;
+	}
 
 public:
 	virtual ~DriverInterface() = default;
+	void requireOwnerThread() const {
+		mOwner.requireCurrentThread();
+	}
+	const GpuCompletionSource& completion() const noexcept {
+		return *mCompletion;
+	}
+	virtual void waitForCompletion(GpuCompletionToken token);
+	void setAccessBoundary(std::function<void()> boundary) {
+		mAccessBoundary = std::move(boundary);
+	}
+	void prepareAccess();
 
 	void setDirty(Dirty flag) {
 		mDirty.set(static_cast<int>(flag), true);
@@ -119,6 +138,10 @@ public:
 	virtual void init() = 0;
 	virtual void begin() = 0;
 	virtual void end() = 0;
+	// Immediate APIs always have work that can be drained; command-list backends report their recording state.
+	virtual bool hasOpenRecording() const noexcept {
+		return true;
+	}
 
 	virtual void submit() = 0;
 	virtual void cleanup() = 0;
@@ -410,9 +433,7 @@ public:
 
 	virtual void renderImGui() { }
 
-	static DriverInterface* Get() {
-		return sActive;
-	}
+	static DriverInterface* Get();
 	static void SetActive(DriverInterface* driver) {
 		sActive = driver;
 	}
@@ -420,6 +441,9 @@ public:
 	inline static RenderSettings settings;
 
 private:
+	RenderOwner mOwner {};
+	std::shared_ptr<GpuCompletionSource> mCompletion = std::make_shared<GpuCompletionSource>();
+	std::function<void()> mAccessBoundary {};
 	inline static DriverInterface* sActive = nullptr;
 };
 } // namespace IKIGAI::RENDER

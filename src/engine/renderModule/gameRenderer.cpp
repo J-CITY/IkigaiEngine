@@ -275,7 +275,7 @@ void GameRenderer::renderLoadingScene(SCENE_SYSTEM::Scene* scene) {
 		uboData.Projection = MATH::Matrix4f::Identity;
 		uboData.ViewportSize = { float(size.x), float(size.y) };
 		uboData.Time = static_cast<float>(TIME::Timer::GetInstance().getTimeSinceStart().count());
-		mEngineUbo->setData(uboData);
+		mContext.render->updateUniformBuffer(mEngineUbo, uboData);
 		renderGui(*scene);
 	}
 }
@@ -452,13 +452,13 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 		if (reflected.contains("engine_Surface")) {
 			auto state = surfaceGpu(deformation, shellCount);
 			state.Pivot.w = float(drawable.OwnerId);
-			mSurfaceUbo->setData(state);
+			mContext.render->updateUniformBuffer(mSurfaceUbo, state);
 			render->setUniformBuffer("engine_Surface", mSurfaceUbo);
 		}
 		if (reflected.contains("engine_InstanceTransforms")) {
 			const InstanceMetaGpu state { { drawable.instances ? float(drawable.instances->transforms().size()) : 0.0f, float(shellCount), 0, 0 },
 				drawable.tint };
-			mInstanceMetaUbo->setData(state);
+			mContext.render->updateUniformBuffer(mInstanceMetaUbo, state);
 			render->setUniformBuffer("engine_InstanceMeta", mInstanceMetaUbo);
 			render->setStorageBuffer("engine_InstanceTransforms", drawable.instances ? drawable.instances->buffer() : mEmptyInstanceBuffer);
 		}
@@ -483,7 +483,7 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 				setMorphWeight(morph.Previous, index, previous ? (*previous)[index] : targets[index].DefaultWeight);
 			}
 			if (reflected.contains("engine_MorphWeights")) {
-				mMorphUbo->setData(morph);
+				mContext.render->updateUniformBuffer(mMorphUbo, morph);
 				render->setUniformBuffer("engine_MorphWeights", mMorphUbo);
 			}
 			if (reflected.contains("engine_MorphDeltas")) {
@@ -499,7 +499,7 @@ void GameRenderer::drawDrawable(const Drawable& drawable) {
 			if (mDrawFrameUbo) {
 				// Vulkan snapshots the payload; OpenGL replaces the buffer store on update.
 				// Both paths reuse the buffer object instead of allocating one per draw.
-				mDrawFrameUbo->setData(frame);
+				mContext.render->updateUniformBuffer(mDrawFrameUbo, frame);
 				render->setUniformBuffer("engine_Frame", mDrawFrameUbo);
 			}
 			else {
@@ -632,7 +632,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		projection = jitter * projection;
 	}
 	uboData.Projection = MATH::Matrix4f::Transpose(projection);
-	mEngineUbo->setData(uboData);
+	mContext.render->updateUniformBuffer(mEngineUbo, uboData);
 	const auto viewProjection = projection * cameraComponent.getCamera().getViewMatrix();
 	mFrameData.InvViewProjection = MATH::Matrix4f::Transpose(MATH::Matrix4f::Inverse(viewProjection));
 	const bool temporalValid = mRenderPipeline->mHistory.isValid(HistoryEffect::Presentation);
@@ -646,7 +646,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	mFrameData.FrameState = { temporalValid ? 1.0f : 0.0f, std::clamp(uboData.Time - previousTime, 0.0f, .25f),
 		temporalValid ? (mJitter.x - mPreviousJitter.x) / renderSize.x : 0, temporalValid ? (mJitter.y - mPreviousJitter.y) / renderSize.y : 0 };
 	const auto cameraFrameState = mFrameData.FrameState;
-	mFrameUbo->setData(mFrameData);
+	mContext.render->updateUniformBuffer(mFrameUbo, mFrameData);
 
 	std::vector<float> sun;
 	for (const auto& light : mLights) {
@@ -658,7 +658,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	if (mEnvironmentState.Atmosphere.x < .5f && mFrameCount > 0 && sun != mEnvironmentSun) {
 		mRenderPipeline->invalidateResources({ "Environment", "SkyEnvironment" });
 		mFrameData.FrameState.x = 0;
-		mFrameUbo->setData(mFrameData);
+		mContext.render->updateUniformBuffer(mFrameUbo, mFrameData);
 	}
 	mEnvironmentSun = std::move(sun);
 
@@ -744,7 +744,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		if (!history.allValid(HistoryRayTracedEffects)) {
 			mRaySample = 0;
 			mFrameData.FrameState.x = 0;
-			mFrameUbo->setData(mFrameData);
+			mContext.render->updateUniformBuffer(mFrameUbo, mFrameData);
 		}
 	}
 	if (HasTemporalDenoisers(*mRenderPipeline)) {
@@ -752,7 +752,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		if (!(rayTracingActive && rayLightsNeeded)) {
 			DetectTemporalDenoiseLightChange(*mRenderPipeline, scene.findLightData());
 		}
-		UpdateTemporalDenoiseBuffers(*mRenderPipeline, mFrameData.FrameState.x > .5f);
+		UpdateTemporalDenoiseBuffers(*mContext.render, *mRenderPipeline, mFrameData.FrameState.x > .5f);
 	}
 	FrameGenerationInputs temporalCamera;
 	temporalCamera.RenderSize = renderSize;
@@ -773,6 +773,18 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	temporalCamera.RealFrameId = presentationDriver->mRealFrameId == UINT64_MAX ? mFrameCount : presentationDriver->mRealFrameId;
 	temporalCamera.Reset = cameraFrameState.x < .5f || (presentationDriver->mFrameGeneration && !presentationDriver->mFrameGenerationStatus.Active);
 	presentationDriver->setTemporalCamera(temporalCamera);
+	RenderViewSnapshot viewSnapshot;
+	viewSnapshot.ViewId = cameraComponent.obj->getID().getUniqueId().value();
+	std::copy_n(temporalCamera.View.getData(), 16, viewSnapshot.View.begin());
+	std::copy_n(temporalCamera.Projection.getData(), 16, viewSnapshot.Projection.begin());
+	std::copy_n(temporalCamera.PreviousViewProjection.getData(), 16, viewSnapshot.PreviousViewProjection.begin());
+	viewSnapshot.Position = { temporalCamera.Position.x, temporalCamera.Position.y, temporalCamera.Position.z };
+	viewSnapshot.RenderSize = { uint32_t(renderSize.x), uint32_t(renderSize.y) };
+	viewSnapshot.DisplaySize = { uint32_t(displaySize.x), uint32_t(displaySize.y) };
+	viewSnapshot.Jitter = { mJitter.x, mJitter.y };
+	viewSnapshot.Near = temporalCamera.Near;
+	viewSnapshot.Far = temporalCamera.Far;
+	mContext.render->addView(std::move(viewSnapshot));
 	if (mFrameCount == 0) {
 		for (const auto& chunk : chunks) {
 			std::cout << "Render drawables: opaque=" << chunk.opaqueDrawablesForward.size() + chunk.opaqueDrawablesDeferred.size()
@@ -792,7 +804,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	if (rayFrameNeeded) {
 		mRayFrameUbo = mContext.render->createUniformBuffer<RayFrameData>(rayFrameData());
 	}
-	mShadowUbo->setData(mShadowData);
+	mContext.render->updateUniformBuffer(mShadowUbo, mShadowData);
 
 	// Re-establish physical resources before applying disabled-stage aliases.
 	mRenderPipeline->mTextures = mRenderPipeline->mAllocatedTextures;
@@ -843,7 +855,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 				render.setFrameBuffer(stage->mFrameBuffer);
 				const MATH::Vector2f size(float(stage->mFrameBuffer->getWidth()), float(stage->mFrameBuffer->getHeight()));
 				uboData.ViewportSize = size;
-				mEngineUbo->setData(uboData);
+				mContext.render->updateUniformBuffer(mEngineUbo, uboData);
 				render.setViewport({ { 0, 0 }, size });
 				render.resetScissor();
 				mVirtualGeometry->drawOcclusionPost(render, { mEngineUbo, mFrameUbo, mEmptyTexture });
@@ -946,7 +958,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			}
 			mCaptureLightIndex = -1;
 			mShadowData.LightIndices = { -1, -1, -1, 0 };
-			mShadowUbo->setData(mShadowData);
+			mContext.render->updateUniformBuffer(mShadowUbo, mShadowData);
 			if (!stage->mExecuted) {
 				std::cout << "LIGHT_ACCUMULATION " << pass.Descriptor.Name << " lights=" << used << " shadows=" << shadowed
 						  << " shadow_provider=" << (rayShadows ? "ray" : "raster") << " raster_captures=" << rasterCaptures << std::endl;
@@ -1079,7 +1091,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		const auto size = stage->mFrameBuffer ? MATH::Vector2f(stage->mFrameBuffer->getWidth(), stage->mFrameBuffer->getHeight())
 											  : MATH::Vector2f(float(sz.x), float(sz.y));
 		uboData.ViewportSize = size;
-		mEngineUbo->setData(uboData);
+		mContext.render->updateUniformBuffer(mEngineUbo, uboData);
 		render.setViewport({ { 0, 0 }, size });
 		render.resetScissor();
 		render.setClearColor(stage->mDescriptor.ClearValue);
@@ -1091,7 +1103,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		}
 		if (stage->mName == "PrepareFrameGenMotion" || stage->mName == "PrepareUpscaleVelocity") {
 			mFrameData.FrameState = cameraFrameState;
-			mFrameUbo->setData(mFrameData);
+			mContext.render->updateUniformBuffer(mFrameUbo, mFrameData);
 		}
 		if (stage->mDescriptor.PresentationSink && stage->mDrawContent == DrawContent::QUAD) {
 			stage->mDefaults["data_UBOCompositeUI"]
@@ -1338,7 +1350,7 @@ void GameRenderer::captureShadows(
 			}
 		}
 	}
-	mShadowUbo->setData(mShadowData);
+	mContext.render->updateUniformBuffer(mShadowUbo, mShadowData);
 }
 
 namespace {
@@ -1362,7 +1374,7 @@ void GameRenderer::updateLights(SCENE_SYSTEM::Scene& scene) {
 #if !defined(IKIGAI_GL_HAS_SSBO)
 	PadLightsForEsUbo(lightMatrices);
 #endif
-	mLightSSBO->setData(lightMatrices);
+	mContext.render->updateStorageBuffer(mLightSSBO, lightMatrices);
 	mLights = std::move(lightMatrices);
 }
 
@@ -1374,7 +1386,7 @@ void GameRenderer::updateLightsInFrustum(SCENE_SYSTEM::Scene& scene, const Frust
 #if !defined(IKIGAI_GL_HAS_SSBO)
 	PadLightsForEsUbo(lightMatrices);
 #endif
-	mLightSSBO->setData(lightMatrices);
+	mContext.render->updateStorageBuffer(mLightSSBO, lightMatrices);
 	mLights = std::move(lightMatrices);
 }
 
@@ -1442,7 +1454,7 @@ void GameRenderer::renderSceneOculus(XrCompositionLayerProjectionView& layerView
 		if (auto* loading = mContext.sceneManager->getPresentedScene()) {
 			uboData.ViewportSize = { float(rect.extent.width), float(rect.extent.height) };
 			uboData.Time = static_cast<float>(TIME::Timer::GetInstance().getTimeSinceStart().count());
-			mEngineUbo->setData(uboData);
+			mContext.render->updateUniformBuffer(mEngineUbo, uboData);
 			renderGui(*loading);
 		}
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -2487,7 +2499,7 @@ void GameRenderer::bindStage(PipelineStage& stage) {
 		if (!buffer) {
 			buffer = renderer.createUniformBuffer(nullptr, data.size());
 		}
-		buffer->setData(data.data(), data.size());
+		mContext.render->updateUniformBuffer(buffer, data.data(), data.size());
 		renderer.setUniformBuffer(uniform.mBind, buffer);
 	}
 	for (const auto& [name, buffer] :

@@ -737,6 +737,13 @@ std::span<std::shared_ptr<IKIGAI::ECS::Object>> Scene::getObjects() {
 
 // TODO: void Scene::setMainCamera(Entity id) {}
 
+void Scene::commitRenderTransforms() {
+	for (auto& component : getWorld().getComponentManager()->getComponentsArray<ECS::TransformComponent>()) {
+		auto& transform = component.getTransform();
+		transform.setPrevWorldMatrix(transform.getWorldMatrix());
+	}
+}
+
 IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::CameraComponent> Scene::findMainCamera() {
 	auto cm = getWorld().getComponentManager();
 	for (auto& camera : cm->getComponentsArray<ECS::CameraComponent>()) {
@@ -1042,7 +1049,7 @@ void AppendSurfaceDrawables(Scene& scene, ChunkContext& ctx, const MATH::Vector3
 								facial->bind(*model);
 								element.facialAnimation = facial.get();
 							}
-							transform.setPrevWorldMatrix(transform.getWorldMatrix());
+
 							if (material->isBlendable()) {
 								if (!material->isDeferred()) {
 									chunk.transparentDrawablesForward.emplace(distanceToActor, element);
@@ -1151,7 +1158,7 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledBVHDrawa
 						}
 						element.facialAnimation = facial.get();
 					}
-					transform.setPrevWorldMatrix(transform.getWorldMatrix());
+
 					if (material->isBlendable()) {
 						if (!material->isDeferred()) {
 							chunk.transparentDrawablesForward.emplace(distanceToActor, element);
@@ -1246,7 +1253,7 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledDrawable
 									facial->bind(*model);
 									element.facialAnimation = facial.get();
 								}
-								transform.setPrevWorldMatrix(transform.getWorldMatrix());
+
 								if (material->isBlendable()) {
 									if (!material->isDeferred()) {
 										chunk.transparentDrawablesForward.emplace(distanceToActor, element);
@@ -1324,7 +1331,7 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(
 								facial->bind(*model);
 								element.facialAnimation = facial.get();
 							}
-							transform.setPrevWorldMatrix(transform.getWorldMatrix());
+
 							if (material->isBlendable()) {
 								if (!material->isDeferred()) {
 									chunk.transparentDrawablesForward.emplace(distanceToActor, element);

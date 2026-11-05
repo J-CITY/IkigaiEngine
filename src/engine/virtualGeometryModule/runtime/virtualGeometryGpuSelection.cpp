@@ -63,10 +63,10 @@ namespace {
 		return static_cast<uint32_t>(capacity);
 	}
 
-	void UploadChunked(RENDER::StorageBufferInterface& buffer, const void* data, size_t bytes) {
+	void UploadChunked(RENDER::Renderer& renderer, const std::shared_ptr<RENDER::StorageBufferInterface>& buffer, const void* data, size_t bytes) {
 		const auto* source = static_cast<const uint8_t*>(data);
 		for (size_t offset = 0; offset < bytes; offset += UploadChunkBytes) {
-			buffer.setSubData(source + offset, std::min(UploadChunkBytes, bytes - offset), offset);
+			renderer.updateStorageBufferRange(buffer, source + offset, std::min(UploadChunkBytes, bytes - offset), offset);
 		}
 	}
 
@@ -196,7 +196,7 @@ void VirtualGeometryGpuSelection::setViewUniforms(RENDER::Renderer& renderer, co
 		mViewUniformPool.push_back(renderer.createUniformBuffer(&view, sizeof(view)));
 	}
 	auto& buffer = mViewUniformPool[mViewUniformsUsed++];
-	buffer->setData(&view, sizeof(view));
+	renderer.updateUniformBuffer(buffer, &view, sizeof(view));
 	renderer.setUniformBuffer(ViewUniformName, buffer);
 }
 
@@ -246,22 +246,22 @@ void VirtualGeometryGpuSelection::record(RENDER::Renderer& renderer, const Virtu
 		mSegmentScratch[(segments + segment) * SegmentWords + 0] = entry.FirstDraw + frame.DrawCapacity;
 		mSegmentScratch[(segments + segment) * SegmentWords + 1] = occlusion.Active ? entry.Capacity : 0u;
 	}
-	UploadChunked(*mCullInstanceBuffer, frame.Instances.data(), frame.Instances.size() * sizeof(VirtualGeometryCullInstanceGpu));
-	UploadChunked(*mAssetDispatchBuffer, mAssetDispatchScratch.data(), mAssetDispatchScratch.size() * sizeof(uint32_t));
+	UploadChunked(renderer, mCullInstanceBuffer, frame.Instances.data(), frame.Instances.size() * sizeof(VirtualGeometryCullInstanceGpu));
+	UploadChunked(renderer, mAssetDispatchBuffer, mAssetDispatchScratch.data(), mAssetDispatchScratch.size() * sizeof(uint32_t));
 	// The post instance dispatch starts as the main one: X over clusters, Y appended by vgInstanceCullPost.
-	UploadChunked(*mPostInstanceDispatchBuffer, mAssetDispatchScratch.data(), mAssetDispatchScratch.size() * sizeof(uint32_t));
-	UploadChunked(*mPostClusterArgsBuffer, mPostDispatchScratch.data(), mPostDispatchScratch.size() * sizeof(uint32_t));
-	UploadChunked(*mSlotBatchBuffer, frame.SlotBatches.data(), frame.SlotBatches.size() * sizeof(uint32_t));
-	UploadChunked(*mSegmentBuffer, mSegmentScratch.data(), mSegmentScratch.size() * sizeof(uint32_t));
+	UploadChunked(renderer, mPostInstanceDispatchBuffer, mAssetDispatchScratch.data(), mAssetDispatchScratch.size() * sizeof(uint32_t));
+	UploadChunked(renderer, mPostClusterArgsBuffer, mPostDispatchScratch.data(), mPostDispatchScratch.size() * sizeof(uint32_t));
+	UploadChunked(renderer, mSlotBatchBuffer, frame.SlotBatches.data(), frame.SlotBatches.size() * sizeof(uint32_t));
+	UploadChunked(renderer, mSegmentBuffer, mSegmentScratch.data(), mSegmentScratch.size() * sizeof(uint32_t));
 	// Counters are reset through the upload ring rather than fillBuffer: on DirectX 12 fillBuffer creates a committed
 	// upload resource per call. Measured on 64 dragons (DX12 Release): record() 1.2 ms with two fills, 0.05 ms without.
 	mZeroScratch.assign(std::max<size_t>({ size_t(segments) * 2, size_t(assets), StatisticsBufferWords }), 0u);
-	UploadChunked(*mSegmentCountBuffer, mZeroScratch.data(), size_t(segments) * 2 * sizeof(uint32_t));
-	UploadChunked(*mStatisticsBuffer, mZeroScratch.data(), StatisticsBufferWords * sizeof(uint32_t));
-	UploadChunked(*mOccludedClusterCountBuffer, mZeroScratch.data(), size_t(assets) * sizeof(uint32_t));
-	UploadChunked(*mOccludedInstanceBuffer, mZeroScratch.data(), sizeof(uint32_t));
+	UploadChunked(renderer, mSegmentCountBuffer, mZeroScratch.data(), size_t(segments) * 2 * sizeof(uint32_t));
+	UploadChunked(renderer, mStatisticsBuffer, mZeroScratch.data(), StatisticsBufferWords * sizeof(uint32_t));
+	UploadChunked(renderer, mOccludedClusterCountBuffer, mZeroScratch.data(), size_t(assets) * sizeof(uint32_t));
+	UploadChunked(renderer, mOccludedInstanceBuffer, mZeroScratch.data(), sizeof(uint32_t));
 	const uint32_t postInstanceArgs[AssetDispatchWords] = { 0u, 1u, 1u, 0u };
-	UploadChunked(*mPostInstanceArgsBuffer, postInstanceArgs, sizeof(postInstanceArgs));
+	UploadChunked(renderer, mPostInstanceArgsBuffer, postInstanceArgs, sizeof(postInstanceArgs));
 
 	// Phase 1 tests against the previous HZB only with a valid history; the descriptor is always bound.
 	const bool phaseOneOcclusion = occlusion.Active && occlusion.History && occlusion.PreviousHzb;

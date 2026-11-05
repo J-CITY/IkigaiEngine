@@ -212,7 +212,7 @@ void MaterialMetal::fillUniforms(std::shared_ptr<TextureInterface> defaultTextur
 						},
 						mUniforms[memberName]);
 				}
-				mUniformBuffers[uniform.mName]->setData(bufferData.data(), bufferData.size());
+				renderer.updateUniformBuffer(mUniformBuffers[uniform.mName], bufferData.data(), bufferData.size());
 			}
 			if (mUniformBuffers.contains(uniform.mName)) {
 				renderer.setUniformBuffer(uniform.mBind, mUniformBuffers[uniform.mName]);

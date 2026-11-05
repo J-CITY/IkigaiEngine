@@ -107,14 +107,14 @@ void CreateTemporalDenoiseBuffers(RenderGraphPipeline& pipeline, Renderer& rende
 	}
 }
 
-void UpdateTemporalDenoiseBuffers(RenderGraphPipeline& pipeline, bool frameHistoryValid) {
+void UpdateTemporalDenoiseBuffers(Renderer& renderer, RenderGraphPipeline& pipeline, bool frameHistoryValid) {
 	for (auto& entry : pipeline.mTemporalDenoise.Entries) {
 		const int32_t valid = frameHistoryValid && pipeline.mHistory.isValid(EffectOf(entry.Effect)) ? 1 : 0;
 		if (entry.Uploaded && entry.Gpu.HistoryValid == valid) {
 			continue;
 		}
 		entry.Gpu.HistoryValid = valid;
-		pipeline.mUniformBuffers.at(entry.Name)->setData(entry.Gpu);
+		renderer.updateUniformBuffer(pipeline.mUniformBuffers.at(entry.Name), entry.Gpu);
 		entry.Uploaded = true;
 	}
 }

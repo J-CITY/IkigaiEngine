@@ -608,7 +608,8 @@ void* TextureGl::getImguiId() {
 }
 
 void TextureGl::recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) {
-    ++mRevision;
+	requireOwnerThread();
+	++mRevision;
 	// Удаляем старый GPU-ресурс
 	glDeleteTextures(1, &id);
 #if IKIGAI_ENABLE_MEMORY_TRACKING

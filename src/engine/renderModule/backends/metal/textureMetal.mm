@@ -428,7 +428,8 @@ namespace IKIGAI::RENDER {
 	}
 
 	void TextureMetal::recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) {
-        ++mRevision;
+		requireOwnerThread();
+		++mRevision;
 		auto& mutableDesc = const_cast<TextureResource&>(descriptor);
 		ImagePayload payload = fileData.empty() ? LoadPayload(mutableDesc, nullptr) : LoadPayload(mutableDesc, &fileData);
 		init(mutableDesc, payload.pixels);

@@ -249,6 +249,7 @@ ShaderDx12::ShaderDx12(const ShaderResource& res) : ShaderDx12() {
 }
 
 void ShaderDx12::recompile(const ShaderResource& res) {
+	requireOwnerThread();
 	mReflection = ShaderReflection();
 	mBlobs.clear();
 	mRootSignature.Reset();

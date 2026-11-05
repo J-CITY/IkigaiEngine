@@ -839,9 +839,13 @@ void DriverDx12::begin() {
 }
 
 void DriverDx12::end() {
+	if (!mRecording) {
+		return;
+	}
 	std::static_pointer_cast<TextureDx12>(getDefaultFrameBuffer()->getTextures()[0])->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_PRESENT);
 	const bool timestamps = resolveTimestampQueries();
 	endCommandList(mCommandQueue.Get(), mCommandList.Get(), false);
+	completionSource()->submitted();
 	// Every later signal of mFence on this queue follows the submission above.
 	mUploadRing->retireFrame(mFenceValue);
 	if (timestamps) {
@@ -850,12 +854,14 @@ void DriverDx12::end() {
 }
 
 void DriverDx12::beginCommandList(ID3D12CommandAllocator* cmdAlloc, ID3D12GraphicsCommandList* cmdList) {
-	cmdAlloc->Reset();
-	cmdList->Reset(cmdAlloc, nullptr);
+	ThrowIfFailed(cmdAlloc->Reset());
+	ThrowIfFailed(cmdList->Reset(cmdAlloc, nullptr));
+	mRecording = true;
 }
 
 void DriverDx12::endCommandList(ID3D12CommandQueue* cmdQueue, ID3D12GraphicsCommandList* cmdList, bool needWait) {
-	cmdList->Close();
+	ThrowIfFailed(cmdList->Close());
+	mRecording = false;
 	cmdQueue->ExecuteCommandLists(1, CommandListCast(&cmdList));
 	if (needWait) {
 		Microsoft::WRL::ComPtr<ID3D12Fence> fence;
@@ -1039,11 +1045,20 @@ std::shared_ptr<TextureInterface> DriverDx12::createTexture(const std::string& n
 }
 
 void DriverDx12::wait() {
-	mCommandQueue->Signal(mFence.Get(), mFenceValue);
-	mFence->SetEventOnCompletion(mFenceValue, mFenceEvent);
+	ThrowIfFailed(mCommandQueue->Signal(mFence.Get(), mFenceValue));
+	ThrowIfFailed(mFence->SetEventOnCompletion(mFenceValue, mFenceEvent));
 	WaitWithWindowMessages(mFenceEvent);
 	++mFenceValue;
+	completionSource()->completed(completionSource()->lastSubmitted());
 	clearForDestroy();
+}
+
+void DriverDx12::waitForCompletion(GpuCompletionToken token) {
+	requireOwnerThread();
+	completionSource()->validate(token);
+	if (!completionSource()->isComplete(token)) {
+		wait();
+	}
 }
 
 void DriverDx12::logAdapters() {

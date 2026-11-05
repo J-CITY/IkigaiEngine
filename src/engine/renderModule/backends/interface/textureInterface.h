@@ -1,6 +1,7 @@
 #pragma once
-#include "renderEnums.h"
 #include "atlasInterface.h"
+#include "renderEnums.h"
+#include "renderResourceOwner.h"
 #include <string>
 
 namespace IKIGAI::RENDER {
@@ -14,7 +15,7 @@ namespace IKIGAI::RENDER {
 		DEPTH
 	};
 
-	class TextureInterface {
+	class TextureInterface : protected RenderResourceOwner {
 	protected:
 		std::string mPath;
 

@@ -425,9 +425,10 @@ DriverDx12* d3dUtil::mDriver = nullptr;
 
 DriverDx12* d3dUtil::GetDriver() {
     if (mDriver) {
-        return mDriver;
-    }
-    return static_cast<DriverDx12*>(DriverInterface::Get());
+		mDriver->prepareAccess();
+		return mDriver;
+	}
+	return static_cast<DriverDx12*>(DriverInterface::Get());
 }
 
 

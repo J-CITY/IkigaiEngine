@@ -1,13 +1,23 @@
 #include "renderStatistics.h"
+#include "renderModule/render.h"
+#include "resourceModule/serviceManager.h"
 
 #include <algorithm>
 #include <iomanip>
+#include <limits>
+#include <optional>
 #include <ostream>
 #include <utility>
 
 namespace IKIGAI::RENDER {
 namespace {
 	constexpr std::string_view UnscopedStageName = "(unscoped)";
+	std::optional<size_t> playbackStage {};
+	void recordStageMarker(size_t index) {
+		if (RESOURCES::ServiceManager::Check<Renderer>()) {
+			RESOURCES::ServiceManager::Get<Renderer>().execute([index] { playbackStage = index; });
+		}
+	}
 
 	void Accumulate(RenderDrawCounters& target, const RenderDrawCounters& source) {
 		target.DrawCalls += source.DrawCalls;
@@ -81,6 +91,7 @@ bool RenderStatistics::isEnabled() const {
 }
 
 void RenderStatistics::beginFrame() {
+	playbackStage.reset();
 	if (!mEnabled) {
 		return;
 	}
@@ -123,12 +134,14 @@ RenderStatistics::StageScope RenderStatistics::measureStage(std::string_view nam
 		return {};
 	}
 	mStageStack.push_back(stageIndex(name));
+	recordStageMarker(mStageStack.back());
 	return StageScope(this);
 }
 
 void RenderStatistics::endStage() {
 	if (!mStageStack.empty()) {
 		mStageStack.pop_back();
+		recordStageMarker(mStageStack.empty() ? std::numeric_limits<size_t>::max() : mStageStack.back());
 	}
 }
 
@@ -147,6 +160,9 @@ std::size_t RenderStatistics::stageIndex(std::string_view name) {
 }
 
 RenderDrawCounters& RenderStatistics::current() {
+	if (playbackStage) {
+		return *playbackStage < mCurrent.Stages.size() ? mCurrent.Stages[*playbackStage].Counters : mUnscoped;
+	}
 	return mStageStack.empty() ? mUnscoped : mCurrent.Stages[mStageStack.back()].Counters;
 }
 

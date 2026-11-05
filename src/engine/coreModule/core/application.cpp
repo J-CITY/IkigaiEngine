@@ -27,6 +27,7 @@ namespace {
 		stringOption("--loading-scene", options.loadingScene, "Loading scene asset");
 		stringOption("--pipeline", options.pipeline, "Render pipeline asset");
 		stringOption("--render-backend", options.renderBackend, "opengl, vulkan, directx12 or metal");
+		stringOption("--render-executor", options.renderExecutor, "immediate or deferred");
 		stringOption("--upscaler", options.upscaler, "Upscaler");
 		stringOption("--upscaler-quality", options.upscalerQuality, "Upscaler quality");
 		stringOption("--frame-generation", options.frameGeneration, "Frame generation mode");
@@ -77,6 +78,9 @@ namespace {
 		}
 		if (!options.renderBackend.empty()) {
 			RENDER::SetCliRenderBackendOverride(options.renderBackend);
+		}
+		if (!options.renderExecutor.empty()) {
+			RENDER::SetCliRenderExecutorOverride(options.renderExecutor);
 		}
 		if (!options.upscaler.empty()) {
 			RENDER::SetCliUpscalerOverride(options.upscaler);

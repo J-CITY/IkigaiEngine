@@ -152,6 +152,8 @@ public:
 		const MATH::Vector3f& cameraPosition, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial);
 
 	IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::CameraComponent> findMainCamera();
+	// Advance once after all views have recorded a game frame.
+	void commitRenderTransforms();
 	std::vector<RENDER::LightOGL> findLightData(std::vector<int>* objectIds = nullptr) const;
 	std::vector<RENDER::LightOGL> findLightDataInFrustum(const RENDER::Frustum& frustum, std::vector<int>* objectIds = nullptr);
 

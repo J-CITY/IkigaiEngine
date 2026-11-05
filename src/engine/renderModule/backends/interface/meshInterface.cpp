@@ -14,10 +14,12 @@ const BoundingSphere& MeshInterface::getBoundingSphere() const {
 }
 
 void MeshInterface::setOffset(size_t offset) {
+	(void)DriverInterface::Get();
 	mOffset = offset;
 }
 
 void MeshInterface::setMorphTargets(std::vector<MorphTarget> targets) {
+	(void)DriverInterface::Get();
 	if (targets.size() > 64) {
 		throw std::invalid_argument("A mesh supports at most 64 morph targets");
 	}

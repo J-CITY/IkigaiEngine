@@ -271,6 +271,7 @@ IKIGAI::RENDER::ShaderVk::~ShaderVk() {
 }
 
 void IKIGAI::RENDER::ShaderVk::recompile(const ShaderResource& res) {
+	requireOwnerThread();
 	clear();
 	// New sources must not be shadowed by SPIR-V compiled from the previous version
 	if (!res.sources.empty()) {

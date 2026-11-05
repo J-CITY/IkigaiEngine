@@ -37,6 +37,10 @@ class DriverVk : public DriverInterface {
 	friend class StreamlineFrameGenerationVk;
 
 public:
+	void waitForCompletion(GpuCompletionToken token) override;
+	bool hasOpenRecording() const noexcept override {
+		return working;
+	}
 	struct VolkInitializer {
 		std::shared_ptr<void> Runtime;
 		VolkInitializer();
@@ -130,6 +134,7 @@ public:
 		// Declared first so it is destroyed last (after framebuffer textures that may queue into it).
 		std::vector<VulkanObject> destroyDeferred;
 		vk::raii::Fence fence = nullptr;
+		GpuCompletionToken Completion {};
 		std::shared_ptr<FrameBufferVk> mFrameBuffer;
 		vk::raii::Semaphore mImageAcquiredSemaphore = nullptr;
 		vk::raii::Semaphore mRenderCompleteSemaphore = nullptr;

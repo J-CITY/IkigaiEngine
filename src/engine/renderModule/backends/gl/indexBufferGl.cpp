@@ -42,6 +42,7 @@ void IKIGAI::RENDER::IndexBufferGl::unbind() {
 }
 
 void IKIGAI::RENDER::IndexBufferGl::setData(const void* data, size_t sz, size_t stride) {
+	requireOwnerThread();
 	bind();
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sz * stride, data, INTERNAL::UsageTypeMap[static_cast<unsigned>(mType)]);
 #if IKIGAI_ENABLE_MEMORY_TRACKING

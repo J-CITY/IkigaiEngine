@@ -109,6 +109,7 @@ namespace IKIGAI::RENDER {
 	void ShaderMetal::setUniform(const std::string&, const std::vector<MATH::Matrix4f>&) {}
 
 	void ShaderMetal::recompile(const ShaderResource& res) {
+		requireOwnerThread();
 		if (!res.sources.empty()) {
 			res.spirvSources.clear();
 		}

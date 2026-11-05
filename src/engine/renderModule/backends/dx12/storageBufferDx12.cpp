@@ -98,6 +98,7 @@ namespace IKIGAI::RENDER {
 	}
 
 	void StorageBufferDx12::setSubData(const void* data, size_t sz, size_t offset) {
+		requireOwnerThread();
 		if (!mBuffer || offset + sz > mSizeByte || !data) {
 			return;
 		}
@@ -117,6 +118,7 @@ namespace IKIGAI::RENDER {
 	}
 
 	void StorageBufferDx12::setData(const void* data, size_t sz, size_t stride) {
+		requireOwnerThread();
 		const size_t newSizeByte = sz * stride;
 		if (newSizeByte > mSizeByte) {
 			mSize = sz;

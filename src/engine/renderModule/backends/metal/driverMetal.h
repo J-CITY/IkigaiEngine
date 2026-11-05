@@ -27,6 +27,10 @@ public:
 	void init() override;
 	void begin() override;
 	void end() override;
+	void waitForCompletion(GpuCompletionToken token) override;
+	bool hasOpenRecording() const noexcept override {
+		return mCurrentCommandBuffer != nil;
+	}
 	void submit() override;
 	void cleanup() override;
 	void resize(size_t width, size_t height) override;

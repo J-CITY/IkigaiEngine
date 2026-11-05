@@ -27,6 +27,7 @@ namespace {
 	std::optional<FrameGenerationType> gCliFrameGeneration;
 	std::optional<unsigned> gCliFrameGenerationMultiplier;
 	std::optional<RenderSettings::PresentMode> gCliPresentMode;
+	std::optional<RenderSettings::Execution> gCliExecution;
 	std::string ToLower(std::string value) {
 		std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		return value;
@@ -181,7 +182,23 @@ const char* PresentModeToString(RenderSettings::PresentMode mode) {
 		return "default";
 	}
 }
+void SetCliRenderExecutorOverride(std::string_view name) {
+	const auto value = ToLower(std::string(name));
+	if (value == "immediate") {
+		gCliExecution = RenderSettings::Execution::IMMEDIATE;
+	}
+	else if (value == "deferred") {
+		gCliExecution = RenderSettings::Execution::DEFERRED;
+	}
+	else {
+		throw std::invalid_argument("Invalid render executor; expected immediate/deferred");
+	}
+}
+
 void ResolveRenderBackend(RenderSettings& settings) {
+	if (gCliExecution) {
+		settings.execution = *gCliExecution;
+	}
 	if (gCliPresentMode) {
 		settings.presentMode = *gCliPresentMode;
 	}

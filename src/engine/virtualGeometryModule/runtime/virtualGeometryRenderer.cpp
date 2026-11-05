@@ -50,10 +50,10 @@ namespace {
 		return static_cast<uint32_t>(capacity);
 	}
 
-	void UploadChunked(RENDER::StorageBufferInterface& buffer, const void* data, size_t bytes) {
+	void UploadChunked(RENDER::Renderer& renderer, const std::shared_ptr<RENDER::StorageBufferInterface>& buffer, const void* data, size_t bytes) {
 		const auto* source = static_cast<const uint8_t*>(data);
 		for (size_t offset = 0; offset < bytes; offset += UploadChunkBytes) {
-			buffer.setSubData(source + offset, std::min(UploadChunkBytes, bytes - offset), offset);
+			renderer.updateStorageBufferRange(buffer, source + offset, std::min(UploadChunkBytes, bytes - offset), offset);
 		}
 	}
 
@@ -862,7 +862,7 @@ void VirtualGeometryRenderer::uploadFrame(RENDER::Renderer& renderer) {
 			mInstanceCapacity = GrowCapacity(mInstanceCapacity, mInstances.size());
 			mInstanceBuffer = renderer.createStorageBuffer(nullptr, mInstanceCapacity, sizeof(InstanceGpu), RENDER::BufferUsage::STORAGE);
 		}
-		UploadChunked(*mInstanceBuffer, mInstances.data(), mInstances.size() * sizeof(InstanceGpu));
+		UploadChunked(renderer, mInstanceBuffer, mInstances.data(), mInstances.size() * sizeof(InstanceGpu));
 		return;
 	}
 	auto& commands = mCommandScratch;
@@ -901,9 +901,9 @@ void VirtualGeometryRenderer::uploadFrame(RENDER::Renderer& renderer) {
 		std::iota(identity.begin(), identity.end(), 0u);
 		mDrawIndexStream = CreateVirtualGeometryVertexBuffer(identity.data(), identity.size(), sizeof(uint32_t));
 	}
-	UploadChunked(*mInstanceBuffer, mInstances.data(), mInstances.size() * sizeof(InstanceGpu));
-	UploadChunked(*mIndirectBuffer, commands.data(), commands.size() * sizeof(RENDER::DrawIndexedIndirectCommand));
-	UploadChunked(*mDrawRecordBuffer, records.data(), records.size() * sizeof(DrawRecordGpu));
+	UploadChunked(renderer, mInstanceBuffer, mInstances.data(), mInstances.size() * sizeof(InstanceGpu));
+	UploadChunked(renderer, mIndirectBuffer, commands.data(), commands.size() * sizeof(RENDER::DrawIndexedIndirectCommand));
+	UploadChunked(renderer, mDrawRecordBuffer, records.data(), records.size() * sizeof(DrawRecordGpu));
 }
 
 void VirtualGeometryRenderer::drawGeometry(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings) {

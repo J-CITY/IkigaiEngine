@@ -8,6 +8,9 @@
 #include "backends/interface/meshInterface.h"
 #include "diagnostics/renderStatistics.h"
 #include "executors/renderExecutor.h"
+#include "frame/frameContext.h"
+#include "frame/renderOwner.h"
+#include <deque>
 
 namespace IKIGAI::RENDER {
 class MaterialInterface;
@@ -205,18 +208,52 @@ struct CmdSetPushConstant : CommandHeader {
 class Renderer {
 	std::unique_ptr<RenderExecutorInterface> mExecutor;
 	DriverInterface* mDriver = nullptr;
+	RenderOwner mOwner {};
+	std::shared_ptr<FrameContext> mActiveFrame {};
+	std::deque<std::shared_ptr<FrameContext>> mSubmittedFrames {};
+	std::vector<std::shared_ptr<RenderCommandBuffer>> mFreeFrameCommands {};
+	std::shared_ptr<const RenderFrameSnapshot> mLastSnapshot {};
+	uint64_t mNextFrameId = 0;
+	uint64_t mFrameStartSubmission = 0;
+	bool mShutdown = false;
+	bool mPreparingAccess = false;
+	bool mRetiringFrames = false;
+	void prepareBackendAccess();
+	void retireFrames(bool wait);
+	void finishFrame(GpuCompletionToken token);
 
 public:
-	Renderer(DriverInterface* driver, std::unique_ptr<RenderExecutorInterface> executor)
-		: mDriver(driver)
-		, mExecutor(std::move(executor)) { };
+	Renderer(DriverInterface* driver, std::unique_ptr<RenderExecutorInterface> executor);
+	~Renderer();
+	void beginFrame();
+	void addView(RenderViewSnapshot view);
+	void shutdown();
+	bool hasActiveFrame() const;
+	std::shared_ptr<const RenderFrameSnapshot> lastSnapshot() const;
 
-	DriverInterface* getDriver() {
-		return mDriver;
-	}
+	// Explicit serial boundary for legacy/native operations and synchronous resource creation.
+	DriverInterface* getDriver();
 
 	template <typename T, typename... Args> void push(OpCode op, Args&&... args) {
+		mOwner.requireCurrentThread();
+		if (mShutdown) {
+			throw std::logic_error("Renderer is shut down");
+		}
+		if (!mActiveFrame && !mSubmittedFrames.empty()) {
+			retireFrames(true);
+		}
 		mExecutor->submit<T>(mDriver, op, std::forward<Args>(args)...);
+	}
+	void updateUniformBuffer(std::shared_ptr<UniformBufferInterface> buffer, const void* data, size_t bytes, size_t offset = 0);
+	template <typename T> void updateUniformBuffer(std::shared_ptr<UniformBufferInterface> buffer, const T& data) {
+		static_assert(std::is_standard_layout_v<T> && std::is_trivially_destructible_v<T> && !std::is_pointer_v<T>);
+		updateUniformBuffer(std::move(buffer), &data, sizeof(T));
+	}
+	void updateStorageBuffer(std::shared_ptr<StorageBufferInterface> buffer, const void* data, size_t count, size_t stride);
+	void updateStorageBufferRange(std::shared_ptr<StorageBufferInterface> buffer, const void* data, size_t bytes, size_t offset);
+	template <typename T> void updateStorageBuffer(std::shared_ptr<StorageBufferInterface> buffer, const std::vector<T>& data) {
+		static_assert(std::is_trivially_copyable_v<T>);
+		updateStorageBuffer(std::move(buffer), data.data(), data.size(), sizeof(T));
 	}
 
 	// Hybrid approach:
@@ -277,9 +314,7 @@ public:
 	void end() {
 		push<CommandHeader>(OpCode::END);
 	}
-	void submit() {
-		push<CommandHeader>(OpCode::SUBMIT);
-	}
+	void submit();
 	void cleanup() {
 		push<CommandHeader>(OpCode::CLEANUP);
 	}
@@ -388,24 +423,24 @@ public:
 	void setPushConstant(ShaderType stage, uint32_t offset, uint32_t dataSize, const void* data);
 
 	std::shared_ptr<UniformBufferInterface> createUniformBuffer(const void* data, size_t size) {
-		return mDriver->createUniformBuffer(data, size);
+		return getDriver()->createUniformBuffer(data, size);
 	}
 
 	template <typename T> std::shared_ptr<UniformBufferInterface> createUniformBuffer(const T& data) {
-		return mDriver->createUniformBuffer(&data, sizeof(T));
+		return getDriver()->createUniformBuffer(&data, sizeof(T));
 	}
 
 	std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void* data, size_t size, size_t stride) {
-		return mDriver->createStorageBuffer(data, size, stride);
+		return getDriver()->createStorageBuffer(data, size, stride);
 	}
 
 	// count elements of stride bytes, like DriverInterface::createStorageBuffer.
 	std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void* data, size_t count, size_t stride, BufferUsage usage) {
-		return mDriver->createStorageBuffer(data, count, stride, usage);
+		return getDriver()->createStorageBuffer(data, count, stride, usage);
 	}
 
 	template <typename T> std::shared_ptr<StorageBufferInterface> createStorageBuffer(const std::vector<T>& data) {
-		return mDriver->createStorageBuffer(data.data(), data.size(), sizeof(T));
+		return getDriver()->createStorageBuffer(data.data(), data.size(), sizeof(T));
 	}
 
 	// One T split into elements of stride bytes; stride must divide sizeof(T).
@@ -413,66 +448,67 @@ public:
 		if (!stride || sizeof(T) % stride != 0) {
 			throw std::invalid_argument("Storage buffer stride must divide the element size");
 		}
-		return mDriver->createStorageBuffer(&data, sizeof(T) / stride, stride);
+		return getDriver()->createStorageBuffer(&data, sizeof(T) / stride, stride);
 	}
 
 	std::shared_ptr<TextureInterface> createTexture(
 		const std::string& path, bool generateMipmap = true, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) {
-		return mDriver->createTexture(path, generateMipmap, allocator, deleter);
+		return getDriver()->createTexture(path, generateMipmap, allocator, deleter);
 	}
 
 	std::shared_ptr<TextureInterface> createTextureAtlas(
 		const std::string& path, bool generateMipmap = true, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) {
-		return mDriver->createTextureAtlas(path, generateMipmap, allocator, deleter);
+		return getDriver()->createTextureAtlas(path, generateMipmap, allocator, deleter);
 	}
 
 	std::shared_ptr<TextureInterface> createTexture(
 		const TextureResource& res, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) {
-		return mDriver->createTexture(res, allocator, deleter);
+		return getDriver()->createTexture(res, allocator, deleter);
 	}
 
 	std::shared_ptr<TextureInterface> createTexture(const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData,
 		UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) {
-		return mDriver->createTexture(res, fileData, allocator, deleter);
+		return getDriver()->createTexture(res, fileData, allocator, deleter);
 	}
 
 	std::shared_ptr<TextureInterface> createTextureAtlas(const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData,
 		UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) {
-		return mDriver->createTextureAtlas(res, fileData, allocator, deleter);
+		return getDriver()->createTextureAtlas(res, fileData, allocator, deleter);
 	}
 
 	std::shared_ptr<TextureInterface> createTexture(const std::string& path, const std::vector<uint8_t>& data, bool generateMipmap = true,
 		UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) {
-		return mDriver->createTexture(path, data, generateMipmap, allocator, deleter);
+		return getDriver()->createTexture(path, data, generateMipmap, allocator, deleter);
 	}
 
 	std::shared_ptr<ShaderInterface> createShader(const std::string& vertexPath, const std::string& fragmentPath) {
-		return mDriver->createShader(vertexPath, fragmentPath);
+		return getDriver()->createShader(vertexPath, fragmentPath);
 	}
 
 	std::shared_ptr<ShaderInterface> createShader(
 		const ShaderResource& res, UTILS::IAllocator* allocator = nullptr, ShaderDeleter deleter = nullptr) {
-		return mDriver->createShader(res, allocator, deleter);
+		return getDriver()->createShader(res, allocator, deleter);
 	}
 
 	std::shared_ptr<ModelInterface> createModel(const std::string& path, UTILS::IAllocator* allocator = nullptr, ModelDeleter deleter = nullptr) {
-		return mDriver->createModel(path, allocator, deleter);
+		return getDriver()->createModel(path, allocator, deleter);
 	}
 
 	std::shared_ptr<FrameBufferInterface> createFrameBuffer(const std::vector<std::shared_ptr<TextureInterface>>& textures,
 		std::shared_ptr<TextureInterface> depth, unsigned mip = 0, unsigned layer = 0) {
-		return mDriver->createFrameBuffer(textures, depth, mip, layer);
+		return getDriver()->createFrameBuffer(textures, depth, mip, layer);
 	}
 
 	std::shared_ptr<MaterialInterface> createMaterial(
 		const MaterialResource& res, UTILS::IAllocator* allocator = nullptr, MaterialDeleter deleter = nullptr) {
-		return mDriver->createMaterial(res, allocator, deleter);
+		return getDriver()->createMaterial(res, allocator, deleter);
 	}
 
-	void cancel() noexcept;
+	void cancel();
 
 	// Replay CPU packets; this does not wait for GPU completion.
 	void flush() {
+		mOwner.requireCurrentThread();
 		if (mExecutor) {
 			mExecutor->flush(mDriver);
 		}

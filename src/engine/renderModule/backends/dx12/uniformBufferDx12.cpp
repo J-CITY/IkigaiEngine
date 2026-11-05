@@ -18,15 +18,18 @@ IKIGAI::RENDER::UniformBufferDx12::UniformBufferDx12(const void* data, size_t sz
 IKIGAI::RENDER::UniformBufferDx12::~UniformBufferDx12() = default;
 
 void IKIGAI::RENDER::UniformBufferDx12::setData(const void* data, size_t sz, size_t offset) {
-	(void)offset;
+	requireOwnerThread();
 	if (!data || sz == 0) {
 		return;
 	}
-	if (sz > mSizeByte) {
-		mSizeByte = DirectX::AlignUp((int)sz, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+	if (offset > SIZE_MAX - sz || offset + sz > INT_MAX - D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT) {
+		throw std::invalid_argument("Uniform buffer range is too large");
+	}
+	if (offset + sz > mSizeByte) {
+		mSizeByte = DirectX::AlignUp((int)(offset + sz), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 		mData.resize(mSizeByte);
 	}
-	std::memcpy(mData.data(), data, sz);
+	std::memcpy(mData.data() + offset, data, sz);
 	mUploadSerial = 0;
 }
 

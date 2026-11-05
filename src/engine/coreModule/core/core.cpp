@@ -241,7 +241,18 @@ Core::Core(const PlatformStartup& platform)
 		throw std::runtime_error("Failed to create render driver");
 	}
 
-	render = std::make_unique<RENDER::Renderer>(driver.get(), std::make_unique<RENDER::ImmediateExecutor>());
+	std::unique_ptr<RENDER::RenderExecutorInterface> executor;
+	if (RENDER::DriverInterface::settings.execution == RENDER::RenderSettings::Execution::DEFERRED) {
+		if (RENDER::DriverInterface::settings.backend != RENDER::RenderSettings::Backend::VULKAN
+			&& RENDER::DriverInterface::settings.backend != RENDER::RenderSettings::Backend::DIRECTX12) {
+			throw std::runtime_error("Deferred frame recording requires Vulkan or DirectX 12; use Immediate on this backend");
+		}
+		executor = std::make_unique<RENDER::BufferedExecutor>();
+	}
+	else {
+		executor = std::make_unique<RENDER::ImmediateExecutor>();
+	}
+	render = std::make_unique<RENDER::Renderer>(driver.get(), std::move(executor));
 
 	std::cout << "Create driver\n";
 
@@ -374,6 +385,9 @@ Core::~Core() {
 	}
 	RESOURCES::ServiceManager::Remove<COROUTINE::Scheduler>();
 	CAPTURE::ScreenshotService::Get().wait();
+	if (render) {
+		render->shutdown();
+	}
 	// FG owns presentation workers. Stop them while the window, UI and all
 	// tagged scene resources still exist, before ImGui destroys platform windows.
 	if (driver) {
@@ -409,5 +423,6 @@ Core::~Core() {
 	// explicitly before fileSystem's member destructor runs.
 	fontManager.reset();
 	RESOURCES::ServiceManager::Remove<RESOURCES::FontLoader>();
+	RESOURCES::ServiceManager::Remove<RENDER::Renderer>();
 	RENDER::DriverInterface::SetActive(nullptr);
 }

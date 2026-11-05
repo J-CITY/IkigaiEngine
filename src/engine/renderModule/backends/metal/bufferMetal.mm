@@ -33,73 +33,80 @@ namespace IKIGAI::RENDER {
     }
 
     void UniformBufferMetal::setData(const void* data, size_t sz, size_t offset) {
-        if (mBuffer && data && sz > 0 && offset + sz <= mSizeByte) {
-            std::memcpy((uint8_t*)[mBuffer contents] + offset, data, sz);
-        }
-    }
+		requireOwnerThread();
+		if (mBuffer && data && sz > 0 && offset + sz <= mSizeByte) {
+			std::memcpy((uint8_t*)[mBuffer contents] + offset, data, sz);
+		}
+	}
 
-    // --- StorageBufferMetal ---
-    StorageBufferMetal::StorageBufferMetal(size_t sz, size_t stride) : StorageBufferInterface(sz, stride) {
-        mBuffer = MakeSharedBuffer(mSizeByte, PROFILER::GpuResourceKind::StorageBuffer);
-    }
+	// --- StorageBufferMetal ---
+	StorageBufferMetal::StorageBufferMetal(size_t sz, size_t stride)
+		: StorageBufferInterface(sz, stride) {
+		mBuffer = MakeSharedBuffer(mSizeByte, PROFILER::GpuResourceKind::StorageBuffer);
+	}
 
-    void StorageBufferMetal::setData(const void* data, size_t sz, size_t stride) {
-        mSize = sz;
-        mStride = stride;
-        mSizeByte = sz * stride;
-        
-        if (!mBuffer || [mBuffer length] < mSizeByte) {
-            mBuffer = MakeSharedBuffer(mSizeByte, PROFILER::GpuResourceKind::StorageBuffer);
-        }
-        
-        if (mBuffer && data && mSizeByte > 0) {
-            std::memcpy([mBuffer contents], data, mSizeByte);
-        }
-    }
+	void StorageBufferMetal::setData(const void* data, size_t sz, size_t stride) {
+		requireOwnerThread();
+		mSize = sz;
+		mStride = stride;
+		mSizeByte = sz * stride;
 
-    void StorageBufferMetal::setSubData(const void* data, size_t sz, size_t offset) {
-        if (mBuffer && data && sz > 0 && offset + sz <= mSizeByte) {
-            std::memcpy((uint8_t*)[mBuffer contents] + offset, data, sz);
-        }
-    }
+		if (!mBuffer || [mBuffer length] < mSizeByte) {
+			mBuffer = MakeSharedBuffer(mSizeByte, PROFILER::GpuResourceKind::StorageBuffer);
+		}
 
-    // --- VertexBufferMetal ---
-    VertexBufferMetal::VertexBufferMetal(size_t sz, size_t stride) : VertexBufferInterface(sz, stride) {
-        mBuffer = MakeSharedBuffer(mSizeByte, PROFILER::GpuResourceKind::VertexBuffer);
-    }
+		if (mBuffer && data && mSizeByte > 0) {
+			std::memcpy([mBuffer contents], data, mSizeByte);
+		}
+	}
 
-    void VertexBufferMetal::setData(const void* data, size_t sz, size_t stride) {
-        mSize = sz;
-        mStride = stride;
-        mSizeByte = sz * stride;
-        
-        if (!mBuffer || [mBuffer length] < mSizeByte) {
-            mBuffer = MakeSharedBuffer(mSizeByte, PROFILER::GpuResourceKind::VertexBuffer);
-        }
-        
-        if (mBuffer && data && mSizeByte > 0) {
-            std::memcpy([mBuffer contents], data, mSizeByte);
-        }
-    }
+	void StorageBufferMetal::setSubData(const void* data, size_t sz, size_t offset) {
+		requireOwnerThread();
+		if (mBuffer && data && sz > 0 && offset + sz <= mSizeByte) {
+			std::memcpy((uint8_t*)[mBuffer contents] + offset, data, sz);
+		}
+	}
 
-    // --- IndexBufferMetal ---
+	// --- VertexBufferMetal ---
+	VertexBufferMetal::VertexBufferMetal(size_t sz, size_t stride)
+		: VertexBufferInterface(sz, stride) {
+		mBuffer = MakeSharedBuffer(mSizeByte, PROFILER::GpuResourceKind::VertexBuffer);
+	}
+
+	void VertexBufferMetal::setData(const void* data, size_t sz, size_t stride) {
+		requireOwnerThread();
+		mSize = sz;
+		mStride = stride;
+		mSizeByte = sz * stride;
+
+		if (!mBuffer || [mBuffer length] < mSizeByte) {
+			mBuffer = MakeSharedBuffer(mSizeByte, PROFILER::GpuResourceKind::VertexBuffer);
+		}
+
+		if (mBuffer && data && mSizeByte > 0) {
+			std::memcpy([mBuffer contents], data, mSizeByte);
+		}
+	}
+
+	// --- IndexBufferMetal ---
     IndexBufferMetal::IndexBufferMetal(size_t sz, size_t stride) : IndexBufferInterface(sz, stride) {
         mBuffer = MakeSharedBuffer(mSizeByte, PROFILER::GpuResourceKind::IndexBuffer);
     }
 
     void IndexBufferMetal::setData(const void* data, size_t sz, size_t stride) {
-        mSize = sz;
-        mStride = stride;
-        mSizeByte = sz * stride;
-        
-        if (!mBuffer || [mBuffer length] < mSizeByte) {
-            mBuffer = MakeSharedBuffer(mSizeByte, PROFILER::GpuResourceKind::IndexBuffer);
-        }
-        
-        if (mBuffer && data && mSizeByte > 0) {
-            std::memcpy([mBuffer contents], data, mSizeByte);
-        }
-    }
+		requireOwnerThread();
+		mSize = sz;
+		mStride = stride;
+		mSizeByte = sz * stride;
+
+		if (!mBuffer || [mBuffer length] < mSizeByte) {
+			mBuffer = MakeSharedBuffer(mSizeByte, PROFILER::GpuResourceKind::IndexBuffer);
+		}
+
+		if (mBuffer && data && mSizeByte > 0) {
+			std::memcpy([mBuffer contents], data, mSizeByte);
+		}
+	}
 
 }
 #endif

@@ -227,6 +227,7 @@ void TextureDx12::create(const TextureResource& descriptor, const std::vector<vo
 }
 
 void TextureDx12::setData(const std::vector<void*>& data, size_t width, size_t height, PixelFormat format, size_t mipLevel) {
+	requireOwnerThread();
 	const auto uploadSize = GetRequiredIntermediateSize(mResource.Get(), mipLevel, 1);
 	auto buffer = d3dUtil::CreateBuffer(uploadSize, D3D12_HEAP_TYPE_UPLOAD);
 
@@ -275,7 +276,8 @@ void* TextureDx12::getImguiId() {
 }
 
 void TextureDx12::recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) {
-    ++mRevision;
+	requireOwnerThread();
+	++mRevision;
 	// Отложенное уничтожение старого DX12-ресурса
 	d3dUtil::GetDriver()->destroyDeferred(mResource);
 	mResource = nullptr;
