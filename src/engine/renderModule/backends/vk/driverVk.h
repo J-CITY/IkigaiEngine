@@ -90,6 +90,9 @@ public:
 	std::shared_ptr<RayTracingProgram> createRayTracingProgram(const RayTracingProgramResource&) override;
 	std::shared_ptr<RayTracingProgram> createComputeProgram(const RayTracingProgramResource&) override;
 	void dispatchComputeProgram(const RayTracingDispatch&) override;
+	bool hasGraphComputeQueue() const noexcept override;
+	void dispatchGraphCompute(const RayTracingDispatch&) override;
+	void joinGraphCompute() override;
 	std::shared_ptr<RayTracingProgram> createRayTracingProgramImpl(const RayTracingProgramResource&, bool requireRayQuery);
 	std::shared_ptr<AccelerationStructure> createBottomLevelAS(const std::vector<RayTracingGeometry>&, bool allowUpdate = false) override;
 	std::shared_ptr<AccelerationStructure> createTopLevelAS(const std::vector<RayTracingInstance>&, bool allowUpdate = false) override;
@@ -97,7 +100,22 @@ public:
 	void refitTopLevelAS(const std::shared_ptr<AccelerationStructure>&, const std::vector<RayTracingInstance>&) override;
 	void traceRays(const RayTracingDispatch&) override;
 	void dispatchRayQueries(const RayTracingDispatch&) override;
-	void executeRayProgram(const RayTracingDispatch&, bool rayQuery);
+	void executeRayProgram(const RayTracingDispatch&, bool rayQuery, VkCommandBuffer computeList = VK_NULL_HANDLE);
+	void splitGraphGraphics(uint64_t signal);
+	void submitGraphics(vk::Semaphore renderComplete, uint64_t graphSignal, vk::Fence fence);
+	void invalidateCommandState();
+	void transferGraphBuffers(VkCommandBuffer command, uint32_t source, uint32_t destination, bool release);
+	uint32_t mGraphComputeFamily = UINT32_MAX;
+	vk::raii::Queue mGraphComputeQueue = nullptr;
+	vk::raii::CommandPool mGraphComputePool = nullptr;
+	vk::raii::Semaphore mGraphGraphicsTimeline = nullptr;
+	vk::raii::Semaphore mGraphComputeTimeline = nullptr;
+	std::vector<VkBuffer> mGraphComputeBuffers;
+	uint64_t mGraphComputeValue = 0;
+	uint64_t mGraphComputePending = 0;
+	uint64_t mGraphGraphicsWait = 0;
+	bool mProfileGraphQueues = false;
+	VkQueryPool mGraphTiming = VK_NULL_HANDLE;
 	// Timestamp queries for GpuStageProfiler (timestampQueriesVk.cpp).
 	vk::raii::QueryPool mTimestampPool = nullptr;
 	uint32_t mTimestampCapacity = 0;

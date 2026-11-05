@@ -1213,12 +1213,28 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		}
 		mRenderPipeline->mIsInitialized = true;
 	}
+	const bool asyncCompute = mRenderPipeline->mDescriptor.Execution.AsyncCompute && presentationDriver->hasGraphComputeQueue();
+	bool computePending = false;
 	for (const auto& pass : mRenderPipeline->mGraphPlan.Schedule) {
+		if (asyncCompute && pass.WaitForCompute) {
+			mContext.render->execute([presentationDriver] { presentationDriver->joinGraphCompute(); });
+			computePending = false;
+		}
 		if (!pass.Barriers.empty()) {
 			const bool uav = std::any_of(pass.Barriers.begin(), pass.Barriers.end(), [](const auto& barrier) { return barrier.Uav; });
 			mContext.render->execute([presentationDriver, uav] { presentationDriver->renderGraphBarrier(uav); });
 		}
-		runStage(mRenderPipeline->mStageIndex[pass.Id]);
+		auto* stage = mRenderPipeline->mStageIndex[pass.Id];
+		if (asyncCompute && pass.ExecutionQueue == GRAPH::Queue::ASYNC_COMPUTE) {
+			runComputeStage(*stage, true);
+			computePending = true;
+		}
+		else {
+			runStage(stage);
+		}
+	}
+	if (computePending) {
+		mContext.render->execute([presentationDriver] { presentationDriver->joinGraphCompute(); });
 	}
 	if (mVirtualGeometry) {
 		mVirtualGeometry->endFrame();

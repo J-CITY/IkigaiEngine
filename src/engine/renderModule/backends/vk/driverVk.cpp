@@ -31,6 +31,7 @@
 #include <algorithm>
 #include <array>
 #include <assimp/Importer.hpp>
+#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <set>
@@ -482,6 +483,35 @@ void DriverVk::init() {
 	VkPhysicalDeviceFeatures2 bindlessQuery { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
 	bindlessQuery.pNext = &bindlessFeatures;
 	vkGetPhysicalDeviceFeatures2(*mPhysicalDevice, &bindlessQuery);
+	const auto& graphicsFamily = properties.at(mQueueFamilyIndex);
+	// Presentation SDKs keep their requested queue indices. Use a separate queue for the graph.
+	uint32_t graphComputeIndex = 0;
+	if (settings.pipelined() && bindlessFeatures.timelineSemaphore) {
+		for (uint32_t index = 0; index < properties.size(); ++index) {
+			const auto flags = properties[index].queueFlags;
+			if ((flags & vk::QueueFlagBits::eCompute) && !(flags & vk::QueueFlagBits::eGraphics) && properties[index].queueCount) {
+				mGraphComputeFamily = index;
+				break;
+			}
+		}
+		if (mGraphComputeFamily == UINT32_MAX && graphicsFamily.queueCount > queuePriority.size()
+			&& (graphicsFamily.queueFlags & vk::QueueFlagBits::eCompute)) {
+			mGraphComputeFamily = mQueueFamilyIndex;
+			graphComputeIndex = static_cast<uint32_t>(queuePriority.size());
+			queuePriority.push_back(1.f);
+			queueInfo.setQueuePriorities(queuePriority);
+		}
+		if (mGraphComputeFamily != UINT32_MAX) {
+			mRTCoreFeatures.timelineSemaphore = VK_TRUE;
+			if (std::getenv("IKIGAI_PROFILE_GRAPH_QUEUES") && graphicsFamily.timestampValidBits == 64
+				&& properties[mGraphComputeFamily].timestampValidBits == 64
+				&& std::any_of(all_device_extensions.begin(), all_device_extensions.end(),
+					[](const auto& extension) { return std::string_view(extension.extensionName) == VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME; })) {
+				device_extensions.push_back(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
+				mProfileGraphQueues = true;
+			}
+		}
+	}
 	mRTCoreFeatures.runtimeDescriptorArray = bindlessFeatures.runtimeDescriptorArray;
 	mRTCoreFeatures.shaderSampledImageArrayNonUniformIndexing = bindlessFeatures.shaderSampledImageArrayNonUniformIndexing;
 	mRTCoreFeatures.shaderStorageBufferArrayNonUniformIndexing = bindlessFeatures.shaderStorageBufferArrayNonUniformIndexing;
@@ -521,6 +551,10 @@ void DriverVk::init() {
 	VkPhysicalDeviceOpticalFlowFeaturesNV opticalFlow { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPTICAL_FLOW_FEATURES_NV };
 	std::vector<vk::DeviceQueueCreateInfo> queueInfos { queueInfo };
 	const float opticalPriority = 1.f;
+	const float computePriority = 1.f;
+	if (mGraphComputeFamily != UINT32_MAX && mGraphComputeFamily != mQueueFamilyIndex) {
+		queueInfos.emplace_back(vk::DeviceQueueCreateFlags {}, mGraphComputeFamily, 1, &computePriority);
+	}
 #ifdef IKIGAI_USE_DLSS_FRAME_GENERATION
 	if (mDlssRuntime && std::any_of(all_device_extensions.begin(), all_device_extensions.end(), [](const auto& e) {
 			return std::string_view(e.extensionName) == VK_NV_OPTICAL_FLOW_EXTENSION_NAME;
@@ -640,6 +674,21 @@ void DriverVk::init() {
 	}
 
 	mQueue = mDevice.getQueue(mQueueFamilyIndex, 0);
+	if (mGraphComputeFamily != UINT32_MAX) {
+		mGraphComputeQueue = mDevice.getQueue(mGraphComputeFamily, graphComputeIndex);
+		mGraphComputePool = mDevice.createCommandPool(vk::CommandPoolCreateInfo(vk::CommandPoolCreateFlagBits::eTransient, mGraphComputeFamily));
+		if (enableValidation && vkSetDebugUtilsObjectNameEXT) {
+			VkDebugUtilsObjectNameInfoEXT name { VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT };
+			name.objectType = VK_OBJECT_TYPE_QUEUE;
+			name.objectHandle = reinterpret_cast<uintptr_t>(VkQueue(*mGraphComputeQueue));
+			name.pObjectName = "Render Graph Compute";
+			vkSetDebugUtilsObjectNameEXT(*mDevice, &name);
+		}
+		const vk::SemaphoreTypeCreateInfo timeline(vk::SemaphoreType::eTimeline, 0);
+		const vk::SemaphoreCreateInfo info({}, &timeline);
+		mGraphGraphicsTimeline = mDevice.createSemaphore(info);
+		mGraphComputeTimeline = mDevice.createSemaphore(info);
+	}
 	if (queuePriority.size() >= 4) {
 		for (unsigned i = 0; i < 3; ++i) {
 			vkGetDeviceQueue(*mDevice, mQueueFamilyIndex, i + 1, &mPresentationQueues[i]);
@@ -784,27 +833,7 @@ void DriverVk::begin() {
 	mBindlessFrameResources.clear();
 	mDescriptorPoolIndex = 0;
 
-	setDirty(Dirty::VERTEX_BUFFER);
-	setDirty(Dirty::INDEX_BUFFER);
-	setDirty(Dirty::VIEWPORT);
-	setDirty(Dirty::SCISSOR);
-	setDirty(Dirty::RASTERIZATION_MODE);
-	setDirty(Dirty::PRIMITIVE_MODE);
-	setDirty(Dirty::DEPTH);
-	setDirty(Dirty::STENCIL);
-	setDirty(Dirty::BLENDING);
-	setDirty(Dirty::CULLING);
-	setDirty(Dirty::PIPELINE);
-	setDirty(Dirty::TRIANGULATION_ORDER);
-
-	// gContext->pipeline_state_dirty = true;
-	// gContext->topology_dirty = true;
-	// gContext->cull_mode_dirty = true;
-	// gContext->front_face_dirty = true;
-	// gContext->blend_mode_dirty = true;
-	// gContext->depth_mode_dirty = true;
-	// gContext->stencil_mode_dirty = true;
-
+	invalidateCommandState();
 	vk::CommandBufferBeginInfo beginInfo;
 	beginInfo.setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 	getCurrentFrame().mCommandBuffer.begin(beginInfo);
@@ -822,11 +851,29 @@ void DriverVk::begin() {
 	tex->mCurrentState = vk::ImageLayout::eColorAttachmentOptimal;
 }
 
+void DriverVk::invalidateCommandState() {
+	mBoundPipelineName.clear();
+	graphics_pipeline_ignore_bindings.clear();
+	setDirty(Dirty::VERTEX_BUFFER);
+	setDirty(Dirty::INDEX_BUFFER);
+	setDirty(Dirty::VIEWPORT);
+	setDirty(Dirty::SCISSOR);
+	setDirty(Dirty::RASTERIZATION_MODE);
+	setDirty(Dirty::PRIMITIVE_MODE);
+	setDirty(Dirty::DEPTH);
+	setDirty(Dirty::STENCIL);
+	setDirty(Dirty::BLENDING);
+	setDirty(Dirty::CULLING);
+	setDirty(Dirty::PIPELINE);
+	setDirty(Dirty::TRIANGULATION_ORDER);
+}
+
 void DriverVk::end() {
 	if (!working) {
 		return;
 	}
 
+	joinGraphCompute();
 	deactivateRenderPass();
 
 	auto tex = std::static_pointer_cast<TextureVk>(getCurrentFrame().mFrameBuffer->getTextures()[0]);
@@ -852,19 +899,7 @@ void DriverVk::end() {
 	}
 	mDevice.resetFences({ **frame.fence });
 
-	auto wait_dst_stage_mask = vk::PipelineStageFlags { vk::PipelineStageFlagBits::eAllCommands };
-
-	// The acquire semaphore is chosen by mSemaphoreIndex in nextFrame(), NOT by the acquired image index (mFrameIndex).
-	// Waiting on frames[mFrameIndex] would wait on a semaphore that was never signaled.
-	const auto& image_acquired_semaphore = getCurrentSwapchainContext().frames.at(mSemaphoreIndex).mImageAcquiredSemaphore;
-
-	auto submit_info = vk::SubmitInfo().setCommandBuffers(*frame.mCommandBuffer).setSignalSemaphores(*frame.mRenderCompleteSemaphore);
-	if (mAcquireWaitPending) {
-		submit_info.setWaitDstStageMask(wait_dst_stage_mask).setWaitSemaphores(*image_acquired_semaphore);
-	}
-
-	mQueue.submit(submit_info, **frame.fence);
-	mAcquireWaitPending = false;
+	submitGraphics(*frame.mRenderCompleteSemaphore, 0, **frame.fence);
 	frame.Completion = completionSource()->submitted();
 	if (settings.pipelined()) {
 		getCurrentSwapchainContext().frames.at(mSemaphoreIndex).AcquireConsumed = frame.Completion;
@@ -873,6 +908,86 @@ void DriverVk::end() {
 		frame.RayTracingResources.swap(mRayTracingFrameResources);
 		frame.BindlessResources.swap(mBindlessFrameResources);
 	}
+}
+
+void DriverVk::submitGraphics(vk::Semaphore renderComplete, uint64_t graphSignal, vk::Fence fence) {
+	std::array<vk::Semaphore, 2> waits {};
+	std::array<uint64_t, 2> waitValues {};
+	const std::array<vk::PipelineStageFlags, 2> stages { vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands };
+	uint32_t waitCount = 0;
+	if (mAcquireWaitPending) {
+		waits[waitCount++] = *getCurrentSwapchainContext().frames.at(mSemaphoreIndex).mImageAcquiredSemaphore;
+	}
+	if (mGraphGraphicsWait) {
+		waits[waitCount] = *mGraphComputeTimeline;
+		waitValues[waitCount++] = mGraphGraphicsWait;
+	}
+	const auto signal = graphSignal ? *mGraphGraphicsTimeline : renderComplete;
+	const uint32_t signalCount = signal ? 1 : 0;
+	const vk::TimelineSemaphoreSubmitInfo timeline(waitCount, waitValues.data(), signalCount, &graphSignal);
+	const auto command = *getCurrentFrame().mCommandBuffer;
+	vk::SubmitInfo submit(waitCount, waits.data(), stages.data(), 1, &command, signalCount, &signal);
+	if (graphSignal || mGraphGraphicsWait) {
+		submit.setPNext(&timeline);
+	}
+	mQueue.submit(submit, fence);
+	mAcquireWaitPending = false;
+	mGraphGraphicsWait = 0;
+}
+
+bool DriverVk::hasGraphComputeQueue() const noexcept {
+	return bool(*mGraphComputeQueue);
+}
+
+void DriverVk::splitGraphGraphics(uint64_t signal) {
+	auto& frame = getCurrentFrame();
+	frame.TransferLists.reserve(frame.TransferLists.size() + 1);
+	auto lists = mDevice.allocateCommandBuffers(vk::CommandBufferAllocateInfo(*mCommandPool, vk::CommandBufferLevel::ePrimary, 1));
+	lists.front().begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+	deactivateRenderPass();
+	frame.mCommandBuffer.end();
+	submitGraphics({}, signal, {});
+	frame.TransferLists.push_back(std::move(frame.mCommandBuffer));
+	frame.mCommandBuffer = std::move(lists.front());
+	invalidateCommandState();
+}
+
+void DriverVk::joinGraphCompute() {
+	if (mGraphComputePending) {
+		if (mGraphTiming) {
+			vkCmdWriteTimestamp2(*getCurrentFrame().mCommandBuffer, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, mGraphTiming, 3);
+			mGraphTiming = VK_NULL_HANDLE;
+		}
+		// Submit independent graphics before making subsequent submissions wait.
+		splitGraphGraphics(0);
+		mGraphGraphicsWait = std::exchange(mGraphComputePending, 0);
+		transferGraphBuffers(*getCurrentFrame().mCommandBuffer, mGraphComputeFamily, mQueueFamilyIndex, false);
+		mGraphComputeBuffers.clear();
+	}
+}
+
+void DriverVk::transferGraphBuffers(VkCommandBuffer command, uint32_t source, uint32_t destination, bool release) {
+	if (source == destination) {
+		return;
+	}
+	std::vector<VkBufferMemoryBarrier2> barriers;
+	barriers.reserve(mGraphComputeBuffers.size());
+	for (auto buffer : mGraphComputeBuffers) {
+		VkBufferMemoryBarrier2 barrier { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2 };
+		barrier.srcQueueFamilyIndex = source;
+		barrier.dstQueueFamilyIndex = destination;
+		barrier.srcStageMask = release ? VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT : VK_PIPELINE_STAGE_2_NONE;
+		barrier.dstStageMask = release ? VK_PIPELINE_STAGE_2_NONE : VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+		barrier.srcAccessMask = release ? VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT : 0;
+		barrier.dstAccessMask = release ? 0 : VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+		barrier.buffer = buffer;
+		barrier.size = VK_WHOLE_SIZE;
+		barriers.push_back(barrier);
+	}
+	VkDependencyInfo dependency { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+	dependency.bufferMemoryBarrierCount = static_cast<uint32_t>(barriers.size());
+	dependency.pBufferMemoryBarriers = barriers.data();
+	vkCmdPipelineBarrier2(command, &dependency);
 }
 
 void DriverVk::setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) {

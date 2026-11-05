@@ -238,6 +238,7 @@ std::vector<uint8_t> DriverVk::readBuffer(const std::shared_ptr<StorageBufferInt
 	}
 	CheckTransferSource(native, "readBuffer");
 	CheckRange(native, offset, size, "readBuffer");
+	joinGraphCompute();
 	auto staging = UtilityVk::CreateBuffer(size, vk::BufferUsageFlagBits::eTransferDst, UtilityVk::MemoryUsage::Staging);
 	auto& cmd = getCurrentFrame().mCommandBuffer;
 	beginTransferCommands(cmd);
@@ -309,25 +310,18 @@ void DriverVk::flushRecordedCommands() {
 	// Submits everything recorded so far in this frame and waits for it, then reopens the
 	// frame command buffer. Consume the WSI acquire wait only on the first
 	// submission that can touch this image.
+	joinGraphCompute();
 	deactivateRenderPass();
 	auto& frame = getCurrentFrame();
 	frame.mCommandBuffer.end();
 	working = false;
 	const auto& swapchain = getCurrentSwapchainContext();
-	const auto& acquireSlot = swapchain.frames.at(mSemaphoreIndex);
-	const vk::PipelineStageFlags waitStage = vk::PipelineStageFlagBits::eAllCommands;
-	vk::SubmitInfo work;
-	work.setCommandBuffers(*frame.mCommandBuffer);
-	if (mAcquireWaitPending) {
+	if (mAcquireWaitPending && !swapchain.sdkAcquire) {
 		// Synchronous readback splits this frame across submissions. Wait
 		// for WSI to release the image before subsequent host-driven work.
-		if (!swapchain.sdkAcquire) {
-			waitFrameFence(acquireSlot.AcquireFence);
-		}
-		work.setWaitSemaphores(*acquireSlot.mImageAcquiredSemaphore).setWaitDstStageMask(waitStage);
+		waitFrameFence(swapchain.frames.at(mSemaphoreIndex).AcquireFence);
 	}
-	mQueue.submit(work);
-	mAcquireWaitPending = false;
+	submitGraphics({}, 0, {});
 	mQueue.waitIdle();
 	// Everything recorded so far (including asynchronous readback copies) has completed.
 	mCompletedEpoch = mSubmissionEpoch++;
@@ -336,12 +330,7 @@ void DriverVk::flushRecordedCommands() {
 	beginInfo.setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 	frame.mCommandBuffer.begin(beginInfo);
 	working = true;
-	mBoundPipelineName.clear();
-	graphics_pipeline_ignore_bindings.clear();
-	for (auto flag : { Dirty::VERTEX_BUFFER, Dirty::INDEX_BUFFER, Dirty::VIEWPORT, Dirty::SCISSOR, Dirty::RASTERIZATION_MODE, Dirty::PRIMITIVE_MODE,
-		 Dirty::DEPTH, Dirty::STENCIL, Dirty::BLENDING, Dirty::CULLING, Dirty::PIPELINE, Dirty::TRIANGULATION_ORDER }) {
-		setDirty(flag);
-	}
+	invalidateCommandState();
 }
 
 void DriverVk::drawIndexedIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset, uint32_t drawCount, uint32_t stride) {

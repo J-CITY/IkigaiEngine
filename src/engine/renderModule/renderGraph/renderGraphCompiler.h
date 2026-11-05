@@ -10,6 +10,7 @@ using ResourceId = size_t;
 using PassId = size_t;
 
 enum class Access { SAMPLED, UNIFORM, INDIRECT, STORAGE_READ, STORAGE_WRITE, ATTACHMENT_READ, ATTACHMENT_WRITE, TRANSFER_READ, TRANSFER_WRITE };
+enum class Queue { GRAPHICS, ASYNC_COMPUTE };
 
 struct Resource {
 	std::string Name;
@@ -28,6 +29,7 @@ struct Pass {
 	std::vector<Use> Uses;
 	std::vector<PassId> After;
 	bool SideEffect = false;
+	Queue PreferredQueue = Queue::GRAPHICS;
 };
 
 struct Barrier {
@@ -38,6 +40,8 @@ struct Barrier {
 struct ScheduledPass {
 	PassId Id = 0;
 	std::vector<Barrier> Barriers;
+	Queue ExecutionQueue = Queue::GRAPHICS;
+	bool WaitForCompute = false;
 };
 
 struct Plan {

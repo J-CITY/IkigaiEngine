@@ -217,6 +217,13 @@ public:
 	virtual void setClearColor(float r, float g, float b, float a) = 0;
 	virtual void dispatch(uint32_t x, uint32_t y, uint32_t z) = 0;
 	virtual void renderGraphBarrier(bool uav);
+	[[nodiscard]] virtual bool hasGraphComputeQueue() const noexcept {
+		return false;
+	}
+	virtual void dispatchGraphCompute(const RayTracingDispatch& dispatch) {
+		dispatchComputeProgram(dispatch);
+	}
+	virtual void joinGraphCompute() { }
 	virtual BindlessCapabilities bindlessCapabilities() const {
 		return {};
 	}

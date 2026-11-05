@@ -166,6 +166,28 @@ struct DispatchData {
 	}
 };
 
+struct GraphQueueTiming {
+	VkDevice Device = VK_NULL_HANDLE;
+	VkQueryPool Queries = VK_NULL_HANDLE;
+	double NanosecondsPerTick = 0;
+
+	~GraphQueueTiming() {
+		if (!Queries) {
+			return;
+		}
+		std::array<uint64_t, 4> ticks {};
+		if (vkGetQueryPoolResults(Device, Queries, 0, 4, sizeof(ticks), ticks.data(), sizeof(uint64_t), VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
+			const auto begin = std::max(ticks[0], ticks[2]);
+			const auto end = std::min(ticks[1], ticks[3]);
+			const auto milliseconds = [this](uint64_t interval) { return interval * NanosecondsPerTick / 1e6; };
+			std::cout << "GRAPH_GPU_QUEUES backend=vulkan compute_ms=" << milliseconds(ticks[1] - ticks[0])
+					  << " graphics_ms=" << milliseconds(ticks[3] - ticks[2]) << " overlap_ms=" << milliseconds(end > begin ? end - begin : 0)
+					  << '\n';
+		}
+		vkDestroyQueryPool(Device, Queries, nullptr);
+	}
+};
+
 std::shared_ptr<ASVk> buildAS(DriverVk& driver, std::vector<VkAccelerationStructureGeometryKHR> geometries, std::vector<uint32_t> primitiveCounts,
 	std::shared_ptr<ASVk> output, bool top, bool update = false) {
 	if (geometries.empty())
@@ -730,7 +752,74 @@ void DriverVk::dispatchRayQueries(const RayTracingDispatch& dispatch) {
 void DriverVk::dispatchComputeProgram(const RayTracingDispatch& dispatch) {
 	executeRayProgram(dispatch, true);
 }
-void DriverVk::executeRayProgram(const RayTracingDispatch& dispatch, bool rayQuery) {
+
+void DriverVk::dispatchGraphCompute(const RayTracingDispatch& dispatch) {
+	requireOwnerThread();
+	if (!hasGraphComputeQueue() || mGraphComputePending) {
+		throw std::logic_error("Vulkan graph compute queue is unavailable");
+	}
+	mGraphComputeBuffers.clear();
+	for (const auto& [binding, resources] : dispatch.Bindings) {
+		for (const auto& resource : resources) {
+			const auto* storage = std::get_if<std::shared_ptr<StorageBufferInterface>>(&resource);
+			auto buffer = storage ? std::dynamic_pointer_cast<StorageBufferVk>(*storage) : nullptr;
+			if (!buffer || !buffer->getBuffer()) {
+				throw std::invalid_argument("Vulkan graph compute requires storage buffer bindings");
+			}
+			const auto native = buffer->getBuffer().handle();
+			if (std::find(mGraphComputeBuffers.begin(), mGraphComputeBuffers.end(), native) == mGraphComputeBuffers.end()) {
+				mGraphComputeBuffers.push_back(native);
+			}
+		}
+	}
+	auto& frame = getCurrentFrame();
+	auto lists = mDevice.allocateCommandBuffers(vk::CommandBufferAllocateInfo(*mGraphComputePool, vk::CommandBufferLevel::ePrimary, 1));
+	auto& list = lists.front();
+	list.begin(vk::CommandBufferBeginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit));
+	transferGraphBuffers(*list, mQueueFamilyIndex, mGraphComputeFamily, false);
+	std::shared_ptr<GraphQueueTiming> timing;
+	if (mProfileGraphQueues) {
+		timing = std::make_shared<GraphQueueTiming>();
+		timing->Device = *mDevice;
+		timing->NanosecondsPerTick = mPhysicalDevice.getProperties().limits.timestampPeriod;
+		const VkQueryPoolCreateInfo queryInfo {
+			.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO, .queryType = VK_QUERY_TYPE_TIMESTAMP, .queryCount = 4
+		};
+		check(vkCreateQueryPool(*mDevice, &queryInfo, nullptr, &timing->Queries), "Create graph queue timestamps");
+		mRayTracingFrameResources.push_back(timing);
+		vkCmdResetQueryPool(*list, timing->Queries, 0, 2);
+		vkCmdWriteTimestamp2(*list, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, timing->Queries, 0);
+	}
+	executeRayProgram(dispatch, true, *list);
+	if (timing) {
+		vkCmdWriteTimestamp2(*list, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, timing->Queries, 1);
+	}
+	transferGraphBuffers(*list, mGraphComputeFamily, mQueueFamilyIndex, true);
+	list.end();
+
+	const auto value = ++mGraphComputeValue;
+	frame.TransferLists.reserve(frame.TransferLists.size() + 2);
+	deactivateRenderPass();
+	transferGraphBuffers(*frame.mCommandBuffer, mQueueFamilyIndex, mGraphComputeFamily, true);
+	splitGraphGraphics(value);
+	const auto command = *list;
+	const auto wait = *mGraphGraphicsTimeline;
+	const auto signal = *mGraphComputeTimeline;
+	const vk::PipelineStageFlags stage = vk::PipelineStageFlagBits::eAllCommands;
+	const vk::TimelineSemaphoreSubmitInfo timeline(1, &value, 1, &value);
+	vk::SubmitInfo submit(1, &wait, &stage, 1, &command, 1, &signal);
+	submit.setPNext(&timeline);
+	mGraphComputeQueue.submit(submit);
+	frame.TransferLists.push_back(std::move(list));
+	mGraphComputePending = value;
+	if (timing) {
+		mGraphTiming = timing->Queries;
+		vkCmdResetQueryPool(*frame.mCommandBuffer, mGraphTiming, 2, 2);
+		vkCmdWriteTimestamp2(*frame.mCommandBuffer, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, mGraphTiming, 2);
+	}
+}
+
+void DriverVk::executeRayProgram(const RayTracingDispatch& dispatch, bool rayQuery, VkCommandBuffer computeList) {
 	auto program = std::dynamic_pointer_cast<ProgramVk>(dispatch.Program);
 	if (!program || program->Driver != this)
 		throw std::runtime_error("RT dispatch requires a program from this driver");
@@ -788,8 +877,10 @@ void DriverVk::executeRayProgram(const RayTracingDispatch& dispatch, bool rayQue
 		alloc.pSetLayouts = data.Sets.data();
 		check(vkAllocateDescriptorSets(*mDevice, &alloc, sets.data()), "vkAllocateDescriptorSets(RT)");
 	}
-	deactivateRenderPass();
-	const VkCommandBuffer cmd = *getCurrentFrame().mCommandBuffer;
+	if (!computeList) {
+		deactivateRenderPass();
+	}
+	const VkCommandBuffer cmd = computeList ? computeList : VkCommandBuffer(*getCurrentFrame().mCommandBuffer);
 	const auto shaderStage = data.Compute ? VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
 	std::set<const TextureVk*> sampledImages, storageImages;
 	dependency(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT, shaderStage,
@@ -812,6 +903,11 @@ void DriverVk::executeRayProgram(const RayTracingDispatch& dispatch, bool rayQue
 		std::vector<VkDescriptorImageInfo> images;
 		std::vector<VkAccelerationStructureKHR> structures;
 		for (const auto& resource : *resources) {
+			if (computeList
+				&& (binding.Type != VK_DESCRIPTOR_TYPE_STORAGE_BUFFER
+					|| !std::holds_alternative<std::shared_ptr<StorageBufferInterface>>(resource))) {
+				throw std::invalid_argument("Vulkan graph compute requires storage buffer bindings");
+			}
 			if (binding.Type == VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR) {
 				const auto* ptr = std::get_if<std::shared_ptr<AccelerationStructure>>(&resource);
 				auto as = ptr ? std::dynamic_pointer_cast<ASVk>(*ptr) : nullptr;
@@ -901,8 +997,10 @@ void DriverVk::executeRayProgram(const RayTracingDispatch& dispatch, bool rayQue
 	if (frame->Timestamps)
 		vkCmdWriteTimestamp2(cmd, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, frame->Timestamps, 1);
 	mRayTracingFrameResources.push_back(frame);
-	mBoundPipelineName.clear();
-	graphics_pipeline_ignore_bindings.clear();
-	setDirty(Dirty::PIPELINE);
+	if (!computeList) {
+		mBoundPipelineName.clear();
+		graphics_pipeline_ignore_bindings.clear();
+		setDirty(Dirty::PIPELINE);
+	}
 }
 #endif

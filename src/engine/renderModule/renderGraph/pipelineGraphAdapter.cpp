@@ -37,7 +37,7 @@ namespace {
 	}
 
 	bool HasGraphContract(const PipelineStage::Descriptor& stage) {
-		return !stage.ResourceUses.empty() || !stage.After.empty() || stage.SideEffect;
+		return !stage.ResourceUses.empty() || !stage.After.empty() || stage.SideEffect || stage.Queue != GRAPH::Queue::GRAPHICS;
 	}
 
 	void RequireUse(const PipelineStage::Descriptor& stage, const std::string& resource, Access access) {
@@ -222,6 +222,41 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 			RequireUse(stage, clear.Buffer, Access::STORAGE_WRITE);
 			if (clear.Offset || clear.Size) {
 				RequireUse(stage, clear.Buffer, Access::STORAGE_READ);
+			}
+		}
+		bool bufferProgram
+			= compute && !stage.Program.empty() && stage.Compute.ClearBuffers.empty() && !stage.SideEffect && !stage.ResourceUses.empty();
+		for (const auto& [binding, sources] : stage.Bindings) {
+			size_t begin = 0;
+			do {
+				const auto end = sources.find(',', begin);
+				const auto source = sources.substr(begin, end == std::string::npos ? end : end - begin);
+				const auto found = resourceIds.find(source);
+				if (found == resourceIds.end() || resourceInfo[found->second].Kind != ResourceKind::StorageBuffer) {
+					bufferProgram = false;
+				}
+				else if (descriptor.Execution.AsyncCompute && std::none_of(pass.Uses.begin(), pass.Uses.end(), [&](const auto& use) {
+							 return use.Resource == found->second && (use.Mode == Access::STORAGE_READ || use.Mode == Access::STORAGE_WRITE);
+						 })) {
+					throw std::invalid_argument("Missing declared program buffer access to " + source + " in " + stage.Name);
+				}
+				if (end == std::string::npos) {
+					break;
+				}
+				begin = end + 1;
+			} while (true);
+		}
+		bufferProgram = bufferProgram && !stage.Bindings.empty() && std::all_of(pass.Uses.begin(), pass.Uses.end(), [&](const auto& use) {
+			return resourceInfo[use.Resource].Kind == ResourceKind::StorageBuffer
+				&& (use.Mode == Access::STORAGE_READ || use.Mode == Access::STORAGE_WRITE);
+		});
+		if (stage.Queue == GRAPH::Queue::ASYNC_COMPUTE) {
+			if (!bufferProgram) {
+				throw std::invalid_argument(
+					"Async compute requires a reflected compute program with declared storage buffer accesses: " + stage.Name);
+			}
+			if (descriptor.Execution.AsyncCompute) {
+				pass.PreferredQueue = stage.Queue;
 			}
 		}
 		passes.push_back(std::move(pass));

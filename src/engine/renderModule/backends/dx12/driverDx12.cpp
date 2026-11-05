@@ -9,6 +9,7 @@
 
 #include "renderModule/backends/interface/meshInterface.h"
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
 
 #ifdef DX12_BACKEND
@@ -347,6 +348,16 @@ void DriverDx12::init() {
 
 	if (settings.pipelined()) {
 		mRecordingSlots.resize(settings.framesInFlight);
+		const D3D12_COMMAND_QUEUE_DESC compute { .Type = D3D12_COMMAND_LIST_TYPE_COMPUTE };
+		if (FAILED(mDevice->CreateCommandQueue(&compute, IID_PPV_ARGS(mGraphComputeQueue.GetAddressOf())))
+			|| FAILED(mDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(mGraphGraphicsFence.GetAddressOf())))
+			|| FAILED(mDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(mGraphComputeFence.GetAddressOf())))) {
+			mGraphComputeQueue.Reset();
+		}
+		if (mGraphComputeQueue) {
+			mGraphComputeQueue->SetName(L"Render Graph Compute");
+			mProfileGraphQueues = std::getenv("IKIGAI_PROFILE_GRAPH_QUEUES") != nullptr;
+		}
 	}
 	createCommandList();
 	createTimestampQueries();
@@ -920,6 +931,7 @@ void DriverDx12::end() {
 	if (!mRecording) {
 		return;
 	}
+	joinGraphCompute();
 	std::static_pointer_cast<TextureDx12>(getDefaultFrameBuffer()->getTextures()[0])->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_PRESENT);
 	const bool timestamps = resolveTimestampQueries();
 	endCommandList(mCommandQueue.Get(), mCommandList.Get(), false);
@@ -941,6 +953,41 @@ void DriverDx12::end() {
 		slot.LegacyDescriptors.swap(mPendingLegacyDescriptors);
 		slot.ImGuiDescriptors.swap(mPendingImGuiSrv);
 		ThrowIfFailed(mCommandQueue->Signal(mFence.Get(), slot.FenceValue));
+	}
+}
+
+bool DriverDx12::hasGraphComputeQueue() const noexcept {
+	return bool(mGraphComputeQueue);
+}
+
+void DriverDx12::splitGraphGraphics() {
+	endCommandList(mCommandQueue.Get(), mCommandList.Get(), false);
+	// The allocator covers every graphics segment until the final frame fence.
+	ThrowIfFailed(mCommandList->Reset(mCommandAllocator.Get(), nullptr));
+	mRecording = true;
+	setDirty(Dirty::VIEWPORT);
+	setDirty(Dirty::SCISSOR);
+	setDirty(Dirty::PRIMITIVE_MODE);
+	setDirty(Dirty::RASTERIZATION_MODE);
+	setDirty(Dirty::VERTEX_BUFFER);
+	setDirty(Dirty::INDEX_BUFFER);
+	setDirty(Dirty::PIPELINE);
+}
+
+void DriverDx12::joinGraphCompute() {
+	if (mGraphComputePending) {
+		// Submit independent graphics before making subsequent submissions wait.
+		recordGraphTimingEnd();
+		splitGraphGraphics();
+		enqueueGraphComputeWait();
+		resolveGraphTiming();
+	}
+}
+
+void DriverDx12::enqueueGraphComputeWait() {
+	if (mGraphComputePending) {
+		ThrowIfFailed(mCommandQueue->Wait(mGraphComputeFence.Get(), mGraphComputePending));
+		mGraphComputePending = 0;
 	}
 }
 
@@ -1142,6 +1189,8 @@ std::shared_ptr<TextureInterface> DriverDx12::createTexture(const std::string& n
 }
 
 void DriverDx12::wait() {
+	enqueueGraphComputeWait();
+	mGraphTiming.reset();
 	waitForPresentedFrame();
 	releaseCompletedFrame();
 }

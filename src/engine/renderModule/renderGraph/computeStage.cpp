@@ -498,7 +498,7 @@ void LoadComputeStage(RenderGraphPipeline& pipeline, PipelineStage& stage) {
 	}
 }
 
-void GameRenderer::runComputeStage(PipelineStage& stage) {
+void GameRenderer::runComputeStage(PipelineStage& stage, bool async) {
 	auto& state = *stage.mCompute;
 	const auto& desc = stage.mDescriptor;
 	if (state.Bypassed || !state.Resolved) {
@@ -535,9 +535,14 @@ void GameRenderer::runComputeStage(PipelineStage& stage) {
 			const auto extent = textureExtent(state.DispatchTexture);
 			dispatch.Extent = { static_cast<uint32_t>(extent[0]), static_cast<uint32_t>(extent[1]), static_cast<uint32_t>(extent[2]) };
 		}
-		renderer.execute([driver, dispatch = std::move(dispatch)]() {
+		renderer.execute([driver, dispatch = std::move(dispatch), async]() {
 			RenderStatistics::Get().recordDispatch();
-			driver->dispatchComputeProgram(dispatch);
+			if (async) {
+				driver->dispatchGraphCompute(dispatch);
+			}
+			else {
+				driver->dispatchComputeProgram(dispatch);
+			}
 		});
 	}
 	else {

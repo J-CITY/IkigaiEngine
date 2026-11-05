@@ -26,9 +26,12 @@ void check(HRESULT hr, const char* operation) {
 	if (FAILED(hr))
 		throw std::runtime_error(std::string(operation) + " HRESULT=" + std::to_string(uint32_t(hr)));
 }
-void uav(DriverDx12& driver) {
+void uav(ID3D12GraphicsCommandList* list) {
 	auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(nullptr);
-	driver.getCommandList()->ResourceBarrier(1, &barrier);
+	list->ResourceBarrier(1, &barrier);
+}
+void uav(DriverDx12& driver) {
+	uav(driver.getCommandList().Get());
 }
 Dx12Resource buffer(uint64_t size, D3D12_RESOURCE_STATES state, bool unordered = false) {
 	const auto initial = state == D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE ? state : D3D12_RESOURCE_STATE_COMMON;
@@ -697,7 +700,124 @@ void DriverDx12::dispatchRayQueries(const RayTracingDispatch& dispatch) {
 void DriverDx12::dispatchComputeProgram(const RayTracingDispatch& dispatch) {
 	executeRayProgram(dispatch, true);
 }
-void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool compute) {
+
+struct DriverDx12::GraphTiming {
+	struct Clock {
+		UINT64 GpuTick = 0;
+		UINT64 CpuTick = 0;
+		UINT64 Frequency = 0;
+
+		bool calibrate(ID3D12CommandQueue& queue) {
+			return SUCCEEDED(queue.GetTimestampFrequency(&Frequency)) && Frequency && SUCCEEDED(queue.GetClockCalibration(&GpuTick, &CpuTick));
+		}
+
+		double milliseconds(UINT64 tick, UINT64 origin, double cpuFrequency) const {
+			return 1000.0 * (double(CpuTick - origin) / cpuFrequency + (double(tick) - double(GpuTick)) / double(Frequency));
+		}
+	};
+	Clock Compute;
+	Clock Graphics;
+	double CpuFrequency = 0;
+	ComPtr<ID3D12QueryHeap> Queries;
+	Dx12Resource Readback;
+	bool Resolved = false;
+
+	~GraphTiming() {
+		if (!Resolved) {
+			return;
+		}
+		const D3D12_RANGE range { 0, 4 * sizeof(UINT64) };
+		void* mapped = nullptr;
+		if (FAILED(Readback->Map(0, &range, &mapped))) {
+			return;
+		}
+		std::array<UINT64, 4> ticks {};
+		std::memcpy(ticks.data(), mapped, sizeof(ticks));
+		const D3D12_RANGE written {};
+		Readback->Unmap(0, &written);
+		const auto origin = std::min(Compute.CpuTick, Graphics.CpuTick);
+		const auto computeStart = Compute.milliseconds(ticks[0], origin, CpuFrequency);
+		const auto computeEnd = Compute.milliseconds(ticks[1], origin, CpuFrequency);
+		const auto graphicsStart = Graphics.milliseconds(ticks[2], origin, CpuFrequency);
+		const auto graphicsEnd = Graphics.milliseconds(ticks[3], origin, CpuFrequency);
+		std::cout << "GRAPH_GPU_QUEUES backend=dx12 compute_ms=" << computeEnd - computeStart << " graphics_ms=" << graphicsEnd - graphicsStart
+				  << " overlap_ms=" << std::max(0.0, std::min(computeEnd, graphicsEnd) - std::max(computeStart, graphicsStart)) << '\n';
+	}
+};
+
+void DriverDx12::recordGraphTimingEnd() {
+	if (mGraphTiming) {
+		mCommandList->EndQuery(mGraphTiming->Queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 3);
+	}
+}
+
+void DriverDx12::resolveGraphTiming() {
+	if (mGraphTiming) {
+		mCommandList->ResolveQueryData(mGraphTiming->Queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, 4, mGraphTiming->Readback.Get(), 0);
+		mGraphTiming->Resolved = true;
+		mGraphTiming.reset();
+	}
+}
+
+void DriverDx12::dispatchGraphCompute(const RayTracingDispatch& dispatch) {
+	requireOwnerThread();
+	if (!hasGraphComputeQueue() || mGraphComputePending) {
+		throw std::logic_error("DX12 graph compute queue is unavailable");
+	}
+	struct Recording {
+		ComPtr<ID3D12CommandAllocator> Allocator;
+		ComPtr<ID3D12GraphicsCommandList4> List;
+	};
+	auto recording = std::make_shared<Recording>();
+	check(mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(&recording->Allocator)), "Graph compute allocator");
+	check(mDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, recording->Allocator.Get(), nullptr, IID_PPV_ARGS(&recording->List)),
+		"Graph compute command list");
+	if (mProfileGraphQueues) {
+		auto timing = std::make_shared<GraphTiming>();
+		LARGE_INTEGER cpuFrequency {};
+		if (QueryPerformanceFrequency(&cpuFrequency) && timing->Compute.calibrate(*mGraphComputeQueue.Get())
+			&& timing->Graphics.calibrate(*mCommandQueue.Get())) {
+			timing->CpuFrequency = static_cast<double>(cpuFrequency.QuadPart);
+			const D3D12_QUERY_HEAP_DESC queryInfo { D3D12_QUERY_HEAP_TYPE_TIMESTAMP, 4, 0 };
+			check(mDevice->CreateQueryHeap(&queryInfo, IID_PPV_ARGS(&timing->Queries)), "Create graph queue timestamps");
+			timing->Readback = d3dUtil::CreateBuffer(4 * sizeof(UINT64), D3D12_HEAP_TYPE_READBACK);
+			mRayFrameResources.push_back(timing);
+			mGraphTiming = std::move(timing);
+			recording->List->EndQuery(mGraphTiming->Queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0);
+		}
+	}
+	for (const auto& [binding, resources] : dispatch.Bindings) {
+		for (const auto& resource : resources) {
+			const auto* storage = std::get_if<std::shared_ptr<StorageBufferInterface>>(&resource);
+			auto buffer = storage ? std::dynamic_pointer_cast<StorageBufferDx12>(*storage) : nullptr;
+			if (!buffer) {
+				throw std::invalid_argument("DX12 graph compute requires storage buffer bindings");
+			}
+			buffer->transition(mCommandList.Get(), D3D12_RESOURCE_STATE_COMMON);
+		}
+	}
+	executeRayProgram(dispatch, true, recording->List.Get());
+	if (mGraphTiming) {
+		recording->List->EndQuery(mGraphTiming->Queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 1);
+	}
+	check(recording->List->Close(), "Close graph compute list");
+	mRayFrameResources.push_back(recording);
+
+	const auto value = ++mGraphComputeValue;
+	splitGraphGraphics();
+	check(mCommandQueue->Signal(mGraphGraphicsFence.Get(), value), "Signal graph graphics fence");
+	check(mGraphComputeQueue->Wait(mGraphGraphicsFence.Get(), value), "Wait for graph graphics fence");
+	ID3D12CommandList* list = recording->List.Get();
+	mGraphComputeQueue->ExecuteCommandLists(1, &list);
+	check(mGraphComputeQueue->Signal(mGraphComputeFence.Get(), value), "Signal graph compute fence");
+	mGraphComputePending = value;
+	if (mGraphTiming) {
+		mCommandList->EndQuery(mGraphTiming->Queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 2);
+	}
+}
+
+void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool compute, ID3D12GraphicsCommandList4* computeList) {
+	auto* list = computeList ? computeList : mCommandList.Get();
 	auto program = std::dynamic_pointer_cast<ProgramDx>(dispatch.Program);
 	if (!program || program->Driver != this || program->Data->Compute != compute)
 		throw std::runtime_error("DXR program/driver/dispatch mismatch");
@@ -734,7 +854,8 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 	};
 	makeHeap(data.Descriptors, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, frame->Heap);
 	makeHeap(data.Samplers, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, frame->SamplerHeap);
-	uav(*this);
+	uav(list);
+	std::set<StorageBufferDx12*> computeBuffers;
 	std::set<const TextureDx12*> sampled, storage;
 	for (const auto& b : data.Bindings) {
 		const std::vector<RayTracingResource>* resources = nullptr;
@@ -786,7 +907,10 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 					auto buffer = std::dynamic_pointer_cast<StorageBufferDx12>(*value);
 					if (!buffer)
 						throw std::runtime_error("Invalid DXR storage");
-					buffer->transition(mCommandList.Get(), state);
+					buffer->transition(list, state);
+					if (computeList) {
+						computeBuffers.insert(buffer.get());
+					}
 					raw = buffer->getBuffer().Get();
 					bytes = buffer->getSizeByte();
 					stride = buffer->getStride();
@@ -795,7 +919,7 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 					auto buffer = std::dynamic_pointer_cast<VertexBufferDx12>(*value);
 					if (!buffer)
 						throw std::runtime_error("Invalid DXR vertex storage");
-					buffer->transition(mCommandList.Get(), state);
+					buffer->transition(list, state);
 					raw = buffer->getBuffer().Get();
 					bytes = buffer->getSizeByte();
 					stride = buffer->getStride();
@@ -843,7 +967,7 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 					storage.insert(texture.get());
 					if (!(raw->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS))
 						throw std::runtime_error("DXR output image lacks storage usage");
-					texture->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+					texture->setState(list, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 					D3D12_UNORDERED_ACCESS_VIEW_DESC desc { };
 					desc.Format = format;
 					desc.ViewDimension = b.Dimension == D3D_SRV_DIMENSION_TEXTURE3D ? D3D12_UAV_DIMENSION_TEXTURE3D : D3D12_UAV_DIMENSION_TEXTURE2D;
@@ -853,7 +977,7 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 				}
 				else {
 					sampled.insert(texture.get());
-					texture->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+					texture->setState(list, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					D3D12_SHADER_RESOURCE_VIEW_DESC desc { };
 					desc.Format = format == DXGI_FORMAT_R32_TYPELESS ? DXGI_FORMAT_R32_FLOAT
 						: format == DXGI_FORMAT_R24G8_TYPELESS		 ? DXGI_FORMAT_R24_UNORM_X8_TYPELESS
@@ -884,32 +1008,37 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 	if (frame->SamplerHeap)
 		heaps.push_back(frame->SamplerHeap.Get());
 	if (!heaps.empty())
-		mCommandList->SetDescriptorHeaps(UINT(heaps.size()), heaps.data());
-	mCommandList->SetComputeRootSignature(data.Root.Get());
+		list->SetDescriptorHeaps(UINT(heaps.size()), heaps.data());
+	list->SetComputeRootSignature(data.Root.Get());
 	for (const auto& b : data.Bindings) {
 		auto heap = b.Sampler ? frame->SamplerHeap : frame->Heap;
 		auto handle = heap->GetGPUDescriptorHandleForHeapStart();
 		handle.ptr += UINT64(b.HeapOffset)
 			* mDevice->GetDescriptorHandleIncrementSize(b.Sampler ? D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER : D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-		mCommandList->SetComputeRootDescriptorTable(b.Root, handle);
+		list->SetComputeRootDescriptorTable(b.Root, handle);
 	}
 	if (data.PushRoot >= 0)
-		mCommandList->SetComputeRoot32BitConstants(data.PushRoot, data.PushSize / 4, dispatch.PushConstants.data(), 0);
+		list->SetComputeRoot32BitConstants(data.PushRoot, data.PushSize / 4, dispatch.PushConstants.data(), 0);
 	if (compute) {
-		mCommandList->SetPipelineState(data.ComputeState.Get());
-		mCommandList->Dispatch(groups[0], groups[1], groups[2]);
+		list->SetPipelineState(data.ComputeState.Get());
+		list->Dispatch(groups[0], groups[1], groups[2]);
 	}
 	else {
-		mCommandList->SetPipelineState1(data.State.Get());
+		list->SetPipelineState1(data.State.Get());
 		auto desc = data.Rays;
 		desc.RayGenerationShaderRecord.StartAddress += uint64_t(dispatch.RaygenRecord) * data.RaygenStride;
 		desc.Width = dispatch.Extent[0];
 		desc.Height = dispatch.Extent[1];
 		desc.Depth = dispatch.Extent[2];
-		mCommandList->DispatchRays(&desc);
+		list->DispatchRays(&desc);
 	}
-	uav(*this);
+	uav(list);
+	for (auto* buffer : computeBuffers) {
+		buffer->transition(list, D3D12_RESOURCE_STATE_COMMON);
+	}
 	mRayFrameResources.push_back(frame);
-	setDirty(Dirty::PIPELINE);
+	if (!computeList) {
+		setDirty(Dirty::PIPELINE);
+	}
 }
 #endif

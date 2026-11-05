@@ -180,6 +180,32 @@ Plan Compile(std::span<const Resource> resources, std::span<const Pass> passes) 
 		}
 		result.Schedule.push_back(std::move(scheduled));
 	}
+	std::optional<PassId> outstandingCompute;
+	const auto needsCompute = [&](PassId compute, PassId graphics) {
+		if (edges[compute].contains(graphics)) {
+			return true;
+		}
+		// Even concurrent reads may use different native buffer states.
+		for (const auto& [resource, use] : accesses[compute]) {
+			if (accesses[graphics].contains(resource)) {
+				return true;
+			}
+		}
+		return false;
+	};
+	for (size_t index = 0; index < result.Schedule.size(); ++index) {
+		auto& pass = result.Schedule[index];
+		if (outstandingCompute && needsCompute(*outstandingCompute, pass.Id)) {
+			pass.WaitForCompute = true;
+			outstandingCompute.reset();
+		}
+		// Skip a queue handoff unless at least the next pass can run concurrently.
+		if (!outstandingCompute && passes[pass.Id].PreferredQueue == Queue::ASYNC_COMPUTE && index + 1 < result.Schedule.size()
+			&& !needsCompute(pass.Id, result.Schedule[index + 1].Id)) {
+			pass.ExecutionQueue = Queue::ASYNC_COMPUTE;
+			outstandingCompute = pass.Id;
+		}
+	}
 	return result;
 }
 }

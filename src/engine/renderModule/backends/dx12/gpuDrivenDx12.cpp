@@ -327,6 +327,8 @@ bool DriverDx12::collectBufferReadback(uint64_t ticket, std::vector<uint8_t>& by
 void DriverDx12::flushRecordedCommands() {
 	// Executes everything recorded in this frame, waits for it and reopens the command list.
 	// Pipeline, root signature, heaps and render targets are re-applied by applyState().
+	enqueueGraphComputeWait();
+	mGraphTiming.reset();
 	ThrowIfFailed(mCommandList->Close());
 	ID3D12CommandList* lists[] = { mCommandList.Get() };
 	mCommandQueue->ExecuteCommandLists(1, lists);

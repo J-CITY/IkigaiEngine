@@ -108,7 +108,10 @@ public:
 	void traceRays(const RayTracingDispatch&) override;
 	void dispatchRayQueries(const RayTracingDispatch&) override;
 	void dispatchComputeProgram(const RayTracingDispatch&) override;
-	void executeRayProgram(const RayTracingDispatch&, bool compute);
+	bool hasGraphComputeQueue() const noexcept override;
+	void dispatchGraphCompute(const RayTracingDispatch&) override;
+	void joinGraphCompute() override;
+	void executeRayProgram(const RayTracingDispatch&, bool compute, ID3D12GraphicsCommandList4* computeList = nullptr);
 
 	void onResize();
 	void setPrimitiveMode(PrimitiveMode param) override;
@@ -390,6 +393,18 @@ private:
 
 	unsigned int mFrameId = 0;
 	bool mRecording = false;
+	void splitGraphGraphics();
+	void enqueueGraphComputeWait();
+	void recordGraphTimingEnd();
+	void resolveGraphTiming();
+	struct GraphTiming;
+	std::shared_ptr<GraphTiming> mGraphTiming;
+	bool mProfileGraphQueues = false;
+	Microsoft::WRL::ComPtr<ID3D12CommandQueue> mGraphComputeQueue;
+	Microsoft::WRL::ComPtr<ID3D12Fence> mGraphGraphicsFence;
+	Microsoft::WRL::ComPtr<ID3D12Fence> mGraphComputeFence;
+	uint64_t mGraphComputeValue = 0;
+	uint64_t mGraphComputePending = 0;
 	HANDLE mFenceEvent = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12Fence> mFence;
 	UINT64 mFenceValue {};

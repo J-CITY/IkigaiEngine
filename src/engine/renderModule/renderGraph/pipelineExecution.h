@@ -13,6 +13,7 @@ inline constexpr unsigned MaxPipelineFramesInFlight = 4;
 struct PipelineExecution {
 	std::optional<int> FramesInFlight;
 	std::optional<VG::VirtualGeometrySelectionPath> DrivenMode;
+	bool AsyncCompute = false;
 
 	template <class Context> static constexpr auto serde(Context& context, PipelineExecution& value) {
 		if constexpr (std::is_same_v<typename Context::Adaptor, nlohmann::json>) {
@@ -33,7 +34,8 @@ struct PipelineExecution {
 		}
 		serde::serde_struct(context, value)
 			.field(&PipelineExecution::FramesInFlight, "FramesInFlight")
-			.field(&PipelineExecution::DrivenMode, "DrivenMode");
+			.field(&PipelineExecution::DrivenMode, "DrivenMode")
+			.field(&PipelineExecution::AsyncCompute, "AsyncCompute", serde::attribute::default_ { false });
 	}
 };
 }

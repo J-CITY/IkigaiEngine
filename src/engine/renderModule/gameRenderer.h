@@ -105,6 +105,7 @@ struct PipelineStage {
 		std::vector<GRAPH::UseDescriptor> ResourceUses;
 		std::vector<std::string> After;
 		bool SideEffect = false;
+		GRAPH::Queue Queue = GRAPH::Queue::GRAPHICS;
 		std::vector<int> PushConstants;
 		std::string Unsupported = "ERROR";
 		int HitGroupOffset = 0;
@@ -151,6 +152,7 @@ struct PipelineStage {
 				.field(&Self::ResourceUses, "ResourceUses", default_ { decltype(ResourceUses) {} })
 				.field(&Self::After, "After", default_ { decltype(After) {} })
 				.field(&Self::SideEffect, "SideEffect", default_ { false })
+				.field(&Self::Queue, "Queue", default_ { GRAPH::Queue::GRAPHICS })
 				.field(&Self::PushConstants, "PushConstants", default_ { decltype(PushConstants) {} })
 				.field(&Self::Unsupported, "Unsupported", default_ { std::string { "ERROR" } })
 				.field(&Self::HitGroupOffset, "HitGroupOffset", default_ { 0 })
@@ -457,7 +459,7 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	void prepareRayTracingScene(const std::vector<RenderChunk>& chunks);
 	void runRayTracingStage(PipelineStage& stage);
 	RayTracingDispatch buildProgramDispatch(PipelineStage& stage);
-	void runComputeStage(PipelineStage& stage);
+	void runComputeStage(PipelineStage& stage, bool async = false);
 	std::vector<LightOGL> mLights;
 	std::vector<int> mLightObjectIds;
 	std::vector<float> mEnvironmentSun;
