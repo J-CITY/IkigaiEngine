@@ -20,13 +20,14 @@ namespace IKIGAI::RENDER {
 		vk::raii::ImageView mImageView = nullptr;
 		size_t mDepth = 0;
 		vk::ImageLayout mCurrentState = vk::ImageLayout::eUndefined;
+		bool mDiscardAliasContents = false;
 
 		vk::raii::Sampler mSampler = nullptr;
 
 		VkDescriptorSet mDescriptorSet = nullptr;
 		
 		TextureVk() = default;
-		TextureVk(const TextureResource& descriptor, const std::vector<void*>& data);
+		TextureVk(const TextureResource& descriptor, const std::vector<void*>& data, std::shared_ptr<VmaImage>* backing = nullptr);
 		TextureVk(uint32_t width, uint32_t height, vk::Format format, vk::Image image);
 		~TextureVk() override;
 
@@ -46,7 +47,7 @@ namespace IKIGAI::RENDER {
 	protected:
 		void releaseResources();
 		// Загрузить данные и инициализировать VK-ресурсы (выделено из конструктора)
-		void init(const TextureResource& descriptor, const std::vector<void*>& data);
+		void init(const TextureResource& descriptor, const std::vector<void*>& data, std::shared_ptr<VmaImage>* backing = nullptr);
 	};
 
 	class TextureAtlasVk : public TextureVk {

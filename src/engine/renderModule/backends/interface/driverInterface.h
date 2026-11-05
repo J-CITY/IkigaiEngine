@@ -26,6 +26,10 @@
 #include <utilsModule/memory/memory.h>
 
 namespace IKIGAI::RENDER {
+struct AliasedRenderTargets {
+	std::vector<std::shared_ptr<TextureInterface>> Textures;
+	uint64_t AllocationBytes = 0;
+};
 class FrameBufferInterface;
 class IndexBufferInterface;
 class VertexBufferInterface;
@@ -217,6 +221,10 @@ public:
 	virtual void setClearColor(float r, float g, float b, float a) = 0;
 	virtual void dispatch(uint32_t x, uint32_t y, uint32_t z) = 0;
 	virtual void renderGraphBarrier(bool uav);
+	virtual AliasedRenderTargets createAliasedRenderTargets(std::span<const TextureResource>) {
+		return {};
+	}
+	virtual void activateAliasedRenderTarget(TextureInterface&) { }
 	[[nodiscard]] virtual bool hasGraphComputeQueue() const noexcept {
 		return false;
 	}

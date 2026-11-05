@@ -111,8 +111,16 @@ VmaImage::VmaImage(VmaAllocator allocator, VkImage image, VmaAllocation allocati
 #endif
 }
 
+VmaImage::VmaImage(VmaAllocator allocator, VkImage image, std::shared_ptr<VmaImage> backing)
+	: mAllocator(allocator)
+	, mImage(image)
+	, mBacking(std::move(backing)) { }
+
 VmaImage::VmaImage(VmaImage&& other) noexcept
-	: mAllocator(other.mAllocator), mImage(other.mImage), mAllocation(other.mAllocation) {
+	: mAllocator(other.mAllocator)
+	, mImage(other.mImage)
+	, mAllocation(other.mAllocation)
+	, mBacking(std::move(other.mBacking)) {
 #if IKIGAI_ENABLE_MEMORY_TRACKING
     mMemory = std::move(other.mMemory);
 #endif
@@ -127,6 +135,7 @@ VmaImage& VmaImage::operator=(VmaImage&& other) noexcept {
 		mAllocator = other.mAllocator;
 		mImage = other.mImage;
 		mAllocation = other.mAllocation;
+		mBacking = std::move(other.mBacking);
 #if IKIGAI_ENABLE_MEMORY_TRACKING
         mMemory = std::move(other.mMemory);
 #endif
@@ -142,9 +151,10 @@ VmaImage::~VmaImage() {
 }
 
 void VmaImage::reset() {
-	if (mImage && mAllocator) {
+	if (mImage && mAllocator && (!mBacking || mBacking->handle() != mImage)) {
 		vmaDestroyImage(mAllocator, mImage, mAllocation);
 	}
+	mBacking.reset();
 #if IKIGAI_ENABLE_MEMORY_TRACKING
     mMemory.reset();
 #endif

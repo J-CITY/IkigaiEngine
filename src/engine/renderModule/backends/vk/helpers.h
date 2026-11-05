@@ -20,7 +20,9 @@ namespace IKIGAI::RENDER {
 		static DriverVk* GetDriver();
 		static VmaBuffer CreateBuffer(uint64_t size, vk::BufferUsageFlags usage, MemoryUsage memoryUsage = MemoryUsage::GpuOnly);
 		static vk::raii::ImageView CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspect_flags, size_t layers, vk::ImageViewType type, uint32_t mip_levels = 1);
-		static std::tuple<VmaImage, vk::raii::ImageView> CreateImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageUsageFlags usage, vk::ImageAspectFlags aspect_flags, size_t layers, vk::ImageViewType type, uint32_t mip_levels = 1);
+		static std::tuple<VmaImage, vk::raii::ImageView> CreateImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageUsageFlags usage,
+			vk::ImageAspectFlags aspect_flags, size_t layers, vk::ImageViewType type, uint32_t mip_levels = 1,
+			std::shared_ptr<VmaImage>* backing = nullptr);
 
 		static void SetMemoryBarrier(const vk::raii::CommandBuffer& cmdbuf, vk::PipelineStageFlags2 src_stage, vk::PipelineStageFlags2 dst_stage);
 		static void SetImageMemoryBarrier(const vk::raii::CommandBuffer& cmdbuf, vk::Image image,

@@ -19,6 +19,7 @@ struct UseDescriptor {
 
 struct Descriptor {
 	bool Enabled = false;
+	bool Aliasing = false;
 	std::vector<std::string> Imports;
 	std::vector<std::string> Exports;
 
@@ -26,6 +27,7 @@ struct Descriptor {
 		using serde::attribute::default_;
 		serde::serde_struct(context, value)
 			.field(&Descriptor::Enabled, "Enabled", default_ { false })
+			.field(&Descriptor::Aliasing, "Aliasing", default_ { false })
 			.field(&Descriptor::Imports, "Imports", default_ { std::vector<std::string> {} })
 			.field(&Descriptor::Exports, "Exports", default_ { std::vector<std::string> {} });
 	}

@@ -46,13 +46,23 @@ namespace {
 			throw std::invalid_argument("Missing declared access to " + resource + " in " + stage.Name);
 		}
 	}
+
+	bool IsTransientColor(const RenderGraphPipeline::TextureDesc& texture) {
+		// These pipeline names are also accessed through implicit engine bindings.
+		constexpr std::string_view engineTextures[] = { "ShapeNoise", "DetailNoise", "CurlNoise", "CloudShadowMap", "AtmosphereTransmittance",
+			"AtmosphereSkyView", "AtmosphereAerial", "CloudDepth", "Display" };
+		return texture.Transient && !texture.Persistent && !texture.History && texture.Path.empty() && !texture.FullMipChain
+			&& texture.Resource.texType == TextureType::TEXTURE_2D && !texture.Resource.storage && !texture.Resource.useMipmap
+			&& texture.Resource.mipMapCount <= 1 && texture.Resource.colorData.empty() && texture.Resource.pathTexture.empty()
+			&& std::find(std::begin(engineTextures), std::end(engineTextures), texture.Name) == std::end(engineTextures);
+	}
 }
 
 GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 	std::vector<GRAPH::Pass> passes;
 	passes.reserve(descriptor.Stages.size());
 	if (!descriptor.Graph.Enabled) {
-		if (!descriptor.Graph.Imports.empty() || !descriptor.Graph.Exports.empty()
+		if (descriptor.Graph.Aliasing || !descriptor.Graph.Imports.empty() || !descriptor.Graph.Exports.empty()
 			|| std::any_of(descriptor.Stages.begin(), descriptor.Stages.end(), HasGraphContract)) {
 			throw std::invalid_argument("Graph declarations require Graph.Enabled");
 		}
@@ -92,6 +102,7 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 	for (const auto& texture : descriptor.Textures) {
 		const auto kind = texture.Resource.storage ? ResourceKind::StorageTexture : ResourceKind::Texture;
 		add(texture.Name, kind, !texture.Path.empty(), texture.History, !texture.Path.empty());
+		resources.back().Transient = descriptor.StartStages.empty() && descriptor.LightPasses.empty() && IsTransientColor(texture);
 		if (texture.History) {
 			add(texture.Name + "Previous", kind, true, false, true);
 		}
@@ -171,6 +182,10 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 			for (const auto& name : frame->Textures) {
 				attachment(name, stage.ClearColor);
 			}
+			if (stage.ClearColor && frame->Textures.size() == 1 && frame->Depth.empty()
+				&& (stage.Draw == DrawContent::CLEAR || stage.Draw == DrawContent::QUAD)) {
+				pass.ClearedColorAttachments.push_back(resolve(frame->Textures.front()));
+			}
 			if (!frame->Depth.empty()) {
 				attachment(frame->Depth, stage.ClearDepth);
 			}
@@ -232,6 +247,10 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 				const auto end = sources.find(',', begin);
 				const auto source = sources.substr(begin, end == std::string::npos ? end : end - begin);
 				const auto found = resourceIds.find(source);
+				if (found != resourceIds.end()) {
+					// Program bindings can perform native accesses outside raster attachment/sampler reflection.
+					resources[found->second].Transient = false;
+				}
 				if (found == resourceIds.end() || resourceInfo[found->second].Kind != ResourceKind::StorageBuffer) {
 					bufferProgram = false;
 				}

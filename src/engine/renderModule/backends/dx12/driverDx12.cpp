@@ -774,6 +774,12 @@ void DriverDx12::renderGraphBarrier(bool uav) {
 	}
 }
 
+void DriverDx12::activateAliasedRenderTarget(TextureInterface& texture) {
+	auto& native = static_cast<TextureDx12&>(texture);
+	const auto barrier = CD3DX12_RESOURCE_BARRIER::Aliasing(nullptr, native.getResource().Get());
+	mCommandList->ResourceBarrier(1, &barrier);
+}
+
 void DriverDx12::drawIndexed(uint32_t index_count, uint32_t index_offset, uint32_t instance_count) {
     if (!index_count || !instance_count) return;
     validateVertexDraw({index_count,index_offset,instance_count,0,0,true});

@@ -9,12 +9,13 @@ void IKIGAI::EDITOR::TextureWatcherWindow::draw() {
 	if (!ImGui::Begin("Texture Watcher")) { ImGui::End(); return; }
 	try {
 		auto& renderer = RESOURCES::ServiceManager::Get<RENDER::GameRendererInterface>();
-		const auto& textures = renderer.getCurrentPipeline().mTextures;
+		const auto& pipeline = renderer.getCurrentPipeline();
+		const auto& textures = pipeline.mTextures;
 		if (textures.empty()) {
 			ImGui::TextUnformatted("No pipeline textures");
 		}
 		for (const auto& [name, texture] : textures) {
-			if (!texture) {
+			if (!texture || pipeline.mAliasedTextures.contains(name)) {
 				continue;
 			}
 			ImGui::TextUnformatted(name.c_str());

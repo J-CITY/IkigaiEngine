@@ -315,12 +315,6 @@ void DriverVk::flushRecordedCommands() {
 	auto& frame = getCurrentFrame();
 	frame.mCommandBuffer.end();
 	working = false;
-	const auto& swapchain = getCurrentSwapchainContext();
-	if (mAcquireWaitPending && !swapchain.sdkAcquire) {
-		// Synchronous readback splits this frame across submissions. Wait
-		// for WSI to release the image before subsequent host-driven work.
-		waitFrameFence(swapchain.frames.at(mSemaphoreIndex).AcquireFence);
-	}
 	submitGraphics({}, 0, {});
 	mQueue.waitIdle();
 	// Everything recorded so far (including asynchronous readback copies) has completed.

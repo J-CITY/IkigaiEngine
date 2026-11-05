@@ -74,10 +74,8 @@ vk::raii::ImageView UtilityVk::CreateImageView(vk::Image image, vk::Format forma
 	return GetDriver()->mDevice.createImageView(image_view_create_info);
 }
 
-std::tuple<VmaImage, vk::raii::ImageView> UtilityVk::CreateImage(uint32_t width,
-	uint32_t height, vk::Format format, vk::ImageUsageFlags usage, vk::ImageAspectFlags aspect_flags, size_t layers, vk::ImageViewType type,
-	uint32_t mip_levels)
-{
+std::tuple<VmaImage, vk::raii::ImageView> UtilityVk::CreateImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageUsageFlags usage,
+	vk::ImageAspectFlags aspect_flags, size_t layers, vk::ImageViewType type, uint32_t mip_levels, std::shared_ptr<VmaImage>* backing) {
 	auto image_create_info = vk::ImageCreateInfo()
 	                         .setFlags(type==vk::ImageViewType::eCube ? vk::ImageCreateFlagBits::eCubeCompatible : vk::ImageCreateFlags{})
                              .setImageType(type==vk::ImageViewType::e3D ? vk::ImageType::e3D : vk::ImageType::e2D)
@@ -90,19 +88,57 @@ std::tuple<VmaImage, vk::raii::ImageView> UtilityVk::CreateImage(uint32_t width,
 	                         .setUsage(usage)
 	                         .setSharingMode(vk::SharingMode::eExclusive)
 	                         .setInitialLayout(vk::ImageLayout::eUndefined);
+	if (backing) {
+		image_create_info.flags |= vk::ImageCreateFlagBits::eAlias;
+	}
 	VkImageCreateInfo vkImageInfo = image_create_info;
 
 	VmaAllocationCreateInfo allocInfo{};
 	allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
+	auto* driver = GetDriver();
+	if (backing) {
+		if (!vkGetDeviceImageMemoryRequirements) {
+			throw UnsupportedGpuFeature("Vulkan device image memory requirements unavailable");
+		}
+		VkMemoryDedicatedRequirements dedicated { VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS };
+		VkMemoryRequirements2 requirements { VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2, &dedicated };
+		VkDeviceImageMemoryRequirements query { VK_STRUCTURE_TYPE_DEVICE_IMAGE_MEMORY_REQUIREMENTS, nullptr, &vkImageInfo };
+		vkGetDeviceImageMemoryRequirements(*driver->mDevice, &query, &requirements);
+		if (dedicated.requiresDedicatedAllocation) {
+			throw UnsupportedGpuFeature("Vulkan image requires a dedicated allocation");
+		}
+		if (*backing) {
+			VmaAllocationInfo existing {};
+			vmaGetAllocationInfo(driver->mAllocator, (*backing)->allocation(), &existing);
+			const auto& required = requirements.memoryRequirements;
+			if (existing.size < required.size || existing.offset % required.alignment
+				|| !(required.memoryTypeBits & (uint32_t { 1 } << existing.memoryType))) {
+				throw UnsupportedGpuFeature("Vulkan alias allocation is incompatible with the image");
+			}
+		}
+		allocInfo.flags = VMA_ALLOCATION_CREATE_CAN_ALIAS_BIT;
+	}
+
 	VkImage image = VK_NULL_HANDLE;
 	VmaAllocation allocation = nullptr;
-	const VkResult result = vmaCreateImage(GetDriver()->mAllocator, &vkImageInfo, &allocInfo, &image, &allocation, nullptr);
+	const VkResult result = backing && *backing ? vmaCreateAliasingImage(driver->mAllocator, (*backing)->allocation(), &vkImageInfo, &image)
+												: vmaCreateImage(driver->mAllocator, &vkImageInfo, &allocInfo, &image, &allocation, nullptr);
 	if (result != VK_SUCCESS) {
 		throw std::runtime_error("vmaCreateImage failed");
 	}
 
-	VmaImage vmaImage(GetDriver()->mAllocator, image, allocation);
+	VmaImage vmaImage;
+	if (backing) {
+		if (!*backing) {
+			VmaImage owner(driver->mAllocator, image, allocation);
+			*backing = std::make_shared<VmaImage>(std::move(owner));
+		}
+		vmaImage = VmaImage(driver->mAllocator, image, *backing);
+	}
+	else {
+		vmaImage = VmaImage(driver->mAllocator, image, allocation);
+	}
 	auto image_view = CreateImageView(*vmaImage, format, aspect_flags, layers, type, std::max(1u,mip_levels));
 
 	return {std::move(vmaImage), std::move(image_view)};

@@ -1220,6 +1220,13 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			mContext.render->execute([presentationDriver] { presentationDriver->joinGraphCompute(); });
 			computePending = false;
 		}
+		if (auto activations = mRenderPipeline->mAliasActivations.find(pass.Id); activations != mRenderPipeline->mAliasActivations.end()) {
+			mContext.render->execute([presentationDriver, textures = activations->second] {
+				for (const auto& texture : textures) {
+					presentationDriver->activateAliasedRenderTarget(*texture);
+				}
+			});
+		}
 		if (!pass.Barriers.empty()) {
 			const bool uav = std::any_of(pass.Barriers.begin(), pass.Barriers.end(), [](const auto& barrier) { return barrier.Uav; });
 			mContext.render->execute([presentationDriver, uav] { presentationDriver->renderGraphBarrier(uav); });
@@ -2032,7 +2039,7 @@ void RenderGraphPipeline::reloadSettings(Renderer& renderer, const std::string& 
 	if (changed) {
 		mHistory.invalidate(HistoryReason::PipelineReload);
 		mIsInitialized = false;
-		if (!changedTextures.empty() && mSize.x > 0 && mSize.y > 0) {
+		if ((!changedTextures.empty() || mDescriptor.Graph.Aliasing) && mSize.x > 0 && mSize.y > 0) {
 			for (const auto& name : changedTextures) {
 				mAllocatedTextures.erase(name);
 				mTextureRevisions.erase(name);
@@ -2178,6 +2185,65 @@ void RenderGraphPipeline::prepareUpscaler(Renderer& renderer, int width, int hei
 	}
 }
 
+namespace {
+	struct TransientTargets {
+		std::map<std::string, std::shared_ptr<TextureInterface>> Textures;
+		std::map<GRAPH::PassId, std::vector<std::shared_ptr<TextureInterface>>> Activations;
+		std::set<std::string> Names;
+		uint64_t AllocationBytes = 0;
+		uint64_t SavedBytes = 0;
+	};
+
+	TransientTargets AllocateTransientTargets(Renderer& renderer, const GRAPH::Plan& plan, const std::map<std::string, TextureResource>& resources) {
+		auto lifetimes = plan.TransientLifetimes;
+		std::stable_sort(lifetimes.begin(), lifetimes.end(), [](const auto& a, const auto& b) { return a.First < b.First; });
+		using Compatibility = std::tuple<int, int, PixelFormat>;
+		using Group = std::vector<const GRAPH::Plan::TransientLifetime*>;
+		std::map<Compatibility, std::vector<Group>> groups;
+		for (const auto& lifetime : lifetimes) {
+			const auto& descriptor = resources.at(lifetime.Name);
+			auto& compatible = groups[{ descriptor.width, descriptor.height, descriptor.pixelType }];
+			const auto free
+				= std::find_if(compatible.begin(), compatible.end(), [&](const auto& group) { return group.back()->Last < lifetime.First; });
+			if (free == compatible.end()) {
+				compatible.push_back({ &lifetime });
+			}
+			else {
+				free->push_back(&lifetime);
+			}
+		}
+		TransientTargets result;
+		for (const auto& [key, compatible] : groups) {
+			for (const auto& group : compatible) {
+				if (group.size() < 2) {
+					continue;
+				}
+				std::vector<TextureResource> descriptors;
+				descriptors.reserve(group.size());
+				for (const auto* lifetime : group) {
+					descriptors.push_back(resources.at(lifetime->Name));
+				}
+				auto targets = renderer.getDriver()->createAliasedRenderTargets(descriptors);
+				if (targets.Textures.empty()) {
+					continue;
+				}
+				if (targets.Textures.size() != group.size()) {
+					throw std::logic_error("Incomplete native render graph alias allocation");
+				}
+				result.AllocationBytes += targets.AllocationBytes;
+				result.SavedBytes += targets.AllocationBytes * (group.size() - 1);
+				for (size_t index = 0; index < group.size(); ++index) {
+					const auto& lifetime = *group[index];
+					result.Activations[plan.Schedule[lifetime.First].Id].push_back(targets.Textures[index]);
+					result.Textures.emplace(lifetime.Name, std::move(targets.Textures[index]));
+					result.Names.insert(lifetime.Name);
+				}
+			}
+		}
+		return result;
+	}
+}
+
 void RenderGraphPipeline::resize(Renderer& renderer, int width, int height) {
 	if (width <= 0 || height <= 0 || (mSize.x == width && mSize.y == height && mAllocatedRenderSize == mRenderSize)) {
 		return;
@@ -2185,18 +2251,10 @@ void RenderGraphPipeline::resize(Renderer& renderer, int width, int height) {
 	if (mRenderSize.x <= 0 || mRenderSize.y <= 0) {
 		mRenderSize = { width, height };
 	}
-	auto previous = std::move(mAllocatedTextures);
-	mTextures.clear();
+	std::map<std::string, TextureResource> resources;
 	for (const auto& t : mDescriptor.Textures) {
-		if (t.Name.empty() || mTextures.contains(t.Name) || !(t.Scale > 0)) {
+		if (t.Name.empty() || resources.contains(t.Name) || !(t.Scale > 0)) {
 			throw std::runtime_error("Invalid/duplicate pipeline texture: " + t.Name);
-		}
-		if (t.Persistent && previous.contains(t.Name) && (t.Size == TextureDesc::SizeBase::FIXED || (t.Resource.width && t.Resource.height))) {
-			mTextures[t.Name] = previous.at(t.Name);
-			if (t.History) {
-				mTextures[t.Name + "Previous"] = previous.at(t.Name + "Previous");
-			}
-			continue;
 		}
 		auto resource = t.Resource;
 		if (t.Size == TextureDesc::SizeBase::FIXED && (!resource.width || !resource.height)) {
@@ -2215,22 +2273,50 @@ void RenderGraphPipeline::resize(Renderer& renderer, int width, int height) {
 			}
 			resource.mipMapCount = static_cast<int>(std::floor(std::log2(std::max(resource.width, resource.height)))) + 1;
 		}
+		resources.emplace(t.Name, std::move(resource));
+	}
+	auto transient = mDescriptor.Graph.Aliasing ? AllocateTransientTargets(renderer, mGraphPlan, resources) : TransientTargets {};
+	auto textures = std::move(transient.Textures);
+	for (const auto& t : mDescriptor.Textures) {
+		if (transient.Names.contains(t.Name)) {
+			continue;
+		}
+		if (textures.contains(t.Name)) {
+			throw std::runtime_error("Duplicate pipeline texture: " + t.Name);
+		}
+		if (t.Persistent && mAllocatedTextures.contains(t.Name)
+			&& (t.Size == TextureDesc::SizeBase::FIXED || (t.Resource.width && t.Resource.height))) {
+			textures[t.Name] = mAllocatedTextures.at(t.Name);
+			if (t.History) {
+				textures[t.Name + "Previous"] = mAllocatedTextures.at(t.Name + "Previous");
+			}
+			continue;
+		}
 		auto create = [&]() {
-			return t.Path.empty() ? renderer.createTexture(resource)
+			return t.Path.empty() ? renderer.createTexture(resources.at(t.Name))
 								  : RESOURCES::ServiceManager::Get<RESOURCES::TextureLoader>().loadResource(t.Path);
 		};
-		mTextures[t.Name] = create();
-		if (!mTextures[t.Name]) {
+		textures[t.Name] = create();
+		if (!textures[t.Name]) {
 			throw std::runtime_error("Cannot allocate pipeline texture: " + t.Name);
 		}
 		if (t.History) {
 			if (!t.Path.empty()) {
 				throw std::runtime_error("History textures must be render targets");
 			}
-			mTextures[t.Name + "Previous"] = create();
+			textures[t.Name + "Previous"] = create();
 		}
 	}
+	mTextures = std::move(textures);
 	mAllocatedTextures = mTextures;
+	mAliasActivations = std::move(transient.Activations);
+	mAliasedTextures = std::move(transient.Names);
+	mAliasAllocationBytes = transient.AllocationBytes;
+	mAliasSavedBytes = transient.SavedBytes;
+	if (mDescriptor.Graph.Aliasing) {
+		std::cout << "Render graph aliasing: targets=" << mAliasedTextures.size() << " shared_bytes=" << mAliasAllocationBytes
+				  << " saved_bytes=" << mAliasSavedBytes << std::endl;
+	}
 	mSize = { width, height };
 	mAllocatedRenderSize = mRenderSize;
 	mHistory.invalidate(HistoryReason::Resize);

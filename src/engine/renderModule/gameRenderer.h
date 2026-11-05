@@ -20,6 +20,7 @@
 #include "renderGraph/renderGraphDescriptor.h"
 #include "renderGraph/screenProbeSettings.h"
 #include <filesystem>
+#include <set>
 
 // TODO move include to .cpp
 #ifdef OCULUS
@@ -208,6 +209,7 @@ struct RenderGraphPipeline {
 		SizeBase Size = SizeBase::DISPLAY;
 		bool History = false;
 		bool Persistent = false;
+		bool Transient = false;
 		// Allocates floor(log2(max(width, height))) + 1 mips for the resolved size (render-size pyramids such as HZB).
 		// Requires UseMipmap false: the chain is filled by compute stages, not by blitting.
 		bool FullMipChain = false;
@@ -223,6 +225,7 @@ struct RenderGraphPipeline {
 				.field(&Self::Size, "Size", default_ { SizeBase::DISPLAY })
 				.field(&Self::History, "History", default_ { false })
 				.field(&Self::Persistent, "Persistent", default_ { false })
+				.field(&Self::Transient, "Transient", default_ { false })
 				.field(&Self::FullMipChain, "FullMipChain", default_ { false });
 		}
 	};
@@ -373,6 +376,10 @@ struct RenderGraphPipeline {
 	StagesArr mStages;
 	std::vector<PipelineStage*> mStageIndex;
 	GRAPH::Plan mGraphPlan;
+	std::map<GRAPH::PassId, std::vector<std::shared_ptr<TextureInterface>>> mAliasActivations;
+	std::set<std::string> mAliasedTextures;
+	uint64_t mAliasAllocationBytes = 0;
+	uint64_t mAliasSavedBytes = 0;
 	static GRAPH::Plan compileGraph(const Descriptor& descriptor);
 	struct LightPass {
 		LightPassDescriptor Descriptor;
@@ -590,6 +597,9 @@ public:
 
 	void setPipeline(std::unique_ptr<RenderGraphPipeline>&& renderPipeline);
 	std::shared_ptr<TextureInterface> getPipelineTexture(const std::string& name) const {
+		if (mRenderPipeline->mAliasedTextures.contains(name)) {
+			throw std::invalid_argument("Aliased render graph textures are local to their passes");
+		}
 		return mRenderPipeline->mTextures.at(name);
 	}
 	void setPipelineAccelerationStructure(const std::string& name, std::shared_ptr<AccelerationStructure> structure) {

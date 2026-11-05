@@ -26,6 +26,13 @@
 using namespace IKIGAI;
 using namespace IKIGAI::RENDER;
 
+struct IKIGAI::RENDER::AliasHeapDx12 {
+	Microsoft::WRL::ComPtr<D3D12MA::Allocation> Allocation;
+#if IKIGAI_ENABLE_MEMORY_TRACKING
+	PROFILER::GpuAllocationToken Memory;
+#endif
+};
+
 static uint32_t GetMipCount(uint32_t width, uint32_t height) {
 	return static_cast<uint32_t>(glm::floor(glm::log2(static_cast<float>(glm::max(width, height))))) + 1;
 }
@@ -124,8 +131,8 @@ CD3DX12_GPU_DESCRIPTOR_HANDLE TextureDx12::getGpuDescriptorHandle() const {
 	return mGpuDescriptorHandle;
 }
 
-TextureDx12::TextureDx12(const TextureResource& descriptor, const std::vector<void*>& data) {
-	create(descriptor, data);
+TextureDx12::TextureDx12(const TextureResource& descriptor, const std::vector<void*>& data, std::shared_ptr<AliasHeapDx12>* backing) {
+	create(descriptor, data, backing);
 }
 
 TextureDx12::TextureDx12(size_t width, size_t height, PixelFormat format, Microsoft::WRL::ComPtr<ID3D12Resource> texture) :
@@ -141,7 +148,7 @@ TextureDx12::~TextureDx12() {
 	d3dUtil::GetDriver()->destroyDeferred(mResource);
 }
 
-void TextureDx12::create(const TextureResource& descriptor, const std::vector<void*>& data) {
+void TextureDx12::create(const TextureResource& descriptor, const std::vector<void*>& data, std::shared_ptr<AliasHeapDx12>* backing) {
 	mType = descriptor.texType;
 	mFormat = descriptor.pixelType;
 	mWidth = descriptor.width;
@@ -180,7 +187,36 @@ void TextureDx12::create(const TextureResource& descriptor, const std::vector<vo
 	}
 	
 	mCurrentState = D3D12_RESOURCE_STATE_COMMON;
-	mResource = d3dUtil::CreateResource(desc, D3D12_HEAP_TYPE_DEFAULT, mCurrentState, nullptr, allocFlags);
+	if (backing) {
+		auto* driver = d3dUtil::GetDriver();
+		if (!*backing) {
+			auto heap = std::make_shared<AliasHeapDx12>();
+			D3D12MA::ALLOCATION_DESC allocation {};
+			allocation.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+			allocation.ExtraHeapFlags = D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES;
+			const auto requirements = driver->getDevice()->GetResourceAllocationInfo(0, 1, &desc);
+			ThrowIfFailed(driver->getAllocator()->AllocateMemory(&allocation, &requirements, heap->Allocation.GetAddressOf()));
+#if IKIGAI_ENABLE_MEMORY_TRACKING
+			PROFILER::GpuAllocationInfo info;
+			info.backend = PROFILER::GpuBackend::DirectX12;
+			info.device = reinterpret_cast<uintptr_t>(driver->getDevice().Get());
+			info.handle = reinterpret_cast<uintptr_t>(heap->Allocation.Get());
+			info.bytes = heap->Allocation->GetSize();
+			info.deviceLocal = true;
+			info.kind = PROFILER::GpuResourceKind::Texture;
+			info.name = "Render graph alias group";
+			heap->Memory.track(info);
+#endif
+			*backing = std::move(heap);
+		}
+		Microsoft::WRL::ComPtr<ID3D12Resource> resource;
+		ThrowIfFailed(
+			driver->getAllocator()->CreateAliasingResource((*backing)->Allocation.Get(), 0, &desc, mCurrentState, nullptr, IID_PPV_ARGS(&resource)));
+		mResource = Dx12Resource(std::move(resource), nullptr, *backing);
+	}
+	else {
+		mResource = d3dUtil::CreateResource(desc, D3D12_HEAP_TYPE_DEFAULT, mCurrentState, nullptr, allocFlags);
+	}
 	// SRV (and UAV for storage textures) take consecutive legacy slots; recreate() returns the previous run.
 	d3dUtil::GetDriver()->releaseLegacyDescriptors(mDescriptorIndex, mDescriptorCount);
 	mDescriptorCount = descriptor.storage ? 2 : 1;
@@ -224,6 +260,20 @@ void TextureDx12::create(const TextureResource& descriptor, const std::vector<vo
 	if (descriptor.useMipmap) {
 		generateMips();
 	}
+}
+
+AliasedRenderTargets DriverDx12::createAliasedRenderTargets(std::span<const TextureResource> descriptors) {
+	requireOwnerThread();
+	AliasedRenderTargets result;
+	std::shared_ptr<AliasHeapDx12> backing;
+	result.Textures.reserve(descriptors.size());
+	for (const auto& descriptor : descriptors) {
+		result.Textures.push_back(AllocateTexture<TextureDx12>(nullptr, {}, descriptor, std::vector<void*> {}, &backing));
+	}
+	if (backing) {
+		result.AllocationBytes = backing->Allocation->GetSize();
+	}
+	return result;
 }
 
 void TextureDx12::setData(const std::vector<void*>& data, size_t width, size_t height, PixelFormat format, size_t mipLevel) {

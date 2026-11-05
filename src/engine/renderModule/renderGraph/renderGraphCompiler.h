@@ -16,6 +16,7 @@ struct Resource {
 	std::string Name;
 	bool Imported = false;
 	bool Exported = false;
+	bool Transient = false;
 };
 
 struct Use {
@@ -30,6 +31,7 @@ struct Pass {
 	std::vector<PassId> After;
 	bool SideEffect = false;
 	Queue PreferredQueue = Queue::GRAPHICS;
+	std::vector<ResourceId> ClearedColorAttachments;
 };
 
 struct Barrier {
@@ -47,6 +49,12 @@ struct ScheduledPass {
 struct Plan {
 	std::vector<ScheduledPass> Schedule;
 	std::vector<PassId> Culled;
+	struct TransientLifetime {
+		std::string Name;
+		size_t First = 0;
+		size_t Last = 0;
+	};
+	std::vector<TransientLifetime> TransientLifetimes;
 };
 
 [[nodiscard]] bool IsWrite(Access access);

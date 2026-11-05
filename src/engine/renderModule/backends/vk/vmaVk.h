@@ -12,11 +12,12 @@
 #define VMA_VULKAN_VERSION 1003000
 #endif
 
-#include <cstddef>
-#include <volk.h>
-#include <vk_mem_alloc.h>
-#include <vulkan/vulkan_raii.hpp>
 #include "profilerModule/gpuMemoryProfiler.h"
+#include <cstddef>
+#include <memory>
+#include <vk_mem_alloc.h>
+#include <volk.h>
+#include <vulkan/vulkan_raii.hpp>
 
 namespace IKIGAI::RENDER {
 	class VmaBuffer {
@@ -56,6 +57,7 @@ namespace IKIGAI::RENDER {
 	public:
 		VmaImage() = default;
 		VmaImage(VmaAllocator allocator, VkImage image, VmaAllocation allocation);
+		VmaImage(VmaAllocator allocator, VkImage image, std::shared_ptr<VmaImage> backing);
 		VmaImage(const VmaImage&) = delete;
 		VmaImage& operator=(const VmaImage&) = delete;
 		VmaImage(VmaImage&& other) noexcept;
@@ -78,6 +80,7 @@ namespace IKIGAI::RENDER {
 		VmaAllocator mAllocator = nullptr;
 		VkImage mImage = VK_NULL_HANDLE;
 		VmaAllocation mAllocation = nullptr;
+		std::shared_ptr<VmaImage> mBacking;
 #if IKIGAI_ENABLE_MEMORY_TRACKING
         PROFILER::GpuAllocationToken mMemory;
 #endif

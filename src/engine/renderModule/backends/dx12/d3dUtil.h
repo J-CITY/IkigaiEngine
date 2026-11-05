@@ -2,18 +2,19 @@
 #ifdef DX12_BACKEND
 #include "gpuMemoryDx12.h"
 #include "renderModule/backends/interface/reflectionStructs.h"
-#include <windows.h>
-#include <wrl.h>
-#include <dxgi1_4.h>
-#include <d3d12.h>
 #include <D3Dcompiler.h>
 #include <DirectXMath.h>
-#include <string>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
+#include <d3d12.h>
+#include <dxgi1_4.h>
 #include <fstream>
 #include <functional>
+#include <memory>
+#include <string>
 #include <utility>
+#include <windows.h>
+#include <wrl.h>
 
 #define D3D12MA_D3D12_HEADERS_ALREADY_INCLUDED
 #include "D3D12MemAlloc.h"
@@ -45,9 +46,18 @@ namespace IKIGAI::RENDER
 	class Dx12Resource {
 	public:
 		Dx12Resource() = default;
-		Dx12Resource(Microsoft::WRL::ComPtr<ID3D12Resource> resource,
-			Microsoft::WRL::ComPtr<D3D12MA::Allocation> allocation = nullptr)
-			: mResource(std::move(resource)), mAllocation(std::move(allocation)) {}
+		Dx12Resource(Microsoft::WRL::ComPtr<ID3D12Resource> resource, Microsoft::WRL::ComPtr<D3D12MA::Allocation> allocation = nullptr,
+			std::shared_ptr<void> backing = {})
+			: mResource(std::move(resource))
+			, mAllocation(std::move(allocation))
+			, mBacking(std::move(backing)) { }
+		Dx12Resource(const Dx12Resource&) = default;
+		Dx12Resource(Dx12Resource&&) noexcept = default;
+		Dx12Resource& operator=(const Dx12Resource&) = default;
+		Dx12Resource& operator=(Dx12Resource&&) noexcept = default;
+		~Dx12Resource() {
+			Reset();
+		}
 
 		ID3D12Resource* Get() const { return mResource.Get(); }
 		ID3D12Resource* operator->() const { return mResource.Get(); }
@@ -56,6 +66,7 @@ namespace IKIGAI::RENDER
 		void Reset() {
 			mResource.Reset();
 			mAllocation.Reset();
+			mBacking.reset();
 		}
 
 		Dx12Resource& operator=(std::nullptr_t) {
@@ -66,6 +77,7 @@ namespace IKIGAI::RENDER
 	private:
 		Microsoft::WRL::ComPtr<ID3D12Resource> mResource;
 		Microsoft::WRL::ComPtr<D3D12MA::Allocation> mAllocation;
+		std::shared_ptr<void> mBacking;
 	};
 
 	class d3dUtil {

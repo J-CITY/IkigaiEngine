@@ -18,10 +18,11 @@
 
 namespace IKIGAI::RENDER {
 	struct TextureResource;
+	struct AliasHeapDx12;
 
 	class TextureDx12 : public TextureInterface, public std::enable_shared_from_this<TextureDx12> {
 	public:
-		TextureDx12(const TextureResource& descriptor, const std::vector<void*>& data);
+		TextureDx12(const TextureResource& descriptor, const std::vector<void*>& data, std::shared_ptr<AliasHeapDx12>* backing = nullptr);
 		TextureDx12(size_t width, size_t height, PixelFormat format, Microsoft::WRL::ComPtr<ID3D12Resource> texture);
 		~TextureDx12() override;
 
@@ -43,7 +44,7 @@ namespace IKIGAI::RENDER {
 
 	private:
 		void generateMips(ID3D12GraphicsCommandList* cmdlist);
-		void create(const TextureResource& descriptor, const std::vector<void*>& data);
+		void create(const TextureResource& descriptor, const std::vector<void*>& data, std::shared_ptr<AliasHeapDx12>* backing = nullptr);
 
 		Dx12Resource mResource;
 		uint32_t mDescriptorIndex = UINT32_MAX;

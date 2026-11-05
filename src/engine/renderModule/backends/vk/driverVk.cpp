@@ -916,7 +916,14 @@ void DriverVk::submitGraphics(vk::Semaphore renderComplete, uint64_t graphSignal
 	const std::array<vk::PipelineStageFlags, 2> stages { vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands };
 	uint32_t waitCount = 0;
 	if (mAcquireWaitPending) {
-		waits[waitCount++] = *getCurrentSwapchainContext().frames.at(mSemaphoreIndex).mImageAcquiredSemaphore;
+		const auto& swapchain = getCurrentSwapchainContext();
+		const auto& acquire = swapchain.frames.at(mSemaphoreIndex);
+		if (!renderComplete && !swapchain.sdkAcquire) {
+			// An early submission splits the frame before presentation. Establish
+			// WSI ownership before consuming the acquire semaphore in that prefix.
+			waitFrameFence(acquire.AcquireFence);
+		}
+		waits[waitCount++] = *acquire.mImageAcquiredSemaphore;
 	}
 	if (mGraphGraphicsWait) {
 		waits[waitCount] = *mGraphComputeTimeline;
@@ -1793,13 +1800,15 @@ void DriverVk::beginRenderPass() {
 	std::optional<vk::RenderingAttachmentInfo> depth_stencil_attachment;
 
 	for (auto target : targets->getTextures()) {
-		static_cast<TextureVk*>(target.get())->setState(getCurrentFrame().mCommandBuffer, vk::ImageLayout::eGeneral);
+		auto* native = static_cast<TextureVk*>(target.get());
+		native->setState(getCurrentFrame().mCommandBuffer, vk::ImageLayout::eGeneral);
+		const auto load = std::exchange(native->mDiscardAliasContents, false) ? vk::AttachmentLoadOp::eDontCare : vk::AttachmentLoadOp::eLoad;
 		auto color_attachment = vk::RenderingAttachmentInfo()
 									.setImageView(target->getType() == TextureType::TEXTURE_CUBE
 											? static_cast<TextureVk*>(target.get())->attachmentView(targets->getMip(), targets->getLayer())
 											: *static_cast<TextureVk*>(target.get())->mImageView)
 									.setImageLayout(vk::ImageLayout::eGeneral)
-									.setLoadOp(vk::AttachmentLoadOp::eLoad)
+									.setLoadOp(load)
 									.setStoreOp(vk::AttachmentStoreOp::eStore);
 
 		color_attachments.push_back(color_attachment);
@@ -2474,6 +2483,25 @@ void DriverVk::setClearColor(float r, float g, float b, float a) {
 void DriverVk::renderGraphBarrier(bool) {
 	deactivateRenderPass();
 	UtilityVk::SetMemoryBarrier(getCurrentFrame().mCommandBuffer, vk::PipelineStageFlagBits2::eAllCommands, vk::PipelineStageFlagBits2::eAllCommands);
+}
+
+void DriverVk::activateAliasedRenderTarget(TextureInterface& texture) {
+	// A global barrier covers accesses through the previous image sharing this allocation.
+	renderGraphBarrier(false);
+	auto& native = static_cast<TextureVk&>(texture);
+	const auto transition = vk::ImageMemoryBarrier2()
+								.setSrcStageMask(vk::PipelineStageFlagBits2::eAllCommands)
+								.setDstStageMask(vk::PipelineStageFlagBits2::eAllCommands)
+								.setDstAccessMask(vk::AccessFlagBits2::eMemoryRead | vk::AccessFlagBits2::eMemoryWrite)
+								.setOldLayout(vk::ImageLayout::eUndefined)
+								.setNewLayout(vk::ImageLayout::eGeneral)
+								.setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+								.setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+								.setImage(native.mImagePtr)
+								.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
+	getCurrentFrame().mCommandBuffer.pipelineBarrier2(vk::DependencyInfo().setImageMemoryBarriers(transition));
+	native.mCurrentState = vk::ImageLayout::eGeneral;
+	native.mDiscardAliasContents = true;
 }
 
 void DriverVk::submit() {

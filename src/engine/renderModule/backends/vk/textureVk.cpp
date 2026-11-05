@@ -78,11 +78,35 @@ static vk::ImageUsageFlags SupportedColorUsage(vk::Format format, vk::ImageUsage
 	return usage;
 }
 
-IKIGAI::RENDER::TextureVk::TextureVk(const TextureResource& descriptor, const std::vector<void*>& data) {
-	init(descriptor, data);
+IKIGAI::RENDER::TextureVk::TextureVk(const TextureResource& descriptor, const std::vector<void*>& data, std::shared_ptr<VmaImage>* backing) {
+	init(descriptor, data, backing);
 }
 
-void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const std::vector<void*>& data) {
+IKIGAI::RENDER::AliasedRenderTargets IKIGAI::RENDER::DriverVk::createAliasedRenderTargets(std::span<const TextureResource> descriptors) {
+	requireOwnerThread();
+	const auto features = mPhysicalDevice.getFeatures2<vk::PhysicalDeviceFeatures2, vk::PhysicalDeviceVulkan13Features>();
+	if (!features.get<vk::PhysicalDeviceVulkan13Features>().maintenance4) {
+		return {};
+	}
+	AliasedRenderTargets result;
+	std::shared_ptr<VmaImage> backing;
+	result.Textures.reserve(descriptors.size());
+	try {
+		for (const auto& descriptor : descriptors) {
+			result.Textures.push_back(AllocateTexture<TextureVk>(nullptr, {}, descriptor, std::vector<void*> {}, &backing));
+		}
+	} catch (const UnsupportedGpuFeature&) {
+		return {};
+	}
+	if (backing) {
+		VmaAllocationInfo info {};
+		vmaGetAllocationInfo(mAllocator, backing->allocation(), &info);
+		result.AllocationBytes = info.size;
+	}
+	return result;
+}
+
+void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const std::vector<void*>& data, std::shared_ptr<VmaImage>* backing) {
 	const TextureResource& desc = descriptor;
 	if (desc.width == 0 || desc.height == 0) {
 		throw std::invalid_argument(
@@ -115,9 +139,8 @@ void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const st
 		? (desc.pixelType == PixelFormat::DEPTH32_FLOAT ? vk::ImageAspectFlags(vk::ImageAspectFlagBits::eDepth) : vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil)
 		: vk::ImageAspectFlags(vk::ImageAspectFlagBits::eColor);
 
-	std::tie(mImage, mImageView) = UtilityVk::CreateImage(
-		desc.width, desc.height, FormatMap.at(desc.pixelType), usage,
-		aspectFlag, desc.depth, ToTextureType.at(desc.texType), desc.mipMapCount);
+	std::tie(mImage, mImageView) = UtilityVk::CreateImage(desc.width, desc.height, FormatMap.at(desc.pixelType), usage, aspectFlag, desc.depth,
+		ToTextureType.at(desc.texType), desc.mipMapCount, backing);
 
 	mImagePtr = *mImage;
 	mPath = !desc.path.empty() ? desc.path : (!desc.pathTexture.empty() ? desc.pathTexture.front() : std::string());

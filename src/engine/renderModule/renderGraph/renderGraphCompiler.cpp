@@ -1,4 +1,5 @@
 #include "renderGraphCompiler.h"
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <optional>
@@ -204,6 +205,40 @@ Plan Compile(std::span<const Resource> resources, std::span<const Pass> passes) 
 			&& !needsCompute(pass.Id, result.Schedule[index + 1].Id)) {
 			pass.ExecutionQueue = Queue::ASYNC_COMPUTE;
 			outstandingCompute = pass.Id;
+		}
+	}
+	// A linear interval proves ordering only for accesses on the same queue.
+	std::vector<std::optional<Plan::TransientLifetime>> lifetimes(resources.size());
+	std::vector<bool> eligible(resources.size());
+	for (ResourceId id = 0; id < resources.size(); ++id) {
+		eligible[id] = resources[id].Transient && !resources[id].Imported && !resources[id].Exported;
+	}
+	for (size_t index = 0; index < result.Schedule.size(); ++index) {
+		const auto& scheduled = result.Schedule[index];
+		const auto& pass = passes[scheduled.Id];
+		for (const auto& [resource, pair] : accesses[scheduled.Id]) {
+			if (!eligible[resource]) {
+				continue;
+			}
+			auto& lifetime = lifetimes[resource];
+			if (scheduled.ExecutionQueue != Queue::GRAPHICS || (pair.Write && pair.Write->Mode != Access::ATTACHMENT_WRITE)
+				|| (pair.Read && pair.Read->Mode != Access::SAMPLED && pair.Read->Mode != Access::ATTACHMENT_READ)
+				|| (!lifetime
+					&& (pair.Read || !pair.Write
+						|| std::find(pass.ClearedColorAttachments.begin(), pass.ClearedColorAttachments.end(), resource)
+							== pass.ClearedColorAttachments.end()))) {
+				eligible[resource] = false;
+				continue;
+			}
+			if (!lifetime) {
+				lifetime = Plan::TransientLifetime { resources[resource].Name, index, index };
+			}
+			lifetime->Last = index;
+		}
+	}
+	for (ResourceId id = 0; id < resources.size(); ++id) {
+		if (eligible[id] && lifetimes[id]) {
+			result.TransientLifetimes.push_back(*lifetimes[id]);
 		}
 	}
 	return result;
