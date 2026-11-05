@@ -1,10 +1,14 @@
 #include "driverVk.h"
 #ifdef VULKAN_BACKEND
 #include "helpers.h"
+#include "profilerModule/profiler.h"
+#include "profilerModule/profilerSpy.h"
 #include "storageBufferVk.h"
 #include <algorithm>
+#include <barrier>
 #include <cstdlib>
 #include <cstring>
+#include <future>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -149,6 +153,62 @@ void DriverVk::fillBuffer(const std::shared_ptr<StorageBufferInterface>& buffer,
 	endTransferCommands(cmd);
 }
 
+void DriverVk::fillBuffers(std::span<const BufferFill> fills) {
+	if (!settings.pipelined() || !independentFills(fills)) {
+		DriverInterface::fillBuffers(fills);
+		return;
+	}
+
+	std::vector<vk::Buffer> buffers;
+	buffers.reserve(fills.size());
+	for (const auto& fill : fills) {
+		auto& native = NativeBuffer(fill.Buffer, "fillBuffers");
+		CheckRange(native, fill.Offset, fill.Size, "fillBuffers");
+		if (fill.Offset % 4 || fill.Size % 4) {
+			throw std::invalid_argument("fillBuffers requires four-byte aligned ranges");
+		}
+		buffers.push_back(*native.getBuffer());
+	}
+
+	auto& frame = getCurrentFrame();
+	std::array<vk::raii::CommandBuffer, 2> lists { nullptr, nullptr };
+	for (size_t lane = 0; lane < lists.size(); ++lane) {
+		auto& pool = frame.TransferPools[lane];
+		if (!*pool) {
+			pool = mDevice.createCommandPool(vk::CommandPoolCreateInfo(vk::CommandPoolCreateFlagBits::eTransient, mQueueFamilyIndex));
+		}
+		auto allocated = mDevice.allocateCommandBuffers(vk::CommandBufferAllocateInfo(*pool, vk::CommandBufferLevel::eSecondary, 1));
+		lists[lane] = std::move(allocated.front());
+	}
+
+	std::barrier start(2);
+	const auto record = [&](size_t lane) {
+		start.arrive_and_wait();
+		auto profile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("RecordVkBufferFills") : nullptr;
+		const vk::CommandBufferInheritanceInfo inheritance {};
+		const auto info = vk::CommandBufferBeginInfo().setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit).setPInheritanceInfo(&inheritance);
+		auto& list = lists[lane];
+		list.begin(info);
+		for (size_t index = lane; index < fills.size(); index += lists.size()) {
+			const auto& fill = fills[index];
+			list.fillBuffer(buffers[index], fill.Offset, fill.Size, fill.Value);
+		}
+		list.end();
+	};
+	auto worker = std::async(std::launch::async, record, size_t { 1 });
+	record(0);
+	worker.get();
+
+	const std::array nativeLists { *lists[0], *lists[1] };
+	frame.TransferLists.reserve(frame.TransferLists.size() + lists.size());
+	for (auto& list : lists) {
+		frame.TransferLists.push_back(std::move(list));
+	}
+	beginTransferCommands(frame.mCommandBuffer);
+	frame.mCommandBuffer.executeCommands(nativeLists);
+	endTransferCommands(frame.mCommandBuffer);
+}
+
 void DriverVk::copyBuffer(const std::shared_ptr<StorageBufferInterface>& source, size_t sourceOffset,
 	const std::shared_ptr<StorageBufferInterface>& destination, size_t destinationOffset, size_t size) {
 	auto& from = NativeBuffer(source, "copyBuffer");
@@ -247,26 +307,35 @@ bool DriverVk::collectBufferReadback(uint64_t ticket, std::vector<uint8_t>& byte
 
 void DriverVk::flushRecordedCommands() {
 	// Submits everything recorded so far in this frame and waits for it, then reopens the
-	// frame command buffer. The recorded prologue already transitioned the swapchain image,
-	// so the submission waits on the acquire semaphore and re-signals it for end().
+	// frame command buffer. Consume the WSI acquire wait only on the first
+	// submission that can touch this image.
 	deactivateRenderPass();
 	auto& frame = getCurrentFrame();
 	frame.mCommandBuffer.end();
-	const auto& acquired = getCurrentSwapchainContext().frames.at(mSemaphoreIndex).mImageAcquiredSemaphore;
+	working = false;
+	const auto& swapchain = getCurrentSwapchainContext();
+	const auto& acquireSlot = swapchain.frames.at(mSemaphoreIndex);
 	const vk::PipelineStageFlags waitStage = vk::PipelineStageFlagBits::eAllCommands;
 	vk::SubmitInfo work;
-	work.setWaitSemaphores(*acquired).setWaitDstStageMask(waitStage).setCommandBuffers(*frame.mCommandBuffer);
+	work.setCommandBuffers(*frame.mCommandBuffer);
+	if (mAcquireWaitPending) {
+		// Synchronous readback splits this frame across submissions. Wait
+		// for WSI to release the image before subsequent host-driven work.
+		if (!swapchain.sdkAcquire) {
+			waitFrameFence(acquireSlot.AcquireFence);
+		}
+		work.setWaitSemaphores(*acquireSlot.mImageAcquiredSemaphore).setWaitDstStageMask(waitStage);
+	}
 	mQueue.submit(work);
+	mAcquireWaitPending = false;
 	mQueue.waitIdle();
 	// Everything recorded so far (including asynchronous readback copies) has completed.
 	mCompletedEpoch = mSubmissionEpoch++;
-	vk::SubmitInfo resignal;
-	resignal.setSignalSemaphores(*acquired);
-	mQueue.submit(resignal);
 
 	vk::CommandBufferBeginInfo beginInfo;
 	beginInfo.setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 	frame.mCommandBuffer.begin(beginInfo);
+	working = true;
 	mBoundPipelineName.clear();
 	graphics_pipeline_ignore_bindings.clear();
 	for (auto flag : { Dirty::VERTEX_BUFFER, Dirty::INDEX_BUFFER, Dirty::VIEWPORT, Dirty::SCISSOR, Dirty::RASTERIZATION_MODE, Dirty::PRIMITIVE_MODE,

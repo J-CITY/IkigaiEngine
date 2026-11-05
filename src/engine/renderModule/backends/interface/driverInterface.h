@@ -4,6 +4,7 @@
 #include "vertexLayout.h"
 
 #include <bitset>
+#include <span>
 #include <string>
 
 #include "../interface/shaderInterface.h"
@@ -29,6 +30,13 @@ class FrameBufferInterface;
 class IndexBufferInterface;
 class VertexBufferInterface;
 class ShaderInterface;
+
+struct BufferFill {
+	std::shared_ptr<StorageBufferInterface> Buffer;
+	size_t Offset = 0;
+	size_t Size = 0;
+	uint32_t Value = 0;
+};
 
 using TextureDeleter = std::function<void(TextureInterface*)>;
 using ModelDeleter = std::function<void(ModelInterface*)>;
@@ -59,10 +67,13 @@ struct RenderSettings {
 	// frameGeneration.vsync). FIFO forces vsync; MAILBOX/IMMEDIATE disable it
 	// (DX12 presents with sync interval 0 for both). Unsupported Vulkan modes fall back to FIFO.
 	enum class PresentMode { DEFAULT, FIFO, MAILBOX, IMMEDIATE };
-	enum class Execution { IMMEDIATE, DEFERRED, THREADED };
+	enum class Execution { IMMEDIATE, DEFERRED, THREADED, PIPELINED };
 	Backend backend = Backend::OPENGL;
 	PresentMode presentMode = PresentMode::DEFAULT;
 	Execution execution = Execution::IMMEDIATE;
+	[[nodiscard]] bool pipelined() const noexcept {
+		return execution == Execution::PIPELINED;
+	}
 	std::string pipeline;
 	UpscalerSettings upscaler;
 	FrameGenerationSettings frameGeneration;
@@ -110,6 +121,7 @@ protected:
 	std::shared_ptr<GpuCompletionSource> completionSource() const {
 		return mCompletion;
 	}
+	static bool independentFills(std::span<const BufferFill> fills);
 
 public:
 	virtual ~DriverInterface() = default;
@@ -297,6 +309,7 @@ public:
 	virtual void fillBuffer(const std::shared_ptr<StorageBufferInterface>&, size_t, size_t, uint32_t) {
 		throw UnsupportedGpuFeature("Buffer fill is unavailable on this backend");
 	}
+	virtual void fillBuffers(std::span<const BufferFill> fills);
 	virtual void copyBuffer(const std::shared_ptr<StorageBufferInterface>&, size_t, const std::shared_ptr<StorageBufferInterface>&, size_t, size_t) {
 		throw UnsupportedGpuFeature("Buffer copy is unavailable on this backend");
 	}
@@ -447,6 +460,7 @@ private:
 	virtual void presentFrame();
 	virtual void waitForPresentedFrame();
 	virtual void finishPresent();
+	virtual std::function<void()> presentedFrameWait(GpuCompletionToken token);
 	void withReplayAccess(const std::function<void()>& work);
 	static std::thread::id resourceOwnerThread() noexcept;
 	static thread_local DriverInterface* sReplayDriver;

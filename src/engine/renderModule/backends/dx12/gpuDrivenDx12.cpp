@@ -1,9 +1,14 @@
 #include "driverDx12.h"
 #ifdef DX12_BACKEND
+#include "profilerModule/profiler.h"
+#include "profilerModule/profilerSpy.h"
 #include "storageBufferDx12.h"
+#include "uploadRingDx12.h"
 #include <algorithm>
+#include <barrier>
 #include <cstdlib>
 #include <cstring>
+#include <future>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
@@ -152,6 +157,72 @@ void DriverDx12::fillBuffer(const std::shared_ptr<StorageBufferInterface>& buffe
 	// Leave the destination in a writable shader state; later consumers transition from it.
 	native.transition(mCommandList.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	destroyDeferred(std::move(upload));
+}
+
+void DriverDx12::fillBuffers(std::span<const BufferFill> fills) {
+	if (!settings.pipelined() || !independentFills(fills)) {
+		DriverInterface::fillBuffers(fills);
+		return;
+	}
+
+	struct Copy {
+		StorageBufferDx12* Buffer;
+		ID3D12Resource* Destination;
+		UploadAllocationDx12 Upload;
+	};
+	std::vector<Copy> copies;
+	copies.reserve(fills.size());
+	for (const auto& fill : fills) {
+		auto& native = NativeBuffer(fill.Buffer, "fillBuffers");
+		CheckRange(native, fill.Offset, fill.Size, "fillBuffers");
+		if (fill.Offset % 4 || fill.Size % 4) {
+			throw std::invalid_argument("fillBuffers requires four-byte aligned ranges");
+		}
+		const auto upload = mUploadRing->allocate(fill.Size, alignof(uint32_t));
+		std::fill_n(reinterpret_cast<uint32_t*>(upload.Cpu), fill.Size / sizeof(uint32_t), fill.Value);
+		copies.push_back({ &native, native.getBuffer().Get(), upload });
+	}
+
+	auto& slot = mRecordingSlots[mRecordingSlot];
+	std::array<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>, 2> lists;
+	for (size_t lane = 0; lane < lists.size(); ++lane) {
+		auto& allocator = slot.TransferAllocators[lane];
+		if (!allocator) {
+			ThrowIfFailed(mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(allocator.GetAddressOf())));
+		}
+		ThrowIfFailed(
+			mDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), nullptr, IID_PPV_ARGS(lists[lane].GetAddressOf())));
+	}
+
+	std::barrier start(2);
+	const auto record = [&](size_t lane) {
+		start.arrive_and_wait();
+		auto profile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("RecordDx12BufferFills") : nullptr;
+		auto& list = lists[lane];
+		for (size_t index = lane; index < fills.size(); index += lists.size()) {
+			const auto& fill = fills[index];
+			const auto& copy = copies[index];
+			list->CopyBufferRegion(copy.Destination, fill.Offset, copy.Upload.Resource, copy.Upload.Offset, fill.Size);
+		}
+		ThrowIfFailed(list->Close());
+	};
+	auto worker = std::async(std::launch::async, record, size_t { 1 });
+	record(0);
+	worker.get();
+
+	ID3D12CommandList* nativeLists[] = { lists[0].Get(), lists[1].Get() };
+	slot.TransferLists.reserve(slot.TransferLists.size() + lists.size());
+	for (auto& list : lists) {
+		slot.TransferLists.push_back(std::move(list));
+	}
+	for (const auto& copy : copies) {
+		copy.Buffer->transition(mCommandList.Get(), D3D12_RESOURCE_STATE_COPY_DEST);
+	}
+	executeRecordedCommands();
+	mCommandQueue->ExecuteCommandLists(static_cast<UINT>(std::size(nativeLists)), nativeLists);
+	for (const auto& copy : copies) {
+		copy.Buffer->transition(mCommandList.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	}
 }
 
 void DriverDx12::copyBuffer(const std::shared_ptr<StorageBufferInterface>& source, size_t sourceOffset,

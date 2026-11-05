@@ -777,9 +777,9 @@ bool DriverVk::checkInstanceExtensionSupport(const std::vector<const char*>& ext
 
 void DriverVk::begin() {
 	working = true;
-	UniformBufferVk::BeginFrame();
+	UniformBufferVk::BeginFrame(settings.pipelined() ? 2 : 1);
 	mRayTracingFrameResources.clear();
-	// Previous frame's fence has already signaled (submit waits before begin).
+	// In pipelined mode submitted sets have moved to their owning frame.
 	mFrameDescriptorSets.clear();
 	mBindlessFrameResources.clear();
 	mDescriptorPoolIndex = 0;
@@ -808,6 +808,10 @@ void DriverVk::begin() {
 	vk::CommandBufferBeginInfo beginInfo;
 	beginInfo.setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 	getCurrentFrame().mCommandBuffer.begin(beginInfo);
+	if (settings.pipelined()) {
+		// Pipeline attachments and persistent storage may be shared across submissions.
+		renderGraphBarrier(false);
+	}
 	resetTimestampPoolIfNeeded();
 
 	auto tex = std::static_pointer_cast<TextureVk>(getCurrentFrame().mFrameBuffer->getTextures()[0]);
@@ -842,7 +846,11 @@ void DriverVk::end() {
 
 	auto& frame = getCurrentFrame();
 
-	mDevice.resetFences({ *frame.fence });
+	// An earlier CPU waiter may still own this fence. Preserve its signal.
+	if (frame.fence.use_count() != 1) {
+		frame.fence = std::make_shared<vk::raii::Fence>(mDevice.createFence({}));
+	}
+	mDevice.resetFences({ **frame.fence });
 
 	auto wait_dst_stage_mask = vk::PipelineStageFlags { vk::PipelineStageFlagBits::eAllCommands };
 
@@ -850,14 +858,20 @@ void DriverVk::end() {
 	// Waiting on frames[mFrameIndex] would wait on a semaphore that was never signaled.
 	const auto& image_acquired_semaphore = getCurrentSwapchainContext().frames.at(mSemaphoreIndex).mImageAcquiredSemaphore;
 
-	auto submit_info = vk::SubmitInfo()
-						   .setWaitDstStageMask(wait_dst_stage_mask)
-						   .setWaitSemaphores(*image_acquired_semaphore)
-						   .setCommandBuffers(*frame.mCommandBuffer)
-						   .setSignalSemaphores(*frame.mRenderCompleteSemaphore);
+	auto submit_info = vk::SubmitInfo().setCommandBuffers(*frame.mCommandBuffer).setSignalSemaphores(*frame.mRenderCompleteSemaphore);
+	if (mAcquireWaitPending) {
+		submit_info.setWaitDstStageMask(wait_dst_stage_mask).setWaitSemaphores(*image_acquired_semaphore);
+	}
 
-	mQueue.submit(submit_info, *frame.fence);
+	mQueue.submit(submit_info, **frame.fence);
+	mAcquireWaitPending = false;
 	frame.Completion = completionSource()->submitted();
+	if (settings.pipelined()) {
+		frame.Epoch = mSubmissionEpoch++;
+		frame.DescriptorSets.swap(mFrameDescriptorSets);
+		frame.RayTracingResources.swap(mRayTracingFrameResources);
+		frame.BindlessResources.swap(mBindlessFrameResources);
+	}
 }
 
 void DriverVk::setPushConstant(ShaderType stage, uint32_t offset, uint32_t size, const void* data) {
@@ -1375,6 +1389,10 @@ void DriverVk::EnsureGraphicsState(bool draw_indexed) {
 }
 
 void DriverVk::wait() {
+	if (settings.pipelined()) {
+		waitForCompletion(completion().lastSubmitted());
+		return;
+	}
 	waitForPresentedFrame();
 	releaseCompletedFrame();
 }
@@ -1384,11 +1402,28 @@ void DriverVk::waitForPresentedFrame() {
 	if (it == mSwapchains.end() || it->second.frames.empty() || mFrameIndex >= it->second.frames.size()) {
 		return;
 	}
-	auto& frame = it->second.frames.at(mFrameIndex);
-	auto wait_result = mDevice.waitForFences({ *frame.fence }, true, UINT64_MAX);
+	waitFrameFence(*it->second.frames.at(mFrameIndex).fence);
+}
+
+void DriverVk::waitFrameFence(const vk::raii::Fence& fence) {
+	auto wait_result = mDevice.waitForFences({ *fence }, true, UINT64_MAX);
 	if (wait_result != vk::Result::eSuccess) {
 		throw std::runtime_error("Vulkan frame fence wait failed");
 	}
+}
+
+std::function<void()> DriverVk::presentedFrameWait(GpuCompletionToken token) {
+	if (completion().isComplete(token)) {
+		return [] { };
+	}
+	const auto& frame = getCurrentFrame();
+	if (frame.Completion != token) {
+		throw std::logic_error("Vulkan presentation fence does not match the submission");
+	}
+	return [this, fence = frame.fence, source = completionSource(), token] {
+		waitFrameFence(*fence);
+		source->completed(token);
+	};
 }
 
 void DriverVk::releaseCompletedFrame() {
@@ -1400,6 +1435,16 @@ void DriverVk::releaseCompletedFrame() {
 	if (frame.Completion.Value) {
 		completionSource()->completed(frame.Completion);
 	}
+	releaseFrame(frame);
+}
+
+void DriverVk::releaseFrame(Frame& frame) {
+	mCompletedEpoch = std::max(mCompletedEpoch, frame.Epoch);
+	frame.Completion = {};
+	frame.DescriptorSets.clear();
+	frame.RayTracingResources.clear();
+	frame.BindlessResources.clear();
+	frame.TransferLists.clear();
 	// Retiring a TLAS can release BLAS/mesh owners which themselves enqueue
 	// buffers for retirement. Do not mutate the vector being destroyed.
 	while (!frame.destroyDeferred.empty()) {
@@ -1409,12 +1454,37 @@ void DriverVk::releaseCompletedFrame() {
 	}
 }
 
+void DriverVk::collectCompletedFrames() {
+	for (auto& [id, swapchain] : mSwapchains) {
+		for (auto& frame : swapchain.frames) {
+			if (frame.Completion.Value && completion().isComplete(frame.Completion)) {
+				releaseFrame(frame);
+			}
+		}
+	}
+}
+
 void DriverVk::waitForCompletion(GpuCompletionToken token) {
 	requireOwnerThread();
 	completionSource()->validate(token);
 	if (!completionSource()->isComplete(token)) {
+		if (settings.pipelined()) {
+			for (auto& [id, swapchain] : mSwapchains) {
+				for (auto& frame : swapchain.frames) {
+					if (frame.Completion == token) {
+						waitFrameFence(*frame.fence);
+						completionSource()->completed(token);
+						collectCompletedFrames();
+						return;
+					}
+				}
+			}
+		}
 		mDevice.waitIdle();
 		completionSource()->completed(completionSource()->lastSubmitted());
+	}
+	if (settings.pipelined()) {
+		collectCompletedFrames();
 	}
 }
 
@@ -1516,9 +1586,10 @@ void DriverVk::createSwapchainFrames(unsigned windowID, const std::vector<vk::Im
 
 		auto fence_info = vk::FenceCreateInfo().setFlags(vk::FenceCreateFlagBits::eSignaled);
 
-		frame.fence = mDevice.createFence(fence_info);
+		frame.fence = std::make_shared<vk::raii::Fence>(mDevice.createFence(fence_info));
 
 		frame.mImageAcquiredSemaphore = mDevice.createSemaphore({});
+		frame.AcquireFence = mDevice.createFence(fence_info);
 		frame.mRenderCompleteSemaphore = mDevice.createSemaphore({});
 
 		auto command_buffer_allocate_info
@@ -1551,9 +1622,9 @@ void DriverVk::createSwapchainFrames(unsigned windowID, const std::vector<vk::Im
 }
 
 void DriverVk::nextFrame() {
-	const auto& image_acquired_semaphore = getCurrentSwapchainContext().frames.at(mSemaphoreIndex).mImageAcquiredSemaphore;
-
 	auto& ctx = getCurrentSwapchainContext();
+	const auto& acquireSlot = ctx.frames.at(mSemaphoreIndex);
+	const auto& image_acquired_semaphore = acquireSlot.mImageAcquiredSemaphore;
 	if (ctx.sdkAcquire) {
 		auto result = ctx.sdkAcquire(*image_acquired_semaphore, &mFrameIndex);
 		if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
@@ -1561,7 +1632,13 @@ void DriverVk::nextFrame() {
 		}
 	}
 	else {
-		mFrameIndex = ctx.swapchain.acquireNextImage(UINT64_MAX, *image_acquired_semaphore).value;
+		waitFrameFence(acquireSlot.AcquireFence);
+		mDevice.resetFences({ *acquireSlot.AcquireFence });
+		mFrameIndex = ctx.swapchain.acquireNextImage(UINT64_MAX, *image_acquired_semaphore, *acquireSlot.AcquireFence).value;
+	}
+	mAcquireWaitPending = true;
+	if (settings.pipelined() && getCurrentFrame().Completion.Value) {
+		waitForCompletion(getCurrentFrame().Completion);
 	}
 }
 
@@ -2335,10 +2412,21 @@ void DriverVk::presentFrame() {
 #endif
 
 	mSemaphoreIndex = (mSemaphoreIndex + 1) % getCurrentSwapchainContext().frames.size();
-	++mSubmissionEpoch;
+	if (!settings.pipelined()) {
+		++mSubmissionEpoch;
+	}
 }
 
 void DriverVk::finishPresent() {
+	if (settings.pipelined()) {
+		if (getCurrentSwapchainContext().frames.size() == 1) {
+			waitForCompletion(completion().lastSubmitted());
+		}
+		collectCompletedFrames();
+		nextFrame();
+		begin();
+		return;
+	}
 	// The frame fence also covers the readback copies.
 	releaseCompletedFrame();
 	mCompletedEpoch = mSubmissionEpoch - 1;

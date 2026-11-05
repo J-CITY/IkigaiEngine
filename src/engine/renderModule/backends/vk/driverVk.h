@@ -133,10 +133,17 @@ public:
 	struct Frame {
 		// Declared first so it is destroyed last (after framebuffer textures that may queue into it).
 		std::vector<VulkanObject> destroyDeferred;
-		vk::raii::Fence fence = nullptr;
+		std::shared_ptr<vk::raii::Fence> fence;
 		GpuCompletionToken Completion {};
+		uint64_t Epoch = 0;
+		std::vector<vk::raii::DescriptorSet> DescriptorSets;
+		std::vector<std::shared_ptr<void>> RayTracingResources;
+		std::vector<BindlessResourceEntry> BindlessResources;
+		std::array<vk::raii::CommandPool, 2> TransferPools { nullptr, nullptr };
+		std::vector<vk::raii::CommandBuffer> TransferLists;
 		std::shared_ptr<FrameBufferVk> mFrameBuffer;
 		vk::raii::Semaphore mImageAcquiredSemaphore = nullptr;
+		vk::raii::Fence AcquireFence = nullptr;
 		vk::raii::Semaphore mRenderCompleteSemaphore = nullptr;
 		vk::raii::CommandBuffer mCommandBuffer = nullptr;
 	};
@@ -162,6 +169,7 @@ public:
 
 	uint32_t mSemaphoreIndex = 0;
 	uint32_t mFrameIndex = 0;
+	bool mAcquireWaitPending = false;
 	uint32_t mWidth = 0;
 	uint32_t mHeight = 0;
 
@@ -390,6 +398,7 @@ public:
 	GpuFeatures gpuFeatures() const override;
 	std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void* data, size_t count, size_t stride, BufferUsage usage) override;
 	void fillBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size, uint32_t value) override;
+	void fillBuffers(std::span<const BufferFill> fills) override;
 	void copyBuffer(const std::shared_ptr<StorageBufferInterface>& source, size_t sourceOffset,
 		const std::shared_ptr<StorageBufferInterface>& destination, size_t destinationOffset, size_t size) override;
 	std::vector<uint8_t> readBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size) override;
@@ -425,8 +434,12 @@ private:
 	void wait();
 	void presentFrame() override;
 	void waitForPresentedFrame() override;
+	std::function<void()> presentedFrameWait(GpuCompletionToken token) override;
 	void finishPresent() override;
 	void releaseCompletedFrame();
+	void releaseFrame(Frame& frame);
+	void collectCompletedFrames();
+	void waitFrameFence(const vk::raii::Fence& fence);
 	void createSwapchain(unsigned int windowID, uint32_t width, uint32_t height);
 	void createSwapchainFrames(unsigned windowID, const std::vector<vk::Image>&);
 	void nextFrame();

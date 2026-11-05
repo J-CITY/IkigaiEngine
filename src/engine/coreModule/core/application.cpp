@@ -27,7 +27,7 @@ namespace {
 		stringOption("--loading-scene", options.loadingScene, "Loading scene asset");
 		stringOption("--pipeline", options.pipeline, "Render pipeline asset");
 		stringOption("--render-backend", options.renderBackend, "opengl, vulkan, directx12 or metal");
-		stringOption("--render-executor", options.renderExecutor, "immediate, deferred or threaded");
+		stringOption("--render-executor", options.renderExecutor, "immediate, deferred, threaded or pipelined");
 		stringOption("--upscaler", options.upscaler, "Upscaler");
 		stringOption("--upscaler-quality", options.upscalerQuality, "Upscaler quality");
 		stringOption("--frame-generation", options.frameGeneration, "Frame generation mode");

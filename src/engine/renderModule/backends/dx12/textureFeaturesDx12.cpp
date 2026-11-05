@@ -14,8 +14,6 @@ namespace {
 		DXGI_FORMAT_R16_FLOAT,
 		DXGI_FORMAT_R11G11B10_FLOAT,
 	};
-	// Matches the transient range used by bindlessSnapshot (reset in begin()).
-	constexpr uint32_t TransientDescriptorEnd = 1064 + 65536;
 }
 
 void DriverDx12::setStorageImage(size_t binding, std::shared_ptr<TextureInterface> texture, uint32_t mip, uint32_t layer) {
@@ -49,7 +47,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DriverDx12::storageImageUav(const StorageImageBindin
 	if (const auto found = mBindlessSnapshots.find(key); found != mBindlessSnapshots.end()) {
 		return found->second.first;
 	}
-	if (mBindlessDescriptorCursor >= TransientDescriptorEnd) {
+	if (mBindlessDescriptorCursor >= mBindlessDescriptorEnd) {
 		throw std::runtime_error("Storage image descriptor capacity exhausted in current frame");
 	}
 	auto cpu = mDescriptorHeap->GetCPUDescriptorHandleForHeapStart();

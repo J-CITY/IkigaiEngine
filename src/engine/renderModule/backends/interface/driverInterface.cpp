@@ -1,5 +1,6 @@
 #include "driverInterface.h"
 #include <stdexcept>
+#include <unordered_set>
 
 namespace IKIGAI::RENDER {
 thread_local DriverInterface* DriverInterface::sReplayDriver = nullptr;
@@ -52,8 +53,31 @@ void DriverInterface::finishPresent() {
 	throw std::logic_error("Backend does not support threaded presentation");
 }
 
+std::function<void()> DriverInterface::presentedFrameWait(GpuCompletionToken) {
+	throw std::logic_error("Backend does not support pipelined frame completion");
+}
+
 void DriverInterface::renderGraphBarrier(bool) {
 	throw std::logic_error("Backend does not support explicit render graph barriers");
+}
+
+bool DriverInterface::independentFills(std::span<const BufferFill> fills) {
+	if (fills.size() < 2) {
+		return false;
+	}
+	std::unordered_set<const StorageBufferInterface*> buffers;
+	for (const auto& fill : fills) {
+		if (!fill.Size || !buffers.insert(fill.Buffer.get()).second) {
+			return false;
+		}
+	}
+	return true;
+}
+
+void DriverInterface::fillBuffers(std::span<const BufferFill> fills) {
+	for (const auto& fill : fills) {
+		fillBuffer(fill.Buffer, fill.Offset, fill.Size, fill.Value);
+	}
 }
 
 void DriverInterface::waitForCompletion(GpuCompletionToken token) {

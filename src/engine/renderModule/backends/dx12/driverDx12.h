@@ -254,6 +254,7 @@ public:
 	GpuFeatures gpuFeatures() const override;
 	std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void* data, size_t count, size_t stride, BufferUsage usage) override;
 	void fillBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size, uint32_t value) override;
+	void fillBuffers(std::span<const BufferFill> fills) override;
 	void copyBuffer(const std::shared_ptr<StorageBufferInterface>& source, size_t sourceOffset,
 		const std::shared_ptr<StorageBufferInterface>& destination, size_t destinationOffset, size_t size) override;
 	std::vector<uint8_t> readBuffer(const std::shared_ptr<StorageBufferInterface>& buffer, size_t offset, size_t size) override;
@@ -296,8 +297,14 @@ private:
 
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mDescriptorHeap;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mBindlessSamplerHeap;
-	uint32_t mBindlessDescriptorCursor = 1064;
+	static constexpr uint32_t LegacyDescriptorCapacity = 1000;
+	static constexpr uint32_t ImGuiDescriptorCapacity = 64;
+	static constexpr uint32_t TransientDescriptorStart = LegacyDescriptorCapacity + ImGuiDescriptorCapacity;
+	static constexpr uint32_t TransientDescriptorsPerFrame = 65536;
+	static constexpr uint32_t BindlessSamplerCapacity = 2048;
+	uint32_t mBindlessDescriptorCursor = TransientDescriptorStart;
 	uint32_t mBindlessSamplerCursor = 0;
+	uint32_t mBindlessDescriptorEnd = TransientDescriptorStart + TransientDescriptorsPerFrame;
 	std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> bindlessSnapshot(
 		const ShaderReflection::Uniform&, uint32_t, const BindlessResourceTable* localTable = nullptr);
 	std::map<std::string, std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE>> mBindlessSnapshots;
@@ -314,7 +321,7 @@ private:
 	CD3DX12_GPU_DESCRIPTOR_HANDLE mDescriptorHeapGPUHandle {};
 	unsigned int mDescriptorIncSize = 0;
 	std::vector<UINT> mImGuiFreeSrv;
-	static constexpr uint32_t LegacyDescriptorCapacity = 1000;
+	std::vector<UINT> mPendingImGuiSrv;
 	uint32_t mLegacyDescriptorCursor = 0;
 	// Free slot runs by run length (index 1 and 2 are used), plus runs waiting for the next GPU wait.
 	std::array<std::vector<uint32_t>, 3> mFreeLegacyDescriptors;
@@ -322,18 +329,36 @@ private:
 
 	std::vector<Microsoft::WRL::ComPtr<ID3D12DeviceChild>> mDestroyDeffered {};
 	std::vector<Dx12Resource> mDestroyDeferredResources {};
+	struct RecordingSlot {
+		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> Allocator;
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Samplers;
+		GpuCompletionToken Completion {};
+		UINT64 FenceValue = 0;
+		std::vector<std::shared_ptr<void>> RayResources;
+		std::vector<std::shared_ptr<void>> RayDeferred;
+		std::vector<BindlessResourceEntry> BindlessResources;
+		std::vector<Microsoft::WRL::ComPtr<ID3D12DeviceChild>> Objects;
+		std::vector<Dx12Resource> Resources;
+		std::vector<std::pair<uint32_t, uint32_t>> LegacyDescriptors;
+		std::vector<UINT> ImGuiDescriptors;
+		std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, 2> TransferAllocators;
+		std::vector<Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList>> TransferLists;
+	};
+	std::array<RecordingSlot, 2> mRecordingSlots {};
+	size_t mRecordingSlot = 0;
 	// Upload pages are retired with mFenceValue in end() and recycled in begin() once the fence passed it.
 	std::unique_ptr<UploadRingDx12> mUploadRing;
 	std::unique_ptr<ImmediateSubmitDx12> mImmediateSubmit;
 
 	struct SwapchainContextDx12 {
 		Microsoft::WRL::ComPtr<IDXGISwapChain3> mSwapChain;
-		std::array<std::shared_ptr<FrameBufferDx12>, DEFAULT_FB_SIZE> mDefaultFb;
+		std::array<std::shared_ptr<FrameBufferDx12>, DEFAULT_FB_SIZE + 1> mDefaultFb;
 		unsigned width = 0;
 		unsigned height = 0;
 		bool streamline = false;
 		unsigned slMultiplier = 0;
 	};
+	static unsigned swapchainImageCount() noexcept;
 
 	std::unordered_map<unsigned int, SwapchainContextDx12> mSwapchains;
 	unsigned int mCurrentWindowID = 0;
@@ -408,8 +433,10 @@ private:
 	void wait();
 	void presentFrame() override;
 	void waitForPresentedFrame() override;
+	std::function<void()> presentedFrameWait(GpuCompletionToken token) override;
 	void finishPresent() override;
 	void releaseCompletedFrame();
+	void collectCompletedFrames();
 
 	FrameInfo mFrameInfo;
 

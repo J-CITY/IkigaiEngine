@@ -512,9 +512,13 @@ void GameRenderer::runComputeStage(PipelineStage& stage) {
 	}
 	auto& renderer = *mContext.render;
 	auto* driver = renderer.getDriver();
-	for (const auto& clear : state.Clears) {
-		auto buffer = mRenderPipeline->mStorageBuffers.at(clear.Buffer);
-		renderer.execute([driver, buffer, clear]() { driver->fillBuffer(buffer, clear.Offset, clear.Size, clear.Value); });
+	if (!state.Clears.empty()) {
+		std::vector<BufferFill> fills;
+		fills.reserve(state.Clears.size());
+		for (const auto& clear : state.Clears) {
+			fills.push_back({ mRenderPipeline->mStorageBuffers.at(clear.Buffer), clear.Offset, clear.Size, clear.Value });
+		}
+		renderer.execute([driver, fills = std::move(fills)] { driver->fillBuffers(fills); });
 	}
 	auto textureExtent = [&](const std::string& name) {
 		const auto& texture = mRenderPipeline->mTextures.at(name);

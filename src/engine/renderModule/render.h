@@ -221,6 +221,7 @@ class Renderer {
 	bool mPreparingAccess = false;
 	bool mRetiringFrames = false;
 	std::unique_ptr<RenderThread> mRenderThread {};
+	std::unique_ptr<RenderThread> mGpuWaitThread {};
 	RenderTicket mPendingPresent {};
 	void prepareBackendAccess();
 	void retireFrames(bool wait);
@@ -234,6 +235,7 @@ public:
 	// A default ticket represents synchronous completion.
 	RenderTicket submitAsync();
 	void waitForPendingPresent();
+	void pollPresent();
 	void addView(RenderViewSnapshot view);
 	void shutdown();
 	bool hasActiveFrame() const;
@@ -248,7 +250,7 @@ public:
 			throw std::logic_error("Renderer is shut down");
 		}
 		if (!mActiveFrame && !mSubmittedFrames.empty()) {
-			retireFrames(true);
+			retireFrames(!mGpuWaitThread);
 		}
 		mExecutor->submit<T>(mDriver, op, std::forward<Args>(args)...);
 	}

@@ -96,7 +96,7 @@ bool App::runMainLoop() {
 			= IKIGAI::PROFILER::Profiler::IsEnabled() ? std::make_unique<IKIGAI::PROFILER::ProfilerSpy>("CoroutineScheduler::tick") : nullptr;
 		core.coroutineScheduler->tick(frameDt, timer.getDeltaTimeUnscaled());
 	}
-	core.render->waitForPendingPresent();
+	core.render->pollPresent();
 	preUpdate(frameDt);
 
 	update(frameDt);

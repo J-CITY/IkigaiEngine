@@ -45,6 +45,9 @@ Renderer::Renderer(DriverInterface* driver, std::unique_ptr<RenderExecutorInterf
 			throw std::invalid_argument("Threaded rendering needs a driver");
 		}
 		mRenderThread = std::make_unique<RenderThread>();
+		if (DriverInterface::settings.pipelined()) {
+			mGpuWaitThread = std::make_unique<RenderThread>();
+		}
 	}
 	if (mDriver) {
 		mDriver->requireOwnerThread();
@@ -71,10 +74,10 @@ void Renderer::prepareBackendAccess() {
 	if (mExecutor->isExecuting() || mShutdown || mPreparingAccess || mRetiringFrames) {
 		return;
 	}
-	waitForPendingPresent();
+	pollPresent();
 	AccessGuard guard { mPreparingAccess };
 	if (!mActiveFrame) {
-		retireFrames(true);
+		retireFrames(!mGpuWaitThread);
 	}
 	flush();
 }
@@ -88,7 +91,7 @@ DriverInterface* Renderer::getDriver() {
 
 void Renderer::flush() {
 	mOwner.requireCurrentThread();
-	waitForPendingPresent();
+	pollPresent();
 	if (!mRenderThread) {
 		mExecutor->flush(mDriver);
 	}
@@ -134,9 +137,9 @@ void Renderer::beginFrame() {
 	}
 	// A new CPU snapshot can be built while the previous GPU frame is pending.
 	// The first native access joins it before any new recording is replayed.
-	if (!mPendingPresent.valid() || mExecutor->pendingCommandCount()) {
+	if (mGpuWaitThread || !mPendingPresent.valid() || mExecutor->pendingCommandCount()) {
 		flush();
-		retireFrames(true);
+		retireFrames(!mGpuWaitThread);
 	}
 	auto commands = mFreeFrameCommands.empty() ? std::make_shared<RenderCommandBuffer>(64 * 1024, true) : mFreeFrameCommands.back();
 	if (!mFreeFrameCommands.empty()) {
@@ -192,7 +195,19 @@ RenderTicket Renderer::submitAsync() {
 			AccessGuard guard { mPreparingAccess };
 			mDriver->presentFrame();
 		}
-		finishFrame(mDriver->completion().lastSubmitted());
+		const auto token = mDriver->completion().lastSubmitted();
+		finishFrame(token);
+		if (mGpuWaitThread) {
+			// The second submission can overlap the first. Join the oldest
+			// before opening a third recording or reusing its completion lane.
+			waitForPendingPresent();
+			auto ticket = mGpuWaitThread->post(mDriver->presentedFrameWait(token));
+			mPendingPresent = ticket;
+			AccessGuard guard { mPreparingAccess };
+			mDriver->finishPresent();
+			retireFrames(false);
+			return ticket;
+		}
 		mPendingPresent = mRenderThread->post([driver = mDriver] { driver->waitForPresentedFrame(); });
 		return mPendingPresent;
 	}
@@ -232,8 +247,17 @@ void Renderer::waitForPendingPresent() {
 #endif
 	mPendingPresent.get();
 	mPendingPresent = {};
-	AccessGuard guard { mPreparingAccess };
-	mDriver->finishPresent();
+	if (!mGpuWaitThread) {
+		AccessGuard guard { mPreparingAccess };
+		mDriver->finishPresent();
+	}
+}
+
+void Renderer::pollPresent() {
+	mOwner.requireCurrentThread();
+	if (!mGpuWaitThread || (mPendingPresent.valid() && mPendingPresent.wait_for(std::chrono::seconds(0)) == std::future_status::ready)) {
+		waitForPendingPresent();
+	}
 }
 
 bool Renderer::hasActiveFrame() const {
@@ -253,6 +277,7 @@ void Renderer::shutdown() {
 		mPendingPresent = {};
 	}
 	mRenderThread.reset();
+	mGpuWaitThread.reset();
 	if (mActiveFrame) {
 		mExecutor->cancel();
 		// A failed present may already have submitted work. Do not submit an ended native list twice.
@@ -273,6 +298,9 @@ void Renderer::shutdown() {
 		mActiveFrame.reset();
 	}
 	if (mDriver) {
+		if (DriverInterface::settings.pipelined()) {
+			mDriver->waitForCompletion(mDriver->completion().lastSubmitted());
+		}
 		retireFrames(true);
 	}
 	mExecutor->cancel();

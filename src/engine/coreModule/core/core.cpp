@@ -249,7 +249,8 @@ Core::Core(const PlatformStartup& platform)
 	else {
 		executor = std::make_unique<RENDER::ImmediateExecutor>();
 	}
-	render = std::make_unique<RENDER::Renderer>(driver.get(), std::move(executor), execution == RENDER::RenderSettings::Execution::THREADED);
+	render = std::make_unique<RENDER::Renderer>(
+		driver.get(), std::move(executor), execution == RENDER::RenderSettings::Execution::THREADED || RENDER::DriverInterface::settings.pipelined());
 
 	std::cout << "Create driver\n";
 

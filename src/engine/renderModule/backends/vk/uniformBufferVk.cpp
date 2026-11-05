@@ -47,20 +47,20 @@ void IKIGAI::RENDER::UniformBufferVk::snapshot() {
             return;
         }
     }
-    auto slot = std::find_if(mSnapshots.begin(), mSnapshots.end(), [](const Snapshot& value) {
-        return value.usedFrame != sFrame;
-    });
-    if (slot == mSnapshots.end()) {
-        mSnapshots.emplace_back();
-        slot = std::prev(mSnapshots.end());
-    }
-    if (!slot->buffer || slot->bytes.size() != mBytes.size()) {
-        if (slot->buffer) UtilityVk::GetDriver()->destroyDeferred(std::move(slot->buffer));
-        slot->buffer = UtilityVk::CreateBuffer(mBytes.size(), vk::BufferUsageFlagBits::eUniformBuffer,
+	auto slot = std::find_if(mSnapshots.begin(), mSnapshots.end(), [](const Snapshot& value) { return sFrame - value.usedFrame >= sInFlight; });
+	if (slot == mSnapshots.end()) {
+		mSnapshots.emplace_back();
+		slot = std::prev(mSnapshots.end());
+	}
+	if (!slot->buffer || slot->bytes.size() != mBytes.size()) {
+		if (slot->buffer) {
+			UtilityVk::GetDriver()->destroyDeferred(std::move(slot->buffer));
+		}
+		slot->buffer = UtilityVk::CreateBuffer(mBytes.size(), vk::BufferUsageFlagBits::eUniformBuffer,
             UtilityVk::MemoryUsage::Staging);
-    }
-    slot->buffer.upload(mBytes.data(), mBytes.size());
-    slot->bytes = mBytes;
+	}
+	slot->buffer.upload(mBytes.data(), mBytes.size());
+	slot->bytes = mBytes;
     slot->usedFrame = sFrame;
     mSnapshot = static_cast<size_t>(slot - mSnapshots.begin());
 }

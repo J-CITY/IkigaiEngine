@@ -387,24 +387,27 @@ void DriverDx12::init() {
 }
 
 void DriverDx12::createDescriptorHeaps() {
-	constexpr UINT engineDescriptors = 1000;
-	constexpr UINT imguiDescriptors = 64;
 	D3D12_DESCRIPTOR_HEAP_DESC descriptor {
 		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-		.NumDescriptors = engineDescriptors + imguiDescriptors + 65536,
+		.NumDescriptors = TransientDescriptorStart + TransientDescriptorsPerFrame * (settings.pipelined() ? 2u : 1u),
 		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 	};
 	mDevice->CreateDescriptorHeap(&descriptor, IID_PPV_ARGS(&mDescriptorHeap));
     D3D12_DESCRIPTOR_HEAP_DESC samplers{};samplers.Type=D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-    samplers.NumDescriptors=2048;samplers.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-    ThrowIfFailed(mDevice->CreateDescriptorHeap(&samplers,IID_PPV_ARGS(&mBindlessSamplerHeap)));
+	samplers.NumDescriptors = BindlessSamplerCapacity;
+	samplers.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	ThrowIfFailed(mDevice->CreateDescriptorHeap(&samplers, IID_PPV_ARGS(&mBindlessSamplerHeap)));
+	if (settings.pipelined()) {
+		mRecordingSlots.front().Samplers = mBindlessSamplerHeap;
+		ThrowIfFailed(mDevice->CreateDescriptorHeap(&samplers, IID_PPV_ARGS(mRecordingSlots.back().Samplers.GetAddressOf())));
+	}
 	mDescriptorIncSize = mDevice->GetDescriptorHandleIncrementSize(descriptor.Type);
 	mDescriptorHeapCPUHandle = mDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	mDescriptorHeapGPUHandle = mDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
 
 	mImGuiFreeSrv.clear();
-	mImGuiFreeSrv.reserve(imguiDescriptors);
-	for (UINT index = engineDescriptors + imguiDescriptors; index > engineDescriptors; --index) {
+	mImGuiFreeSrv.reserve(ImGuiDescriptorCapacity);
+	for (UINT index = TransientDescriptorStart; index > LegacyDescriptorCapacity; --index) {
 		mImGuiFreeSrv.push_back(index - 1);
 	}
 }
@@ -422,7 +425,9 @@ void DriverDx12::immediateSubmit(const std::function<void(ID3D12GraphicsCommandL
 
 void DriverDx12::allocImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE* outCpu, D3D12_GPU_DESCRIPTOR_HANDLE* outGpu) {
 	assert(outCpu && outGpu);
-	assert(!mImGuiFreeSrv.empty());
+	if (mImGuiFreeSrv.empty()) {
+		throw std::runtime_error("ImGui descriptor capacity exhausted");
+	}
 	const UINT index = mImGuiFreeSrv.back();
 	mImGuiFreeSrv.pop_back();
 	D3D12_CPU_DESCRIPTOR_HANDLE cpu = mDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
@@ -436,7 +441,12 @@ void DriverDx12::allocImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE* outCpu, D3D12_GPU_DE
 void DriverDx12::freeImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIPTOR_HANDLE) {
 	const D3D12_CPU_DESCRIPTOR_HANDLE start = mDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 	const UINT index = static_cast<UINT>((cpu.ptr - start.ptr) / mDescriptorIncSize);
-	mImGuiFreeSrv.push_back(index);
+	if (settings.pipelined()) {
+		mPendingImGuiSrv.push_back(index);
+	}
+	else {
+		mImGuiFreeSrv.push_back(index);
+	}
 }
 
 void DriverDx12::executeRecordedCommands() {
@@ -470,6 +480,10 @@ void DriverDx12::createCommandList() {
     #endif
 	ThrowIfFailed(mDevice->CreateCommandQueue(&descriptor, IID_PPV_ARGS(&mCommandQueue)));
 	ThrowIfFailed(mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(mCommandAllocator.GetAddressOf())));
+	if (settings.pipelined()) {
+		mRecordingSlots.front().Allocator = mCommandAllocator;
+		ThrowIfFailed(mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(mRecordingSlots.back().Allocator.GetAddressOf())));
+	}
 	ThrowIfFailed(mDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mCommandAllocator.Get(), nullptr, IID_PPV_ARGS(mCommandList.GetAddressOf())));
 	mCommandList->Close();
 }
@@ -527,12 +541,12 @@ void DriverDx12::onResize() {
     if(mFrameGeneration)mFrameGeneration->waitForPresents();
 	auto& ctx = mSwapchains[mCurrentWindowID];
 	mCurrentState.mFrameBuffer.reset();
-	for (UINT i = 0; i < DEFAULT_FB_SIZE; i++) {
-		ctx.mDefaultFb[i].reset();
+	for (auto& framebuffer : ctx.mDefaultFb) {
+		framebuffer.reset();
 	}
 	wait();
 	clearForDestroy();
-	ThrowIfFailed(ctx.mSwapChain->ResizeBuffers(DEFAULT_FB_SIZE, (UINT)mWidth, (UINT)mHeight, DefaultTextureColorFormat, 0));
+	ThrowIfFailed(ctx.mSwapChain->ResizeBuffers(swapchainImageCount(), (UINT)mWidth, (UINT)mHeight, DefaultTextureColorFormat, 0));
 	ctx.width=mWidth;ctx.height=mHeight;
 	createDefaultFrameBuffer(mCurrentWindowID, mWidth, mHeight);
 	begin();
@@ -843,6 +857,19 @@ void DriverDx12::presentFrame() {
 }
 
 void DriverDx12::finishPresent() {
+	if (settings.pipelined()) {
+		collectCompletedFrames();
+		mRecordingSlot = (mRecordingSlot + 1) % mRecordingSlots.size();
+		auto& slot = mRecordingSlots[mRecordingSlot];
+		if (slot.Completion.Value) {
+			waitForCompletion(slot.Completion);
+			collectCompletedFrames();
+		}
+		mCommandAllocator = slot.Allocator;
+		mBindlessSamplerHeap = slot.Samplers;
+		begin();
+		return;
+	}
 	releaseCompletedFrame();
 	if (mFrameGeneration) {
 		mFrameGeneration->waitForPresents();
@@ -860,7 +887,16 @@ void DriverDx12::finishPresent() {
 
 void DriverDx12::begin() {
     mBindlessSnapshots.clear();mBindlessFrameResources.clear();
-    mBindlessDescriptorCursor=1064;mBindlessSamplerCursor=0;
+	mBindlessDescriptorCursor = TransientDescriptorStart + static_cast<uint32_t>(mRecordingSlot) * TransientDescriptorsPerFrame;
+	mBindlessSamplerCursor = 0;
+	mBindlessDescriptorEnd = mBindlessDescriptorCursor + TransientDescriptorsPerFrame;
+	if (settings.pipelined()) {
+		for (const auto& allocator : mRecordingSlots[mRecordingSlot].TransferAllocators) {
+			if (allocator) {
+				ThrowIfFailed(allocator->Reset());
+			}
+		}
+	}
 	mUploadRing->beginFrame(mFence ? mFence->GetCompletedValue() : 0);
 	beginCommandList(mCommandAllocator.Get(), mCommandList.Get());
 
@@ -879,11 +915,24 @@ void DriverDx12::end() {
 	std::static_pointer_cast<TextureDx12>(getDefaultFrameBuffer()->getTextures()[0])->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_PRESENT);
 	const bool timestamps = resolveTimestampQueries();
 	endCommandList(mCommandQueue.Get(), mCommandList.Get(), false);
-	completionSource()->submitted();
+	const auto token = completionSource()->submitted();
 	// Every later signal of mFence on this queue follows the submission above.
 	mUploadRing->retireFrame(mFenceValue);
 	if (timestamps) {
 		signalTimestampQueries();
+	}
+	if (settings.pipelined()) {
+		auto& slot = mRecordingSlots[mRecordingSlot];
+		slot.Completion = token;
+		slot.FenceValue = mFenceValue++;
+		slot.RayResources.swap(mRayFrameResources);
+		slot.RayDeferred.swap(mRayDeferred);
+		slot.BindlessResources.swap(mBindlessFrameResources);
+		slot.Objects.swap(mDestroyDeffered);
+		slot.Resources.swap(mDestroyDeferredResources);
+		slot.LegacyDescriptors.swap(mPendingLegacyDescriptors);
+		slot.ImGuiDescriptors.swap(mPendingImGuiSrv);
+		ThrowIfFailed(mCommandQueue->Signal(mFence.Get(), slot.FenceValue));
 	}
 }
 
@@ -945,6 +994,11 @@ void DriverDx12::setStorageBuffer(const std::string& name, std::shared_ptr<Stora
 	mStorageBuffers[bind] = std::static_pointer_cast<StorageBufferDx12>(data);
 }
 
+unsigned DriverDx12::swapchainImageCount() noexcept {
+	// One extra present image keeps a double-buffered recorder independent of WSI.
+	return DEFAULT_FB_SIZE + (settings.pipelined() ? 1 : 0);
+}
+
 void DriverDx12::createSwapChain(unsigned int windowID, unsigned width, unsigned height, bool streamline) {
 	auto& ctx = mSwapchains[windowID];
 	// Release the previous swapchain we will be recreating.
@@ -955,7 +1009,7 @@ void DriverDx12::createSwapChain(unsigned int windowID, unsigned width, unsigned
 	ctx.height = height;
 
 	DXGI_SWAP_CHAIN_DESC1 descriptor{};
-	descriptor.BufferCount = DEFAULT_FB_SIZE;
+	descriptor.BufferCount = swapchainImageCount();
 	descriptor.Width = ctx.width;
 	descriptor.Height = ctx.height;
 	descriptor.Format = DefaultTextureColorFormat;
@@ -1042,6 +1096,8 @@ D3D12_GPU_DESCRIPTOR_HANDLE DriverDx12::legacyDescriptorGpu(uint32_t index) cons
 }
 
 void DriverDx12::clearForDestroy() {
+	mImGuiFreeSrv.insert(mImGuiFreeSrv.end(), mPendingImGuiSrv.begin(), mPendingImGuiSrv.end());
+	mPendingImGuiSrv.clear();
 	for (const auto& [index, count] : mPendingLegacyDescriptors) {
 		mFreeLegacyDescriptors[count].push_back(index);
 	}
@@ -1092,7 +1148,47 @@ void DriverDx12::waitForPresentedFrame() {
 
 void DriverDx12::releaseCompletedFrame() {
 	completionSource()->completed(completionSource()->lastSubmitted());
+	if (settings.pipelined()) {
+		collectCompletedFrames();
+	}
 	clearForDestroy();
+}
+
+std::function<void()> DriverDx12::presentedFrameWait(GpuCompletionToken token) {
+	if (completion().isComplete(token)) {
+		return [] { };
+	}
+	const auto& slot = mRecordingSlots[mRecordingSlot];
+	if (slot.Completion != token) {
+		throw std::logic_error("DX12 presentation fence does not match the submission");
+	}
+	return [fence = mFence, value = slot.FenceValue, source = completionSource(), token] {
+		ThrowIfFailed(fence->SetEventOnCompletion(value, nullptr));
+		source->completed(token);
+	};
+}
+
+void DriverDx12::collectCompletedFrames() {
+	const auto completed = mFence->GetCompletedValue();
+	for (auto& slot : mRecordingSlots) {
+		if (!slot.Completion.Value || completed < slot.FenceValue) {
+			continue;
+		}
+		completionSource()->completed(slot.Completion);
+		slot.Completion = {};
+		slot.RayResources.clear();
+		slot.RayDeferred.clear();
+		slot.BindlessResources.clear();
+		slot.Objects.clear();
+		slot.Resources.clear();
+		slot.TransferLists.clear();
+		for (const auto& [index, count] : slot.LegacyDescriptors) {
+			mFreeLegacyDescriptors[count].push_back(index);
+		}
+		slot.LegacyDescriptors.clear();
+		mImGuiFreeSrv.insert(mImGuiFreeSrv.end(), slot.ImGuiDescriptors.begin(), slot.ImGuiDescriptors.end());
+		slot.ImGuiDescriptors.clear();
+	}
 }
 
 void DriverDx12::waitForCompletion(GpuCompletionToken token) {
@@ -1100,6 +1196,9 @@ void DriverDx12::waitForCompletion(GpuCompletionToken token) {
 	completionSource()->validate(token);
 	if (!completionSource()->isComplete(token)) {
 		wait();
+	}
+	else if (settings.pipelined()) {
+		collectCompletedFrames();
 	}
 }
 
@@ -1130,9 +1229,9 @@ void DriverDx12::logAdapters() {
 
 void DriverDx12::createDefaultFrameBuffer(unsigned int windowID, unsigned width, unsigned height) {
 	auto& ctx = mSwapchains[windowID];
-	for (UINT i = 0; i < DEFAULT_FB_SIZE; i++) {
+	for (UINT i = 0; i < swapchainImageCount(); i++) {
 		Microsoft::WRL::ComPtr<ID3D12Resource> backbuffer;
-		ctx.mSwapChain->GetBuffer(i, IID_PPV_ARGS(backbuffer.GetAddressOf()));
+		ThrowIfFailed(ctx.mSwapChain->GetBuffer(i, IID_PPV_ARGS(backbuffer.GetAddressOf())));
 		auto tex = IKIGAI::MEMORY::MakeShared<TextureDx12, IKIGAI::MEMORY::Category::Texture>(width, height, PixelFormat::RGBA_INT, backbuffer);
 		auto fb = std::make_shared<FrameBufferDx12>(std::vector<std::shared_ptr<TextureInterface>>{tex}, nullptr);
 		ctx.mDefaultFb[i] = fb;
@@ -1673,12 +1772,15 @@ IKIGAI::RENDER::DriverDx12::bindlessSnapshot(const ShaderReflection::Uniform& un
         }
     }
     if (const auto it=mBindlessSnapshots.find(key);it!=mBindlessSnapshots.end()) return it->second;
-    if (count>1064+65536-mBindlessDescriptorCursor || (textures && count>2048-mBindlessSamplerCursor))
-        throw std::runtime_error("Bindless descriptor snapshot capacity exhausted in current frame");
-    auto cpu=mDescriptorHeap->GetCPUDescriptorHandleForHeapStart();cpu.ptr+=SIZE_T(mBindlessDescriptorCursor)*mDescriptorIncSize;
-    auto gpu=mDescriptorHeap->GetGPUDescriptorHandleForHeapStart();gpu.ptr+=UINT64(mBindlessDescriptorCursor)*mDescriptorIncSize;
-    auto samplerCpu=mBindlessSamplerHeap->GetCPUDescriptorHandleForHeapStart();
-    auto samplerGpu=mBindlessSamplerHeap->GetGPUDescriptorHandleForHeapStart();
+	if (count > mBindlessDescriptorEnd - mBindlessDescriptorCursor || (textures && count > BindlessSamplerCapacity - mBindlessSamplerCursor)) {
+		throw std::runtime_error("Bindless descriptor snapshot capacity exhausted in current frame");
+	}
+	auto cpu = mDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	cpu.ptr += SIZE_T(mBindlessDescriptorCursor) * mDescriptorIncSize;
+	auto gpu = mDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+	gpu.ptr += UINT64(mBindlessDescriptorCursor) * mDescriptorIncSize;
+	auto samplerCpu = mBindlessSamplerHeap->GetCPUDescriptorHandleForHeapStart();
+	auto samplerGpu=mBindlessSamplerHeap->GetGPUDescriptorHandleForHeapStart();
     const auto samplerStride=mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
     samplerCpu.ptr+=SIZE_T(mBindlessSamplerCursor)*samplerStride;samplerGpu.ptr+=UINT64(mBindlessSamplerCursor)*samplerStride;
     for (uint32_t i=0;i<count;++i) {

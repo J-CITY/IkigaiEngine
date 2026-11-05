@@ -193,8 +193,11 @@ void SetCliRenderExecutorOverride(std::string_view name) {
 	else if (value == "threaded") {
 		gCliExecution = RenderSettings::Execution::THREADED;
 	}
+	else if (value == "pipelined") {
+		gCliExecution = RenderSettings::Execution::PIPELINED;
+	}
 	else {
-		throw std::invalid_argument("Invalid render executor; expected immediate/deferred/threaded");
+		throw std::invalid_argument("Invalid render executor; expected immediate/deferred/threaded/pipelined");
 	}
 }
 
@@ -241,12 +244,16 @@ void ResolveRenderBackend(RenderSettings& settings) {
 		}
 	}
 	ValidateBackendAvailable(settings.backend);
+	if (settings.pipelined()
+		&& (settings.frameGeneration.technology != FrameGenerationType::OFF || settings.upscaler.technology != UpscalerType::OFF)) {
+		throw std::invalid_argument("Pipelined rendering requires frame generation and upscaling disabled");
+	}
 	if (settings.execution != RenderSettings::Execution::IMMEDIATE && settings.backend != RenderSettings::Backend::VULKAN
 		&& settings.backend != RenderSettings::Backend::DIRECTX12) {
 		throw std::invalid_argument("Deferred and threaded rendering require Vulkan or DirectX 12");
 	}
 #if !defined(_WIN32) || defined(OCULUS)
-	if (settings.execution == RenderSettings::Execution::THREADED) {
+	if (settings.execution == RenderSettings::Execution::THREADED || settings.pipelined()) {
 		throw std::invalid_argument("Threaded rendering is supported on Windows");
 	}
 #endif
