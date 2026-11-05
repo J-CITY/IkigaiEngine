@@ -1,0 +1,62 @@
+#pragma once
+#include <cstddef>
+#include <cstdint>
+
+namespace IKIGAI::RENDER {
+class DriverInterface;
+
+enum class OpCode : uint8_t {
+	LAMBDA,
+	DRAW,
+	DRAW_INDEXED,
+	DRAW_MESH,
+	SET_VIEWPORT,
+	SET_SCISSOR,
+	SET_SHADER,
+	SET_VERTEX_BUFFER,
+	SET_INDEX_BUFFER,
+	SET_TEXTURE,
+	SET_UNIFORM_BUFFER,
+	SET_STORAGE_BUFFER,
+	SET_TEXTURE_NAMED,
+	SET_UNIFORM_BUFFER_NAMED,
+	SET_STORAGE_BUFFER_NAMED,
+	SET_MSAA,
+	CLEAR,
+	SET_PRIMITIVE_MODE,
+	SET_RASTERIZATION,
+	SET_BLEND,
+	SET_DEPTH,
+	SET_STENCIL,
+	SET_CULL,
+	SET_CLEAR_COLOR_VEC,
+	SET_CLEAR_COLOR_FLOAT,
+	SET_TRIANGLE_ORIENTATION,
+	RESET_VIEWPORT,
+	RESET_SCISSOR,
+	RESET_BLEND,
+	RESET_DEPTH,
+	RESET_STENCIL,
+	BEGIN,
+	END,
+	SUBMIT,
+	CLEANUP,
+	SET_FRAMEBUFFER,
+	RESET_FRAMEBUFFER,
+	SET_PUSH_CONSTANT,
+	FILL_BUFFER,
+	COPY_BUFFER,
+	DRAW_INDEXED_INDIRECT,
+	DRAW_INDEXED_INDIRECT_COUNT,
+	DISPATCH_INDIRECT,
+	EXIT
+};
+
+struct CommandHeader {
+	OpCode op = OpCode::EXIT;
+	size_t size = 0;
+};
+
+using CommandDispatch = void (*)(const CommandHeader*, DriverInterface*);
+void DispatchRenderCommand(const CommandHeader* command, DriverInterface* driver);
+}

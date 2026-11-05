@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <memory>
 #include <type_traits>
 
@@ -6,6 +7,7 @@
 #include "backends/interface/frameBufferInterface.h"
 #include "backends/interface/meshInterface.h"
 #include "diagnostics/renderStatistics.h"
+#include "executors/renderExecutor.h"
 
 namespace IKIGAI::RENDER {
 class MaterialInterface;
@@ -42,280 +44,162 @@ public:
 class DriverInterface;
 class Renderer;
 
-enum class OpCode : uint8_t {
-	LAMBDA,
-	DRAW,
-	DRAW_INDEXED,
-	DRAW_MESH,
-	SET_VIEWPORT,
-	SET_SCISSOR,
-	SET_SHADER,
-	SET_VERTEX_BUFFER,
-	SET_INDEX_BUFFER,
-	SET_TEXTURE,
-	SET_UNIFORM_BUFFER,
-	SET_STORAGE_BUFFER,
-	SET_TEXTURE_NAMED,
-	SET_UNIFORM_BUFFER_NAMED,
-	SET_STORAGE_BUFFER_NAMED,
-	SET_MSAA,
-	CLEAR,
-	SET_PRIMITIVE_MODE,
-	SET_RASTERIZATION,
-	SET_BLEND,
-	SET_DEPTH,
-	SET_STENCIL,
-	SET_CULL,
-	SET_CLEAR_COLOR_VEC,
-	SET_CLEAR_COLOR_FLOAT,
-	SET_TRIANGLE_ORIENTATION,
-	RESET_VIEWPORT,
-	RESET_SCISSOR,
-	RESET_BLEND,
-	RESET_DEPTH,
-	RESET_STENCIL,
-	BEGIN,
-	END,
-	SUBMIT,
-	CLEANUP,
-	SET_FRAMEBUFFER,
-	RESET_FRAMEBUFFER,
-	SET_PUSH_CONSTANT,
-	FILL_BUFFER,
-	COPY_BUFFER,
-	DRAW_INDEXED_INDIRECT,
-	DRAW_INDEXED_INDIRECT_COUNT,
-	DISPATCH_INDIRECT,
-	EXIT
-};
-
-struct CommandHeader {
-	OpCode op;
-	size_t size;
-};
-
 struct CmdDraw : CommandHeader {
-	uint32_t count;
-	uint32_t offset;
-	uint32_t instance;
+	uint32_t count {};
+	uint32_t offset {};
+	uint32_t instance {};
 };
 
 struct CmdDrawIndexed : CommandHeader {
-	uint32_t count;
-	uint32_t offset;
-	uint32_t instance;
+	uint32_t count {};
+	uint32_t offset {};
+	uint32_t instance {};
 };
 
 struct CmdLambda : CommandHeader {
-	std::function<void()> func;
-	// Manual constructor/destructor handling in CommandBuffer
+	std::function<void()> func {};
 };
 
 // POD wrappers for simple arguments
 template <typename T> struct CmdWrapper : CommandHeader {
-	T data;
+	T data {};
 };
 
 template <typename T> struct CmdWrapper2 : CommandHeader {
-	T data1;
-	size_t binding;
+	T data1 {};
+	size_t binding {};
 };
 
 struct CmdSetTextureNamed : CommandHeader {
-	char name[64]; // Fixed size for simplicity in POD, or handle dynamic string
-	std::shared_ptr<TextureInterface> texture;
+	char name[64] {};
+	std::shared_ptr<TextureInterface> texture {};
 };
-// For simplicity in this iteration, we might use specific structs for complex
-// types
 struct CmdSetTexture : CommandHeader {
-	size_t bind;
-	std::shared_ptr<TextureInterface> texture;
+	size_t bind {};
+	std::shared_ptr<TextureInterface> texture {};
 };
-// ... similarly for others ...
-
-// To avoid defining 20 structs here, we can use generic templates or define
-// them as needed. For the sake of the task, I will define the necessary ones or
-// a generic approach for PODs.
-
 struct CmdSetViewport : CommandHeader {
-	Viewport viewport;
+	Viewport viewport {};
 };
 struct CmdSetScissor : CommandHeader {
-	Scissor scissor;
+	Scissor scissor {};
 };
 struct CmdSetShader : CommandHeader {
-	std::shared_ptr<ShaderInterface> shader;
+	std::shared_ptr<ShaderInterface> shader {};
 };
 struct CmdSetVertexBuffer : CommandHeader {
-	std::shared_ptr<VertexBufferInterface> buffer;
+	std::shared_ptr<VertexBufferInterface> buffer {};
 };
 struct CmdSetIndexBuffer : CommandHeader {
-	std::shared_ptr<IndexBufferInterface> buffer;
+	std::shared_ptr<IndexBufferInterface> buffer {};
 };
 struct CmdSetBlending : CommandHeader {
-	Blending blending;
+	Blending blending { BlendMode::ONE, BlendMode::ZERO };
 };
 struct CmdSetDepth : CommandHeader {
-	Depth depth;
+	Depth depth {};
 };
 struct CmdSetStencil : CommandHeader {
-	Stencil stencil;
+	Stencil stencil {};
 };
 struct CmdSetCull : CommandHeader {
-	CullFace cull;
+	CullFace cull {};
 };
 struct CmdSetTriangleOrientation : CommandHeader {
-	TriangleOrientation orientation;
+	TriangleOrientation orientation {};
 };
 struct CmdSetClearColorVec : CommandHeader {
-	MATH::Vector4f color;
+	MATH::Vector4f color {};
 };
 struct CmdSetClearColorFloat : CommandHeader {
-	float r, g, b, a;
+	float r = 0.0f;
+	float g = 0.0f;
+	float b = 0.0f;
+	float a = 0.0f;
 };
 struct CmdClear : CommandHeader {
-	bool color;
-	bool depth;
-	bool stencil;
+	bool color {};
+	bool depth {};
+	bool stencil {};
 };
 struct CmdSetPrimitiveMode : CommandHeader {
-	PrimitiveMode mode;
+	PrimitiveMode mode {};
 };
 struct CmdSetRasterization : CommandHeader {
-	RasterizationMode mode;
+	RasterizationMode mode {};
 };
 struct CmdSetMSAA : CommandHeader {
-	bool value;
+	bool value {};
 };
 
 struct CmdSetUniformBuffer : CommandHeader {
-	size_t bind;
-	std::shared_ptr<UniformBufferInterface> buffer;
+	size_t bind {};
+	std::shared_ptr<UniformBufferInterface> buffer {};
 };
 struct CmdSetStorageBuffer : CommandHeader {
-	size_t bind;
-	std::shared_ptr<StorageBufferInterface> buffer;
+	size_t bind {};
+	std::shared_ptr<StorageBufferInterface> buffer {};
 };
 struct CmdSetFrameBuffer : CommandHeader {
-	std::shared_ptr<FrameBufferInterface> frameBuffer;
+	std::shared_ptr<FrameBufferInterface> frameBuffer {};
 };
 struct CmdDrawMesh : CommandHeader {
-	std::shared_ptr<MeshInterface> mesh;
-	PrimitiveMode primitive;
-	uint32_t instances;
+	std::shared_ptr<MeshInterface> mesh {};
+	PrimitiveMode primitive {};
+	uint32_t instances {};
 };
 
 struct CmdFillBuffer : CommandHeader {
-	std::shared_ptr<StorageBufferInterface> buffer;
-	size_t offset;
-	size_t size;
-	uint32_t value;
+	std::shared_ptr<StorageBufferInterface> buffer {};
+	size_t offset {};
+	size_t size {};
+	uint32_t value {};
 };
 struct CmdCopyBuffer : CommandHeader {
-	std::shared_ptr<StorageBufferInterface> source;
-	size_t sourceOffset;
-	std::shared_ptr<StorageBufferInterface> destination;
-	size_t destinationOffset;
-	size_t size;
+	std::shared_ptr<StorageBufferInterface> source {};
+	size_t sourceOffset {};
+	std::shared_ptr<StorageBufferInterface> destination {};
+	size_t destinationOffset {};
+	size_t size {};
 };
 struct CmdDrawIndexedIndirect : CommandHeader {
-	std::shared_ptr<StorageBufferInterface> arguments;
-	size_t offset;
-	uint32_t drawCount;
-	uint32_t stride;
+	std::shared_ptr<StorageBufferInterface> arguments {};
+	size_t offset {};
+	uint32_t drawCount {};
+	uint32_t stride {};
 };
 struct CmdDrawIndexedIndirectCount : CommandHeader {
-	std::shared_ptr<StorageBufferInterface> arguments;
-	size_t offset;
-	std::shared_ptr<StorageBufferInterface> count;
-	size_t countOffset;
-	uint32_t maxDrawCount;
-	uint32_t stride;
+	std::shared_ptr<StorageBufferInterface> arguments {};
+	size_t offset {};
+	std::shared_ptr<StorageBufferInterface> count {};
+	size_t countOffset {};
+	uint32_t maxDrawCount {};
+	uint32_t stride {};
 };
 struct CmdDispatchIndirect : CommandHeader {
-	std::shared_ptr<StorageBufferInterface> arguments;
-	size_t offset;
+	std::shared_ptr<StorageBufferInterface> arguments {};
+	size_t offset {};
 };
 
-// String versions need care. We can store std::string but need destructor call
-// (CmdLambda mechanism or similar). Let's use specific structs that own the
-// std::string, and CommandBuffer destruction loop will handle them if we mark
-// them. Actually, easier to use CmdLambda for complex things or just make these
-// have destructors and rely on CommandBuffer's clear. We will implement a smart
-// iterate-and-destroy in CommandBuffer::clear().
+// Named packets own their names until replay or cancellation.
 struct CmdStringResource : CommandHeader {
-	std::string name;
-	std::shared_ptr<TextureInterface> texture; // or uniform/storage
+	std::string name {};
+	std::shared_ptr<TextureInterface> texture {};
 };
 struct CmdStringUniformResource : CommandHeader {
-	std::string name;
-	std::shared_ptr<UniformBufferInterface> buffer;
+	std::string name {};
+	std::shared_ptr<UniformBufferInterface> buffer {};
 };
 struct CmdStringStorageResource : CommandHeader {
-	std::string name;
-	std::shared_ptr<StorageBufferInterface> buffer;
-};
-
-class RenderExecutorInterface {
-public:
-	virtual ~RenderExecutorInterface() = default;
-	virtual void* allocate(size_t size) = 0;
-	virtual void submit(CommandHeader* header, DriverInterface* driver) = 0;
-	virtual void flush(DriverInterface* driver) = 0;
-
-	template <typename T, typename... Args> void submit(DriverInterface* driver, OpCode op, Args&&... args) {
-		size_t size = sizeof(T);
-		size_t alignedSize = (size + 7) & ~7;
-		T* ptr = reinterpret_cast<T*>(allocate(alignedSize));
-		if constexpr (std::is_same_v<T, CommandHeader>) {
-			new (ptr) T { op, alignedSize };
-		}
-		else {
-			new (ptr) T { { op, alignedSize }, std::forward<Args>(args)... };
-		}
-		submit(ptr, driver);
-	}
-};
-
-class ImmediateExecutor : public RenderExecutorInterface {
-	std::vector<uint8_t> mScratch;
-
-public:
-	ImmediateExecutor() {
-		mScratch.reserve(1024);
-	}
-	void* allocate(size_t size) override {
-		if (mScratch.size() < size)
-			mScratch.resize(size);
-		return mScratch.data();
-	}
-	void submit(CommandHeader* header, DriverInterface* driver) override;
-	void flush(DriverInterface* driver) override { }
-};
-
-class BufferedExecutor : public RenderExecutorInterface {
-	std::vector<uint8_t> mBuffer;
-
-public:
-	BufferedExecutor() {
-		mBuffer.reserve(1024 * 1024);
-	}
-	void* allocate(size_t size) override {
-		size_t offset = mBuffer.size();
-		mBuffer.resize(offset + size);
-		return mBuffer.data() + offset;
-	}
-	void submit(CommandHeader* header, DriverInterface* driver) override {
-		// No-op, data is already in buffer
-	}
-	void flush(DriverInterface* driver) override;
+	std::string name {};
+	std::shared_ptr<StorageBufferInterface> buffer {};
 };
 
 struct CmdSetPushConstant : CommandHeader {
-	ShaderType stage;
-	uint32_t offset;
-	uint32_t dataSize;
-	std::byte data[128];
+	ShaderType stage {};
+	uint32_t offset {};
+	uint32_t dataSize {};
+	std::array<std::byte, 128> data {};
 };
 
 class Renderer {
@@ -337,7 +221,7 @@ public:
 
 	// Hybrid approach:
 	void execute(std::function<void()> func) {
-		push<CmdLambda>(OpCode::LAMBDA, func);
+		push<CmdLambda>(OpCode::LAMBDA, std::move(func));
 	}
 
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) {
@@ -501,18 +385,7 @@ public:
 		push<CommandHeader>(OpCode::RESET_FRAMEBUFFER);
 	}
 
-	void setPushConstant(ShaderType stage, uint32_t offset, uint32_t dataSize, const void* data) {
-		size_t allocSize = sizeof(CmdSetPushConstant);
-		size_t alignedSize = (allocSize + 7) & ~7;
-		auto* cmd = reinterpret_cast<CmdSetPushConstant*>(mExecutor->allocate(alignedSize));
-		cmd->op = OpCode::SET_PUSH_CONSTANT;
-		cmd->size = alignedSize;
-		cmd->stage = stage;
-		cmd->offset = offset;
-		cmd->dataSize = dataSize;
-		memcpy(cmd->data, data, dataSize);
-		mExecutor->submit(cmd, mDriver);
-	}
+	void setPushConstant(ShaderType stage, uint32_t offset, uint32_t dataSize, const void* data);
 
 	std::shared_ptr<UniformBufferInterface> createUniformBuffer(const void* data, size_t size) {
 		return mDriver->createUniformBuffer(data, size);
@@ -596,9 +469,11 @@ public:
 		return mDriver->createMaterial(res, allocator, deleter);
 	}
 
-	// Flush commands to executor (Buffer mode)
+	void cancel() noexcept;
+
+	// Replay CPU packets; this does not wait for GPU completion.
 	void flush() {
-		if (mExecutor && mDriver) {
+		if (mExecutor) {
 			mExecutor->flush(mDriver);
 		}
 	}

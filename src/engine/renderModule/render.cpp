@@ -2,6 +2,8 @@
 
 #include "backends/interface/textureInterface.h"
 #include "diagnostics/renderStatistics.h"
+#include <cstring>
+#include <stdexcept>
 
 namespace IKIGAI::RENDER {
 
@@ -214,7 +216,9 @@ struct PacketDispatcher {
 			break;
 		case OpCode::SET_PUSH_CONSTANT: {
 			auto* cmd = reinterpret_cast<const CmdSetPushConstant*>(header);
-			driver->setPushConstant(cmd->stage, cmd->offset, cmd->dataSize, cmd->data);
+			if (cmd->dataSize) {
+				driver->setPushConstant(cmd->stage, cmd->offset, cmd->dataSize, cmd->data.data());
+			}
 			break;
 		}
 		case OpCode::FILL_BUFFER: {
@@ -246,114 +250,41 @@ struct PacketDispatcher {
 			break;
 		}
 
+		case OpCode::EXIT:
+			break;
 		default:
-			break;
-		}
-	}
-
-	static void Destruct(CommandHeader* header) {
-		switch (header->op) {
-		case OpCode::LAMBDA: {
-			reinterpret_cast<CmdLambda*>(header)->func.~function();
-			break;
-		}
-		case OpCode::SET_SHADER: {
-			reinterpret_cast<CmdSetShader*>(header)->shader.~shared_ptr();
-			break;
-		}
-		case OpCode::SET_VERTEX_BUFFER: {
-			reinterpret_cast<CmdSetVertexBuffer*>(header)->buffer.~shared_ptr();
-			break;
-		}
-		case OpCode::DRAW_MESH: {
-			reinterpret_cast<CmdDrawMesh*>(header)->mesh.~shared_ptr();
-			break;
-		}
-		case OpCode::SET_INDEX_BUFFER: {
-			reinterpret_cast<CmdSetIndexBuffer*>(header)->buffer.~shared_ptr();
-			break;
-		}
-		case OpCode::SET_TEXTURE: {
-			reinterpret_cast<CmdSetTexture*>(header)->texture.~shared_ptr();
-			break;
-		}
-		case OpCode::SET_UNIFORM_BUFFER: {
-			reinterpret_cast<CmdSetUniformBuffer*>(header)->buffer.~shared_ptr();
-			break;
-		}
-		case OpCode::SET_STORAGE_BUFFER: {
-			reinterpret_cast<CmdSetStorageBuffer*>(header)->buffer.~shared_ptr();
-			break;
-		}
-		case OpCode::SET_TEXTURE_NAMED: {
-			auto* cmd = reinterpret_cast<CmdStringResource*>(header);
-			// cmd->name.~string();
-			cmd->texture.~shared_ptr();
-			break;
-		}
-		case OpCode::SET_UNIFORM_BUFFER_NAMED: {
-			auto* cmd = reinterpret_cast<CmdStringUniformResource*>(header);
-			// cmd->name.~string();
-			cmd->buffer.~shared_ptr();
-			break;
-		}
-		case OpCode::SET_STORAGE_BUFFER_NAMED: {
-			auto* cmd = reinterpret_cast<CmdStringStorageResource*>(header);
-			// cmd->name.~string();
-			cmd->buffer.~shared_ptr();
-			break;
-		}
-		case OpCode::SET_FRAMEBUFFER: {
-			reinterpret_cast<CmdSetFrameBuffer*>(header)->frameBuffer.~shared_ptr();
-			break;
-		}
-		case OpCode::FILL_BUFFER: {
-			reinterpret_cast<CmdFillBuffer*>(header)->buffer.~shared_ptr();
-			break;
-		}
-		case OpCode::COPY_BUFFER: {
-			auto* cmd = reinterpret_cast<CmdCopyBuffer*>(header);
-			cmd->source.~shared_ptr();
-			cmd->destination.~shared_ptr();
-			break;
-		}
-		case OpCode::DRAW_INDEXED_INDIRECT: {
-			reinterpret_cast<CmdDrawIndexedIndirect*>(header)->arguments.~shared_ptr();
-			break;
-		}
-		case OpCode::DRAW_INDEXED_INDIRECT_COUNT: {
-			auto* cmd = reinterpret_cast<CmdDrawIndexedIndirectCount*>(header);
-			cmd->arguments.~shared_ptr();
-			cmd->count.~shared_ptr();
-			break;
-		}
-		case OpCode::DISPATCH_INDIRECT: {
-			reinterpret_cast<CmdDispatchIndirect*>(header)->arguments.~shared_ptr();
-			break;
-		}
-		default:
-			break;
+			throw std::invalid_argument("Invalid render command opcode");
 		}
 	}
 };
 
-void ImmediateExecutor::submit(CommandHeader* header, DriverInterface* driver) {
-	PacketDispatcher::Dispatch(header, driver);
-	PacketDispatcher::Destruct(header);
-	// Scratch buffer is reused next allocate, no need to clear explicitly, or we can clear
-	mScratch.clear();
+void DispatchRenderCommand(const CommandHeader* command, DriverInterface* driver) {
+	if (!command) {
+		throw std::invalid_argument("Render command is null");
+	}
+	if (!driver && command->op != OpCode::LAMBDA && command->op != OpCode::EXIT) {
+		throw std::invalid_argument("Render command requires a driver");
+	}
+	PacketDispatcher::Dispatch(command, driver);
 }
 
-void BufferedExecutor::flush(DriverInterface* driver) {
-	size_t offset = 0;
-	while (offset < mBuffer.size()) {
-		auto* header = reinterpret_cast<CommandHeader*>(mBuffer.data() + offset);
-		PacketDispatcher::Dispatch(header, driver);
-		PacketDispatcher::Destruct(header);
-		offset += header->size;
+void Renderer::setPushConstant(ShaderType stage, uint32_t offset, uint32_t dataSize, const void* data) {
+	std::array<std::byte, 128> payload {};
+	if (dataSize > payload.size() || (dataSize && !data)) {
+		throw std::invalid_argument("Invalid push constant payload");
 	}
-	mBuffer.clear();
+	if (dataSize) {
+		std::memcpy(payload.data(), data, dataSize);
+	}
+	push<CmdSetPushConstant>(OpCode::SET_PUSH_CONSTANT, stage, offset, dataSize, payload);
 }
+
+void Renderer::cancel() noexcept {
+	if (mExecutor) {
+		mExecutor->cancel();
+	}
+}
+
 }
 
 /*#include "frustum.h"

@@ -20,7 +20,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Configure without graphics SDKs or local test sources
         run: cmake -S cmake/core -B build/core -DCMAKE_BUILD_TYPE=Release
-      - name: Build production task and coroutine libraries
+      - name: Build production task, coroutine and render command libraries
         run: cmake --build build/core --config Release --parallel 2
 
   production-assets:
