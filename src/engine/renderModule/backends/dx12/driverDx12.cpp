@@ -405,7 +405,7 @@ void DriverDx12::createDescriptorHeaps() {
 		.NumDescriptors = TransientDescriptorStart + TransientDescriptorsPerFrame * settings.framesInFlight,
 		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 	};
-	mDevice->CreateDescriptorHeap(&descriptor, IID_PPV_ARGS(&mDescriptorHeap));
+	ThrowIfFailed(mDevice->CreateDescriptorHeap(&descriptor, IID_PPV_ARGS(&mDescriptorHeap)));
     D3D12_DESCRIPTOR_HEAP_DESC samplers{};samplers.Type=D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
 	samplers.NumDescriptors = BindlessSamplerCapacity;
 	samplers.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
@@ -1133,7 +1133,9 @@ uint32_t DriverDx12::allocateLegacyDescriptors(uint32_t count) {
 		return index;
 	}
 	if (mLegacyDescriptorCursor + count > LegacyDescriptorCapacity) {
-		throw std::runtime_error("Legacy descriptor range exhausted; bindless/ImGui ranges are reserved");
+		throw std::runtime_error("Legacy descriptor range exhausted: capacity=" + std::to_string(LegacyDescriptorCapacity)
+			+ " requested=" + std::to_string(count) + " freeSingles=" + std::to_string(mFreeLegacyDescriptors[1].size())
+			+ " freePairs=" + std::to_string(mFreeLegacyDescriptors[2].size()) + " pendingRuns=" + std::to_string(mPendingLegacyDescriptors.size()));
 	}
 	const uint32_t index = mLegacyDescriptorCursor;
 	mLegacyDescriptorCursor += count;

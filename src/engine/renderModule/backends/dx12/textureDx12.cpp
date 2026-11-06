@@ -218,10 +218,13 @@ void TextureDx12::create(const TextureResource& descriptor, const std::vector<vo
 		mResource = d3dUtil::CreateResource(desc, D3D12_HEAP_TYPE_DEFAULT, mCurrentState, nullptr, allocFlags);
 	}
 	// SRV (and UAV for storage textures) take consecutive legacy slots; recreate() returns the previous run.
+	const uint32_t descriptorCount = descriptor.storage ? 2u : 1u;
+	const uint32_t descriptorIndex = d3dUtil::GetDriver()->allocateLegacyDescriptors(descriptorCount);
 	d3dUtil::GetDriver()->releaseLegacyDescriptors(mDescriptorIndex, mDescriptorCount);
-	mDescriptorCount = descriptor.storage ? 2 : 1;
-	mDescriptorIndex = d3dUtil::GetDriver()->allocateLegacyDescriptors(mDescriptorCount);
-	SetGpuMemoryKindDx12(mResource.Get(), PROFILER::GpuResourceKind::Texture, mPath.empty() && !descriptor.pathTexture.empty() ? descriptor.pathTexture.front().c_str() : mPath.c_str());
+	mDescriptorCount = descriptorCount;
+	mDescriptorIndex = descriptorIndex;
+	SetGpuMemoryKindDx12(mResource.Get(), PROFILER::GpuResourceKind::Texture,
+		mPath.empty() && !descriptor.pathTexture.empty() ? descriptor.pathTexture.front().c_str() : mPath.c_str());
 
 	if (descriptor.texType != TextureType::DEPTH) {
 		DirectX::CreateShaderResourceView(d3dUtil::GetDriver()->getDevice().Get(), mResource.Get(),

@@ -236,13 +236,14 @@ public:
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE& getDescriptorHeapCPUHandle() {
 		if (mDescriptorHeap
-			&& mDescriptorHeapCPUHandle.ptr >= mDescriptorHeap->GetCPUDescriptorHandleForHeapStart().ptr + SIZE_T(1000) * mDescriptorIncSize) {
+			&& mDescriptorHeapCPUHandle.ptr
+				>= mDescriptorHeap->GetCPUDescriptorHandleForHeapStart().ptr + SIZE_T(LegacyDescriptorCapacity) * mDescriptorIncSize) {
 			throw std::runtime_error("Legacy descriptor range exhausted; bindless/ImGui ranges are reserved");
 		}
 		return mDescriptorHeapCPUHandle;
 	}
-	// Slots of the legacy range [0, 1000) of the shader-visible heap used by textures and storage buffers.
-	// Released slots are recycled only after the end-of-frame GPU wait, so recorded commands never see them reused.
+	// Persistent slots in the shader-visible heap for textures and storage buffers.
+	// Released slots are recycled after GPU completion.
 	static constexpr uint32_t InvalidLegacyDescriptor = UINT32_MAX;
 	uint32_t allocateLegacyDescriptors(uint32_t count);
 	void releaseLegacyDescriptors(uint32_t index, uint32_t count);
@@ -304,7 +305,8 @@ private:
 
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mDescriptorHeap;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> mBindlessSamplerHeap;
-	static constexpr uint32_t LegacyDescriptorCapacity = 1000;
+	// Pipeline reload and resize overlap new views with those retained by in-flight frames.
+	static constexpr uint32_t LegacyDescriptorCapacity = 4096;
 	static constexpr uint32_t ImGuiDescriptorCapacity = 64;
 	static constexpr uint32_t TransientDescriptorStart = LegacyDescriptorCapacity + ImGuiDescriptorCapacity;
 	static constexpr uint32_t TransientDescriptorsPerFrame = 65536;

@@ -47,8 +47,9 @@ namespace IKIGAI::RENDER {
 
 			auto* driver = d3dUtil::GetDriver();
 			// SRV and UAV take two consecutive legacy slots; growth re-runs init() and returns the old pair.
+			const uint32_t descriptorIndex = driver->allocateLegacyDescriptors(2);
 			driver->releaseLegacyDescriptors(mDescriptorIndex, 2);
-			mDescriptorIndex = driver->allocateLegacyDescriptors(2);
+			mDescriptorIndex = descriptorIndex;
 			mSrvHeapBegin = driver->legacyDescriptorCpu(mDescriptorIndex);
 			mGpuSrvDescriptorHandle = driver->legacyDescriptorGpu(mDescriptorIndex);
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
