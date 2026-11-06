@@ -1713,13 +1713,16 @@ void DriverVk::createSwapchainFrames(unsigned windowID, const std::vector<vk::Im
 	const auto format = mSurfaceFormat.format;
 	mCurrentState.mFrameBuffer.reset();
 
-	// Texture destruction enqueues VMA images into the current frame. Keep all
-	// queues alive until every old framebuffer has released its depth image.
+	// Resize has drained GPU work. Retire frame resources before destroying the
+	// queues since releasing a framebuffer or TLAS can enqueue more resources.
 	for (auto& frame : ctx.frames) {
 		frame.mFrameBuffer.reset();
 	}
 	for (auto& frame : ctx.frames) {
-		frame.destroyDeferred.clear();
+		releaseFrame(frame);
+	}
+	if (windowID == mCurrentWindowID && mFrameIndex < ctx.frames.size()) {
+		releaseFrame(ctx.frames[mFrameIndex]);
 	}
 	ctx.frames.clear();
 
