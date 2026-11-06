@@ -11,6 +11,7 @@
 #include "frustum.h"
 #include "gameRendererInterface.h"
 #include "historyValidity.h"
+#include "indirectLighting/ddgiScroll.h"
 #include "indirectLighting/temporalDenoiseSettings.h"
 #include "light.h"
 #include "primitiveRender.h"
@@ -441,6 +442,7 @@ struct RenderGraphPipeline {
 	bool mUpscalerFailed = false;
 	// Per-effect temporal history validity (GI, reflections, shadows, presentation, upscaler).
 	HistoryValidity mHistory;
+	DdgiScrollRuntime mDdgiScroll;
 	// Temporal denoiser buffers and light change state (indirectLighting/temporalDenoiseStage.h).
 	TemporalDenoiseRuntime mTemporalDenoise;
 	std::map<std::string, std::shared_ptr<TextureInterface>> mAllocatedTextures;

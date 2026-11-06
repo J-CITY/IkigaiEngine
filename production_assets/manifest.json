@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "bundleVersion": "renderer-gi1-2026-11-06",
+  "bundleVersion": "renderer-gi2-2026-11-06",
   "files": [
     {
       "path": "engine/materials/aerialProbe.mat",
@@ -301,6 +301,11 @@
       "path": "engine/materials/render/portable/ddgiSample.mat",
       "size": 371,
       "sha256": "79cf6b980c4b411f7991b1dad49e1387f59205514eb574ca77b3b67f7ff9ddaa"
+    },
+    {
+      "path": "engine/materials/render/portable/ddgiScrollUpdate.mat",
+      "size": 128,
+      "sha256": "9f3872a62e1564290ae833b1307712cd53b7e471556eb5eee88453b81e4edeb8"
     },
     {
       "path": "engine/materials/render/portable/ddgiUpdate.mat",
@@ -1304,8 +1309,8 @@
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/screenProbeSettings.glsl",
-      "size": 1175,
-      "sha256": "8e781ae0873306597e85d00db9c5e7d9c02f649371f7f877d08ab85347231e71"
+      "size": 1187,
+      "sha256": "b2e15c284e071576f5929e6f95eb5bbb5f479456dd179ab5c443d04d1f228497"
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spHzbClosest.comp.glsl",
@@ -1369,8 +1374,8 @@
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spRayQueryTrace.comp",
-      "size": 8280,
-      "sha256": "d2331b742bf232513c0a7b1d162665d896f5643e9966a7362c3c5937c08a0e31"
+      "size": 8312,
+      "sha256": "5110b2ce22d988f3b7accc25f91d6f1ff3ad92a9bc3a3df17d5a8109edd6e317"
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spRayQueryTrace.shader",
@@ -1489,8 +1494,8 @@
     },
     {
       "path": "engine/shaders/raytracing/ddgi.rgen",
-      "size": 3393,
-      "sha256": "2e9631d893ed0da865090f844bbc125c2a14c18d6d4b208ee9842f8948c7f8c0"
+      "size": 132,
+      "sha256": "77de91b4398ae8c3e5676709ca6fd43bb275d13a0e888618940efd9bbe63bcb8"
     },
     {
       "path": "engine/shaders/raytracing/ddgi.shader",
@@ -1499,8 +1504,28 @@
     },
     {
       "path": "engine/shaders/raytracing/ddgiSample.glsl",
-      "size": 1661,
-      "sha256": "dcdfcb4052581bdcdf5485035bb872cb643a92f2e7f1ab431b6e3d4c62c7e6c1"
+      "size": 2221,
+      "sha256": "9116f3be888e9d86fb23de2732ff7b3e75053ae6f509cb240c2ee79f58d838f5"
+    },
+    {
+      "path": "engine/shaders/raytracing/ddgiScroll.glsl",
+      "size": 246,
+      "sha256": "77b392fddcd089062c787d6c75ae96e59d70620fe4ffa271dac152ac9a4fd583"
+    },
+    {
+      "path": "engine/shaders/raytracing/ddgiScroll.rgen",
+      "size": 156,
+      "sha256": "589c150536d12587f024d0142794f74ca6beb08c8ce676d127ec9ac5cf091cf8"
+    },
+    {
+      "path": "engine/shaders/raytracing/ddgiScroll.shader",
+      "size": 1037,
+      "sha256": "157092b01ba49750f6e4373c43c434e80597ef40da4c47c3641e65b7db4540fe"
+    },
+    {
+      "path": "engine/shaders/raytracing/ddgiTrace.glsl",
+      "size": 4040,
+      "sha256": "0d39747cbd8315a82e3f0fb25881616e968bec74ee78b8d2a8afee32bef07d2d"
     },
     {
       "path": "engine/shaders/raytracing/frame.glsl",
@@ -2358,9 +2383,24 @@
       "sha256": "81e97f636902ee9f47ddd9050f089576159cfbfac64d69708f3a8e83f8b1b03d"
     },
     {
+      "path": "engine/shaders/render/portable/ddgiScrollUpdate.comp.glsl",
+      "size": 112,
+      "sha256": "df16c34d52763145ca015d84617f693504332f3487cc370b87be40886dd51e77"
+    },
+    {
+      "path": "engine/shaders/render/portable/ddgiScrollUpdate.shader",
+      "size": 95,
+      "sha256": "c25e30b90c7da7d29b36dfc689249436be72b84477efce522d75e5afe1eaa743"
+    },
+    {
       "path": "engine/shaders/render/portable/ddgiUpdate.comp.glsl",
-      "size": 2457,
-      "sha256": "bb4c7937e07d4775b359d8557425f5e430009cd3121867b6b0448584c7400139"
+      "size": 89,
+      "sha256": "ce589fd0bd9b8a5fc113042da6a0429d90eb64d282524422b93ef7ce329b725d"
+    },
+    {
+      "path": "engine/shaders/render/portable/ddgiUpdate.glsl",
+      "size": 3885,
+      "sha256": "cb1e4fccdf854dd6342389a77bc2e9e64a77a37a44636ff4162177e491a40a26"
     },
     {
       "path": "engine/shaders/render/portable/ddgiUpdate.shader",

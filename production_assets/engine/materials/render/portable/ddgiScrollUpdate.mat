@@ -1,0 +1,6 @@
+{
+  "ShaderPath": "/shaders/render/portable/ddgiScrollUpdate.shader",
+  "Uniforms": {
+    "data_UBOHysteresis": 0.9
+  }
+}

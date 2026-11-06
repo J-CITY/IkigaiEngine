@@ -60,7 +60,8 @@ float rtLightVisibility(vec3 p,vec3 n,vec3 l,float distance) {
 vec3 spDdgi(vec3 p,vec3 n,out float confidence) {
     confidence=0.0;
     if(!spChainEnabled(SP_CHAIN_DDGI)||ScreenProbe.Chain.y==0)return vec3(0.0);
-    vec3 irradiance=probeIrradiance(p,n,ScreenProbe.DdgiOriginSpacing,ScreenProbe.DdgiCounts.xyz,DdgiIrradiance,DdgiDistance,confidence);
+    vec3 irradiance=probeIrradiance(p,n,ScreenProbe.DdgiOriginSpacing,ScreenProbe.DdgiCounts.xyz,DdgiIrradiance,DdgiDistance,
+        ScreenProbe.Chain.w!=0,confidence);
     return max(irradiance,vec3(0.0))*max(ScreenProbe.RayQuery.z,0.0);
 }
 

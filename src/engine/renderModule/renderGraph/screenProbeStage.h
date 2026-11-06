@@ -10,4 +10,5 @@ class Renderer;
 void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor);
 // Creates the ScreenProbeBufferName uniform buffer from the resolved block (no-op when the block is disabled).
 void CreateScreenProbeBuffer(RenderGraphPipeline& pipeline, Renderer& renderer);
+void UpdateScrollingDdgi(RenderGraphPipeline& pipeline, Renderer& renderer, const MATH::Vector3f& camera);
 }

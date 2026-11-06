@@ -895,6 +895,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	if (rayFrameNeeded) {
 		mRayFrameUbo = mContext.render->createUniformBuffer<RayFrameData>(rayFrameData());
 	}
+	UpdateScrollingDdgi(*mRenderPipeline, *mContext.render, cameraPosition);
 	mContext.render->updateUniformBuffer(mShadowUbo, mShadowData);
 
 	// Re-establish physical resources before applying disabled-stage aliases.

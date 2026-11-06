@@ -8,7 +8,7 @@ layout(std140,set=0,binding=5) uniform ScreenProbeSettingsBlock {
     vec4 Trace;              // Thickness (view units), Intensity, MissConfidence, PreviousSceneWeight
     ivec4 Filter;            // UseHistory, MaxHistory, SpatialRadius, HzbMaxLevel
     vec4 Weights;            // DepthSigma (relative plane distance), NormalPower, ClampSigma, ConfidenceHistory
-    ivec4 Chain;             // ChainMask (SP_CHAIN_* bits), DdgiValid, StablePlacement, 0
+    ivec4 Chain;             // ChainMask (SP_CHAIN_* bits), DdgiValid, StablePlacement, DdgiScrolling
     vec4 RayQuery;           // RayQueryMaxDistance, RayQueryConfidence, DdgiIntensity, 0
     vec4 DdgiOriginSpacing;  // DDGI grid origin xyz, probe spacing
     ivec4 DdgiCounts;        // DDGI probe counts xyz, rays per probe

@@ -52,6 +52,8 @@ struct ScreenProbeSettings {
 	bool UseRayQuery = true;
 	// Read the DDGI volume of DdgiStage: secondary light at ray query hits and radiance beyond RayQueryMaxDistance.
 	bool UseDdgi = false;
+	// Zero uses the fixed grid. A positive value enables camera-relative DDGI and caps traced probes per frame.
+	int DdgiProbeBudget = 0;
 	// Range of the ray query trace in world units; longer rays continue in the DDGI volume, then the environment.
 	float RayQueryMaxDistance = 30.0f;
 	// Confidence of ray query samples (screen hits count 1, DDGI and environment samples count MissConfidence).
@@ -98,6 +100,7 @@ struct ScreenProbeSettings {
 			.field(&Self::ConfidenceHistory, "ConfidenceHistory", default_ { 4.0f })
 			.field(&Self::UseRayQuery, "UseRayQuery", default_ { true })
 			.field(&Self::UseDdgi, "UseDdgi", default_ { false })
+			.field(&Self::DdgiProbeBudget, "DdgiProbeBudget", default_ { 0 })
 			.field(&Self::RayQueryMaxDistance, "RayQueryMaxDistance", default_ { 30.0f })
 			.field(&Self::RayQueryConfidence, "RayQueryConfidence", default_ { 0.9f })
 			.field(&Self::DdgiIntensity, "DdgiIntensity", default_ { 1.0f })
@@ -137,7 +140,7 @@ struct ScreenProbeGpuSettings {
 	// 1 when the DDGI probe grid below was resolved from DdgiStage.
 	int32_t DdgiValid = 0;
 	int32_t StablePlacement = 0;
-	int32_t ChainReserved1 = 0;
+	int32_t DdgiScrolling = 0;
 	float RayQueryMaxDistance = 30.0f;
 	float RayQueryConfidence = 0.9f;
 	float DdgiIntensity = 1.0f;
