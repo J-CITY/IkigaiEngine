@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "bundleVersion": "renderer-gi2-2026-11-06",
+  "bundleVersion": "renderer-gi3-2026-11-06",
   "files": [
     {
       "path": "engine/materials/aerialProbe.mat",
@@ -1374,8 +1374,8 @@
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spRayQueryTrace.comp",
-      "size": 8312,
-      "sha256": "5110b2ce22d988f3b7accc25f91d6f1ff3ad92a9bc3a3df17d5a8109edd6e317"
+      "size": 8680,
+      "sha256": "85a090617526f6e9550e2560de6d2e6d5205a20fd3c3b8381719332b51860564"
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spRayQueryTrace.shader",
@@ -1464,8 +1464,8 @@
     },
     {
       "path": "engine/shaders/raytracing/alpha.rahit",
-      "size": 765,
-      "sha256": "a4c7453d7ec99544f157974d8a11c0ebf2c0721e6478f81f5cd5b18c058de6cd"
+      "size": 949,
+      "sha256": "3bb0979f8511dbb586a77453171f1ab266b7b15bb731fbfa68e8c320af42a133"
     },
     {
       "path": "engine/shaders/raytracing/buildTriangles.comp",
@@ -1624,8 +1624,8 @@
     },
     {
       "path": "engine/shaders/raytracing/surface.rchit",
-      "size": 1363,
-      "sha256": "6b3ec8b74191b47f0959be8dd9244bfd2e6f3ed1a881e88814fe8df30df20eeb"
+      "size": 1550,
+      "sha256": "1779be5aed459fb8677b488f26dde1739ce97eb585c7abb9da03a86cab022029"
     },
     {
       "path": "engine/shaders/raytracing/surface.rmiss",
@@ -1634,8 +1634,8 @@
     },
     {
       "path": "engine/shaders/raytracing/visibility.comp",
-      "size": 3785,
-      "sha256": "7be5524520cae3541934678ba88f5c883f9ae6df3dd6257c0a4ded34a91fe3f1"
+      "size": 3981,
+      "sha256": "f1db468030481bf134c28607e67994c43d3702f4fd479b57f043c2a562ed379d"
     },
     {
       "path": "engine/shaders/raytracing/visibility.rmiss",

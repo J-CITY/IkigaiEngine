@@ -7,6 +7,7 @@
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
 #include "resourceModule/shaderManager.h"
+#include <chrono>
 #include <cstring>
 #include <iostream>
 #include <set>
@@ -14,6 +15,13 @@
 
 namespace IKIGAI::RENDER {
 namespace {
+	constexpr size_t RayAlbedoCapacity = 64;
+	constexpr size_t RayInstanceCapacity = 4096;
+	using RaySceneClock = std::chrono::steady_clock;
+	double elapsedMilliseconds(RaySceneClock::time_point start) {
+		return std::chrono::duration<double, std::milli>(RaySceneClock::now() - start).count();
+	}
+
 	void hashBytes(uint64_t& hash, const void* ptr, size_t size) {
 		const auto* bytes = static_cast<const uint8_t*>(ptr);
 		for (size_t i = 0; i < size; ++i) {
@@ -76,6 +84,8 @@ struct GameRenderer::RayScene {
 	std::map<const MeshInterface*, std::shared_ptr<GeometrySource>> Sources;
 	std::shared_ptr<RayTracingProgram> SkinProgram, TriangleProgram;
 	std::vector<RayTracingInstance> Instances;
+	size_t DroppedInstances = 0;
+	size_t DroppedTextures = 0;
 };
 
 void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks) {
@@ -101,6 +111,9 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 		mRayWhite = renderer.createTexture(white);
 	}
 	std::vector<std::shared_ptr<TextureInterface>> albedoMaps;
+	std::unordered_map<const TextureInterface*, uint32_t> albedoSlots;
+	size_t droppedInstances = 0;
+	size_t droppedTextures = 0;
 	// Three independent change classes: topology (what exists), material (how it
 	// shades) and dynamic motion (poses and transforms). Only the first two drop
 	// temporal history; motion is reported as a "scene moved" signal instead.
@@ -124,6 +137,27 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 			const auto mesh = drawable.mesh;
 			if (!mesh || mesh->rayTracingVertices().empty()) {
 				continue;
+			}
+			if (instances.size() >= RayInstanceCapacity) {
+				++droppedInstances;
+				continue;
+			}
+			auto albedoMap = mRayWhite;
+			if (drawable.material) {
+				for (const auto* name : { "u_AlbedoMap", "u_DiffuseMap" }) {
+					if (auto* value = std::get_if<std::shared_ptr<TextureInterface>>(drawable.material->findUniform(name)); value && *value) {
+						albedoMap = *value;
+						break;
+					}
+				}
+			}
+			if (albedoSlots.size() >= RayAlbedoCapacity && !albedoSlots.contains(albedoMap.get())) {
+				++droppedTextures;
+				continue;
+			}
+			const auto [slot, inserted] = albedoSlots.try_emplace(albedoMap.get(), static_cast<uint32_t>(albedoMaps.size()));
+			if (inserted) {
+				albedoMaps.push_back(albedoMap);
 			}
 			if (!mesh->morphTargets().empty()) {
 				throw UnsupportedRayTracing("Ray tracing does not support morph target geometry");
@@ -212,7 +246,6 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 			}
 			MATH::Vector4f albedo { .7f, .7f, .7f, 1 };
 			float roughness = .5f, metallic = 0;
-			auto albedoMap = mRayWhite;
 			MATH::Vector2f tiling { 1, 1 }, offset { 0, 0 };
 			MATH::Vector3f emissive { 0, 0, 0 };
 			if (drawable.material) {
@@ -231,12 +264,6 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 				}
 				if (auto* v = std::get_if<float>(drawable.material->findUniform("data_UBOu_Metallic"))) {
 					metallic = *v;
-				}
-				for (const auto* name : { "u_AlbedoMap", "u_DiffuseMap" }) {
-					if (auto* v = std::get_if<std::shared_ptr<TextureInterface>>(drawable.material->findUniform(name)); v && *v) {
-						albedoMap = *v;
-						break;
-					}
 				}
 				if (auto* v = std::get_if<MATH::Vector2f>(drawable.material->findUniform("data_UBOu_TextureTiling"))) {
 					tiling = *v;
@@ -259,12 +286,11 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 			hashBytes(materialHash, &metallic, sizeof(metallic));
 			const auto* textureIdentity = albedoMap.get();
 			const auto revision = albedoMap->getRevision();
-			hashBytes(topologyHash, &textureIdentity, sizeof(textureIdentity));
-			hashBytes(topologyHash, &revision, sizeof(revision));
+			hashBytes(materialHash, &textureIdentity, sizeof(textureIdentity));
+			hashBytes(materialHash, &revision, sizeof(revision));
 			hashBytes(materialHash, &tiling, sizeof(tiling));
 			hashBytes(materialHash, &offset, sizeof(offset));
-			albedoMaps.push_back(albedoMap);
-			offsets.push_back({ triangleCount, 0, 0, 0 });
+			offsets.push_back({ triangleCount, slot->second + 1, 0, 0 });
 			batches.push_back({ pose ? entry.DeformedBuffer : entry.Source->RigidVertices, entry.Source,
 				{ MATH::Matrix4f::Transpose(drawable.world), albedo, { roughness, metallic, 0, 0 }, { tiling.x, tiling.y, offset.x, offset.y },
 				{ emissive.x, emissive.y, emissive.z, 0 } },
@@ -310,8 +336,10 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 		return std::memcmp(&a.second.world, &b.second.world, sizeof(a.second.world)) < 0;
 	});
 	visit(stableDrawables);
-	if (albedoMaps.size() > 64) {
-		throw std::runtime_error("Default RT material provider supports 64 instances; bind a custom scene provider for larger scenes");
+	if (mRayScene->DroppedInstances != droppedInstances || mRayScene->DroppedTextures != droppedTextures) {
+		std::cout << "RAY_TRACING_BUDGET dropped_instances=" << droppedInstances << " dropped_texture=" << droppedTextures << "\n";
+		mRayScene->DroppedInstances = droppedInstances;
+		mRayScene->DroppedTextures = droppedTextures;
 	}
 	for (auto i = mRayScene->Meshes.begin(); i != mRayScene->Meshes.end();) {
 		if (!active.contains(i->first)) {
@@ -337,6 +365,7 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 	const bool dynamicChanged = dynamicHash != mRayDynamicHash;
 	if (topologyChanged || materialChanged || dynamicChanged) {
 		mRaySceneChanged = topologyChanged || materialChanged;
+		const auto tableStart = RaySceneClock::now();
 		if (offsets.empty()) {
 			offsets.resize(1);
 		}
@@ -349,22 +378,30 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 				{ batch.Source->VertexCount, batch.Source->TriangleCount, batch.Base, 0 });
 		}
 		mRayInstances = renderer.createStorageBuffer(offsets.data(), offsets.size(), sizeof(offsets[0]));
-		if (mRayScene->Instances.size() != instances.size()) {
+		const double tableCpuMs = elapsedMilliseconds(tableStart);
+		if (topologyChanged) {
 			mRayTopLevels.clear();
 		}
 		mRayScene->Instances = std::move(instances);
 		mRayTopologyHash = topologyHash;
 		mRayMaterialHash = materialHash;
 		mRayDynamicHash = dynamicHash;
-		for (auto& [key, top] : mRayTopLevels) {
-			auto updated = mRayScene->Instances;
-			for (auto& instance : updated) {
-				instance.HitGroupOffset = static_cast<uint32_t>(std::stoul(key));
+		const auto tlasStart = RaySceneClock::now();
+		size_t tlasRefits = 0;
+		if (dynamicChanged) {
+			for (auto& [key, top] : mRayTopLevels) {
+				auto updated = mRayScene->Instances;
+				for (auto& instance : updated) {
+					instance.HitGroupOffset = static_cast<uint32_t>(std::stoul(key));
+				}
+				renderer.getDriver()->refitTopLevelAS(top, updated);
+				++tlasRefits;
 			}
-			renderer.getDriver()->refitTopLevelAS(top, updated);
 		}
+		const double tlasCpuMs = elapsedMilliseconds(tlasStart);
+		const auto textureCount = albedoMaps.size();
 		mRayAlbedoMaps = std::move(albedoMaps);
-		mRayAlbedoMaps.resize(64, mRayWhite);
+		mRayAlbedoMaps.resize(RayAlbedoCapacity, mRayWhite);
 		auto& history = mRenderPipeline->mHistory;
 		if (topologyChanged) {
 			history.invalidate(HistoryReason::SceneTopology);
@@ -376,8 +413,9 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 			history.invalidate(HistoryReason::SceneMaterial);
 		}
 		std::cout << "RAY_TRACING_SCENE instances=" << mRayScene->Instances.size() << " triangles=" << triangleCount << " skinned=" << skinned
-				  << " blas_builds=" << builds << " blas_refits=" << refits << " tlas_refits=" << mRayTopLevels.size()
-				  << " skin_compute=" << skinDispatches << " triangle_compute=" << batches.size() << "\n";
+				  << " blas_builds=" << builds << " blas_refits=" << refits << " tlas_refits=" << tlasRefits << " skin_compute=" << skinDispatches
+				  << " triangle_compute=" << batches.size() << " textures=" << textureCount << " dropped_instances=" << droppedInstances
+				  << " dropped_texture=" << droppedTextures << " table_cpu_ms=" << tableCpuMs << " tlas_refit_cpu_ms=" << tlasCpuMs << "\n";
 	}
 }
 
@@ -433,7 +471,9 @@ RayTracingDispatch GameRenderer::buildProgramDispatch(PipelineStage& stage) {
 				for (auto& instance : instances) {
 					instance.HitGroupOffset = static_cast<uint32_t>(desc.HitGroupOffset);
 				}
+				const auto start = RaySceneClock::now();
 				mRayTopLevels[key] = renderer.getDriver()->createTopLevelAS(instances, true);
+				std::cout << "RAY_TRACING_TLAS instances=" << instances.size() << " build_cpu_ms=" << elapsedMilliseconds(start) << "\n";
 			}
 			return mRayTopLevels.at(key);
 		}

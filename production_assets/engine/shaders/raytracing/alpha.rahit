@@ -7,7 +7,10 @@ layout(std430,set=1,binding=1) readonly buffer Triangles {Triangle triangles[];}
 layout(std430,set=1,binding=2) readonly buffer Instances {uvec4 offsets[];} RTInstances;
 layout(set=1,binding=3) uniform sampler2D RTAlbedoMaps[64];
 void main() {
-    Triangle t=RTGeometry.triangles[RTInstances.offsets[gl_InstanceCustomIndexEXT].x+gl_PrimitiveID];
+    uvec4 instanceData=RTInstances.offsets[gl_InstanceCustomIndexEXT];
+    // Zero keeps instance-indexed textures for legacy scene providers.
+    uint albedoSlot=instanceData.y==0u?uint(gl_InstanceCustomIndexEXT):instanceData.y-1u;
+    Triangle t=RTGeometry.triangles[instanceData.x+gl_PrimitiveID];
     vec3 b=vec3(1-bary.x-bary.y,bary);vec2 uv=t.UV01.xy*b.x+t.UV01.zw*b.y+t.UV2.xy*b.z;
-    if(t.Albedo.a*textureLod(RTAlbedoMaps[nonuniformEXT(gl_InstanceCustomIndexEXT)],uv,0).a<.5)ignoreIntersectionEXT;
+    if(t.Albedo.a*textureLod(RTAlbedoMaps[nonuniformEXT(albedoSlot)],uv,0).a<.5)ignoreIntersectionEXT;
 }
