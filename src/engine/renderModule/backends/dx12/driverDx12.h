@@ -338,6 +338,23 @@ private:
 
 	std::vector<Microsoft::WRL::ComPtr<ID3D12DeviceChild>> mDestroyDeffered {};
 	std::vector<Dx12Resource> mDestroyDeferredResources {};
+	struct RayDescriptorPage {
+		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Heap;
+		UINT Capacity = 0;
+		UINT Cursor = 0;
+	};
+	struct RayDescriptorArena {
+		std::vector<RayDescriptorPage> Views;
+		std::vector<RayDescriptorPage> Samplers;
+	};
+	struct RayDescriptorRange {
+		ID3D12DescriptorHeap* Heap = nullptr;
+		D3D12_CPU_DESCRIPTOR_HANDLE Cpu {};
+		D3D12_GPU_DESCRIPTOR_HANDLE Gpu {};
+		UINT Increment = 0;
+	};
+	RayDescriptorArena& activeRayDescriptors();
+	RayDescriptorRange allocateRayDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE type, UINT count);
 	struct RecordingSlot {
 		Microsoft::WRL::ComPtr<ID3D12CommandAllocator> Allocator;
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Samplers;
@@ -345,6 +362,7 @@ private:
 		UINT64 FenceValue = 0;
 		std::vector<std::shared_ptr<void>> RayResources;
 		std::vector<std::shared_ptr<void>> RayDeferred;
+		RayDescriptorArena RayDescriptors;
 		std::vector<BindlessResourceEntry> BindlessResources;
 		std::vector<Microsoft::WRL::ComPtr<ID3D12DeviceChild>> Objects;
 		std::vector<Dx12Resource> Resources;
@@ -355,6 +373,7 @@ private:
 	};
 	std::vector<RecordingSlot> mRecordingSlots {};
 	size_t mRecordingSlot = 0;
+	RayDescriptorArena mImmediateRayDescriptors;
 	// Upload pages are retired with mFenceValue in end() and recycled in begin() once the fence passed it.
 	std::unique_ptr<UploadRingDx12> mUploadRing;
 	std::unique_ptr<ImmediateSubmitDx12> mImmediateSubmit;

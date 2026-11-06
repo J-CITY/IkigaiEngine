@@ -114,10 +114,6 @@ public:
 			Driver->mRayDeferred.push_back(std::move(Data));
 	}
 };
-struct DispatchData {
-	RayTracingDispatch Snapshot;
-	ComPtr<ID3D12DescriptorHeap> Heap, SamplerHeap;
-};
 D3D12_SAMPLER_DESC sampler(const TextureInterface& texture) {
 	auto wrap = [](WrapFilter value) {
 		switch (value) {
@@ -816,6 +812,31 @@ void DriverDx12::dispatchGraphCompute(const RayTracingDispatch& dispatch) {
 	}
 }
 
+DriverDx12::RayDescriptorRange DriverDx12::allocateRayDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE type, UINT count) {
+	if (!count) {
+		return {};
+	}
+	auto& arena = activeRayDescriptors();
+	const bool samplerHeap = type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+	auto& pages = samplerHeap ? arena.Samplers : arena.Views;
+	auto available = std::ranges::find_if(pages, [count](const auto& page) { return page.Capacity - page.Cursor >= count; });
+	if (available == pages.end()) {
+		const UINT pageSize = samplerHeap ? 1024u : 8192u;
+		const D3D12_DESCRIPTOR_HEAP_DESC descriptor { type, std::max(count, pageSize), D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, 0 };
+		ComPtr<ID3D12DescriptorHeap> heap;
+		check(mDevice->CreateDescriptorHeap(&descriptor, IID_PPV_ARGS(&heap)), "DXR descriptor arena page");
+		pages.push_back({ std::move(heap), descriptor.NumDescriptors, 0 });
+		available = pages.end() - 1;
+	}
+	auto& page = *available;
+	RayDescriptorRange range { page.Heap.Get(), page.Heap->GetCPUDescriptorHandleForHeapStart(), page.Heap->GetGPUDescriptorHandleForHeapStart(),
+		mDevice->GetDescriptorHandleIncrementSize(type) };
+	range.Cpu.ptr += SIZE_T(page.Cursor) * range.Increment;
+	range.Gpu.ptr += UINT64(page.Cursor) * range.Increment;
+	page.Cursor += count;
+	return range;
+}
+
 void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool compute, ID3D12GraphicsCommandList4* computeList) {
 	auto* list = computeList ? computeList : mCommandList.Get();
 	auto program = std::dynamic_pointer_cast<ProgramDx>(dispatch.Program);
@@ -844,16 +865,9 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 	}
 	if (!compute && invocations > mRayTracingCapabilities.MaxDispatchInvocations)
 		throw std::runtime_error("DXR dispatch exceeds GPU limit");
-	auto frame = std::make_shared<DispatchData>();
-	frame->Snapshot = dispatch;
-	auto makeHeap = [&](UINT count, D3D12_DESCRIPTOR_HEAP_TYPE type, ComPtr<ID3D12DescriptorHeap>& heap) {
-		if (!count)
-			return;
-		D3D12_DESCRIPTOR_HEAP_DESC desc { type, count, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, 0 };
-		check(mDevice->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&heap)), "DXR dispatch descriptor heap");
-	};
-	makeHeap(data.Descriptors, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, frame->Heap);
-	makeHeap(data.Samplers, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, frame->SamplerHeap);
+	auto snapshot = std::make_shared<RayTracingDispatch>(dispatch);
+	const auto views = allocateRayDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, data.Descriptors);
+	const auto samplers = allocateRayDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, data.Samplers);
 	uav(list);
 	std::set<StorageBufferDx12*> computeBuffers;
 	std::set<const TextureDx12*> sampled, storage;
@@ -873,13 +887,11 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 				}
 		if (!resources || resources->size() != b.Count)
 			throw std::runtime_error("Missing DXR binding or wrong array size: " + numeric + " (" + *b.Names.begin() + ")");
-		auto heap = b.Sampler ? frame->SamplerHeap : frame->Heap;
-		const auto type = b.Sampler ? D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER : D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-		const auto increment = mDevice->GetDescriptorHandleIncrementSize(type);
+		const auto& range = b.Sampler ? samplers : views;
 		for (UINT i = 0; i < b.Count; ++i) {
 			const auto& resource = resources->at(i);
-			auto handle = heap->GetCPUDescriptorHandleForHeapStart();
-			handle.ptr += SIZE_T(b.HeapOffset + i) * increment;
+			auto handle = range.Cpu;
+			handle.ptr += SIZE_T(b.HeapOffset + i) * range.Increment;
 			if (b.Type == D3D_SIT_RTACCELERATIONSTRUCTURE) {
 				const auto* value = std::get_if<std::shared_ptr<AccelerationStructure>>(&resource);
 				auto as = value ? std::dynamic_pointer_cast<ASDx>(*value) : nullptr;
@@ -1002,19 +1014,22 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 	for (auto* image : sampled)
 		if (storage.contains(image))
 			throw std::runtime_error("DXR image cannot be sampled and storage in one dispatch");
-	std::vector<ID3D12DescriptorHeap*> heaps;
-	if (frame->Heap)
-		heaps.push_back(frame->Heap.Get());
-	if (frame->SamplerHeap)
-		heaps.push_back(frame->SamplerHeap.Get());
-	if (!heaps.empty())
-		list->SetDescriptorHeaps(UINT(heaps.size()), heaps.data());
+	std::array<ID3D12DescriptorHeap*, 2> heaps {};
+	UINT heapCount = 0;
+	if (views.Heap) {
+		heaps[heapCount++] = views.Heap;
+	}
+	if (samplers.Heap) {
+		heaps[heapCount++] = samplers.Heap;
+	}
+	if (heapCount) {
+		list->SetDescriptorHeaps(heapCount, heaps.data());
+	}
 	list->SetComputeRootSignature(data.Root.Get());
 	for (const auto& b : data.Bindings) {
-		auto heap = b.Sampler ? frame->SamplerHeap : frame->Heap;
-		auto handle = heap->GetGPUDescriptorHandleForHeapStart();
-		handle.ptr += UINT64(b.HeapOffset)
-			* mDevice->GetDescriptorHandleIncrementSize(b.Sampler ? D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER : D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+		const auto& range = b.Sampler ? samplers : views;
+		auto handle = range.Gpu;
+		handle.ptr += UINT64(b.HeapOffset) * range.Increment;
 		list->SetComputeRootDescriptorTable(b.Root, handle);
 	}
 	if (data.PushRoot >= 0)
@@ -1036,7 +1051,7 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 	for (auto* buffer : computeBuffers) {
 		buffer->transition(list, D3D12_RESOURCE_STATE_COMMON);
 	}
-	mRayFrameResources.push_back(frame);
+	mRayFrameResources.push_back(std::move(snapshot));
 	if (!computeList) {
 		setDirty(Dirty::PIPELINE);
 	}

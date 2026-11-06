@@ -909,8 +909,20 @@ void DriverDx12::finishPresent() {
 	begin();
 }
 
+DriverDx12::RayDescriptorArena& DriverDx12::activeRayDescriptors() {
+	return settings.pipelined() ? mRecordingSlots[mRecordingSlot].RayDescriptors : mImmediateRayDescriptors;
+}
+
 void DriverDx12::begin() {
-    mBindlessSnapshots.clear();mBindlessFrameResources.clear();
+	// Reuse this slot only after the presentation/resize wait or its frame fence.
+	// end() joins graph compute before signalling that fence.
+	auto& rayDescriptors = activeRayDescriptors();
+	for (auto* pages : { &rayDescriptors.Views, &rayDescriptors.Samplers }) {
+		for (auto& page : *pages) {
+			page.Cursor = 0;
+		}
+	}
+	mBindlessSnapshots.clear();mBindlessFrameResources.clear();
 	mBindlessDescriptorCursor = TransientDescriptorStart + static_cast<uint32_t>(mRecordingSlot) * TransientDescriptorsPerFrame;
 	mBindlessSamplerCursor = 0;
 	mBindlessDescriptorEnd = mBindlessDescriptorCursor + TransientDescriptorsPerFrame;
