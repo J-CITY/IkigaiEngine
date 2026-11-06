@@ -23,6 +23,7 @@ const int SP_CHAIN_SDF_ACTIVE=16;
 // query and fell back further, so the number of ray query rays per frame can be read back from the atlas.
 const float SP_KIND_HIT=1.0;
 const float SP_KIND_RAY_QUERY=0.875;
+const float SP_KIND_SURFACE_CACHE=0.8125;
 const float SP_KIND_SDF=0.75;
 const float SP_KIND_DDGI_AFTER_RAY=0.6875;
 const float SP_KIND_DDGI=0.625;

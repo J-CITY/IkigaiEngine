@@ -12,6 +12,7 @@
 #include "gameRendererInterface.h"
 #include "historyValidity.h"
 #include "indirectLighting/ddgiScroll.h"
+#include "indirectLighting/surfaceCache.h"
 #include "indirectLighting/temporalDenoiseSettings.h"
 #include "light.h"
 #include "primitiveRender.h"
@@ -364,6 +365,7 @@ struct RenderGraphPipeline {
 		PipelineExecution Execution;
 		// Screen probe gather parameters (hybrid-sp); disabled unless the pipeline enables the block.
 		ScreenProbeSettings ScreenProbes;
+		std::optional<SurfaceCacheConfig> SurfaceCache;
 		// Temporal denoiser settings blocks (indirectLighting/temporalDenoiseSettings.h), one uniform buffer per entry.
 		std::vector<TemporalDenoiseSettings> TemporalDenoisers;
 
@@ -443,6 +445,7 @@ struct RenderGraphPipeline {
 	// Per-effect temporal history validity (GI, reflections, shadows, presentation, upscaler).
 	HistoryValidity mHistory;
 	DdgiScrollRuntime mDdgiScroll;
+	bool mSurfaceCacheActive = false;
 	// Temporal denoiser buffers and light change state (indirectLighting/temporalDenoiseStage.h).
 	TemporalDenoiseRuntime mTemporalDenoise;
 	std::map<std::string, std::shared_ptr<TextureInterface>> mAllocatedTextures;

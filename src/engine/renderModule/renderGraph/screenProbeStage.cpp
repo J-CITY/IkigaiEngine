@@ -14,6 +14,8 @@
 namespace IKIGAI::RENDER {
 namespace {
 	constexpr auto DdgiScrollBufferName = "DdgiScrollSettings";
+	constexpr auto SurfaceCacheBufferName = "SurfaceCacheSettings";
+	constexpr auto SurfaceCacheTextureName = "SPSurfaceRadiance";
 	constexpr int SdfTraceActiveBit = 1 << 4;
 	void Require(bool condition, const std::string& field, const std::string& rule) {
 		if (!condition) {
@@ -141,6 +143,121 @@ namespace {
 		trace->Uniforms.emplace("SdfAtlas", std::string(textureName));
 	}
 
+	struct SurfaceCardAsset {
+		MATH::Vector3f Origin {};
+		MATH::Vector3f AxisU {};
+		MATH::Vector3f AxisV {};
+		MATH::Vector3f Albedo {};
+		MATH::Vector3f Emissive {};
+		float Roughness = 1.f;
+		float Thickness = 0.005f;
+
+		template <class Context> static void serde(Context& context, SurfaceCardAsset& value) {
+			using Self = SurfaceCardAsset;
+			serde::serde_struct(context, value)
+				.field(&Self::Origin, "Origin")
+				.field(&Self::AxisU, "AxisU")
+				.field(&Self::AxisV, "AxisV")
+				.field(&Self::Albedo, "Albedo")
+				.field(&Self::Emissive, "Emissive")
+				.field(&Self::Roughness, "Roughness")
+				.field(&Self::Thickness, "Thickness");
+		}
+	};
+
+	struct SurfaceCacheAsset {
+		std::string Scene;
+		std::vector<SurfaceCardAsset> Cards;
+
+		template <class Context> static void serde(Context& context, SurfaceCacheAsset& value) {
+			serde::serde_struct(context, value).field(&SurfaceCacheAsset::Scene, "Scene").field(&SurfaceCacheAsset::Cards, "Cards");
+		}
+	};
+
+	SurfaceCacheConfig LoadSurfaceCache(const std::string& path) {
+		auto file = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().getFile(path);
+		Require(file && file->isValid() && file->getSize() <= 64 * 1024, "SurfaceCache", "needs a readable card asset of at most 64 KiB");
+		auto parsed = UTILS::FromJsonStr<SurfaceCacheAsset>(file->readStr());
+		Require(!parsed.isErr(), "SurfaceCache", "could not decode " + path);
+		const auto asset = parsed.unwrap();
+		Require(!asset.Scene.empty() && !asset.Cards.empty() && asset.Cards.size() <= SurfaceCacheMaxCards, "SurfaceCache",
+			"needs a scene path and 1 to 16 cards");
+		SurfaceCacheConfig result;
+		result.Scene = RESOURCES::FileSystem::normalizePath(asset.Scene);
+		result.Gpu.State[0] = static_cast<int32_t>(asset.Cards.size());
+		const auto bounded = [](float x, float low, float high) { return std::isfinite(x) && x >= low && x <= high; };
+		const auto vectorBounded = [&](const MATH::Vector3f& v, float low, float high) {
+			return bounded(v.x, low, high) && bounded(v.y, low, high) && bounded(v.z, low, high);
+		};
+		for (size_t i = 0; i < asset.Cards.size(); ++i) {
+			const auto& source = asset.Cards[i];
+			const auto& u = source.AxisU;
+			const auto& v = source.AxisV;
+			const auto lengthU = std::hypot(u.x, u.y, u.z);
+			const auto lengthV = std::hypot(v.x, v.y, v.z);
+			Require(vectorBounded(source.Origin, -10000.f, 10000.f) && bounded(lengthU, 0.01f, 128.f) && bounded(lengthV, 0.01f, 128.f)
+					&& std::abs(u.x * v.x + u.y * v.y + u.z * v.z) <= 1e-4f * lengthU * lengthV && bounded(source.Thickness, 0.0001f, 0.02f)
+					&& vectorBounded(source.Albedo, 0.f, 1.f) && vectorBounded(source.Emissive, 0.f, 65504.f) && bounded(source.Roughness, 0.7f, 1.f),
+				"SurfaceCache", "has invalid bounds or material at card " + std::to_string(i));
+			auto& card = result.Gpu.Cards[i];
+			card.OriginTolerance = { source.Origin.x, source.Origin.y, source.Origin.z, source.Thickness };
+			card.AxisU = { u.x, u.y, u.z, 0.f };
+			card.AxisV = { v.x, v.y, v.z, 0.f };
+			card.AlbedoRoughness = { source.Albedo.x, source.Albedo.y, source.Albedo.z, source.Roughness };
+			card.Emissive = { source.Emissive.x, source.Emissive.y, source.Emissive.z, 0.f };
+		}
+		return result;
+	}
+
+	void ConfigureSurfaceCache(RenderGraphPipeline::Descriptor& descriptor) {
+		const auto& settings = descriptor.ScreenProbes;
+		Require(!descriptor.Graph.Enabled && settings.UseRayQuery && settings.SdfAtlas.empty(), "SurfaceCache",
+			"requires the linear RT pipeline with UseRayQuery enabled");
+		auto& stages = descriptor.Stages;
+		auto trace = std::ranges::find(stages, "SPRayQueryTrace", &PipelineStage::Descriptor::Name);
+		Require(trace != stages.end() && trace->Enabled && trace->Draw == DrawContent::COMPUTE
+				&& trace->Program == "/shaders/indirectLighting/screenProbes/spRayQueryTrace.shader" && !trace->Bindings.contains("SurfaceCache")
+				&& !trace->Bindings.contains("SurfaceRadiance"),
+			"SurfaceCache", "requires the standard SPRayQueryTrace pass");
+		Require(std::ranges::none_of(stages, [](const auto& stage) { return stage.Name == SurfaceCacheRelightStageName; })
+				&& std::ranges::none_of(descriptor.Textures, [](const auto& texture) { return texture.Name == SurfaceCacheTextureName; }),
+			"SurfaceCache", "reserves SPSurfaceRelight and SPSurfaceRadiance");
+		descriptor.SurfaceCache = LoadSurfaceCache(settings.SurfaceCache);
+		auto& texture = descriptor.Textures.emplace_back();
+		texture.Name = SurfaceCacheTextureName;
+		texture.Size = RenderGraphPipeline::TextureDesc::SizeBase::FIXED;
+		texture.Persistent = true;
+		texture.Resource.width = SurfaceCacheCardSide;
+		texture.Resource.height = SurfaceCacheCardSide * descriptor.SurfaceCache->Gpu.State[0];
+		texture.Resource.channels = 4;
+		texture.Resource.pixelType = PixelFormat::RGBA16_FLOAT;
+		texture.Resource.isFloat = true;
+		texture.Resource.storage = true;
+		texture.Resource.useMipmap = false;
+
+		PipelineStage::Descriptor relight;
+		relight.Name = SurfaceCacheRelightStageName;
+		relight.Draw = DrawContent::COMPUTE;
+		relight.Program = "/shaders/indirectLighting/screenProbes/spSurfaceRelight.shader";
+		relight.HitGroupOffset = trace->HitGroupOffset;
+		relight.LaunchTexture = texture.Name;
+		relight.Unsupported = "BYPASS";
+		relight.Once = true;
+		relight.Reads = { "@Scene" };
+		relight.Writes = { texture.Name };
+		relight.Bypass = { { texture.Name, trace->Bypass.at("SPRadianceRT") } };
+		for (const auto* binding : { "SceneAS", "RTGeometry", "RTInstances", "RTAlbedoMaps", "engine_Lights" }) {
+			relight.Bindings.emplace(binding, trace->Bindings.at(binding));
+		}
+		relight.Bindings.emplace("SurfaceCache", SurfaceCacheBufferName);
+		relight.Bindings.emplace("SurfaceRadiance", texture.Name);
+		trace->Program = "/shaders/indirectLighting/screenProbes/spRayQuerySurfaceCache.shader";
+		trace->Bindings.emplace("SurfaceCache", SurfaceCacheBufferName);
+		trace->Bindings.emplace("SurfaceRadiance", texture.Name);
+		trace->Reads.push_back(texture.Name);
+		stages.insert(trace, std::move(relight));
+	}
+
 	void ConfigureScrollingDdgi(RenderGraphPipeline::Descriptor& descriptor, const ScreenProbeDdgiVolume& volume) {
 		const auto& settings = descriptor.ScreenProbes;
 		const int budget = settings.DdgiProbeBudget;
@@ -232,13 +349,14 @@ void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
 		linked |= LinksScreenProbeBuffer(*stage);
 	}
 	for (const auto& buffer : descriptor.Buffers) {
-		if (buffer.Name == ScreenProbeBufferName || buffer.Name == DdgiScrollBufferName) {
+		if (buffer.Name == ScreenProbeBufferName || buffer.Name == DdgiScrollBufferName || buffer.Name == SurfaceCacheBufferName) {
 			throw std::runtime_error("Pipeline buffer name is reserved for ScreenProbes: " + buffer.Name);
 		}
 	}
 	if (!settings.Enabled) {
 		Require(settings.DdgiProbeBudget == 0, "DdgiProbeBudget", "requires ScreenProbes.Enabled");
 		Require(settings.SdfAtlas.empty(), "SdfAtlas", "requires ScreenProbes.Enabled");
+		Require(settings.SurfaceCache.empty(), "SurfaceCache", "requires ScreenProbes.Enabled");
 		if (linked) {
 			throw std::runtime_error(std::string("Stages link ") + ScreenProbeBufferName + " but the pipeline ScreenProbes block is not enabled");
 		}
@@ -254,6 +372,9 @@ void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
 	}
 	if (!settings.SdfAtlas.empty()) {
 		ConfigureSdfTrace(descriptor);
+	}
+	if (!settings.SurfaceCache.empty()) {
+		ConfigureSurfaceCache(descriptor);
 	}
 	ScaleTextures(descriptor, settings.ProbeTextures, 1.0f / static_cast<float>(gpu.TileSize), "ProbeTextures");
 	ScaleTextures(descriptor, settings.AtlasTextures, static_cast<float>(gpu.DirectionSide) / static_cast<float>(gpu.TileSize), "AtlasTextures");
@@ -285,6 +406,11 @@ void CreateScreenProbeBuffer(RenderGraphPipeline& pipeline, Renderer& renderer) 
 	const auto volume = ResolveDdgiVolume(pipeline.mDescriptor);
 	const auto gpu = ResolveScreenProbeGpuSettings(settings, volume);
 	pipeline.mUniformBuffers[ScreenProbeBufferName] = renderer.createUniformBuffer(&gpu, sizeof(gpu));
+	if (pipeline.mDescriptor.SurfaceCache) {
+		const SurfaceCacheGpu inactive;
+		pipeline.mUniformBuffers[SurfaceCacheBufferName] = renderer.createUniformBuffer(&inactive, sizeof(inactive));
+		pipeline.mSurfaceCacheActive = false;
+	}
 	if (settings.DdgiProbeBudget > 0) {
 		pipeline.mDdgiScroll.Volume = volume;
 		pipeline.mDdgiScroll.ScreenProbes = gpu;
@@ -296,6 +422,32 @@ void CreateScreenProbeBuffer(RenderGraphPipeline& pipeline, Renderer& renderer) 
 			  << " spatial_radius=" << gpu.SpatialRadius << " chain_mask=" << gpu.ChainMask << " previous_scene_weight=" << gpu.PreviousSceneWeight
 			  << " ray_query_max_distance=" << gpu.RayQueryMaxDistance << " ddgi=" << gpu.DdgiValid
 			  << " temporal_v2=" << (ScreenProbeTemporalV2Active(settings) ? 1 : 0) << std::endl;
+}
+
+void UpdateSurfaceCache(RenderGraphPipeline& pipeline, Renderer& renderer, const std::string& scenePath, bool sceneChanged) {
+	const auto& config = pipeline.mDescriptor.SurfaceCache.value();
+	const auto relight = std::ranges::find_if(pipeline.mStages, [](const auto& stage) { return stage->mName == SurfaceCacheRelightStageName; });
+	const bool active = relight != pipeline.mStages.end() && (*relight)->mRayTracingProgram && !scenePath.empty()
+		&& RESOURCES::FileSystem::normalizePath(scenePath) == config.Scene;
+	if (active != pipeline.mSurfaceCacheActive) {
+		auto gpu = config.Gpu;
+		if (!active) {
+			gpu.State[0] = 0;
+		}
+		renderer.updateUniformBuffer(pipeline.mUniformBuffers.at(SurfaceCacheBufferName), gpu);
+		pipeline.mSurfaceCacheActive = active;
+		if (relight != pipeline.mStages.end()) {
+			(*relight)->mExecuted = false;
+		}
+	}
+	if (relight != pipeline.mStages.end()) {
+		if (!active) {
+			(*relight)->mExecuted = true;
+		}
+		else if (sceneChanged || pipeline.mHistory.sceneMoved()) {
+			(*relight)->mExecuted = false;
+		}
+	}
 }
 
 void UpdateScrollingDdgi(RenderGraphPipeline& pipeline, Renderer& renderer, const MATH::Vector3f& camera) {

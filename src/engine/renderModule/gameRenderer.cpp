@@ -899,6 +899,9 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	if (!mRenderPipeline->mDescriptor.ScreenProbes.SdfAtlas.empty()) {
 		UpdateSdfTrace(*mRenderPipeline, *mContext.render, mContext.sceneManager->getCurrentSceneSourcePath());
 	}
+	if (mRenderPipeline->mDescriptor.SurfaceCache) {
+		UpdateSurfaceCache(*mRenderPipeline, *mContext.render, mContext.sceneManager->getCurrentSceneSourcePath(), mRaySceneChanged);
+	}
 	mContext.render->updateUniformBuffer(mShadowUbo, mShadowData);
 
 	// Re-establish physical resources before applying disabled-stage aliases.

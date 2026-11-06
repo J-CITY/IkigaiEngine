@@ -12,4 +12,5 @@ void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor);
 void CreateScreenProbeBuffer(RenderGraphPipeline& pipeline, Renderer& renderer);
 void UpdateScrollingDdgi(RenderGraphPipeline& pipeline, Renderer& renderer, const MATH::Vector3f& camera);
 void UpdateSdfTrace(RenderGraphPipeline& pipeline, Renderer& renderer, const std::string& scenePath);
+void UpdateSurfaceCache(RenderGraphPipeline& pipeline, Renderer& renderer, const std::string& scenePath, bool sceneChanged);
 }

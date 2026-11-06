@@ -431,6 +431,9 @@ void GameRenderer::runRayTracingStage(PipelineStage& stage) {
 	auto& renderer = *mContext.render;
 	if (desc.Draw == DrawContent::COMPUTE) {
 		renderer.dispatchRayQueries(std::move(dispatch));
+		if (mRenderPipeline->mDescriptor.SurfaceCache && stage.mName == SurfaceCacheRelightStageName) {
+			std::cout << "GI5_SURFACE_RELIGHT frame=" << mFrameCount << " cards=" << mRenderPipeline->mDescriptor.SurfaceCache->Gpu.State[0] << "\n";
+		}
 	}
 	else {
 		renderer.traceRays(std::move(dispatch));
