@@ -74,6 +74,7 @@ std::shared_ptr<RayTracingProgram> LoadRayTracingProgram(Renderer&, const std::s
 namespace {
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 	constexpr std::string_view OrdinaryGeometryShader = "/shaders/render/portable/gbuffer.shader";
+	constexpr std::string_view OrdinaryEmissiveGeometryShader = "/shaders/render/portable/gbufferEmissive.shader";
 
 	bool SupportsGpuSceneInstancing(const MaterialInterface& material, std::string_view path, std::string_view alternate = {}) {
 		const auto shader = material.getShader();
@@ -726,7 +727,8 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	GpuSceneSnapshot ordinary;
 	const PipelineStage* ordinaryPost = nullptr;
 	std::shared_ptr<TextureInterface> ordinaryHzb;
-	if (mGpuSceneStage && mGpuSceneStage->mDescriptor.Enabled && SupportsGpuSceneInstancing(*mGpuSceneStage->mMaterial, OrdinaryGeometryShader)) {
+	if (mGpuSceneStage && mGpuSceneStage->mDescriptor.Enabled
+		&& SupportsGpuSceneInstancing(*mGpuSceneStage->mMaterial, OrdinaryGeometryShader, OrdinaryEmissiveGeometryShader)) {
 		if (!mGpuScene) {
 			mGpuScene = std::make_unique<GpuScene>();
 		}
@@ -1608,7 +1610,7 @@ void GameRenderer::setPipeline(std::unique_ptr<RenderGraphPipeline>&& renderPipe
 	if (mRenderPipeline->mDescriptor.Execution.DrivenMode.value_or(SubmissionMode::CPU) != SubmissionMode::CPU) {
 		const auto geometry = std::ranges::find_if(mRenderPipeline->mStages, [](const auto& stage) {
 			return stage->mDrawContent == DrawContent::DEFERRED && stage->mName == "Geometry" && stage->mDescriptor.OverrideMaterial
-				&& stage->mMaterial && SupportsGpuSceneInstancing(*stage->mMaterial, OrdinaryGeometryShader);
+				&& stage->mMaterial && SupportsGpuSceneInstancing(*stage->mMaterial, OrdinaryGeometryShader, OrdinaryEmissiveGeometryShader);
 		});
 		if (geometry != mRenderPipeline->mStages.end()) {
 			mGpuSceneStage = geometry->get();
