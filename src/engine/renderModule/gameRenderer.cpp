@@ -3,6 +3,7 @@
 #include "coreModule/ecs/systems/environmentSystem.h"
 #include "diagnostics/renderStatistics.h"
 #include "environmentModule/surfaceWeather.h"
+#include "frustum.h"
 #include "gpuScene.h"
 #include "indirectLighting/temporalDenoiseStage.h"
 #include "instanceBatch.h"
@@ -58,6 +59,7 @@
 #include <iostream>
 #include <set>
 #include <stdexcept>
+#include <string_view>
 
 #ifdef OCULUS
 #include "coreModule/ecs/components/cameraComponent.h"
@@ -70,6 +72,20 @@ namespace IKIGAI::RENDER {
 std::shared_ptr<RayTracingProgram> LoadRayTracingProgram(Renderer&, const std::string&);
 
 namespace {
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+	constexpr std::string_view OrdinaryGeometryShader = "/shaders/render/portable/gbuffer.shader";
+
+	bool SupportsGpuSceneInstancing(const MaterialInterface& material, std::string_view path, std::string_view alternate = {}) {
+		const auto shader = material.getShader();
+		if (!shader || material.getGPUInstances() != 1 || material.isBlendable()
+			|| (shader->mPath != path && (alternate.empty() || shader->mPath != alternate))) {
+			return false;
+		}
+		const auto& uniforms = shader->getReflection().mNameToUniforms;
+		return uniforms.contains("engine_InstanceTransforms") && uniforms.contains("engine_InstanceMeta");
+	}
+#endif
+
 	struct MorphWeightsGpu {
 		std::array<int, 4> Meta {};
 		std::array<MATH::Vector4f, 16> Current {};
@@ -328,6 +344,15 @@ const GameRenderer::SkinningPose* GameRenderer::skinningPose(const Drawable& dra
 void GameRenderer::drawDrawable(const Drawable& drawable) {
 	drawDrawable(drawable, nullptr);
 }
+
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+void GameRenderer::drawGpuScene(bool shadow) {
+	for (const auto& batch : shadow ? mGpuScene->shadowDraws() : mGpuScene->draws()) {
+		const Drawable drawable { MATH::Matrix4f::Identity, MATH::Matrix4f::Identity, batch.Mesh, batch.Material };
+		drawDrawable(drawable, &batch.Buffers);
+	}
+}
+#endif
 
 void GameRenderer::drawDrawable(const Drawable& drawable, const GpuSceneDraw* indirect) {
 	auto material = mOverrideMaterial ? mOverrideMaterial : drawable.material;
@@ -699,13 +724,18 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	GpuSceneSnapshot* gpuSnapshot = nullptr;
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 	GpuSceneSnapshot ordinary;
-	if (mGpuSceneStage && mGpuSceneStage->mDescriptor.Enabled) {
+	const PipelineStage* ordinaryPost = nullptr;
+	std::shared_ptr<TextureInterface> ordinaryHzb;
+	if (mGpuSceneStage && mGpuSceneStage->mDescriptor.Enabled && SupportsGpuSceneInstancing(*mGpuSceneStage->mMaterial, OrdinaryGeometryShader)) {
 		if (!mGpuScene) {
 			mGpuScene = std::make_unique<GpuScene>();
 		}
 		if (mGpuScene->available(*mContext.render)) {
 			ordinary.UseBvhBounds = cameraComponent.getCamera().isFrustumGeometryBVHCulling();
 			gpuSnapshot = &ordinary;
+			if (!mRenderPipeline->mDescriptor.Execution.AsyncCompute) {
+				ordinaryPost = FindActiveGeometryOcclusionPostStage(*mRenderPipeline, DrawContent::GPU_SCENE_OCCLUSION_POST, ordinaryHzb);
+			}
 		}
 	}
 	else {
@@ -718,7 +748,8 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		auto profile = mGpuProfiler.measure("Ordinary GPU cull");
 		const auto& camera = cameraComponent.getCamera();
 		const bool culling = ordinary.UseBvhBounds || camera.isFrustumGeometryCulling();
-		mGpuScene->prepare(*mContext.render, ordinary.Instances, culling ? &camera.getFrustum() : nullptr);
+		mGpuScene->prepare(*mContext.render, ordinary, culling ? &camera.getFrustum() : nullptr, cameraPosition,
+			{ ordinaryHzb, mEmptyTexture, viewProjection, mPreviousViewProjection, temporalValid });
 	}
 #endif
 	{
@@ -738,7 +769,8 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 				  return stage->mDescriptor.Enabled && stage->mDrawContent == DrawContent::DEFERRED && stage->mName == "Geometry";
 			  });
 		// Two-phase HZB occlusion (M4-V2): phase 1 may reject only when the post stage runs this frame.
-		virtualGeometryInput.OcclusionPostStageActive = FindActiveVirtualGeometryPostStage(*mRenderPipeline, virtualGeometryInput.Hzb) != nullptr;
+		virtualGeometryInput.OcclusionPostStageActive
+			= FindActiveGeometryOcclusionPostStage(*mRenderPipeline, DrawContent::VIRTUAL_GEOMETRY_POST, virtualGeometryInput.Hzb) != nullptr;
 		virtualGeometryInput.HistoryValid = temporalValid;
 		virtualGeometryInput.ViewProjection = viewProjection;
 		virtualGeometryInput.PreviousViewProjection = mPreviousViewProjection;
@@ -906,6 +938,29 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		auto stageProfile = mGpuProfiler.measure(stage->mName);
 		auto stageStatistics = RenderStatistics::Get().measureStage(stage->mName);
 		auto stageCpuProfile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("Stage::" + stage->mName) : nullptr;
+		if (stage->mDrawContent == DrawContent::GPU_SCENE_OCCLUSION_POST) {
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+			auto& render = *mContext.render;
+			if (stage == ordinaryPost
+				&& mGpuScene->recordOcclusionPost(render, mRenderPipeline->mTextures.at(stage->mDescriptor.Bindings.at("Hzb")))) {
+				render.setFrameBuffer(stage->mFrameBuffer);
+				const MATH::Vector2f size(float(stage->mFrameBuffer->getWidth()), float(stage->mFrameBuffer->getHeight()));
+				uboData.ViewportSize = size;
+				render.updateUniformBuffer(mEngineUbo, uboData);
+				render.setViewport({ { 0, 0 }, size });
+				render.resetScissor();
+				bindStage(*mGpuSceneStage);
+				setDrawStage(*mGpuSceneStage);
+				drawGpuScene();
+				mOverrideMaterial.reset();
+				mActiveStage = nullptr;
+				mGpuSceneStage->mMaterial->unbind();
+				render.setFrameBuffer(nullptr);
+			}
+#endif
+			stage->mExecuted = true;
+			return;
+		}
 		if (stage->mDrawContent == DrawContent::VIRTUAL_GEOMETRY_POST) {
 			// Virtual geometry phase 2: compute outside the pass, then draw into the G-buffer without clearing it.
 			auto& render = *mContext.render;
@@ -1171,14 +1226,15 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		if (stage->mMaterial) {
 			bindStage(*stage);
 		}
-		mOverrideMaterial = stage->mDescriptor.OverrideMaterial ? stage->mMaterial : nullptr;
-		mOverrideDefaults = stage->mDefaults;
-		mActiveStage = stage;
-		for (const auto& [name, value] : stage->mResolved.Constants) {
-			mOverrideDefaults[name] = value;
-		}
+		setDrawStage(*stage);
 		if (stage->mDrawContent == DrawContent::SHADOW) {
-			captureShadows(*stage, shadowChunks, cameraPosition, size);
+			GpuScene* gpuShadows = nullptr;
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+			if (gpuSnapshot && mRenderPipeline->mDescriptor.Execution.GpuShadowViews) {
+				gpuShadows = mGpuScene.get();
+			}
+#endif
+			captureShadows(*stage, shadowChunks, cameraPosition, size, gpuShadows);
 		}
 		else if (stage->mDrawContent == DrawContent::QUAD || stage->mDrawContent == DrawContent::UPSCALE) {
 			if (!stage->mMaterial) {
@@ -1238,10 +1294,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			}
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 			if (gpuSnapshot && stage == mGpuSceneStage) {
-				for (const auto& batch : mGpuScene->draws()) {
-					Drawable drawable { MATH::Matrix4f::Identity, MATH::Matrix4f::Identity, batch.Mesh, batch.Material };
-					drawDrawable(drawable, &batch.Buffers);
-				}
+				drawGpuScene();
 			}
 #endif
 			if (stage->mDrawContent == DrawContent::DEFERRED && stage->mName == "Geometry" && mVirtualGeometry) {
@@ -1344,14 +1397,23 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	}
 }
 
-void GameRenderer::captureShadows(
-	PipelineStage& active, const std::vector<RenderChunk>& shadowChunks, const MATH::Vector3f& cameraPosition, const MATH::Vector2f& size) {
+void GameRenderer::captureShadows(PipelineStage& active, const std::vector<RenderChunk>& shadowChunks, const MATH::Vector3f& cameraPosition,
+	const MATH::Vector2f& size, GpuScene* gpuScene) {
 	auto* stage = &active;
 	auto& render = *mContext.render;
 
 	if (!stage->mMaterial || !stage->mFrameBuffer) {
 		throw std::runtime_error("Shadow stage requires material and framebuffer");
 	}
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+	if (gpuScene) {
+		if (!mOverrideMaterial
+			|| !SupportsGpuSceneInstancing(
+				*stage->mMaterial, "/shaders/render/portable/shadow.shader", "/shaders/render/portable/pointShadowCube.shader")) {
+			gpuScene = nullptr;
+		}
+	}
+#endif
 	const auto& type = stage->mDescriptor.ShadowType;
 	const int lightType = type == "directional" ? 1 : type == "spot" ? 2 : (type == "point" || type == "pointCube") ? 0 : -2;
 	int index = mCaptureLightIndex;
@@ -1412,6 +1474,14 @@ void GameRenderer::captureShadows(
 				// Near is a radial cutoff, while projection clips axially.
 				proj = MATH::Matrix4f::CreatePerspective(fov, 1.0f, cube ? nearPlane / std::sqrt(3.0f) : nearPlane, range);
 			}
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+			bool gpuCasters = false;
+			if (gpuScene) {
+				Frustum frustum;
+				frustum.make(proj * view);
+				gpuCasters = gpuScene->recordShadow(render, frustum);
+			}
+#endif
 			if (DriverInterface::settings.backend != RenderSettings::Backend::OPENGL) {
 				auto correction = MATH::Matrix4f::Identity;
 				correction(2, 2) = .5f;
@@ -1437,18 +1507,29 @@ void GameRenderer::captureShadows(
 				render.setViewport(
 					{ { size.x / columns * (face % columns), size.y / rows * (face / columns) }, { size.x / columns, size.y / rows } });
 			}
+			const auto drawCaster = [&](const Drawable& drawable) {
+				if (drawable.material && drawable.material->isCastShadow()) {
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+					if (gpuCasters && gpuScene->containsShadow(drawable)) {
+						return;
+					}
+#endif
+					drawDrawable(drawable);
+				}
+			};
 			for (const auto& chunk : shadowChunks) {
 				for (const auto& [distance, drawable] : chunk.opaqueDrawablesForward) {
-					if (drawable.material && drawable.material->isCastShadow()) {
-						drawDrawable(drawable);
-					}
+					drawCaster(drawable);
 				}
 				for (const auto& [distance, drawable] : chunk.opaqueDrawablesDeferred) {
-					if (drawable.material && drawable.material->isCastShadow()) {
-						drawDrawable(drawable);
-					}
+					drawCaster(drawable);
 				}
 			}
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+			if (gpuCasters) {
+				drawGpuScene(true);
+			}
+#endif
 		}
 	}
 	mContext.render->updateUniformBuffer(mShadowUbo, mShadowData);
@@ -1527,8 +1608,7 @@ void GameRenderer::setPipeline(std::unique_ptr<RenderGraphPipeline>&& renderPipe
 	if (mRenderPipeline->mDescriptor.Execution.DrivenMode.value_or(SubmissionMode::CPU) != SubmissionMode::CPU) {
 		const auto geometry = std::ranges::find_if(mRenderPipeline->mStages, [](const auto& stage) {
 			return stage->mDrawContent == DrawContent::DEFERRED && stage->mName == "Geometry" && stage->mDescriptor.OverrideMaterial
-				&& stage->mMaterial && stage->mMaterial->hasShader() && !stage->mMaterial->isBlendable() && stage->mMaterial->getGPUInstances() == 1
-				&& stage->mMaterial->getShader()->mPath == "/shaders/render/portable/gbuffer.shader";
+				&& stage->mMaterial && SupportsGpuSceneInstancing(*stage->mMaterial, OrdinaryGeometryShader);
 		});
 		if (geometry != mRenderPipeline->mStages.end()) {
 			mGpuSceneStage = geometry->get();
@@ -1897,7 +1977,7 @@ static RenderGraphPipeline::Descriptor ResolvePipelineSettings(const RenderGraph
 			produced.insert(writes.begin(), writes.end());
 		}
 	}
-	ValidateVirtualGeometryPostOrder(resolved.Stages);
+	ValidateGeometryOcclusionPostOrder(resolved.Stages);
 	return resolved;
 }
 
@@ -2705,8 +2785,8 @@ RenderGraphPipeline::StagesArr RenderGraphPipeline::loadStages(const std::vector
 				}
 			}
 		}
-		if (desc.Draw == DrawContent::VIRTUAL_GEOMETRY_POST) {
-			ValidateVirtualGeometryPostStage(desc);
+		if (desc.Draw == DrawContent::VIRTUAL_GEOMETRY_POST || desc.Draw == DrawContent::GPU_SCENE_OCCLUSION_POST) {
+			ValidateGeometryOcclusionPostStage(desc);
 		}
 		stage->mDescriptor = desc;
 		stage->mName = desc.Name;
@@ -2815,6 +2895,15 @@ RenderGraphPipeline::StagesArr RenderGraphPipeline::loadStages(const std::vector
 		result.push_back(std::move(stage));
 	}
 	return result;
+}
+
+void GameRenderer::setDrawStage(PipelineStage& stage) {
+	mOverrideMaterial = stage.mDescriptor.OverrideMaterial ? stage.mMaterial : nullptr;
+	mOverrideDefaults = stage.mDefaults;
+	mActiveStage = &stage;
+	for (const auto& [name, value] : stage.mResolved.Constants) {
+		mOverrideDefaults[name] = value;
+	}
 }
 
 void GameRenderer::bindStage(PipelineStage& stage) {

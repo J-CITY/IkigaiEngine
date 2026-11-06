@@ -997,13 +997,63 @@ const RENDER::Frustum* SurfaceView(const RENDER::RenderChunk& output, const REND
 	const auto& camera = output.camera->getCamera();
 	return camera.isFrustumGeometryCulling() || camera.isFrustumGeometryBVHCulling() ? &camera.getFrustum() : nullptr;
 }
+bool IsOrdinaryGpuMesh(const RENDER::MeshInterface& mesh, const RENDER::MaterialInterface& material) {
+	const auto shader = material.getShader();
+	return mesh.getIndexCount() && mesh.getOffset() == 0 && !mesh.vertexLayout() && mesh.morphTargets().empty() && !material.isBlendable()
+		&& (shader || material.isDeferred()) && material.getGPUInstances() == 1 && material.pbrLayers().Layers.empty()
+		&& (!shader || !shader->supportsPbrLayers()) && material.deformation().Mode == RENDER::DeformationMode::None;
+}
+
+void AppendGpuLod(ECS::ModelLODRenderer& renderer, ChunkContext& ctx, RENDER::GpuSceneSnapshot& snapshot) {
+	const auto& models = renderer.getModels();
+	auto materials = renderer.obj->getComponent<ECS::MaterialRenderer>();
+	if (models.size() < 2 || models.size() > RENDER::GpuSceneLod::MaxLevels || !materials || DeformationPadding(*materials) != 0
+		|| renderer.obj->getComponent<ECS::SkeletalComponent>() || renderer.obj->getComponent<ECS::FacialAnimationComponent>()
+		|| renderer.obj->getComponent<ECS::ModelRenderer>()) {
+		return;
+	}
+	auto& transform = renderer.obj->getTransform()->getTransform();
+	RENDER::GpuSceneLod lod;
+	lod.Owner = static_cast<int>(renderer.obj->getID().getUniqueId());
+	lod.Position = transform.getWorldPosition();
+	lod.Levels = static_cast<uint32_t>(models.size());
+	const auto behavior = renderer.getFrustumBehaviour();
+	for (uint32_t level = 0; level < lod.Levels; ++level) {
+		const auto& model = models[level].m_model;
+		lod.Distances[level] = models[level].m_distance;
+		if (model->getMeshes().empty()) {
+			return;
+		}
+		for (const auto& mesh : model->getMeshes()) {
+			const auto materialIndex = mesh->getMaterialIndex();
+			const auto& slots = materials->getMaterials();
+			if (materialIndex >= slots.size() || !slots[materialIndex] || !IsOrdinaryGpuMesh(*mesh, *slots[materialIndex])) {
+				return;
+			}
+			RENDER::BoundingSphere bounds { {}, -1.f };
+			if (behavior != ECS::EFrustumBehaviour::DISABLED) {
+				const auto& localBounds = behavior == ECS::EFrustumBehaviour::CULL_CUSTOM ? renderer.getCustomBoundingSphere()
+					: behavior == ECS::EFrustumBehaviour::CULL_MODEL					  ? model->getBoundingSphere()
+																						  : mesh->getBoundingSphere();
+				bounds = getGlobalBoundingSphere(localBounds, transform);
+			}
+			lod.Instances.push_back(
+				{ lod.Owner, mesh, slots[materialIndex], { transform.getWorldMatrix(), ctx.previousWorld(transform) }, bounds, { {}, -1.f }, level });
+		}
+	}
+	snapshot.Lods.push_back(std::move(lod));
+}
+
 void AppendSurfaceDrawables(Scene& scene, ChunkContext& ctx, const MATH::Vector3f& cameraPosition, const RENDER::Frustum* frustum,
-	const std::shared_ptr<RENDER::MaterialInterface>& defaultMaterial) {
+	const std::shared_ptr<RENDER::MaterialInterface>& defaultMaterial, RENDER::GpuSceneSnapshot* gpuScene = nullptr) {
 	auto cm = scene.getWorld().getComponentManager();
 	for (auto& modelRenderer : cm->getComponentsArray<ECS::ModelLODRenderer>()) {
 		if (modelRenderer.obj->isAlive() && modelRenderer.obj->getIsActive() && modelRenderer.obj->getIsVisible()) {
 			size_t chunkIdx = ctx.getChunkIdxForObj(modelRenderer.obj->getID());
 			auto& chunk = ctx.getChunk(chunkIdx);
+			if (gpuScene && !chunk.camera) {
+				AppendGpuLod(modelRenderer, ctx, *gpuScene);
+			}
 			const auto* localFrustum = SurfaceView(chunk, frustum);
 
 			MATH::Vector3f localCameraPos = cameraPosition;
@@ -1334,10 +1384,8 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(
 								facial->bind(*model);
 								element.facialAnimation = facial.get();
 							}
-							if (gpuObject && !element.facialAnimation && !material->isBlendable() && material->getGPUInstances() == 1
-								&& material == materials.at(mesh->getMaterialIndex()) && mesh->getIndexCount() && mesh->getOffset() == 0
-								&& !mesh->vertexLayout() && mesh->morphTargets().empty() && material->pbrLayers().Layers.empty()
-								&& material->deformation().Mode == RENDER::DeformationMode::None) {
+							if (gpuObject && !element.facialAnimation && material == materials.at(mesh->getMaterialIndex())
+								&& IsOrdinaryGpuMesh(*mesh, *material)) {
 								RENDER::BoundingSphere modelBounds { {}, -1.f };
 								RENDER::BoundingSphere meshBounds { {}, -1.f };
 								if (behavior != ECS::EFrustumBehaviour::DISABLED || gpuScene->UseBvhBounds) {
@@ -1375,7 +1423,7 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(
 		}
 	}
 
-	AppendSurfaceDrawables(*this, ctx, cameraPosition, nullptr, defaultMaterial);
+	AppendSurfaceDrawables(*this, ctx, cameraPosition, nullptr, defaultMaterial, gpuScene);
 	return std::move(ctx.chunks);
 }
 

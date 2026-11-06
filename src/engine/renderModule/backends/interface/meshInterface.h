@@ -1,11 +1,12 @@
 #pragma once
 
+#include "../../morphTarget.h"
+#include "../../vertex.h"
+#include "vertexLayout.h"
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <vector>
-#include "../../vertex.h"
-#include "../../morphTarget.h"
-#include "vertexLayout.h"
 
 #include "../../objects/boundingSphere.h"
 
@@ -63,6 +64,7 @@ namespace IKIGAI
 			void setOffset(size_t offset);
 
 		protected:
+			void computeBoundingSphere(std::span<const Vertex> vertices);
 			RENDER::BoundingSphere mBoundingSphere;
 
 			size_t mOffset = 0;

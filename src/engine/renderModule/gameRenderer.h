@@ -85,7 +85,8 @@ enum class DrawContent {
 	PRIMITIVES_SCREEN,
 	WEATHER,
 	// Phase 2 of the virtual geometry HZB occlusion (renderModule/virtualGeometry/virtualGeometryPostStage.h).
-	VIRTUAL_GEOMETRY_POST
+	VIRTUAL_GEOMETRY_POST,
+	GPU_SCENE_OCCLUSION_POST
 };
 
 struct PipelineStage {
@@ -568,9 +569,13 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	MATH::Vector2f mJitter {}, mPreviousJitter {};
 	const ECS::CameraComponent* mPreviousCamera = nullptr;
 	void bindStage(PipelineStage& stage);
+	void setDrawStage(PipelineStage& stage);
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+	void drawGpuScene(bool shadow = false);
+#endif
 	void drawDrawable(const Drawable& drawable, const GpuSceneDraw* indirect);
-	void captureShadows(
-		PipelineStage& stage, const std::vector<RenderChunk>& casters, const MATH::Vector3f& cameraPosition, const MATH::Vector2f& size);
+	void captureShadows(PipelineStage& stage, const std::vector<RenderChunk>& casters, const MATH::Vector3f& cameraPosition,
+		const MATH::Vector2f& size, GpuScene* gpuScene);
 	void renderGui(SCENE_SYSTEM::Scene& scene, bool worldVectors = false);
 
 	EngineUBO uboData;

@@ -1,5 +1,8 @@
 {
   "Name": "VgOcclusion",
+  "Execution": {
+    "DrivenMode": "AUTO"
+  },
   "Settings": {
     "Textures": [],
     "Materials": {
@@ -18800,6 +18803,20 @@
     {
       "Name": "VgOcclusionPost",
       "Draw": "VIRTUAL_GEOMETRY_POST",
+      "FrameBuffer": "Geometry",
+      "Bindings": {
+        "Hzb": "HZB"
+      },
+      "Reads": [
+        "HZB"
+      ],
+      "ClearColor": false,
+      "ClearDepth": false,
+      "Unsupported": "BYPASS"
+    },
+    {
+      "Name": "OrdinaryOcclusionPost",
+      "Draw": "GPU_SCENE_OCCLUSION_POST",
       "FrameBuffer": "Geometry",
       "Bindings": {
         "Hzb": "HZB"

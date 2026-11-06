@@ -1,9 +1,10 @@
 #include "meshInterface.h"
 #include "driverInterface.h"
-#include "vertexBufferInterface.h"
 #include "storageBufferInterface.h"
+#include "vertexBufferInterface.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <unordered_set>
 
@@ -11,6 +12,30 @@ using namespace IKIGAI::RENDER;
 
 const BoundingSphere& MeshInterface::getBoundingSphere() const {
 	return mBoundingSphere;
+}
+
+void MeshInterface::computeBoundingSphere(std::span<const Vertex> vertices) {
+	mBoundingSphere = { MATH::Vector3f::Zero, 0.f };
+	if (vertices.empty()) {
+		return;
+	}
+	const auto lowest = std::numeric_limits<float>::lowest();
+	const auto highest = std::numeric_limits<float>::max();
+	MATH::Vector3f minimum { highest, highest, highest };
+	MATH::Vector3f maximum { lowest, lowest, lowest };
+	for (const auto& vertex : vertices) {
+		minimum.x = std::min(minimum.x, vertex.position.x);
+		minimum.y = std::min(minimum.y, vertex.position.y);
+		minimum.z = std::min(minimum.z, vertex.position.z);
+		maximum.x = std::max(maximum.x, vertex.position.x);
+		maximum.y = std::max(maximum.y, vertex.position.y);
+		maximum.z = std::max(maximum.z, vertex.position.z);
+	}
+	mBoundingSphere.position = (minimum + maximum) / 2.f;
+	for (const auto& vertex : vertices) {
+		const MATH::Vector3f position { vertex.position.x, vertex.position.y, vertex.position.z };
+		mBoundingSphere.radius = std::max(mBoundingSphere.radius, MATH::Vector3f::Distance(mBoundingSphere.position, position));
+	}
 }
 
 void MeshInterface::setOffset(size_t offset) {

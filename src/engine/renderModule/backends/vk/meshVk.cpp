@@ -1,9 +1,6 @@
 #include "meshVk.h"
 
 #ifdef VULKAN_BACKEND
-#include <algorithm>
-#include <limits>
-
 #include "driverVk.h"
 #include "helpers.h"
 #include "vertexBufferVk.h"
@@ -54,39 +51,6 @@ void MeshVk::createBuffers(const std::vector<Vertex>& vertices, const std::vecto
 	}
 	if (!indices.empty()) {
 		mIndexBuffer = std::make_shared<IndexBufferVk>(indices);
-	}
-}
-
-void MeshVk::computeBoundingSphere(const std::vector<Vertex>& vertices) {
-	mBoundingSphere.position = MATH::Vector3f::Zero;
-	mBoundingSphere.radius = 0.0f;
-
-	if (!vertices.empty()) {
-		float minX = std::numeric_limits<float>::max();
-		float minY = std::numeric_limits<float>::max();
-		float minZ = std::numeric_limits<float>::max();
-
-		// lowest(), not min(): min() is the smallest positive value and breaks all-negative meshes
-		float maxX = std::numeric_limits<float>::lowest();
-		float maxY = std::numeric_limits<float>::lowest();
-		float maxZ = std::numeric_limits<float>::lowest();
-
-		for (const auto& vertex : vertices) {
-			minX = std::min(minX, vertex.position.x);
-			minY = std::min(minY, vertex.position.y);
-			minZ = std::min(minZ, vertex.position.z);
-
-			maxX = std::max(maxX, vertex.position.x);
-			maxY = std::max(maxY, vertex.position.y);
-			maxZ = std::max(maxZ, vertex.position.z);
-		}
-
-		mBoundingSphere.position = MATH::Vector3f{ minX + maxX, minY + maxY, minZ + maxZ } / 2.0f;
-
-		for (const auto& vertex : vertices) {
-			const auto& position = reinterpret_cast<const MATH::Vector3f&>(vertex.position);
-			mBoundingSphere.radius = std::max(mBoundingSphere.radius, MATH::Vector3f::Distance(mBoundingSphere.position, position));
-		}
 	}
 }
 

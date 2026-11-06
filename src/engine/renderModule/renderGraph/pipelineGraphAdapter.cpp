@@ -131,7 +131,8 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 	for (const auto& stage : descriptor.Stages) {
 		const bool compute = stage.Draw == DrawContent::COMPUTE;
 		const bool raster = stage.Draw == DrawContent::CLEAR || stage.Draw == DrawContent::QUAD || stage.Draw == DrawContent::FORWARD
-			|| stage.Draw == DrawContent::DEFERRED || stage.Draw == DrawContent::TRANSPARENT_GEOMETRY || stage.Draw == DrawContent::GUI;
+			|| stage.Draw == DrawContent::DEFERRED || stage.Draw == DrawContent::TRANSPARENT_GEOMETRY || stage.Draw == DrawContent::GUI
+			|| stage.Draw == DrawContent::GPU_SCENE_OCCLUSION_POST;
 		if ((!raster && !compute) || !stage.Enabled || stage.Once || stage.UpdateInterval != 1 || !stage.Bypass.empty()
 			|| stage.Unsupported == "BYPASS" || stage.Name == "CloudShadowMap"
 			|| (compute && !stage.Program.empty() && stage.Compute.ProgramKind != ComputeProgramKind::COMPUTE)) {
@@ -220,6 +221,9 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 					[&](const auto& use) { return use.Resource == name && !GRAPH::IsWrite(use.Mode); })) {
 				throw std::invalid_argument("Missing declared read of " + name + " in " + stage.Name);
 			}
+		}
+		if (stage.Draw == DrawContent::GPU_SCENE_OCCLUSION_POST) {
+			RequireUse(stage, stage.Bindings.at("Hzb"), Access::SAMPLED);
 		}
 		for (const auto& name : stage.Writes) {
 			RequireUse(stage, name, Access::STORAGE_WRITE);

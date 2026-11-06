@@ -12,6 +12,7 @@ IKIGAI::RENDER::MeshDx12::MeshDx12(const std::vector<Vertex>& vertices, const st
 	mIndicesCount = mIndexBuffer->getSize();
 	mVertexCount = mVertexBuffer->getSize();
 	mMaterialIndex = materialIndex;
+	computeBoundingSphere(vertices);
 }
 
 IKIGAI::RENDER::MeshDx12::MeshDx12(const std::vector<Vertex>& vertices, unsigned materialIndex) {
@@ -19,6 +20,7 @@ IKIGAI::RENDER::MeshDx12::MeshDx12(const std::vector<Vertex>& vertices, unsigned
 	mVertexBuffer = std::make_shared<VertexBufferDx12>(vertices);
 	mVertexCount = mVertexBuffer->getSize();
 	mMaterialIndex = materialIndex;
+	computeBoundingSphere(vertices);
 }
 
 void IKIGAI::RENDER::MeshDx12::bind() const {

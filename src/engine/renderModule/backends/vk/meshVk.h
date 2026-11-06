@@ -36,7 +36,6 @@ namespace IKIGAI::RENDER {
 	private:
 		void init(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, unsigned materialIndex);
 		void createBuffers(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices);
-		void computeBoundingSphere(const std::vector<Vertex>& vertices);
 	};
 }
 #endif

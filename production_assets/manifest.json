@@ -1134,8 +1134,8 @@
     },
     {
       "path": "engine/renderPipeline/rendering/vg-occlusion.json",
-      "size": 371588,
-      "sha256": "3755c08ee358354746a1ab0b069e28e9c8c454bead1bd9062612e52d7f5cc8cb"
+      "size": 371953,
+      "sha256": "d31cd09125906840678305f9f7125dea304d64ae33e8e006b137c55d658e4483"
     },
     {
       "path": "engine/renderPipeline/vector-sdf.json",
@@ -1251,6 +1251,11 @@
       "path": "engine/shaders/gpuDriven/hzb/hzbReduce.shader",
       "size": 81,
       "sha256": "112cdc9b7168f641c4fe934ebcae5232b148d4397bfba3f2985063c685ec09d4"
+    },
+    {
+      "path": "engine/shaders/gpuDriven/hzb/hzbOcclusion.glsl",
+      "size": 3170,
+      "sha256": "c641c07fb93e67d938478d2e46b89a340e16b79fcc11203988aaaa513466a6dd"
     },
     {
       "path": "engine/shaders/indirectLighting/denoise/giTemporal.comp.glsl",
@@ -2224,13 +2229,23 @@
     },
     {
       "path": "engine/shaders/render/ordinary/cull.comp.glsl",
-      "size": 1441,
-      "sha256": "e344f674c3f9b5854bd6a7211965ea159b762cd139e964791a16b911a839f10b"
+      "size": 3561,
+      "sha256": "fba24d64d69556bae792b54c23029c0fb9007abca220accf67bcb6b3b8d958da"
     },
     {
       "path": "engine/shaders/render/ordinary/cull.shader",
       "size": 78,
       "sha256": "7a8dbe9384fb919275d3a977a746798fc37a4a92a01508733e2fd28c8ed38258"
+    },
+    {
+      "path": "engine/shaders/render/ordinary/selectLod.comp.glsl",
+      "size": 1786,
+      "sha256": "a2866beaaa9a1011959c1c19666213d01874858f2fdaf459ef127589dedbec64"
+    },
+    {
+      "path": "engine/shaders/render/ordinary/selectLod.shader",
+      "size": 83,
+      "sha256": "df8c0da20b3c60c943aabed8e520c71e043b333d9f39fe8c48c90494aaf0a81c"
     },
     {
       "path": "engine/shaders/render/portable/atmosphereAerial.frag.glsl",
@@ -3749,8 +3764,8 @@
     },
     {
       "path": "engine/shaders/virtualGeometry/vgCullCommon.glsl",
-      "size": 10627,
-      "sha256": "f257d9dbbe98c63e0d8272a0005dc90d4a9fa99bf3548478e5ae3f8742d80e1d"
+      "size": 7471,
+      "sha256": "fbdf6a6906ba713709d6699e7b8ba23b014a1b1c65748987560ac6249e0cca05"
     },
     {
       "path": "engine/shaders/virtualGeometry/vgGBuffer.frag.glsl",
