@@ -24,7 +24,7 @@ void main() {
     vec4 originSpacing=DdgiScroll.OriginSpacing;
     // The history textures still use the previous frame's logical coordinates.
     vec4 previousGrid=vec4(originSpacing.xyz-vec3(DdgiScroll.Delta.xyz)*originSpacing.w,originSpacing.w);
-    bool reuseHistory=DdgiScroll.Delta.w==1;
+    bool reuseHistory=DdgiScroll.Delta.w==1&&DdgiScroll.Rows[0].w==0;
 #else
     int probe=coord.y;
     ivec4 counts=grid.CountsRays;

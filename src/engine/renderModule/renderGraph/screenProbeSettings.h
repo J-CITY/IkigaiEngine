@@ -57,6 +57,7 @@ struct ScreenProbeSettings {
 	// Optional baked world-space distance field for screen misses in the software pipeline.
 	std::string SdfAtlas;
 	std::string SdfScene;
+	bool SdfReflections = false;
 	// Optional authored surface cache for the hardware ray query pipeline.
 	std::string SurfaceCache;
 	// Range of the ray query trace in world units; longer rays continue in the DDGI volume, then the environment.
@@ -108,6 +109,7 @@ struct ScreenProbeSettings {
 			.field(&Self::DdgiProbeBudget, "DdgiProbeBudget", default_ { 0 })
 			.field(&Self::SdfAtlas, "SdfAtlas", default_ { std::string {} })
 			.field(&Self::SdfScene, "SdfScene", default_ { std::string {} })
+			.field(&Self::SdfReflections, "SdfReflections", default_ { false })
 			.field(&Self::SurfaceCache, "SurfaceCache", default_ { std::string {} })
 			.field(&Self::RayQueryMaxDistance, "RayQueryMaxDistance", default_ { 30.0f })
 			.field(&Self::RayQueryConfidence, "RayQueryConfidence", default_ { 0.9f })

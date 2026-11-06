@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "bundleVersion": "renderer-gi6-2026-11-06",
+  "bundleVersion": "renderer-gi-followups-2026-11-06",
   "files": [
     {
       "path": "engine/materials/aerialProbe.mat",
@@ -481,6 +481,11 @@
       "path": "engine/materials/render/portable/glossyReflectionMotionDenoise.mat",
       "size": 306,
       "sha256": "afe4d1113f25b073672f79ec8e1e781d5c133bd253f8c92a60f30a35710de99b"
+    },
+    {
+      "path": "engine/materials/render/portable/glossySdfReflection.mat",
+      "size": 167,
+      "sha256": "915a43d7cb31e53f4a21dff77d490144593dd84473b1c8e3f43a983f35dcc7a3"
     },
     {
       "path": "engine/materials/render/portable/godRayCompose.mat",
@@ -1594,8 +1599,8 @@
     },
     {
       "path": "engine/shaders/raytracing/ddgiTrace.glsl",
-      "size": 4040,
-      "sha256": "0d39747cbd8315a82e3f0fb25881616e968bec74ee78b8d2a8afee32bef07d2d"
+      "size": 4065,
+      "sha256": "28c2504712b92db3cf2653870d1e7d12214a34562275fdef9bf72c3310d87b32"
     },
     {
       "path": "engine/shaders/raytracing/frame.glsl",
@@ -2489,8 +2494,8 @@
     },
     {
       "path": "engine/shaders/render/portable/ddgiUpdate.glsl",
-      "size": 3885,
-      "sha256": "cb1e4fccdf854dd6342389a77bc2e9e64a77a37a44636ff4162177e491a40a26"
+      "size": 3914,
+      "sha256": "8fb22888c86df5d1b3b733ebf52d5c50e4690f9d76ec124c068c09d0f598c1d0"
     },
     {
       "path": "engine/shaders/render/portable/ddgiUpdate.shader",
@@ -2936,6 +2941,16 @@
       "path": "engine/shaders/render/portable/glossyReflectionMotionDenoise.shader",
       "size": 167,
       "sha256": "7e2481c287b3a8d3a1251fdef2e3cbfef4cb64a4386eecb7a7c3ece6a98603d0"
+    },
+    {
+      "path": "engine/shaders/render/portable/glossySdfReflection.frag.glsl",
+      "size": 3936,
+      "sha256": "d241e876eb9c9b4ddeeae3703d71d84c80fa19d67656840f039159cf955883a6"
+    },
+    {
+      "path": "engine/shaders/render/portable/glossySdfReflection.shader",
+      "size": 157,
+      "sha256": "5342f3568940be682fe6aa537ee4fd8b3a7c3a8690e515d82ca9a335ce35be9e"
     },
     {
       "path": "engine/shaders/render/portable/godRayCompose.frag.glsl",

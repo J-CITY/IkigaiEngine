@@ -17,6 +17,7 @@ namespace {
 	constexpr auto SurfaceCacheBufferName = "SurfaceCacheSettings";
 	constexpr auto SurfaceCacheTextureName = "SPSurfaceRadiance";
 	constexpr int SdfTraceActiveBit = 1 << 4;
+	constexpr auto SdfAtlasTextureName = "SPSdfAtlas";
 	void Require(bool condition, const std::string& field, const std::string& rule) {
 		if (!condition) {
 			throw std::runtime_error("ScreenProbes." + field + " " + rule);
@@ -122,25 +123,47 @@ namespace {
 		return atlas;
 	}
 
-	void ConfigureSdfTrace(RenderGraphPipeline::Descriptor& descriptor) {
+	void AddSdfAtlas(RenderGraphPipeline::Descriptor& descriptor) {
 		const auto& settings = descriptor.ScreenProbes;
 		Require(!descriptor.Graph.Enabled && !settings.UseRayQuery && !settings.UseDdgi, "SdfAtlas",
 			"requires the linear software pipeline with UseRayQuery and UseDdgi disabled");
 		Require(!settings.SdfScene.empty(), "SdfScene", "needs the source scene path used to bake SdfAtlas");
+		Require(std::ranges::none_of(descriptor.Textures, [](const auto& texture) { return texture.Name == SdfAtlasTextureName; }), "SdfAtlas",
+			"reserves pipeline texture SPSdfAtlas");
+		auto& texture = descriptor.Textures.emplace_back();
+		texture.Name = SdfAtlasTextureName;
+		texture.Resource = LoadSdfAtlas(settings.SdfAtlas);
+		texture.Size = RenderGraphPipeline::TextureDesc::SizeBase::FIXED;
+		texture.Persistent = true;
+	}
+
+	void ConfigureSdfTrace(RenderGraphPipeline::Descriptor& descriptor) {
 		auto trace = std::ranges::find(descriptor.Stages, "SPTrace", &PipelineStage::Descriptor::Name);
 		Require(trace != descriptor.Stages.end() && trace->Enabled && trace->Draw == DrawContent::COMPUTE
 				&& trace->Material == "/shaders/indirectLighting/screenProbes/spTrace.mat" && !trace->Uniforms.contains("SdfAtlas"),
 			"SdfAtlas", "requires the standard enabled SPTrace pass");
-		constexpr auto textureName = "SPSdfAtlas";
-		Require(std::ranges::none_of(descriptor.Textures, [](const auto& texture) { return texture.Name == textureName; }), "SdfAtlas",
-			"reserves pipeline texture SPSdfAtlas");
-		auto& texture = descriptor.Textures.emplace_back();
-		texture.Name = textureName;
-		texture.Resource = LoadSdfAtlas(settings.SdfAtlas);
-		texture.Size = RenderGraphPipeline::TextureDesc::SizeBase::FIXED;
-		texture.Persistent = true;
 		trace->Material = "/shaders/indirectLighting/screenProbes/spSdfTrace.mat";
-		trace->Uniforms.emplace("SdfAtlas", std::string(textureName));
+		trace->Uniforms.emplace("SdfAtlas", std::string(SdfAtlasTextureName));
+	}
+
+	void ConfigureSdfReflections(RenderGraphPipeline::Descriptor& descriptor) {
+		auto& stages = descriptor.Stages;
+		auto fallback = std::ranges::find(stages, "SSRToRTContract", &PipelineStage::Descriptor::Name);
+		auto hardware = std::ranges::find(stages, "RTReflectionRawTrace", &PipelineStage::Descriptor::Name);
+		Require(fallback != stages.end() && hardware != stages.end() && fallback < hardware && fallback->Enabled
+				&& fallback->Draw == DrawContent::QUAD && fallback->Material == "/materials/render/portable/rayReflectionFallback.mat"
+				&& hardware->Draw == DrawContent::RAY_TRACE && hardware->Program == "/shaders/raytracing/glossyReflection.shader"
+				&& hardware->Bypass.contains("RTReflectionRaw") && hardware->Bypass.at("RTReflectionRaw") == "RTReflectionFallback",
+			"SdfReflections", "requires the standard hybrid-reflections passes in order");
+		fallback->Material = "/materials/render/portable/glossySdfReflection.mat";
+		for (const auto* binding : { "Depth", "Normals", "Albedo", "Roughness", "EnvironmentSpecular", "Environment" }) {
+			Require(std::ranges::any_of(descriptor.Textures, [&](const auto& texture) { return texture.Name == binding; }), "SdfReflections",
+				"needs texture " + std::string(binding));
+			fallback->Uniforms.insert_or_assign(binding, std::string(binding));
+		}
+		fallback->Uniforms.insert_or_assign("SdfAtlas", std::string(SdfAtlasTextureName));
+		fallback->BufferLinks.insert_or_assign("ScreenProbe", ScreenProbeBufferName);
+		hardware->Enabled = false;
 	}
 
 	struct SurfaceCardAsset {
@@ -344,6 +367,7 @@ namespace {
 void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
 	const auto& settings = descriptor.ScreenProbes;
 	Require(settings.SdfScene.empty() || !settings.SdfAtlas.empty(), "SdfScene", "requires SdfAtlas");
+	Require(!settings.SdfReflections || !settings.SdfAtlas.empty(), "SdfReflections", "requires SdfAtlas");
 	bool linked = false;
 	for (const auto* stage : AllStages(descriptor)) {
 		linked |= LinksScreenProbeBuffer(*stage);
@@ -353,9 +377,15 @@ void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
 			throw std::runtime_error("Pipeline buffer name is reserved for ScreenProbes: " + buffer.Name);
 		}
 	}
+	if (!settings.SdfAtlas.empty()) {
+		AddSdfAtlas(descriptor);
+	}
+	if (settings.SdfReflections) {
+		ConfigureSdfReflections(descriptor);
+	}
 	if (!settings.Enabled) {
 		Require(settings.DdgiProbeBudget == 0, "DdgiProbeBudget", "requires ScreenProbes.Enabled");
-		Require(settings.SdfAtlas.empty(), "SdfAtlas", "requires ScreenProbes.Enabled");
+		Require(settings.SdfAtlas.empty() || settings.SdfReflections, "SdfAtlas", "requires ScreenProbes.Enabled or SdfReflections");
 		Require(settings.SurfaceCache.empty(), "SurfaceCache", "requires ScreenProbes.Enabled");
 		if (linked) {
 			throw std::runtime_error(std::string("Stages link ") + ScreenProbeBufferName + " but the pipeline ScreenProbes block is not enabled");
@@ -400,7 +430,7 @@ void UpdateSdfTrace(RenderGraphPipeline& pipeline, Renderer& renderer, const std
 
 void CreateScreenProbeBuffer(RenderGraphPipeline& pipeline, Renderer& renderer) {
 	const auto& settings = pipeline.mDescriptor.ScreenProbes;
-	if (!settings.Enabled) {
+	if (!settings.Enabled && !settings.SdfReflections) {
 		return;
 	}
 	const auto volume = ResolveDdgiVolume(pipeline.mDescriptor);

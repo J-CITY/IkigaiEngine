@@ -29,7 +29,7 @@ void main() {
     int probe=index.x+counts.x*(index.y+counts.y*index.z);
     int row=DdgiScroll.Rows[probe].x;
     ivec3 previousIndex=index+DdgiScroll.Delta.xyz;
-    bool reuseHistory=DdgiScroll.Delta.w==1
+    bool reuseHistory=DdgiScroll.Delta.w==1&&DdgiScroll.Rows[probe].z==0
         &&all(greaterThanEqual(previousIndex,ivec3(0)))&&all(lessThan(previousIndex,counts.xyz));
     vec4 previous=vec4(0);
     if(reuseHistory) {

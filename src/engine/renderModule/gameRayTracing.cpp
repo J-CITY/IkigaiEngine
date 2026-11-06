@@ -8,6 +8,7 @@
 #include "resourceModule/serviceManager.h"
 #include "resourceModule/shaderManager.h"
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <iostream>
 #include <set>
@@ -20,6 +21,27 @@ namespace {
 	using RaySceneClock = std::chrono::steady_clock;
 	double elapsedMilliseconds(RaySceneClock::time_point start) {
 		return std::chrono::duration<double, std::milli>(RaySceneClock::now() - start).count();
+	}
+
+	bool AppendDdgiBounds(std::vector<DdgiDirtyBounds>& bounds, const BoundingSphere& sphere, MATH::Matrix4f world) {
+		if (!std::isfinite(sphere.radius) || sphere.radius <= 0.f) {
+			return false;
+		}
+		DdgiDirtyBounds box;
+		for (int axis = 0; axis < 3; ++axis) {
+			const float x = world(axis, 0);
+			const float y = world(axis, 1);
+			const float z = world(axis, 2);
+			const float center = x * sphere.position.x + y * sphere.position.y + z * sphere.position.z + world(axis, 3);
+			const float extent = std::hypot(x, y, z) * sphere.radius;
+			box.Min[axis] = center - extent;
+			box.Max[axis] = center + extent;
+			if (!std::isfinite(box.Min[axis]) || !std::isfinite(box.Max[axis])) {
+				return false;
+			}
+		}
+		bounds.push_back(box);
+		return true;
 	}
 
 	void hashBytes(uint64_t& hash, const void* ptr, size_t size) {
@@ -84,6 +106,7 @@ struct GameRenderer::RayScene {
 	std::map<const MeshInterface*, std::shared_ptr<GeometrySource>> Sources;
 	std::shared_ptr<RayTracingProgram> SkinProgram, TriangleProgram;
 	std::vector<RayTracingInstance> Instances;
+	std::vector<uint64_t> DdgiPoseHashes;
 	size_t DroppedInstances = 0;
 	size_t DroppedTextures = 0;
 };
@@ -102,6 +125,11 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 	}
 	mRaySceneChanged = false;
 	mRenderPipeline->mHistory.beginFrame();
+	auto& ddgi = mRenderPipeline->mDdgiScroll;
+	ddgi.DirtyBounds.clear();
+	ddgi.ResetForMotion = false;
+	const bool trackDdgiMotion = mRenderPipeline->mDescriptor.ScreenProbes.DdgiProbeBudget > 0;
+	std::vector<uint64_t> ddgiPoseHashes;
 	if (!mRayWhite) {
 		TextureResource white;
 		white.width = white.height = 1;
@@ -301,6 +329,9 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 			instance.Transform = drawable.world;
 			instance.CustomIndex = static_cast<uint32_t>(instances.size());
 			instances.push_back(std::move(instance));
+			if (trackDdgiMotion) {
+				ddgiPoseHashes.push_back(pose ? poseHash : 0);
+			}
 		}
 	};
 	std::vector<std::pair<float, Drawable>> stableDrawables;
@@ -363,6 +394,23 @@ void GameRenderer::prepareRayTracingScene(const std::vector<RenderChunk>& chunks
 	const bool topologyChanged = topologyHash != mRayTopologyHash || !mRayTriangles;
 	const bool materialChanged = materialHash != mRayMaterialHash;
 	const bool dynamicChanged = dynamicHash != mRayDynamicHash;
+	if (trackDdgiMotion && dynamicChanged && !topologyChanged && !materialChanged) {
+		const auto& previous = mRayScene->Instances;
+		const auto& previousPoses = mRayScene->DdgiPoseHashes;
+		ddgi.ResetForMotion = previous.size() != instances.size() || previousPoses.size() != instances.size();
+		for (size_t i = 0; i < instances.size() && !ddgi.ResetForMotion; ++i) {
+			const auto& oldWorld = previous[i].Transform;
+			const auto& newWorld = instances[i].Transform;
+			const bool moved = std::memcmp(&oldWorld, &newWorld, sizeof(oldWorld)) != 0;
+			if (!moved && previousPoses[i] == ddgiPoseHashes[i]) {
+				continue;
+			}
+			const auto& bounds = batches[i].Source->Mesh->getBoundingSphere();
+			ddgi.ResetForMotion = previousPoses[i] != 0 || ddgiPoseHashes[i] != 0 || ddgi.DirtyBounds.size() >= 128
+				|| !AppendDdgiBounds(ddgi.DirtyBounds, bounds, oldWorld) || !AppendDdgiBounds(ddgi.DirtyBounds, bounds, newWorld);
+		}
+	}
+	mRayScene->DdgiPoseHashes = std::move(ddgiPoseHashes);
 	if (topologyChanged || materialChanged || dynamicChanged) {
 		mRaySceneChanged = topologyChanged || materialChanged;
 		const auto tableStart = RaySceneClock::now();
