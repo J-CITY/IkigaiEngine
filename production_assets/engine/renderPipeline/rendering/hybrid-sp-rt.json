@@ -4188,6 +4188,7 @@
     },
     {
       "Name": "SPProbeTemporal",
+      "Enabled": false,
       "Draw": "COMPUTE",
       "Material": "/shaders/indirectLighting/screenProbes/spProbeTemporal.mat",
       "Uniforms": {
@@ -7081,7 +7082,8 @@
       "DDGI",
       "ENVIRONMENT"
     ],
-    "UseTemporalV2": false,
+    "UseTemporalV2": true,
+    "StableTemporalPlacement": true,
     "TemporalV2Stages": [
       "SPProbeTemporal",
       "GITemporal"

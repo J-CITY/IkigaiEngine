@@ -70,6 +70,8 @@ struct ScreenProbeSettings {
 	// stages in LegacyTemporalStages (the M3 SPTemporal) only when it is off; the inactive set is disabled at load and its
 	// Bypass aliases rewire the graph. Debug visualisations (DebugMode other than OFF) always use the legacy stages.
 	bool UseTemporalV2 = false;
+	// Fix the sample position within each tile while temporal v2 is active.
+	bool StableTemporalPlacement = false;
 	std::vector<std::string> TemporalV2Stages;
 	std::vector<std::string> LegacyTemporalStages;
 
@@ -106,6 +108,7 @@ struct ScreenProbeSettings {
 			.field(&Self::ProbeTextures, "ProbeTextures", default_ { std::vector<std::string> {} })
 			.field(&Self::AtlasTextures, "AtlasTextures", default_ { std::vector<std::string> {} })
 			.field(&Self::UseTemporalV2, "UseTemporalV2", default_ { false })
+			.field(&Self::StableTemporalPlacement, "StableTemporalPlacement", default_ { false })
 			.field(&Self::TemporalV2Stages, "TemporalV2Stages", default_ { std::vector<std::string> {} })
 			.field(&Self::LegacyTemporalStages, "LegacyTemporalStages", default_ { std::vector<std::string> {} });
 	}
@@ -133,7 +136,7 @@ struct ScreenProbeGpuSettings {
 	int32_t ChainMask = 15;
 	// 1 when the DDGI probe grid below was resolved from DdgiStage.
 	int32_t DdgiValid = 0;
-	int32_t ChainReserved0 = 0;
+	int32_t StablePlacement = 0;
 	int32_t ChainReserved1 = 0;
 	float RayQueryMaxDistance = 30.0f;
 	float RayQueryConfidence = 0.9f;

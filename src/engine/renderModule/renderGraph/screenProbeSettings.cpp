@@ -129,6 +129,7 @@ ScreenProbeGpuSettings ResolveScreenProbeGpuSettings(const ScreenProbeSettings& 
 	gpu.ClampSigma = settings.ClampSigma;
 	gpu.ConfidenceHistory = settings.ConfidenceHistory;
 	gpu.ChainMask = chainMask;
+	gpu.StablePlacement = settings.StableTemporalPlacement && ScreenProbeTemporalV2Active(settings) ? 1 : 0;
 	gpu.RayQueryMaxDistance = settings.RayQueryMaxDistance;
 	gpu.RayQueryConfidence = settings.RayQueryConfidence;
 	gpu.DdgiIntensity = settings.DdgiIntensity;

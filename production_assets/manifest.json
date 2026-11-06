@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "bundleVersion": "renderer-rc9-2026-11-05",
+  "bundleVersion": "renderer-gi1-2026-11-06",
   "files": [
     {
       "path": "engine/materials/aerialProbe.mat",
@@ -1124,8 +1124,8 @@
     },
     {
       "path": "engine/renderPipeline/rendering/hybrid-sp-rt.json",
-      "size": 174188,
-      "sha256": "8f7fe6f728d5adbabfb9b0968030ebf94805b85340553e56c58506e40ca3bc4a"
+      "size": 174248,
+      "sha256": "2e438233068fc8b9e9200024e9dcd0876ea89f7bdf8207a611815995fbfbd7d1"
     },
     {
       "path": "engine/renderPipeline/rendering/hybrid-sp.json",
@@ -1304,8 +1304,8 @@
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/screenProbeSettings.glsl",
-      "size": 1161,
-      "sha256": "689576c8379b0903c93083b9bb30235297f2a0f8e644db511122a799f5412ce3"
+      "size": 1175,
+      "sha256": "8e781ae0873306597e85d00db9c5e7d9c02f649371f7f877d08ab85347231e71"
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spHzbClosest.comp.glsl",
@@ -1339,8 +1339,8 @@
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spPlace.comp.glsl",
-      "size": 1773,
-      "sha256": "ae9d222b5ea68a7d82036af921494a63e8c4e44537390165a5aead45dd887e21"
+      "size": 1884,
+      "sha256": "d5606e7469c1f6af77ed87cb8ccefa2b40dcba43f8544773491a05681290d03c"
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spPlace.mat",

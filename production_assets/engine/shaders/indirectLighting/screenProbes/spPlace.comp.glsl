@@ -1,5 +1,5 @@
 #version 450
-// Probe placement: one probe per TileSize^2 tile, jittered per frame. Picks a pixel with valid depth inside the tile
+// Probe placement: one probe per TileSize^2 tile. Picks a pixel with valid depth inside the tile
 // (four jittered candidates, then a coarse scan); sky / empty tiles are invalid. ProbeInfo = (offset in tile, valid, 0).
 // Depth and normal are read back from the G-buffer at that pixel by the later stages (exact, no fp16 depth).
 #include "screenProbeCommon.glsl"
@@ -18,7 +18,8 @@ void main() {
         return;
     }
     uint seed=spHash(uint(probe.x)*73856093u^uint(probe.y)*19349663u);
-    vec2 jitter=spR2(uint(engine_UBO.FrameCount));
+    // Keep the tile's hashed sample locations stable while the pixel filter integrates radiance.
+    vec2 jitter=ScreenProbe.Chain.z!=0?vec2(0.5):spR2(uint(engine_UBO.FrameCount));
     ivec2 chosen=ivec2(-1);
     for(int k=0;k<4&&chosen.x<0;++k) {
         vec2 u=fract(jitter+vec2(spHashFloat(seed+uint(2*k)),spHashFloat(seed+uint(2*k+1))));
