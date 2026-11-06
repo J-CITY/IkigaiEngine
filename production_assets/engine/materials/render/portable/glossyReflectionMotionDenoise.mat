@@ -1,0 +1,12 @@
+{
+  "ShaderPath": "/shaders/render/portable/glossyReflectionMotionDenoise.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Uniforms": {
+    "data_UBORadius": 1.0,
+    "data_UBODepthSigma": 0.002,
+    "data_UBOUseTemporal": 0.0,
+    "data_UBOHistoryWeight": 0.85
+  }
+}

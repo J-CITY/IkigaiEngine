@@ -3525,14 +3525,13 @@
     {
       "Name": "RTReflectionRawTrace",
       "Draw": "RAY_TRACE",
-      "Program": "/shaders/raytracing/hybrid.shader",
+      "Program": "/shaders/raytracing/glossyReflection.shader",
       "LaunchTexture": "RTReflectionRaw",
       "Bindings": {
         "engine_UBO": "engine_UBO",
         "engine_Frame": "engine_Frame",
         "engine_RayFrame": "@RayFrame",
         "engine_Lights": "engine_Lights",
-        "engine_CurrentShadow": "engine_CurrentShadow",
         "SceneAS": "@Scene",
         "RTGeometry": "@Triangles",
         "RTInstances": "@Instances",
@@ -3541,7 +3540,8 @@
         "Normals": "Normals",
         "Albedo": "Albedo",
         "Roughness": "Roughness",
-        "Environment": "Environment",
+        "SsrResolved": "RTReflectionFallback",
+        "EnvironmentSpecular": "EnvironmentSpecular",
         "RTAlbedoMaps": "@AlbedoMaps"
       },
       "Reads": [
@@ -3549,7 +3549,8 @@
         "Normals",
         "Albedo",
         "Roughness",
-        "Environment",
+        "RTReflectionFallback",
+        "EnvironmentSpecular",
         "@Scene"
       ],
       "Writes": [
@@ -3581,12 +3582,13 @@
     {
       "Name": "RTReflectionFilteredDenoise",
       "Draw": "QUAD",
-      "Material": "/materials/indirectLighting/rayDenoiseMotion.mat",
+      "Material": "/materials/render/portable/glossyReflectionMotionDenoise.mat",
       "FrameBuffer": "RTReflectionFilteredFBO",
       "Uniforms": {
         "Input": "RTReflectionRaw",
         "Depth": "Depth",
         "Normals": "Normals",
+        "Roughness": "Roughness",
         "Previous": "RTReflectionFilteredPrevious",
         "PreviousDepth": "DepthHistoryPrevious",
         "PreviousNormals": "NormalsPrevious",

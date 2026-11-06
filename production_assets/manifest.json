@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "bundleVersion": "renderer-gi5-2026-11-06",
+  "bundleVersion": "renderer-gi6-2026-11-06",
   "files": [
     {
       "path": "engine/materials/aerialProbe.mat",
@@ -471,6 +471,16 @@
       "path": "engine/materials/render/portable/gbufferEmissive.mat",
       "size": 629,
       "sha256": "9a55ed63f67c6a2ffd3850b37f6c608d50aaa658df03e02c25b85761b10a7949"
+    },
+    {
+      "path": "engine/materials/render/portable/glossyReflectionDenoise.mat",
+      "size": 300,
+      "sha256": "c6e526f2e1bb8ca1c92c8143c505259a417926062fd12913b7ae421ec59218fb"
+    },
+    {
+      "path": "engine/materials/render/portable/glossyReflectionMotionDenoise.mat",
+      "size": 306,
+      "sha256": "afe4d1113f25b073672f79ec8e1e781d5c133bd253f8c92a60f30a35710de99b"
     },
     {
       "path": "engine/materials/render/portable/godRayCompose.mat",
@@ -1039,8 +1049,8 @@
     },
     {
       "path": "engine/renderPipeline/hybrid-reflections.json",
-      "size": 154358,
-      "sha256": "9185e4da2f352b9285136442f7a39f051d851d30928a0c9fd417dbb9ac8ce586"
+      "size": 154462,
+      "sha256": "9a3a51de9c3e2788f0ba03c2a4fdaed70b009f0f5ff212d7be6f4459fd82a196"
     },
     {
       "path": "engine/renderPipeline/hybrid-shadows.json",
@@ -1124,8 +1134,8 @@
     },
     {
       "path": "engine/renderPipeline/rendering/hybrid-reflections-motion.json",
-      "size": 160660,
-      "sha256": "e63fb90f85de0c2514bd272f8b59c4a722aa76116b2f101718493c32c42b4b78"
+      "size": 160765,
+      "sha256": "18db56da55b335be1097a9e9528849e53db56c86c123549f63874d5810fe475c"
     },
     {
       "path": "engine/renderPipeline/rendering/hybrid-sp-rt.json",
@@ -1289,8 +1299,8 @@
     },
     {
       "path": "engine/shaders/indirectLighting/rayDenoiseMotion.frag.glsl",
-      "size": 3924,
-      "sha256": "60c8aa1edf737d12afc356b5515f320224350b49235723da982866ca51fec7f1"
+      "size": 92,
+      "sha256": "a3359c93b7ffc66ea920f79ecfc33c56149acd60aaf046c20678b0c1ff4a4c13"
     },
     {
       "path": "engine/shaders/indirectLighting/rayDenoiseMotion.shader",
@@ -1593,9 +1603,24 @@
       "sha256": "20d2cec0393c5ca0b2fdc5bdcc32554bf1e5eb51a304666688f1e54a435a3b81"
     },
     {
+      "path": "engine/shaders/raytracing/glossyReflection.rgen",
+      "size": 3412,
+      "sha256": "a70c86214bf5a1e4f2eb03b063800f5e707c8102c630632bfdc93da352583255"
+    },
+    {
+      "path": "engine/shaders/raytracing/glossyReflection.shader",
+      "size": 1043,
+      "sha256": "67e1dae7dad6b2bd285a961a41f1a1ad78db30b5b1bdf656c5b08c0cf4a30ade"
+    },
+    {
+      "path": "engine/shaders/raytracing/glossyReflectionRoughness.glsl",
+      "size": 217,
+      "sha256": "8be878e3cbe5064dc4f9d9a412aca64b0b3fe27de030ed9b45e14d5ce62e0441"
+    },
+    {
       "path": "engine/shaders/raytracing/hybrid.rgen",
-      "size": 4905,
-      "sha256": "3f6d79ba2c1c63c25558981e43ab41bb6f0acca357a6c0487af38f195a36ca02"
+      "size": 4106,
+      "sha256": "9d5bc68ac9c88e233ef520ceafbbff388d184dcfcf21c2d013538f2c01ed07a2"
     },
     {
       "path": "engine/shaders/raytracing/hybrid.shader",
@@ -1651,6 +1676,11 @@
       "path": "engine/shaders/raytracing/record.shader",
       "size": 751,
       "sha256": "8115710f2cf28cc10f72a691a35fa1eb50c0430779db826d7f7a49f7373fb7fb"
+    },
+    {
+      "path": "engine/shaders/raytracing/reflectionGgx.glsl",
+      "size": 968,
+      "sha256": "230636929a5a8097d192bb7dace3af457ef58a64594a0ec6a5d87b3d697255f6"
     },
     {
       "path": "engine/shaders/raytracing/rtLighting.glsl",
@@ -2888,6 +2918,26 @@
       "sha256": "6c2b12fd9ad76804c44aaa1d594d3c576488cf67dea65624fb4dda2106ed197a"
     },
     {
+      "path": "engine/shaders/render/portable/glossyReflectionDenoise.frag.glsl",
+      "size": 80,
+      "sha256": "4d90ab692e5c3d3eeb93808f76a402cd5916d12a6ae8aad5ed448f72445a3d8c"
+    },
+    {
+      "path": "engine/shaders/render/portable/glossyReflectionDenoise.shader",
+      "size": 161,
+      "sha256": "94ce057aedcb4c0f4264f7ae78ec8f25bfa714fb7eddb6438c6ca7ed4a23a40a"
+    },
+    {
+      "path": "engine/shaders/render/portable/glossyReflectionMotionDenoise.frag.glsl",
+      "size": 107,
+      "sha256": "4aaa207652ee32cb42f6e5690f17313d3f5bc8965590b598586011d7f35d5e1f"
+    },
+    {
+      "path": "engine/shaders/render/portable/glossyReflectionMotionDenoise.shader",
+      "size": 167,
+      "sha256": "7e2481c287b3a8d3a1251fdef2e3cbfef4cb64a4386eecb7a7c3ece6a98603d0"
+    },
+    {
       "path": "engine/shaders/render/portable/godRayCompose.frag.glsl",
       "size": 915,
       "sha256": "baba1e9b89a99fcff22b3357940edc101893bff7cc997cca821459b0ab4fa81f"
@@ -3069,13 +3119,18 @@
     },
     {
       "path": "engine/shaders/render/portable/rayDenoise.frag.glsl",
-      "size": 3217,
-      "sha256": "cdee9669150ea4a300b2791ab12500aef90344c27ebfdf83442037945c4c7f59"
+      "size": 46,
+      "sha256": "64bf8d0125cdde146c960ef3d994135f9e02e41bf5aa26399682c6a88b593a6d"
     },
     {
       "path": "engine/shaders/render/portable/rayDenoise.shader",
       "size": 154,
       "sha256": "3aa3240873997df301d39f36658dd779024410f785c2fc1b5aee870d46bf0b90"
+    },
+    {
+      "path": "engine/shaders/render/portable/rayDenoiseShared.glsl",
+      "size": 4689,
+      "sha256": "2ad00c215fa0960d5defd91ad1f2f89b30c212b6af60c218bd9a52dd136560c5"
     },
     {
       "path": "engine/shaders/render/portable/rayHybridCompose.frag.glsl",
