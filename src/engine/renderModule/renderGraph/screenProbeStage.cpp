@@ -2,8 +2,11 @@
 
 #include "renderModule/backends/interface/uniformBufferInterface.h"
 #include "renderModule/render.h"
+#include "utilsModule/jsonLoader.h"
 
 #include <algorithm>
+#include <bit>
+#include <cmath>
 #include <iostream>
 #include <set>
 #include <stdexcept>
@@ -11,6 +14,7 @@
 namespace IKIGAI::RENDER {
 namespace {
 	constexpr auto DdgiScrollBufferName = "DdgiScrollSettings";
+	constexpr int SdfTraceActiveBit = 1 << 4;
 	void Require(bool condition, const std::string& field, const std::string& rule) {
 		if (!condition) {
 			throw std::runtime_error("ScreenProbes." + field + " " + rule);
@@ -76,6 +80,65 @@ namespace {
 		Require(found->Draw == DrawContent::RAY_TRACE && !found->Program.empty(), "DdgiStage",
 			"stage " + settings.DdgiStage + " must be a RAY_TRACE stage with a Program");
 		return DecodeScreenProbeDdgiVolume(found->PushConstants, settings.DdgiStage);
+	}
+
+	TextureResource LoadSdfAtlas(const std::string& path) {
+		auto file = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().getFile(path);
+		Require(file && file->isValid() && file->getSize() <= 8 * 1024 * 1024, "SdfAtlas", "needs a readable cooked texture of at most 8 MiB");
+		auto parsed = UTILS::FromJsonStr<TextureResource>(file->readStr());
+		Require(!parsed.isErr(), "SdfAtlas", "could not decode " + path);
+		auto atlas = parsed.unwrap();
+		Require(atlas.height >= 17 && atlas.height <= 65, "SdfAtlas", "needs a grid resolution in [16, 64]");
+		const int resolution = atlas.height - 1;
+		Require(atlas.width == resolution * resolution && atlas.channels == 4 && atlas.pixelType == PixelFormat::RGBA_INT
+				&& atlas.texType == TextureType::TEXTURE_2D && atlas.pathTexture.empty() && !atlas.isFloat && !atlas.storage && !atlas.useMipmap
+				&& atlas.mipMapCount <= 1 && atlas.colorData.size() == size_t(atlas.width) * atlas.height * 4,
+			"SdfAtlas", "needs a packed RGBA8 distance field with one metadata row and no mipmaps");
+		const size_t metadata = size_t(atlas.width) * resolution * 4;
+		const auto readFloat = [&](size_t texel) {
+			const auto* bytes = atlas.colorData.data() + metadata + texel * 4;
+			const uint32_t bits = uint32_t(bytes[0]) | (uint32_t(bytes[1]) << 8) | (uint32_t(bytes[2]) << 16) | (uint32_t(bytes[3]) << 24);
+			return std::bit_cast<float>(bits);
+		};
+		const float spacing = readFloat(3);
+		Require(std::isfinite(spacing) && spacing >= 0.0001f && spacing <= 128.f, "SdfAtlas", "needs a finite voxel spacing in [0.0001, 128]");
+		for (size_t axis = 0; axis < 3; ++axis) {
+			const float origin = readFloat(axis);
+			Require(std::isfinite(origin) && origin + spacing > origin && std::isfinite(origin + spacing * resolution), "SdfAtlas",
+				"has unrepresentable world-space bounds");
+		}
+		for (size_t texel = 4; texel < 4 + 32 * 6; ++texel) {
+			const float channel = readFloat(texel);
+			const float maxChannel = (texel - 4) % 6 < 3 ? 1.f : 65504.f;
+			Require(std::isfinite(channel) && channel >= 0.f && channel <= maxChannel, "SdfAtlas", "has invalid material data");
+		}
+		for (size_t byte = 0; byte < metadata; byte += 4) {
+			if (atlas.colorData[byte + 2] >= 32 || atlas.colorData[byte + 3] != 255) {
+				throw std::runtime_error("ScreenProbes.SdfAtlas has invalid voxel data");
+			}
+		}
+		return atlas;
+	}
+
+	void ConfigureSdfTrace(RenderGraphPipeline::Descriptor& descriptor) {
+		const auto& settings = descriptor.ScreenProbes;
+		Require(!descriptor.Graph.Enabled && !settings.UseRayQuery && !settings.UseDdgi, "SdfAtlas",
+			"requires the linear software pipeline with UseRayQuery and UseDdgi disabled");
+		Require(!settings.SdfScene.empty(), "SdfScene", "needs the source scene path used to bake SdfAtlas");
+		auto trace = std::ranges::find(descriptor.Stages, "SPTrace", &PipelineStage::Descriptor::Name);
+		Require(trace != descriptor.Stages.end() && trace->Enabled && trace->Draw == DrawContent::COMPUTE
+				&& trace->Material == "/shaders/indirectLighting/screenProbes/spTrace.mat" && !trace->Uniforms.contains("SdfAtlas"),
+			"SdfAtlas", "requires the standard enabled SPTrace pass");
+		constexpr auto textureName = "SPSdfAtlas";
+		Require(std::ranges::none_of(descriptor.Textures, [](const auto& texture) { return texture.Name == textureName; }), "SdfAtlas",
+			"reserves pipeline texture SPSdfAtlas");
+		auto& texture = descriptor.Textures.emplace_back();
+		texture.Name = textureName;
+		texture.Resource = LoadSdfAtlas(settings.SdfAtlas);
+		texture.Size = RenderGraphPipeline::TextureDesc::SizeBase::FIXED;
+		texture.Persistent = true;
+		trace->Material = "/shaders/indirectLighting/screenProbes/spSdfTrace.mat";
+		trace->Uniforms.emplace("SdfAtlas", std::string(textureName));
 	}
 
 	void ConfigureScrollingDdgi(RenderGraphPipeline::Descriptor& descriptor, const ScreenProbeDdgiVolume& volume) {
@@ -163,6 +226,7 @@ namespace {
 
 void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
 	const auto& settings = descriptor.ScreenProbes;
+	Require(settings.SdfScene.empty() || !settings.SdfAtlas.empty(), "SdfScene", "requires SdfAtlas");
 	bool linked = false;
 	for (const auto* stage : AllStages(descriptor)) {
 		linked |= LinksScreenProbeBuffer(*stage);
@@ -174,6 +238,7 @@ void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
 	}
 	if (!settings.Enabled) {
 		Require(settings.DdgiProbeBudget == 0, "DdgiProbeBudget", "requires ScreenProbes.Enabled");
+		Require(settings.SdfAtlas.empty(), "SdfAtlas", "requires ScreenProbes.Enabled");
 		if (linked) {
 			throw std::runtime_error(std::string("Stages link ") + ScreenProbeBufferName + " but the pipeline ScreenProbes block is not enabled");
 		}
@@ -187,6 +252,9 @@ void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
 	if (settings.DdgiProbeBudget != 0) {
 		ConfigureScrollingDdgi(descriptor, volume);
 	}
+	if (!settings.SdfAtlas.empty()) {
+		ConfigureSdfTrace(descriptor);
+	}
 	ScaleTextures(descriptor, settings.ProbeTextures, 1.0f / static_cast<float>(gpu.TileSize), "ProbeTextures");
 	ScaleTextures(descriptor, settings.AtlasTextures, static_cast<float>(gpu.DirectionSide) / static_cast<float>(gpu.TileSize), "AtlasTextures");
 	for (const auto& name : settings.ProbeTextures) {
@@ -195,6 +263,18 @@ void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
 		}
 	}
 	SelectTemporalStages(descriptor);
+}
+
+void UpdateSdfTrace(RenderGraphPipeline& pipeline, Renderer& renderer, const std::string& scenePath) {
+	const auto& settings = pipeline.mDescriptor.ScreenProbes;
+	if (settings.SdfAtlas.empty()) {
+		return;
+	}
+	auto gpu = ResolveScreenProbeGpuSettings(settings, {});
+	if (!scenePath.empty() && RESOURCES::FileSystem::normalizePath(scenePath) == RESOURCES::FileSystem::normalizePath(settings.SdfScene)) {
+		gpu.ChainMask |= SdfTraceActiveBit;
+	}
+	renderer.updateUniformBuffer(pipeline.mUniformBuffers.at(ScreenProbeBufferName), gpu);
 }
 
 void CreateScreenProbeBuffer(RenderGraphPipeline& pipeline, Renderer& renderer) {

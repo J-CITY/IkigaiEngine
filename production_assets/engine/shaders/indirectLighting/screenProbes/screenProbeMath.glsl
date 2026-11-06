@@ -17,11 +17,13 @@ const int SP_CHAIN_SCREEN=1;
 const int SP_CHAIN_RAY_QUERY=2;
 const int SP_CHAIN_DDGI=4;
 const int SP_CHAIN_ENVIRONMENT=8;
+const int SP_CHAIN_SDF_ACTIVE=16;
 
 // Radiance atlas alpha: kind of the sample (exact in half float). Kinds *_AFTER_RAY mark rays that were traced with a ray
 // query and fell back further, so the number of ray query rays per frame can be read back from the atlas.
 const float SP_KIND_HIT=1.0;
 const float SP_KIND_RAY_QUERY=0.875;
+const float SP_KIND_SDF=0.75;
 const float SP_KIND_DDGI_AFTER_RAY=0.6875;
 const float SP_KIND_DDGI=0.625;
 const float SP_KIND_MISS_AFTER_RAY=0.5625;
@@ -33,6 +35,7 @@ const int SP_SOURCE_SCREEN=1;
 const int SP_SOURCE_RAY_QUERY=2;
 const int SP_SOURCE_DDGI=3;
 const int SP_SOURCE_ENVIRONMENT=4;
+const int SP_SOURCE_SDF=5;
 
 int spTileSize() { return max(ScreenProbe.Layout.x,1); }
 int spDirectionSide() { return clamp(ScreenProbe.Layout.y,1,16); }
@@ -42,15 +45,16 @@ bool spChainEnabled(int link) { return (ScreenProbe.Chain.x&link)!=0; }
 int spSampleSource(float kind) {
     if(kind>0.9375)return SP_SOURCE_SCREEN;
     if(kind>0.78)return SP_SOURCE_RAY_QUERY;
+    if(kind==SP_KIND_SDF)return SP_SOURCE_SDF;
     if(kind>0.59)return SP_SOURCE_DDGI;
     if(kind>0.25)return SP_SOURCE_ENVIRONMENT;
     return SP_SOURCE_INVALID;
 }
-// Confidence of one atlas sample: screen hits 1 > ray query hits RayQueryConfidence > DDGI / environment MissConfidence.
+// Confidence of one atlas sample: screen hits 1 > traced hits RayQueryConfidence > DDGI / environment MissConfidence.
 float spSampleConfidence(float kind) {
     int source=spSampleSource(kind);
     if(source==SP_SOURCE_SCREEN)return 1.0;
-    if(source==SP_SOURCE_RAY_QUERY)return clamp(ScreenProbe.RayQuery.y,0.0,1.0);
+    if(source==SP_SOURCE_RAY_QUERY||source==SP_SOURCE_SDF)return clamp(ScreenProbe.RayQuery.y,0.0,1.0);
     if(source==SP_SOURCE_INVALID)return 0.0;
     return clamp(ScreenProbe.Trace.z,0.0,1.0);
 }

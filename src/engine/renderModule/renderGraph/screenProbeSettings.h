@@ -54,6 +54,9 @@ struct ScreenProbeSettings {
 	bool UseDdgi = false;
 	// Zero uses the fixed grid. A positive value enables camera-relative DDGI and caps traced probes per frame.
 	int DdgiProbeBudget = 0;
+	// Optional baked world-space distance field for screen misses in the software pipeline.
+	std::string SdfAtlas;
+	std::string SdfScene;
 	// Range of the ray query trace in world units; longer rays continue in the DDGI volume, then the environment.
 	float RayQueryMaxDistance = 30.0f;
 	// Confidence of ray query samples (screen hits count 1, DDGI and environment samples count MissConfidence).
@@ -101,6 +104,8 @@ struct ScreenProbeSettings {
 			.field(&Self::UseRayQuery, "UseRayQuery", default_ { true })
 			.field(&Self::UseDdgi, "UseDdgi", default_ { false })
 			.field(&Self::DdgiProbeBudget, "DdgiProbeBudget", default_ { 0 })
+			.field(&Self::SdfAtlas, "SdfAtlas", default_ { std::string {} })
+			.field(&Self::SdfScene, "SdfScene", default_ { std::string {} })
 			.field(&Self::RayQueryMaxDistance, "RayQueryMaxDistance", default_ { 30.0f })
 			.field(&Self::RayQueryConfidence, "RayQueryConfidence", default_ { 0.9f })
 			.field(&Self::DdgiIntensity, "DdgiIntensity", default_ { 1.0f })

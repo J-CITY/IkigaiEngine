@@ -32,22 +32,25 @@ vec3 debugColor(int mode,ivec2 pixel,vec4 current) {
         return max(offset.x,offset.y)<=1?vec3(0.0,1.0,0.0):vec3(0.02);
     }
     int side=spDirectionSide();
-    // Shares of the ray sources in this probe: screen, ray query, DDGI, environment.
+    // Shares of the ray sources in this probe: screen, ray query, DDGI, environment, and software SDF.
     vec4 shares=vec4(0.0);
+    float sdfShare=0.0;
     for(int y=0;y<side;++y) {
         for(int x=0;x<side;++x) {
             int source=spSampleSource(texelFetch(Radiance,probe*side+ivec2(x,y),0).a);
             shares+=vec4(source==SP_SOURCE_SCREEN?1.0:0.0,source==SP_SOURCE_RAY_QUERY?1.0:0.0,source==SP_SOURCE_DDGI?1.0:0.0,
                 source==SP_SOURCE_ENVIRONMENT?1.0:0.0);
+            sdfShare+=source==SP_SOURCE_SDF?1.0:0.0;
         }
     }
     shares/=float(side*side);
+    sdfShare/=float(side*side);
     if(mode==SP_DEBUG_SOURCE) {
-        // Screen green, ray query blue, DDGI magenta, environment red: G = screen, B = ray query + DDGI, R = DDGI + environment.
-        return vec3(shares.z+shares.w,shares.x,shares.y+shares.z);
+        // Screen green, ray query blue, DDGI magenta, environment red, SDF cyan.
+        return vec3(shares.z+shares.w,shares.x+sdfShare,shares.y+shares.z+sdfShare);
     }
     // HIT_MISS: screen hits green, every other source red.
-    return vec3(shares.y+shares.z+shares.w,shares.x,0.0);
+    return vec3(shares.y+shares.z+shares.w+sdfShare,shares.x,0.0);
 }
 
 void main() {
