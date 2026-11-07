@@ -1419,8 +1419,8 @@
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spSdfMarch.glsl",
-      "size": 4509,
-      "sha256": "9e63e79afaa0dc7771dd55bc628a48cae8df8ec3fa2d39733a32a8cb2d1fcf59"
+      "size": 8982,
+      "sha256": "376feff751c13a6fdd967462f91e6c830b72c3ffb6e73502241f317db31f6520"
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spSdfTrace.comp.glsl",

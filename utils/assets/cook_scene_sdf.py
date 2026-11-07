@@ -3,7 +3,9 @@
 Usage: python utils/assets/cook_scene_sdf.py scene.json output.texture
 
 The scene JSON specifies Resolution (16–64), Origin (XYZ), Spacing, and
-Meshes. Each mesh specifies Path (a closed, non-self-intersecting triangle
+Meshes for a single region, or Resolution and Regions for a BVH of up to
+eight regions. Each region supplies Origin, Spacing, and Meshes. Each mesh
+specifies Path (a closed, non-self-intersecting triangle
 OBJ, relative to the scene file), Albedo (linear RGB in [0, 1]) and
 Emissive (linear HDR RGB). All mesh vertices are in world space. Overlapping
 solids belong in separate mesh entries so they combine as a signed union.
@@ -13,6 +15,7 @@ import argparse
 from collections import Counter
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 import struct
 
@@ -20,12 +23,17 @@ import numpy as np
 
 
 MAX_MATERIALS = 32
+MAX_REGIONS = 8
+MAX_ATLAS_BYTES = 2 * 1024 * 1024
+MAX_TEXTURE_JSON_BYTES = 8 * 1024 * 1024
 MAX_TRIANGLES = 16_384
 MAX_SAMPLE_TESTS = 64_000_000
 MAX_OBJ_BYTES = 8 * 1024 * 1024
 DISTANCE_SCALE = 4096
 DISTANCE_BIAS = 32768
 MAX_DISTANCE_VOXELS = DISTANCE_BIAS / DISTANCE_SCALE
+BVH_NODE_TEXELS = 7
+BVH_INVALID_INDEX = 255
 
 
 @dataclass(frozen=True)
@@ -41,6 +49,12 @@ class Scene:
     origin: tuple[float, ...]
     spacing: float
     meshes: tuple[Mesh, ...]
+
+
+@dataclass(frozen=True)
+class MultiRegionScene:
+    resolution: int
+    regions: tuple[Scene, ...]
 
 
 def fields(value, expected, label):
@@ -62,12 +76,7 @@ def triple(value, label, minimum, maximum):
     return tuple(scalar(component, label, minimum, maximum) for component in value)
 
 
-def load_scene(path):
-    data = fields(json.loads(path.read_text(encoding="utf-8-sig")),
-                  ("Resolution", "Origin", "Spacing", "Meshes"), "Scene")
-    resolution = data["Resolution"]
-    if type(resolution) is not int or not 16 <= resolution <= 64:
-        raise ValueError("Resolution must be an integer in [16, 64]")
+def load_region(data, resolution, directory):
     origin = triple(data["Origin"], "Origin", -1e6, 1e6)
     spacing = scalar(data["Spacing"], "Spacing", 1e-4, 128)
     if any(abs(component) * np.finfo(np.float32).eps > spacing / 8 for component in origin):
@@ -81,9 +90,32 @@ def load_scene(path):
         name = mesh["Path"]
         if not isinstance(name, str) or not name or Path(name).is_absolute():
             raise ValueError("Mesh Path must be relative to the scene JSON")
-        meshes.append(Mesh(path.parent / name, triple(mesh["Albedo"], "Albedo", 0, 1),
+        meshes.append(Mesh(directory / name, triple(mesh["Albedo"], "Albedo", 0, 1),
                            triple(mesh["Emissive"], "Emissive", 0, 65504)))
     return Scene(resolution, origin, spacing, tuple(meshes))
+
+
+def load_scene(path):
+    data = json.loads(path.read_text(encoding="utf-8-sig"))
+    multi = isinstance(data, dict) and "Regions" in data
+    expected = ("Resolution", "Regions") if multi else ("Resolution", "Origin", "Spacing", "Meshes")
+    fields(data, expected, "Scene")
+    resolution = data["Resolution"]
+    if type(resolution) is not int or not 16 <= resolution <= 64:
+        raise ValueError("Resolution must be an integer in [16, 64]")
+    if not multi:
+        return load_region(data, resolution, path.parent)
+
+    entries = data["Regions"]
+    if not isinstance(entries, list) or not 1 <= len(entries) <= MAX_REGIONS:
+        raise ValueError(f"Regions must contain 1–{MAX_REGIONS} entries")
+    width = resolution * resolution
+    height = 1 + len(entries) * (resolution + 1)
+    if width * height * 4 > MAX_ATLAS_BYTES:
+        raise ValueError(f"Region atlas exceeds the {MAX_ATLAS_BYTES} byte budget")
+    regions = tuple(load_region(fields(entry, ("Origin", "Spacing", "Meshes"), "Region"), resolution, path.parent)
+                    for entry in entries)
+    return MultiRegionScene(resolution, regions)
 
 
 def read_obj(path, triangle_limit):
@@ -203,7 +235,7 @@ def mesh_distance(triangles, axes, radius, sample_budget):
     return np.where(inside, -np.sqrt(squared), np.sqrt(squared)), sample_budget
 
 
-def bake(scene):
+def bake_region(scene, atlas, triangles_remaining, sample_budget):
     resolution = scene.resolution
     centers = (np.arange(resolution) + 0.5) * scene.spacing
     axes = tuple(origin + centers for origin in scene.origin)
@@ -211,8 +243,6 @@ def bake(scene):
     shape = (resolution,) * 3
     distances = np.full(shape, np.inf)
     material_ids = np.zeros(shape, dtype=np.uint8)
-    triangles_remaining = MAX_TRIANGLES
-    sample_budget = MAX_SAMPLE_TESTS
     for material, mesh in enumerate(scene.meshes):
         triangles = read_obj(mesh.path, triangles_remaining)
         triangles_remaining -= len(triangles)
@@ -221,7 +251,6 @@ def bake(scene):
         distances[closer] = signed[closer]
         material_ids[closer] = material
 
-    atlas = np.zeros((resolution + 1, resolution * resolution, 4), dtype=np.uint8)
     voxels = atlas[:resolution].reshape(shape + (4,))
     encoded = np.clip(np.rint(distances / scene.spacing * DISTANCE_SCALE) + DISTANCE_BIAS, 0, 65535).astype(np.uint16)
     voxels[..., 0] = encoded & 255
@@ -230,9 +259,66 @@ def bake(scene):
     voxels[..., 3] = 255
     metadata = (*scene.origin, scene.spacing, *(value for mesh in scene.meshes for value in (*mesh.albedo, *mesh.emissive)))
     atlas[-1, :len(metadata)] = np.frombuffer(struct.pack(f"<{len(metadata)}f", *metadata), dtype=np.uint8).reshape(-1, 4)
+    return triangles_remaining, sample_budget
+
+
+def region_bounds(scene):
+    exact_max = np.array(scene.origin, dtype=np.float64) + scene.spacing * scene.resolution
+    rounded_extent = np.float32(scene.spacing * scene.resolution)
+    shader_max = np.array(scene.origin, dtype=np.float32) + rounded_extent
+    rounded_max = np.maximum(exact_max.astype(np.float32), shader_max)
+    # An inward rounding could make the broad phase reject part of a grid.
+    upper = np.where(rounded_max < exact_max, np.nextafter(rounded_max, np.float32(np.inf)), rounded_max)
+    return np.array(scene.origin, dtype=np.float32), upper
+
+
+def write_bvh(header, regions):
+    header[0] = (ord("S"), ord("D"), ord("F"), len(regions))
+    minima, maxima = zip(*(region_bounds(region) for region in regions))
+    lower = np.stack(minima)
+    upper = np.stack(maxima)
+    centroids = (lower.astype(np.float64) + upper) * 0.5
+
+    def write_node(indices, node):
+        minimum = lower[indices].min(axis=0)
+        maximum = upper[indices].max(axis=0)
+        if len(indices) == 1:
+            links = (BVH_INVALID_INDEX, BVH_INVALID_INDEX, indices[0], 0)
+        else:
+            axis = int(np.argmax(np.ptp(centroids[indices], axis=0)))
+            ordered = sorted(indices, key=lambda index: (centroids[index, axis], index))
+            midpoint = len(ordered) // 2
+            left = node + 1
+            right = node + 2 * midpoint
+            links = (left, right, BVH_INVALID_INDEX, 0)
+            write_node(ordered[:midpoint], left)
+            write_node(ordered[midpoint:], right)
+        offset = 1 + node * BVH_NODE_TEXELS
+        header[offset:offset + 6] = np.frombuffer(struct.pack("<6f", *minimum, *maximum), dtype=np.uint8).reshape(6, 4)
+        header[offset + 6] = links
+
+    write_node(list(range(len(regions))), 0)
+
+
+def bake(scene):
+    resolution = scene.resolution
+    region_height = resolution + 1
+    if isinstance(scene, MultiRegionScene):
+        regions = scene.regions
+        atlas = np.zeros((1 + len(regions) * region_height, resolution * resolution, 4), dtype=np.uint8)
+        write_bvh(atlas[0], regions)
+        triangles_remaining = MAX_TRIANGLES
+        sample_budget = MAX_SAMPLE_TESTS
+        for index, region in enumerate(regions):
+            first_row = 1 + index * region_height
+            triangles_remaining, sample_budget = bake_region(region, atlas[first_row:first_row + region_height],
+                                                              triangles_remaining, sample_budget)
+    else:
+        atlas = np.zeros((region_height, resolution * resolution, 4), dtype=np.uint8)
+        bake_region(scene, atlas, MAX_TRIANGLES, MAX_SAMPLE_TESTS)
     return {
-        "Width": resolution * resolution,
-        "Height": resolution + 1,
+        "Width": atlas.shape[1],
+        "Height": atlas.shape[0],
         "Channels": 4,
         "ColorData": atlas.reshape(-1).tolist(),
         "TexType": "TEXTURE_2D",
@@ -248,7 +334,10 @@ def main():
     args = parser.parse_args()
     try:
         texture = bake(load_scene(args.scene))
-        args.output.write_text(json.dumps(texture, separators=(",", ":")) + "\n", encoding="utf-8")
+        encoded = (json.dumps(texture, separators=(",", ":")) + os.linesep).encode("utf-8")
+        if len(encoded) > MAX_TEXTURE_JSON_BYTES:
+            raise ValueError(f"Texture JSON exceeds the {MAX_TEXTURE_JSON_BYTES} byte budget")
+        args.output.write_bytes(encoded)
     except (OSError, ValueError) as error:
         parser.exit(1, f"Scene SDF: {error}\n")
 

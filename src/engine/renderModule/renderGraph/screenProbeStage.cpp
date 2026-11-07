@@ -91,35 +91,101 @@ namespace {
 		auto parsed = UTILS::FromJsonStr<TextureResource>(file->readStr());
 		Require(!parsed.isErr(), "SdfAtlas", "could not decode " + path);
 		auto atlas = parsed.unwrap();
-		Require(atlas.height >= 17 && atlas.height <= 65, "SdfAtlas", "needs a grid resolution in [16, 64]");
-		const int resolution = atlas.height - 1;
+		Require(atlas.width >= 16 * 16 && atlas.width <= 64 * 64 && atlas.height >= 17 && atlas.height <= 1 + 8 * 65, "SdfAtlas",
+			"needs a grid resolution in [16, 64] and up to eight regions");
+		const int resolution = static_cast<int>(std::sqrt(atlas.width));
 		Require(atlas.width == resolution * resolution && atlas.channels == 4 && atlas.pixelType == PixelFormat::RGBA_INT
 				&& atlas.texType == TextureType::TEXTURE_2D && atlas.pathTexture.empty() && !atlas.isFloat && !atlas.storage && !atlas.useMipmap
-				&& atlas.mipMapCount <= 1 && atlas.colorData.size() == size_t(atlas.width) * atlas.height * 4,
-			"SdfAtlas", "needs a packed RGBA8 distance field with one metadata row and no mipmaps");
-		const size_t metadata = size_t(atlas.width) * resolution * 4;
+				&& atlas.mipMapCount <= 1 && atlas.colorData.size() == size_t(atlas.width) * atlas.height * 4
+				&& atlas.colorData.size() <= 2 * 1024 * 1024,
+			"SdfAtlas", "needs a packed RGBA8 distance field with no mipmaps and at most 2 MiB of voxel data");
 		const auto readFloat = [&](size_t texel) {
-			const auto* bytes = atlas.colorData.data() + metadata + texel * 4;
+			const auto* bytes = atlas.colorData.data() + texel * 4;
 			const uint32_t bits = uint32_t(bytes[0]) | (uint32_t(bytes[1]) << 8) | (uint32_t(bytes[2]) << 16) | (uint32_t(bytes[3]) << 24);
 			return std::bit_cast<float>(bits);
 		};
-		const float spacing = readFloat(3);
-		Require(std::isfinite(spacing) && spacing >= 0.0001f && spacing <= 128.f, "SdfAtlas", "needs a finite voxel spacing in [0.0001, 128]");
-		for (size_t axis = 0; axis < 3; ++axis) {
-			const float origin = readFloat(axis);
-			Require(std::isfinite(origin) && origin + spacing > origin && std::isfinite(origin + spacing * resolution), "SdfAtlas",
-				"has unrepresentable world-space bounds");
-		}
-		for (size_t texel = 4; texel < 4 + 32 * 6; ++texel) {
-			const float channel = readFloat(texel);
-			const float maxChannel = (texel - 4) % 6 < 3 ? 1.f : 65504.f;
-			Require(std::isfinite(channel) && channel >= 0.f && channel <= maxChannel, "SdfAtlas", "has invalid material data");
-		}
-		for (size_t byte = 0; byte < metadata; byte += 4) {
-			if (atlas.colorData[byte + 2] >= 32 || atlas.colorData[byte + 3] != 255) {
-				throw std::runtime_error("ScreenProbes.SdfAtlas has invalid voxel data");
+		const bool multi = atlas.height != resolution + 1;
+		const auto* header = atlas.colorData.data();
+		const int regions = multi ? header[3] : 1;
+		Require(!multi
+				|| (header[0] == 'S' && header[1] == 'D' && header[2] == 'F' && regions >= 1 && regions <= 8
+					&& atlas.height == 1 + regions * (resolution + 1)),
+			"SdfAtlas", "has an invalid region header");
+		struct SdfBounds {
+			std::array<float, 3> Min {};
+			std::array<float, 3> Max {};
+		};
+		std::array<SdfBounds, 8> regionBounds {};
+		for (int region = 0; region < regions; ++region) {
+			const size_t first = size_t(multi ? 1 + region * (resolution + 1) : 0) * atlas.width;
+			const size_t metadata = first + size_t(atlas.width) * resolution;
+			const float spacing = readFloat(metadata + 3);
+			Require(std::isfinite(spacing) && spacing >= 0.0001f && spacing <= 128.f, "SdfAtlas", "needs a finite voxel spacing in [0.0001, 128]");
+			for (size_t axis = 0; axis < 3; ++axis) {
+				const float origin = readFloat(metadata + axis);
+				const float end = origin + spacing * resolution;
+				Require(
+					std::isfinite(origin) && origin + spacing > origin && std::isfinite(end), "SdfAtlas", "has unrepresentable world-space bounds");
+				regionBounds[region].Min[axis] = origin;
+				regionBounds[region].Max[axis] = end;
+			}
+			for (size_t texel = 4; texel < 4 + 32 * 6; ++texel) {
+				const float channel = readFloat(metadata + texel);
+				const float maxChannel = (texel - 4) % 6 < 3 ? 1.f : 65504.f;
+				Require(std::isfinite(channel) && channel >= 0.f && channel <= maxChannel, "SdfAtlas", "has invalid material data");
+			}
+			for (size_t byte = first * 4; byte < metadata * 4; byte += 4) {
+				if (atlas.colorData[byte + 2] >= 32 || atlas.colorData[byte + 3] != 255) {
+					throw std::runtime_error("ScreenProbes.SdfAtlas has invalid voxel data");
+				}
 			}
 		}
+		if (!multi) {
+			return atlas;
+		}
+		const int nodes = 2 * regions - 1;
+		std::array<SdfBounds, 15> nodeBounds {};
+		std::array<bool, 15> attached {};
+		std::array<bool, 8> used {};
+		attached[0] = true;
+		const auto contains = [](const SdfBounds& outer, const SdfBounds& inner) {
+			for (size_t axis = 0; axis < 3; ++axis) {
+				if (outer.Min[axis] > inner.Min[axis] || outer.Max[axis] < inner.Max[axis]) {
+					return false;
+				}
+			}
+			return true;
+		};
+		for (int i = nodes - 1; i >= 0; --i) {
+			const size_t first = 1 + 7 * i;
+			auto& node = nodeBounds[i];
+			for (size_t axis = 0; axis < 3; ++axis) {
+				node.Min[axis] = readFloat(first + axis);
+				node.Max[axis] = readFloat(first + 3 + axis);
+				Require(std::isfinite(node.Min[axis]) && std::isfinite(node.Max[axis]) && node.Min[axis] < node.Max[axis], "SdfAtlas",
+					"has invalid BVH bounds");
+			}
+			const auto* links = header + (first + 6) * 4;
+			const int left = links[0];
+			const int right = links[1];
+			const int region = links[2];
+			Require(links[3] == 0, "SdfAtlas", "has an invalid BVH node");
+			if (region != 255) {
+				Require(region < regions && !used[region] && left == 255 && right == 255 && contains(node, regionBounds[region]), "SdfAtlas",
+					"has an invalid BVH leaf");
+				used[region] = true;
+			}
+			else {
+				Require(left > i && left < nodes && right > i && right < nodes && left != right && !attached[left] && !attached[right]
+						&& contains(node, nodeBounds[left]) && contains(node, nodeBounds[right]),
+					"SdfAtlas", "has invalid BVH children");
+				attached[left] = true;
+				attached[right] = true;
+			}
+		}
+		Require(std::all_of(attached.begin(), attached.begin() + nodes, [](bool value) { return value; })
+				&& std::all_of(used.begin(), used.begin() + regions, [](bool value) { return value; }),
+			"SdfAtlas", "has unreachable BVH nodes or regions");
 		return atlas;
 	}
 
