@@ -11,7 +11,7 @@ void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor);
 // Creates the ScreenProbeBufferName uniform buffer from the resolved block (no-op when the block is disabled).
 void CreateScreenProbeBuffer(RenderGraphPipeline& pipeline, Renderer& renderer);
 void UpdateScrollingDdgi(RenderGraphPipeline& pipeline, Renderer& renderer, const MATH::Vector3f& camera);
-void UpdateSdfTrace(RenderGraphPipeline& pipeline, Renderer& renderer, const std::string& scenePath);
+bool UpdateSdfTrace(RenderGraphPipeline& pipeline, Renderer& renderer, SCENE_SYSTEM::Scene& scene, const std::string& scenePath);
 void UpdateSurfaceCache(RenderGraphPipeline& pipeline, Renderer& renderer, const std::string& scenePath, bool sceneChanged);
 bool UpdateSdfCacheLights(RenderGraphPipeline& pipeline, Renderer& renderer, std::vector<LightOGL> lights);
 }

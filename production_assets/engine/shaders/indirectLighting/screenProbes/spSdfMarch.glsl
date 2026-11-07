@@ -82,7 +82,10 @@ struct SpSdfHit {
 };
 
 bool spTraceSingleSdf(vec3 position,vec3 normal,vec3 direction,int size,float range,out SpSdfHit hit) {
+    vec4 offset=ScreenProbe.SdfRegionOffsets[0];
+    if(offset.w<0.0)return false;
     vec4 grid=spSdfGrid(size);
+    if(offset.w>0.0)grid.xyz+=offset.xyz;
     if(!spSdfValidGrid(grid))return false;
     vec3 origin=(position-grid.xyz)/grid.w+0.65*normal;
     float start=0.0;
@@ -112,43 +115,61 @@ int spSdfFirstRow(int region,int size) {
     return 1+region*(size+1);
 }
 
-bool spTraceSdfBvh(vec3 position,vec3 normal,vec3 direction,int size,int count,float range,out SpSdfHit hit) {
+bool spTraceSdfRegions(vec3 position,vec3 normal,vec3 direction,int size,int count,float range,out SpSdfHit hit) {
     vec4 grids[SP_SDF_MAX_REGIONS];
     float minSpacing=3.402823e38;
     float receiverSpacing=minSpacing;
+    bool hasRegionOverrides=false;
     for(int i=0;i<count;++i) {
+        vec4 offset=ScreenProbe.SdfRegionOffsets[i];
+        hasRegionOverrides=hasRegionOverrides||offset.w!=0.0;
+        if(offset.w<0.0)continue;
         vec4 grid=spSdfGrid(spSdfFirstRow(i,size)+size);
+        if(offset.w>0.0)grid.xyz+=offset.xyz;
         if(!spSdfValidGrid(grid))return false;
         grids[i]=grid;
         minSpacing=min(minSpacing,grid.w);
         vec3 local=(position-grid.xyz)/grid.w;
         if(all(greaterThanEqual(local,vec3(0.0)))&&all(lessThan(local,vec3(size))))receiverSpacing=min(receiverSpacing,grid.w);
     }
+    if(minSpacing==3.402823e38)return false;
 
     // Use one biased world-space ray for every region so overlap distances are comparable.
     float biasSpacing=receiverSpacing<3.402823e38?receiverSpacing:minSpacing;
     vec3 origin=position+(0.65*biasSpacing)*normal;
     SpSdfInterval intervals[SP_SDF_MAX_REGIONS];
     int activeCount=0;
-    int stack[SP_SDF_MAX_REGIONS];
-    stack[0]=0;
-    int pending=1;
-    int nodeCount=2*count-1;
-    for(int visited=0;visited<SP_SDF_MAX_NODES&&pending>0;++visited) {
-        int node=stack[--pending];
-        int column=1+7*node;
-        vec3 minimum=vec3(spSdfMetadata(column,0),spSdfMetadata(column+1,0),spSdfMetadata(column+2,0));
-        vec3 maximum=vec3(spSdfMetadata(column+3,0),spSdfMetadata(column+4,0),spSdfMetadata(column+5,0));
-        float start=0.0,end=range;
-        if(!spSdfClip(origin,direction,minimum,maximum,start,end))continue;
-        ivec3 links=ivec3(spSdfBytes(ivec2(column+6,0)).xyz);
-        if(links.z!=255) {
-            if(links.z>=count||activeCount>=count)return false;
-            intervals[activeCount++]=SpSdfInterval(start,end,links.z);
-        } else {
-            if(links.x<=node||links.y<=node||links.x>=nodeCount||links.y>=nodeCount||pending+2>SP_SDF_MAX_REGIONS)return false;
-            stack[pending++]=links.y;
-            stack[pending++]=links.x;
+    if(hasRegionOverrides) {
+        // Baked BVH bounds do not track translations. Clip against the current grid boxes directly.
+        for(int i=0;i<count;++i) {
+            if(ScreenProbe.SdfRegionOffsets[i].w<0.0)continue;
+            vec4 grid=grids[i];
+            float start=0.0,end=range;
+            if(spSdfClip(origin,direction,grid.xyz,grid.xyz+float(size)*grid.w,start,end)) {
+                intervals[activeCount++]=SpSdfInterval(start,end,i);
+            }
+        }
+    } else {
+        int stack[SP_SDF_MAX_REGIONS];
+        stack[0]=0;
+        int pending=1;
+        int nodeCount=2*count-1;
+        for(int visited=0;visited<SP_SDF_MAX_NODES&&pending>0;++visited) {
+            int node=stack[--pending];
+            int column=1+7*node;
+            vec3 minimum=vec3(spSdfMetadata(column,0),spSdfMetadata(column+1,0),spSdfMetadata(column+2,0));
+            vec3 maximum=vec3(spSdfMetadata(column+3,0),spSdfMetadata(column+4,0),spSdfMetadata(column+5,0));
+            float start=0.0,end=range;
+            if(!spSdfClip(origin,direction,minimum,maximum,start,end))continue;
+            ivec3 links=ivec3(spSdfBytes(ivec2(column+6,0)).xyz);
+            if(links.z!=255) {
+                if(links.z>=count||activeCount>=count)return false;
+                intervals[activeCount++]=SpSdfInterval(start,end,links.z);
+            } else {
+                if(links.x<=node||links.y<=node||links.x>=nodeCount||links.y>=nodeCount||pending+2>SP_SDF_MAX_REGIONS)return false;
+                stack[pending++]=links.y;
+                stack[pending++]=links.x;
+            }
         }
     }
 
@@ -190,7 +211,7 @@ bool spTraceSdfHit(vec3 position,vec3 normal,vec3 direction,float maxRange,out S
     int count=int(header.w);
     if(atlas.x!=size*size||any(notEqual(header.xyz,uvec3(83,68,70)))||count<1||count>SP_SDF_MAX_REGIONS
         ||atlas.y!=1+count*(size+1))return false;
-    return spTraceSdfBvh(position,normal,direction,size,count,range,hit);
+    return spTraceSdfRegions(position,normal,direction,size,count,range,hit);
 }
 
 #ifndef SP_SDF_GEOMETRY_ONLY

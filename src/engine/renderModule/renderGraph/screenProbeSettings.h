@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <cstdint>
 #include <serdepp/adaptor/nlohmann_json.hpp>
 #include <serdepp/attribute/default.hpp>
@@ -14,6 +15,21 @@ enum class ScreenProbeDebugMode { OFF = 0, PROBES, HIT_MISS, CONFIDENCE, RAW, FI
 // Links of the screen probe trace chain screen -> ray query -> DDGI -> environment (hybrid-sp-rt). A link missing from
 // ChainMask is skipped, so tests can force every fallback state.
 enum class ScreenProbeChainLink { SCREEN = 0, RAY_QUERY, DDGI, ENVIRONMENT };
+
+struct SdfMovingRegion {
+	int Region = 0;
+	std::string Object;
+	std::string Model;
+	std::vector<float> BakeWorld;
+
+	template <class Context> static void serde(Context& context, SdfMovingRegion& value) {
+		serde::serde_struct(context, value)
+			.field(&SdfMovingRegion::Region, "Region")
+			.field(&SdfMovingRegion::Object, "Object")
+			.field(&SdfMovingRegion::Model, "Model")
+			.field(&SdfMovingRegion::BakeWorld, "BakeWorld");
+	}
+};
 
 // Pipeline "ScreenProbes" block (hybrid-sp): parameters of the compute screen probe gather. Validated at pipeline load
 // (ResolveScreenProbes); the resolved values reach the stages through the uniform buffer ScreenProbeBufferName.
@@ -58,8 +74,10 @@ struct ScreenProbeSettings {
 	std::string SdfAtlas;
 	std::string SdfScene;
 	bool SdfReflections = false;
+	std::vector<SdfMovingRegion> SdfMovingRegions;
 	// Optional authored surface cache for the hardware ray query pipeline.
 	std::string SurfaceCache;
+	std::string ReflectionSurfaceCache;
 	// Range of the ray query trace in world units; longer rays continue in the DDGI volume, then the environment.
 	float RayQueryMaxDistance = 30.0f;
 	// Confidence of ray query samples (screen hits count 1, DDGI and environment samples count MissConfidence).
@@ -110,7 +128,9 @@ struct ScreenProbeSettings {
 			.field(&Self::SdfAtlas, "SdfAtlas", default_ { std::string {} })
 			.field(&Self::SdfScene, "SdfScene", default_ { std::string {} })
 			.field(&Self::SdfReflections, "SdfReflections", default_ { false })
+			.field(&Self::SdfMovingRegions, "SdfMovingRegions", default_ { std::vector<SdfMovingRegion> {} })
 			.field(&Self::SurfaceCache, "SurfaceCache", default_ { std::string {} })
+			.field(&Self::ReflectionSurfaceCache, "ReflectionSurfaceCache", default_ { std::string {} })
 			.field(&Self::RayQueryMaxDistance, "RayQueryMaxDistance", default_ { 30.0f })
 			.field(&Self::RayQueryConfidence, "RayQueryConfidence", default_ { 0.9f })
 			.field(&Self::DdgiIntensity, "DdgiIntensity", default_ { 1.0f })
@@ -163,8 +183,9 @@ struct ScreenProbeGpuSettings {
 	int32_t DdgiCountY = 0;
 	int32_t DdgiCountZ = 0;
 	int32_t DdgiRays = 0;
+	std::array<std::array<float, 4>, 8> SdfRegionOffsets {};
 };
-static_assert(sizeof(ScreenProbeGpuSettings) == 128);
+static_assert(sizeof(ScreenProbeGpuSettings) == 256);
 
 // Bit values of ScreenProbeGpuSettings::ChainMask (SP_CHAIN_* in screenProbeSettings.glsl).
 enum ScreenProbeChainBit : int32_t {

@@ -12,5 +12,6 @@ layout(std140,set=0,binding=5) uniform ScreenProbeSettingsBlock {
     vec4 RayQuery;           // RayQueryMaxDistance, RayQueryConfidence, DdgiIntensity, 0
     vec4 DdgiOriginSpacing;  // DDGI grid origin xyz, probe spacing
     ivec4 DdgiCounts;        // DDGI probe counts xyz, rays per probe
+    vec4 SdfRegionOffsets[8]; // World translation xyz, state (-1 disabled, 0 static, 1 translated)
 } ScreenProbe;
 #endif

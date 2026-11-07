@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "bundleVersion": "renderer-gi-followups-2026-11-06",
+  "bundleVersion": "renderer-gi-motion-directional-2026-11-07",
   "files": [
     {
       "path": "engine/materials/aerialProbe.mat",
@@ -1324,8 +1324,8 @@
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/screenProbeSettings.glsl",
-      "size": 1187,
-      "sha256": "b2e15c284e071576f5929e6f95eb5bbb5f479456dd179ab5c443d04d1f228497"
+      "size": 1287,
+      "sha256": "3d6f05febb91918e13601521d01b0ceaf67dcdf5c9d973ce84f3e3e2e94985ed"
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spHzbClosest.comp.glsl",
@@ -1439,8 +1439,8 @@
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spSdfMarch.glsl",
-      "size": 9552,
-      "sha256": "ac74a2faaeeff36ccde7b7226ee3d070acb6c18285eca84433153e87e03d7e1a"
+      "size": 10548,
+      "sha256": "55214efcf416cf0f877960ed628c7dd59ca488d40b6dd1744e9d8073697fd67f"
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spSdfSurfaceLighting.glsl",
@@ -1648,9 +1648,19 @@
       "sha256": "20d2cec0393c5ca0b2fdc5bdcc32554bf1e5eb51a304666688f1e54a435a3b81"
     },
     {
+      "path": "engine/shaders/raytracing/glossyCachedReflection.rgen",
+      "size": 170,
+      "sha256": "34aa9ea5f74e660a778d11a9091c13ed05dae04f7d5e003a253e30c3b4c503fd"
+    },
+    {
+      "path": "engine/shaders/raytracing/glossyCachedReflection.shader",
+      "size": 1049,
+      "sha256": "6d258da6ff29769b778d99619bb07f078b85653a1aed5d8606022894394c17a0"
+    },
+    {
       "path": "engine/shaders/raytracing/glossyReflection.rgen",
-      "size": 3412,
-      "sha256": "a70c86214bf5a1e4f2eb03b063800f5e707c8102c630632bfdc93da352583255"
+      "size": 141,
+      "sha256": "1d3218882a3a0e45b8796a730bacdf33b29fc176f0aabde46dde8a0ec80b487c"
     },
     {
       "path": "engine/shaders/raytracing/glossyReflection.shader",
@@ -1661,6 +1671,31 @@
       "path": "engine/shaders/raytracing/glossyReflectionRoughness.glsl",
       "size": 217,
       "sha256": "8be878e3cbe5064dc4f9d9a412aca64b0b3fe27de030ed9b45e14d5ce62e0441"
+    },
+    {
+      "path": "engine/shaders/raytracing/glossyReflectionShared.glsl",
+      "size": 3499,
+      "sha256": "c8c0d75b11336329bbb57744fb1693ee660b7ce8d85870cc16805335b6ab1464"
+    },
+    {
+      "path": "engine/shaders/raytracing/glossySurfaceDirections.glsl",
+      "size": 520,
+      "sha256": "ae6249d7f4154b1afc4087a4b1458af9ae2a595ea0b3e500ceaec7985a0aeaac"
+    },
+    {
+      "path": "engine/shaders/raytracing/glossySurfaceRelight.comp",
+      "size": 2782,
+      "sha256": "925d44198df807d453f1e26db42e35b9e730abfc6fd78c143833cefa4e253cca"
+    },
+    {
+      "path": "engine/shaders/raytracing/glossySurfaceRelight.shader",
+      "size": 147,
+      "sha256": "dce9cd4a853e6a8d9c03b6447e9afac9d07fe32865c0a6023aadc4ca9209a9af"
+    },
+    {
+      "path": "engine/shaders/raytracing/glossySurfaceSample.glsl",
+      "size": 2633,
+      "sha256": "780ab9e66bb26c76752e4d2847833dff183b753ea3dcfc78d8ae1f7f21899696"
     },
     {
       "path": "engine/shaders/raytracing/hybrid.rgen",
@@ -1729,8 +1764,8 @@
     },
     {
       "path": "engine/shaders/raytracing/rtLighting.glsl",
-      "size": 2955,
-      "sha256": "4f858e9307709af0e78e43d67cf716f4a39436d3b460ca09cad4f0b670d69098"
+      "size": 3093,
+      "sha256": "1f1da23cfdab16361547c94345c7c9926cc15b9a01a570014e1449f36f230ef5"
     },
     {
       "path": "engine/shaders/raytracing/skinVertices.comp",

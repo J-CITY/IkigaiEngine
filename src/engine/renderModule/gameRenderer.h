@@ -446,6 +446,7 @@ struct RenderGraphPipeline {
 	HistoryValidity mHistory;
 	DdgiScrollRuntime mDdgiScroll;
 	bool mSurfaceCacheActive = false;
+	std::array<std::array<float, 4>, 8> mSdfRegionOffsets {};
 	std::vector<LightOGL> mSdfCacheLights;
 	// Temporal denoiser buffers and light change state (indirectLighting/temporalDenoiseStage.h).
 	TemporalDenoiseRuntime mTemporalDenoise;

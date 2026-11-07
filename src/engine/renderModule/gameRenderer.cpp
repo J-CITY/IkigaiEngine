@@ -807,6 +807,9 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	if (raySceneNeeded) {
 		prepareRayTracingScene(shadowChunks);
 	}
+	else {
+		mRenderPipeline->mHistory.beginFrame();
+	}
 	if (rayTracingActive) {
 		auto lights = rayLightsNeeded ? scene.findLightData() : std::vector<LightOGL> {};
 		if (lights.empty()) {
@@ -837,6 +840,14 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			mFrameData.FrameState.x = 0;
 			mContext.render->updateUniformBuffer(mFrameUbo, mFrameData);
 		}
+	}
+	const bool sdfMoved = !mRenderPipeline->mDescriptor.ScreenProbes.SdfAtlas.empty()
+		&& UpdateSdfTrace(*mRenderPipeline, *mContext.render, scene, mContext.sceneManager->getCurrentSceneSourcePath());
+	if (sdfMoved) {
+		mRenderPipeline->mHistory.invalidate(
+			HistoryReason::SceneDynamicPose, historyEffectBit(HistoryEffect::GlobalIllumination) | historyEffectBit(HistoryEffect::Reflections));
+		mFrameData.FrameState.x = 0;
+		mContext.render->updateUniformBuffer(mFrameUbo, mFrameData);
 	}
 	if (HasTemporalDenoisers(*mRenderPipeline)) {
 		// Pipelines without a ray traced light list (hybrid-sp) detect light changes for their GI history here.
@@ -896,14 +907,11 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		mRayFrameUbo = mContext.render->createUniformBuffer<RayFrameData>(rayFrameData());
 	}
 	UpdateScrollingDdgi(*mRenderPipeline, *mContext.render, cameraPosition);
-	if (!mRenderPipeline->mDescriptor.ScreenProbes.SdfAtlas.empty()) {
-		UpdateSdfTrace(*mRenderPipeline, *mContext.render, mContext.sceneManager->getCurrentSceneSourcePath());
-	}
 	if (mRenderPipeline->mDescriptor.SurfaceCache) {
 		const bool changed = mRenderPipeline->mDescriptor.ScreenProbes.SdfAtlas.empty()
 			? mRaySceneChanged
 			: UpdateSdfCacheLights(*mRenderPipeline, *mContext.render, scene.findLightData());
-		UpdateSurfaceCache(*mRenderPipeline, *mContext.render, mContext.sceneManager->getCurrentSceneSourcePath(), changed);
+		UpdateSurfaceCache(*mRenderPipeline, *mContext.render, mContext.sceneManager->getCurrentSceneSourcePath(), changed || sdfMoved);
 	}
 	mContext.render->updateUniformBuffer(mShadowUbo, mShadowData);
 

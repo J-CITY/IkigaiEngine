@@ -1,7 +1,10 @@
 #include "screenProbeStage.h"
 
+#include "coreModule/ecs/components/modelRenderer.h"
+#include "coreModule/ecs/object.h"
 #include "renderModule/backends/interface/uniformBufferInterface.h"
 #include "renderModule/render.h"
+#include "sceneModule/scene.h"
 #include "utilsModule/jsonLoader.h"
 
 #include <algorithm>
@@ -202,6 +205,17 @@ namespace {
 		auto& texture = descriptor.Textures.emplace_back();
 		texture.Name = SdfAtlasTextureName;
 		texture.Resource = LoadSdfAtlas(settings.SdfAtlas);
+		const auto& atlas = texture.Resource;
+		const int resolution = static_cast<int>(std::sqrt(atlas.width));
+		const int regionCount = atlas.height == resolution + 1 ? 1 : atlas.colorData[3];
+		std::set<int> tracked;
+		for (const auto& region : settings.SdfMovingRegions) {
+			Require(region.Region >= 0 && region.Region < regionCount && tracked.insert(region.Region).second && !region.Object.empty()
+					&& !region.Model.empty() && region.BakeWorld.size() == 12
+					&& std::ranges::all_of(
+						region.BakeWorld, [](float value) { return std::isfinite(value); }),
+				"SdfMovingRegions", "needs a unique valid region, object name, model path and 12 finite row-major bake matrix values");
+		}
 		texture.Size = RenderGraphPipeline::TextureDesc::SizeBase::FIXED;
 		texture.Persistent = true;
 	}
@@ -331,37 +345,45 @@ namespace {
 		stages.insert(trace, std::move(relight));
 	}
 
-	void ConfigureSurfaceCache(RenderGraphPipeline::Descriptor& descriptor) {
-		const auto& settings = descriptor.ScreenProbes;
-		const bool software = !settings.SdfAtlas.empty();
-		Require(!descriptor.Graph.Enabled && (software || settings.UseRayQuery), "SurfaceCache", "requires the linear SDF or ray-query pipeline");
-		auto& stages = descriptor.Stages;
-		Require(std::ranges::none_of(stages, [](const auto& stage) { return stage.Name == SurfaceCacheRelightStageName; })
+	void AddSurfaceCacheAtlas(RenderGraphPipeline::Descriptor& descriptor, const std::string& path, int azimuths, int elevations) {
+		Require(std::ranges::none_of(descriptor.Stages, [](const auto& stage) { return stage.Name == SurfaceCacheRelightStageName; })
 				&& std::ranges::none_of(descriptor.Textures, [](const auto& texture) { return texture.Name == SurfaceCacheTextureName; }),
 			"SurfaceCache", "reserves SPSurfaceRelight and SPSurfaceRadiance");
-		descriptor.SurfaceCache = LoadSurfaceCache(settings.SurfaceCache);
+		descriptor.SurfaceCache = LoadSurfaceCache(path);
 		auto& texture = descriptor.Textures.emplace_back();
 		texture.Name = SurfaceCacheTextureName;
 		texture.Size = RenderGraphPipeline::TextureDesc::SizeBase::FIXED;
 		texture.Persistent = true;
-		texture.Resource.width = SurfaceCacheCardSide;
-		texture.Resource.height = SurfaceCacheCardSide * descriptor.SurfaceCache->Gpu.State[0];
+		texture.Resource.width = SurfaceCacheCardSide * azimuths;
+		texture.Resource.height = SurfaceCacheCardSide * elevations * descriptor.SurfaceCache->Gpu.State[0];
 		texture.Resource.channels = 4;
 		texture.Resource.pixelType = PixelFormat::RGBA16_FLOAT;
 		texture.Resource.isFloat = true;
 		texture.Resource.storage = true;
 		texture.Resource.useMipmap = false;
+	}
 
+	PipelineStage::Descriptor SurfaceCacheRelightDescriptor() {
 		PipelineStage::Descriptor relight;
 		relight.Name = SurfaceCacheRelightStageName;
 		relight.Draw = DrawContent::COMPUTE;
 		relight.Unsupported = "BYPASS";
 		relight.Once = true;
-		relight.Writes = { texture.Name };
+		relight.Writes = { SurfaceCacheTextureName };
+		return relight;
+	}
+
+	void ConfigureSurfaceCache(RenderGraphPipeline::Descriptor& descriptor) {
+		const auto& settings = descriptor.ScreenProbes;
+		const bool software = !settings.SdfAtlas.empty();
+		Require(!descriptor.Graph.Enabled && (software || settings.UseRayQuery), "SurfaceCache", "requires the linear SDF or ray-query pipeline");
+		AddSurfaceCacheAtlas(descriptor, settings.SurfaceCache, 1, 1);
+		auto relight = SurfaceCacheRelightDescriptor();
 		if (software) {
 			ConfigureSdfSurfaceCache(descriptor, std::move(relight));
 			return;
 		}
+		auto& stages = descriptor.Stages;
 		auto trace = std::ranges::find(stages, "SPRayQueryTrace", &PipelineStage::Descriptor::Name);
 		Require(trace != stages.end() && trace->Enabled && trace->Draw == DrawContent::COMPUTE
 				&& trace->Program == "/shaders/indirectLighting/screenProbes/spRayQueryTrace.shader" && !trace->Bindings.contains("SurfaceCache")
@@ -369,18 +391,49 @@ namespace {
 			"SurfaceCache", "requires the standard SPRayQueryTrace pass");
 		relight.Program = "/shaders/indirectLighting/screenProbes/spSurfaceRelight.shader";
 		relight.HitGroupOffset = trace->HitGroupOffset;
-		relight.LaunchTexture = texture.Name;
+		relight.LaunchTexture = SurfaceCacheTextureName;
 		relight.Reads = { "@Scene" };
-		relight.Bypass = { { texture.Name, trace->Bypass.at("SPRadianceRT") } };
+		relight.Bypass = { { SurfaceCacheTextureName, trace->Bypass.at("SPRadianceRT") } };
 		for (const auto* binding : { "SceneAS", "RTGeometry", "RTInstances", "RTAlbedoMaps", "engine_Lights" }) {
 			relight.Bindings.emplace(binding, trace->Bindings.at(binding));
 		}
 		relight.Bindings.emplace("SurfaceCache", SurfaceCacheBufferName);
-		relight.Bindings.emplace("SurfaceRadiance", texture.Name);
+		relight.Bindings.emplace("SurfaceRadiance", SurfaceCacheTextureName);
 		trace->Program = "/shaders/indirectLighting/screenProbes/spRayQuerySurfaceCache.shader";
 		trace->Bindings.emplace("SurfaceCache", SurfaceCacheBufferName);
-		trace->Bindings.emplace("SurfaceRadiance", texture.Name);
-		trace->Reads.push_back(texture.Name);
+		trace->Bindings.emplace("SurfaceRadiance", SurfaceCacheTextureName);
+		trace->Reads.push_back(SurfaceCacheTextureName);
+		stages.insert(trace, std::move(relight));
+	}
+
+	void ConfigureReflectionSurfaceCache(RenderGraphPipeline::Descriptor& descriptor) {
+		const auto& settings = descriptor.ScreenProbes;
+		Require(!descriptor.Graph.Enabled && settings.SdfAtlas.empty() && settings.SurfaceCache.empty(), "ReflectionSurfaceCache",
+			"requires the linear hardware reflection pipeline and its own cache");
+		auto& stages = descriptor.Stages;
+		auto trace = std::ranges::find(stages, "RTReflectionRawTrace", &PipelineStage::Descriptor::Name);
+		Require(trace != stages.end() && trace->Enabled && trace->Draw == DrawContent::RAY_TRACE
+				&& trace->Program == "/shaders/raytracing/glossyReflection.shader" && trace->Bypass.contains("RTReflectionRaw")
+				&& !trace->Bindings.contains("SurfaceCache") && !trace->Bindings.contains("SurfaceRadiance"),
+			"ReflectionSurfaceCache", "requires the standard glossy RT trace");
+		AddSurfaceCacheAtlas(descriptor, settings.ReflectionSurfaceCache, 8, 4);
+		auto relight = SurfaceCacheRelightDescriptor();
+		relight.Program = "/shaders/raytracing/glossySurfaceRelight.shader";
+		relight.HitGroupOffset = trace->HitGroupOffset;
+		relight.LaunchX = SurfaceCacheCardSide;
+		relight.LaunchY = SurfaceCacheCardSide * descriptor.SurfaceCache->Gpu.State[0];
+		relight.LaunchZ = 1;
+		relight.Reads = { "@Scene" };
+		relight.Bypass = { { SurfaceCacheTextureName, trace->Bypass.at("RTReflectionRaw") } };
+		for (const auto* binding : { "SceneAS", "RTGeometry", "RTInstances", "RTAlbedoMaps", "engine_Lights" }) {
+			relight.Bindings.emplace(binding, trace->Bindings.at(binding));
+		}
+		relight.Bindings.emplace("SurfaceCache", SurfaceCacheBufferName);
+		relight.Bindings.emplace("SurfaceRadiance", SurfaceCacheTextureName);
+		trace->Program = "/shaders/raytracing/glossyCachedReflection.shader";
+		trace->Bindings.emplace("SurfaceCache", SurfaceCacheBufferName);
+		trace->Bindings.emplace("SurfaceRadiance", SurfaceCacheTextureName);
+		trace->Reads.push_back(SurfaceCacheTextureName);
 		stages.insert(trace, std::move(relight));
 	}
 
@@ -471,6 +524,7 @@ void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
 	const auto& settings = descriptor.ScreenProbes;
 	Require(settings.SdfScene.empty() || !settings.SdfAtlas.empty(), "SdfScene", "requires SdfAtlas");
 	Require(!settings.SdfReflections || !settings.SdfAtlas.empty(), "SdfReflections", "requires SdfAtlas");
+	Require(settings.SdfMovingRegions.empty() || !settings.SdfAtlas.empty(), "SdfMovingRegions", "requires SdfAtlas");
 	bool linked = false;
 	for (const auto* stage : AllStages(descriptor)) {
 		linked |= LinksScreenProbeBuffer(*stage);
@@ -486,6 +540,9 @@ void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
 	}
 	if (settings.SdfReflections) {
 		ConfigureSdfReflections(descriptor);
+	}
+	if (!settings.ReflectionSurfaceCache.empty()) {
+		ConfigureReflectionSurfaceCache(descriptor);
 	}
 	if (!settings.Enabled) {
 		Require(settings.DdgiProbeBudget == 0, "DdgiProbeBudget", "requires ScreenProbes.Enabled");
@@ -520,31 +577,58 @@ void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
 	SelectTemporalStages(descriptor);
 }
 
-void UpdateSdfTrace(RenderGraphPipeline& pipeline, Renderer& renderer, const std::string& scenePath) {
+bool UpdateSdfTrace(RenderGraphPipeline& pipeline, Renderer& renderer, SCENE_SYSTEM::Scene& scene, const std::string& scenePath) {
 	const auto& settings = pipeline.mDescriptor.ScreenProbes;
-	if (settings.SdfAtlas.empty()) {
-		return;
-	}
 	auto gpu = ResolveScreenProbeGpuSettings(settings, {});
 	if (!scenePath.empty() && RESOURCES::FileSystem::normalizePath(scenePath) == RESOURCES::FileSystem::normalizePath(settings.SdfScene)) {
 		gpu.ChainMask |= SdfTraceActiveBit;
+		for (const auto& region : settings.SdfMovingRegions) {
+			auto& offset = gpu.SdfRegionOffsets[region.Region];
+			offset[3] = -1.f;
+			const auto objects = scene.findObjectsByName(region.Object);
+			if (objects.size() != 1 || !objects.front()->getIsActive() || !objects.front()->getIsVisible() || !objects.front()->getTransform()) {
+				continue;
+			}
+			const auto modelRenderer = objects.front()->getComponent<ECS::ModelRenderer>();
+			const auto model = modelRenderer ? modelRenderer->getModel() : nullptr;
+			if (!model || RESOURCES::FileSystem::normalizePath(model->getPath()) != RESOURCES::FileSystem::normalizePath(region.Model)) {
+				continue;
+			}
+			auto world = objects.front()->getTransform()->getWorldMatrix();
+			bool translationOnly = true;
+			for (int row = 0; row < 3; ++row) {
+				for (int column = 0; column < 3; ++column) {
+					translationOnly &= std::abs(world(row, column) - region.BakeWorld[row * 4 + column]) <= 1e-5f;
+				}
+				offset[row] = world(row, 3) - region.BakeWorld[row * 4 + 3];
+				translationOnly &= std::isfinite(offset[row]) && std::abs(offset[row]) <= 1000000.f;
+			}
+			if (!translationOnly) {
+				offset = { 0.f, 0.f, 0.f, -1.f };
+				continue;
+			}
+			offset[3] = (offset[0] != 0.f || offset[1] != 0.f || offset[2] != 0.f) ? 1.f : 0.f;
+		}
 	}
+	const bool moved = gpu.SdfRegionOffsets != pipeline.mSdfRegionOffsets;
+	pipeline.mSdfRegionOffsets = gpu.SdfRegionOffsets;
 	renderer.updateUniformBuffer(pipeline.mUniformBuffers.at(ScreenProbeBufferName), gpu);
+	return moved;
 }
 
 void CreateScreenProbeBuffer(RenderGraphPipeline& pipeline, Renderer& renderer) {
 	const auto& settings = pipeline.mDescriptor.ScreenProbes;
+	if (pipeline.mDescriptor.SurfaceCache) {
+		const SurfaceCacheGpu inactive;
+		pipeline.mUniformBuffers[SurfaceCacheBufferName] = renderer.createUniformBuffer(&inactive, sizeof(inactive));
+		pipeline.mSurfaceCacheActive = false;
+	}
 	if (!settings.Enabled && !settings.SdfReflections) {
 		return;
 	}
 	const auto volume = ResolveDdgiVolume(pipeline.mDescriptor);
 	const auto gpu = ResolveScreenProbeGpuSettings(settings, volume);
 	pipeline.mUniformBuffers[ScreenProbeBufferName] = renderer.createUniformBuffer(&gpu, sizeof(gpu));
-	if (pipeline.mDescriptor.SurfaceCache) {
-		const SurfaceCacheGpu inactive;
-		pipeline.mUniformBuffers[SurfaceCacheBufferName] = renderer.createUniformBuffer(&inactive, sizeof(inactive));
-		pipeline.mSurfaceCacheActive = false;
-	}
 	if (settings.DdgiProbeBudget > 0) {
 		pipeline.mDdgiScroll.Volume = volume;
 		pipeline.mDdgiScroll.ScreenProbes = gpu;
