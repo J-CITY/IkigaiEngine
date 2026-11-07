@@ -1449,8 +1449,8 @@
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spSdfSurfaceRelight.comp.glsl",
-      "size": 1098,
-      "sha256": "d44515617913d7f621e6bd2ef583388e20121ac980fd35b7fb23e59980e2d07c"
+      "size": 1847,
+      "sha256": "18106ee8b5764f455e58e63cc87cf0d8e3706817dd04f298771c66523ead1c5f"
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spSdfSurfaceRelight.mat",
@@ -1764,8 +1764,8 @@
     },
     {
       "path": "engine/shaders/raytracing/rtLighting.glsl",
-      "size": 3093,
-      "sha256": "1f1da23cfdab16361547c94345c7c9926cc15b9a01a570014e1449f36f230ef5"
+      "size": 3383,
+      "sha256": "98f5a0f96f86e4d8ce33f659a949ccf66d65eff52b17b98ed26dd21939496054"
     },
     {
       "path": "engine/shaders/raytracing/skinVertices.comp",

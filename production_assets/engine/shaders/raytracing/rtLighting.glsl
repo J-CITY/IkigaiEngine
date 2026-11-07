@@ -16,15 +16,21 @@ float rtLightAttenuation(Light light,vec3 p,out vec3 l,out float d) {
     if(light.type==2){float outer=cos(radians(light.outerCutoff)),inner=cos(radians(light.cutoff));attenuation*=clamp((dot(-l,normalize(light.forward))-outer)/max(inner-outer,.0001),0,1);}
     return attenuation;
 }
-vec3 rtAccumulateDiffuseLight(vec3 result,vec3 p,vec3 n,vec3 albedo) {
+vec3 rtAccumulateDiffuseLight(vec3 result,vec3 p,vec3 n,vec3 albedo,out uint visibleShadowLights) {
+    visibleShadowLights=0u;
     for(int i=0;i<RT_LIGHTS_INSTANCE.lights.length();++i) {
         Light light=RT_LIGHTS_INSTANCE.lights[i];if(light.type<0||light.type>2||light.intensity<=0)continue;
         vec3 l;float d,attenuation=rtLightAttenuation(light,p,l,d);
         float nl=max(dot(n,l),0);if(nl<=0||attenuation<=0)continue;
         float shadow=light.shadows!=0?rtLightVisibility(p,n,l,light.type==1?10000:d-.002):1;
+        if(i<32&&light.shadows!=0&&shadow>0.0)visibleShadowLights|=1u<<uint(i);
         result+=albedo/3.14159265*light.color*light.intensity*attenuation*nl*shadow;
     }
     return result;
+}
+vec3 rtAccumulateDiffuseLight(vec3 result,vec3 p,vec3 n,vec3 albedo) {
+    uint unused;
+    return rtAccumulateDiffuseLight(result,p,n,albedo,unused);
 }
 vec3 rtDirectBrdf(vec3 n,vec3 v,vec3 l,float nl,float nv,vec3 a,vec3 f0,float rough,float metal) {
     vec3 h=normalize(l+v),f=f0+(1-f0)*pow(1-max(dot(h,v),0),5);
