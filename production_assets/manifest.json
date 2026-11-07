@@ -1145,7 +1145,7 @@
     {
       "path": "engine/renderPipeline/rendering/hybrid-sp-rt.json",
       "size": 174248,
-      "sha256": "2e438233068fc8b9e9200024e9dcd0876ea89f7bdf8207a611815995fbfbd7d1"
+      "sha256": "2c93e47da876bfd4eb3307e289808e580da162210ffcb9524f2cce369eefa2b7"
     },
     {
       "path": "engine/renderPipeline/rendering/hybrid-sp.json",

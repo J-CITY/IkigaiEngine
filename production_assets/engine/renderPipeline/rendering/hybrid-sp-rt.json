@@ -7109,7 +7109,7 @@
     {
       "Name": "GIDenoise",
       "Effect": "GLOBAL_ILLUMINATION",
-      "MaxHistory": 32,
+      "MaxHistory": 64,
       "ClampSigma": 1.5,
       "ClampStride": 16,
       "DepthTolerance": 0.03,
