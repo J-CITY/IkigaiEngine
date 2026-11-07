@@ -17,6 +17,9 @@ layout(set=0,binding=15,rgba16f) uniform writeonly image2D Radiance;
 #ifdef SP_SOFTWARE_TRACE
 #include "spSdfMarch.glsl"
 #endif
+#ifdef SP_SDF_SURFACE_CACHE
+#include "spSdfCacheSample.glsl"
+#endif
 
 struct ScreenHit {
     vec2 Uv;
@@ -133,9 +136,17 @@ void main() {
     else {
 #ifdef SP_SOFTWARE_TRACE
         vec3 radiance;
-        if(spChainEnabled(SP_CHAIN_SDF_ACTIVE)&&spTraceSdf(position,normal,dir,radiance)) {
-            imageStore(Radiance,texel,vec4(radiance,SP_KIND_SDF));
-            return;
+        if(spChainEnabled(SP_CHAIN_SDF_ACTIVE)) {
+            float kind=SP_KIND_SDF;
+#ifdef SP_SDF_SURFACE_CACHE
+            bool found=spTraceCachedSdf(position,normal,dir,radiance,kind);
+#else
+            bool found=spTraceSdf(position,normal,dir,radiance);
+#endif
+            if(found) {
+                imageStore(Radiance,texel,vec4(radiance,kind));
+                return;
+            }
         }
 #endif
         // Miss: environment, or zero when the ENVIRONMENT link is disabled. SPRayQueryTrace (hybrid-sp-rt) continues the chain.

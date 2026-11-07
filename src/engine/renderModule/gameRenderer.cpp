@@ -900,7 +900,10 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		UpdateSdfTrace(*mRenderPipeline, *mContext.render, mContext.sceneManager->getCurrentSceneSourcePath());
 	}
 	if (mRenderPipeline->mDescriptor.SurfaceCache) {
-		UpdateSurfaceCache(*mRenderPipeline, *mContext.render, mContext.sceneManager->getCurrentSceneSourcePath(), mRaySceneChanged);
+		const bool changed = mRenderPipeline->mDescriptor.ScreenProbes.SdfAtlas.empty()
+			? mRaySceneChanged
+			: UpdateSdfCacheLights(*mRenderPipeline, *mContext.render, scene.findLightData());
+		UpdateSurfaceCache(*mRenderPipeline, *mContext.render, mContext.sceneManager->getCurrentSceneSourcePath(), changed);
 	}
 	mContext.render->updateUniformBuffer(mShadowUbo, mShadowData);
 

@@ -1,0 +1,7 @@
+{
+  "ShaderPath": "/shaders/indirectLighting/screenProbes/spSdfSurfaceRelight.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Uniforms": {}
+}

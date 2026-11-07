@@ -1319,8 +1319,8 @@
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/screenProbeMath.glsl",
-      "size": 5065,
-      "sha256": "3c943a3839c9527568af87b105d88cee123fd6b241db2a5de1899581c699f3f5"
+      "size": 5130,
+      "sha256": "bef6e49e6aab79285d461a69ffa104e5103b084773b4d98aac974bac40688942"
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/screenProbeSettings.glsl",
@@ -1418,9 +1418,49 @@
       "sha256": "98fd1cb7b16a091e619efd2981edef016b641cd441cf07d32e0fee8fa002ad78"
     },
     {
+      "path": "engine/shaders/indirectLighting/screenProbes/spSdfCacheSample.glsl",
+      "size": 2539,
+      "sha256": "66865cfb12e45a9e7ec70cfa4adf6207e5deb4c053b6690e1ebc2828f9580a1d"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spSdfCachedTrace.comp.glsl",
+      "size": 98,
+      "sha256": "cfa6939700039e3c1853ff99782b910f6fc8f69b0e5c37124a8c8ada9a8b3333"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spSdfCachedTrace.mat",
+      "size": 178,
+      "sha256": "2e6c048d7213e3802847c400721147d74bf439cf2cb44eea8a1eb662ed8bad2b"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spSdfCachedTrace.shader",
+      "size": 104,
+      "sha256": "3f17e5de2c6c428a48b9868125ac1a06e8b251f7cbb8ad039472640cb1000250"
+    },
+    {
       "path": "engine/shaders/indirectLighting/screenProbes/spSdfMarch.glsl",
-      "size": 8982,
-      "sha256": "376feff751c13a6fdd967462f91e6c830b72c3ffb6e73502241f317db31f6520"
+      "size": 9552,
+      "sha256": "ac74a2faaeeff36ccde7b7226ee3d070acb6c18285eca84433153e87e03d7e1a"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spSdfSurfaceLighting.glsl",
+      "size": 398,
+      "sha256": "70489f52d317c0430455e58bc5875ec8390bf7642f4068791118b82038e8e8ce"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spSdfSurfaceRelight.comp.glsl",
+      "size": 1098,
+      "sha256": "d44515617913d7f621e6bd2ef583388e20121ac980fd35b7fb23e59980e2d07c"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spSdfSurfaceRelight.mat",
+      "size": 181,
+      "sha256": "b84aba16869099b55d244a62b4718c851b520cf0c1d4883346eb7ce7cdc61ea1"
+    },
+    {
+      "path": "engine/shaders/indirectLighting/screenProbes/spSdfSurfaceRelight.shader",
+      "size": 107,
+      "sha256": "4ba76754ff52e5652c5324cb0e85417682994f78329adfa5f1e51a73a7249e04"
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spSdfTrace.comp.glsl",
@@ -1454,8 +1494,8 @@
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spSurfaceCards.glsl",
-      "size": 277,
-      "sha256": "c01088d8689750adeb29bc24540f9031cc08a9db75453c617150d22a6e920438"
+      "size": 461,
+      "sha256": "af070022f7ebad1cbc27eabcee71ab373637de3ed6ea872273042eeb7c231b2a"
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spSurfaceRelight.comp",
@@ -1499,8 +1539,8 @@
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spTraceShared.glsl",
-      "size": 7045,
-      "sha256": "dbfa87683d7730bb91fa8dbbe564ee2c7df6f04d70fb30941beb7323c1639f1e"
+      "size": 7328,
+      "sha256": "00151b61f8ac5466bf060de9e54869063ac8ebc658a313fbf8dfaa30b6f45826"
     },
     {
       "path": "engine/shaders/indirectLighting/screenProbes/spUpsample.comp.glsl",
@@ -1689,8 +1729,8 @@
     },
     {
       "path": "engine/shaders/raytracing/rtLighting.glsl",
-      "size": 2778,
-      "sha256": "12c0aa86aee3b3dad94d12285ad7a0f31b8a528ce38b55634723ac9bec5e1fb3"
+      "size": 2955,
+      "sha256": "4f858e9307709af0e78e43d67cf716f4a39436d3b460ca09cad4f0b670d69098"
     },
     {
       "path": "engine/shaders/raytracing/skinVertices.comp",

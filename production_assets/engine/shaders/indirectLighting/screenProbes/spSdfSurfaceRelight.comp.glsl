@@ -1,0 +1,25 @@
+#version 450
+#include "screenProbeSettings.glsl"
+#include "screenProbeMath.glsl"
+#define SP_SDF_GEOMETRY_ONLY
+#include "spSdfMarch.glsl"
+#include "spSdfSurfaceLighting.glsl"
+
+layout(local_size_x=8,local_size_y=8,local_size_z=1) in;
+layout(set=0,binding=17,rgba16f) uniform writeonly image2D SurfaceRadiance;
+
+void main() {
+    ivec2 texel=ivec2(gl_GlobalInvocationID.xy);
+    if(any(greaterThanEqual(texel,imageSize(SurfaceRadiance))))return;
+    int index=texel.y/SP_SURFACE_TILE;
+    if(index>=SurfaceCache.State.x||!spChainEnabled(SP_CHAIN_SDF_ACTIVE)) {
+        imageStore(SurfaceRadiance,texel,vec4(0.0));
+        return;
+    }
+    SurfaceCard card=SurfaceCache.Cards[index];
+    vec2 uv=(vec2(texel.x,texel.y%SP_SURFACE_TILE)+0.5)/SP_SURFACE_TILE;
+    vec3 position=card.OriginTolerance.xyz+card.AxisU.xyz*uv.x+card.AxisV.xyz*uv.y;
+    vec3 normal=normalize(cross(card.AxisU.xyz,card.AxisV.xyz));
+    vec3 radiance=rtAccumulateDiffuseLight(card.Emissive.rgb,position,normal,card.AlbedoRoughness.rgb);
+    imageStore(SurfaceRadiance,texel,vec4(clamp(radiance,vec3(0.0),vec3(65504.0)),1.0));
+}

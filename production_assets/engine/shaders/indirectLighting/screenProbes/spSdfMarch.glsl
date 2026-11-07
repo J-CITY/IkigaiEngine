@@ -73,25 +73,15 @@ bool spSdfStep(vec3 p,int size,int firstRow,out float advance,out uint material)
     return safeDistance<=0.125&&spSdfInterpolated(p,size,firstRow)<=0.2;
 }
 
-vec3 spSdfShade(vec3 p,vec3 direction,int size,int firstRow,uint materialId) {
-    int material=4+6*int(min(materialId,31u));
-    int metadataRow=firstRow+size;
-    vec3 albedo=vec3(spSdfMetadata(material,metadataRow),spSdfMetadata(material+1,metadataRow),spSdfMetadata(material+2,metadataRow));
-    vec3 emissive=vec3(spSdfMetadata(material+3,metadataRow),spSdfMetadata(material+4,metadataRow),spSdfMetadata(material+5,metadataRow));
-    if(spChainEnabled(SP_CHAIN_ENVIRONMENT)) {
-        const vec2 offset=vec2(0.5,0.0);
-        vec3 gradient=vec3(spSdfInterpolated(p+offset.xyy,size,firstRow)-spSdfInterpolated(p-offset.xyy,size,firstRow),
-            spSdfInterpolated(p+offset.yxy,size,firstRow)-spSdfInterpolated(p-offset.yxy,size,firstRow),
-            spSdfInterpolated(p+offset.yyx,size,firstRow)-spSdfInterpolated(p-offset.yyx,size,firstRow));
-        vec3 hitNormal=dot(gradient,gradient)>1e-6?normalize(gradient):-direction;
-        // Low-cost diffuse sky approximation for the static surface.
-        emissive+=albedo*textureLod(Environment,hitNormal,0.0).rgb;
-    }
-    return clamp(emissive,vec3(0.0),vec3(65504.0));
-}
+struct SpSdfHit {
+    vec3 LocalPosition;
+    vec4 Grid;
+    int Size;
+    int FirstRow;
+    uint Material;
+};
 
-bool spTraceSingleSdf(vec3 position,vec3 normal,vec3 direction,int size,float range,out vec3 radiance) {
-    radiance=vec3(0.0);
+bool spTraceSingleSdf(vec3 position,vec3 normal,vec3 direction,int size,float range,out SpSdfHit hit) {
     vec4 grid=spSdfGrid(size);
     if(!spSdfValidGrid(grid))return false;
     vec3 origin=(position-grid.xyz)/grid.w+0.65*normal;
@@ -104,7 +94,7 @@ bool spTraceSingleSdf(vec3 position,vec3 normal,vec3 direction,int size,float ra
         float advance;
         uint material;
         if(spSdfStep(p,size,0,advance,material)) {
-            radiance=spSdfShade(p,direction,size,0,material);
+            hit=SpSdfHit(p,grid,size,0,material);
             return true;
         }
         start+=advance;
@@ -122,8 +112,7 @@ int spSdfFirstRow(int region,int size) {
     return 1+region*(size+1);
 }
 
-bool spTraceSdfBvh(vec3 position,vec3 normal,vec3 direction,int size,int count,float range,out vec3 radiance) {
-    radiance=vec3(0.0);
+bool spTraceSdfBvh(vec3 position,vec3 normal,vec3 direction,int size,int count,float range,out SpSdfHit hit) {
     vec4 grids[SP_SDF_MAX_REGIONS];
     float minSpacing=3.402823e38;
     float receiverSpacing=minSpacing;
@@ -179,7 +168,7 @@ bool spTraceSdfBvh(vec3 position,vec3 normal,vec3 direction,int size,int count,f
         float advance;
         uint material;
         if(spSdfStep(p,size,firstRow,advance,material)) {
-            radiance=spSdfShade(p,direction,size,firstRow,material);
+            hit=SpSdfHit(p,grid,size,firstRow,material);
             return true;
         }
         interval.Start+=advance*grid.w;
@@ -189,17 +178,55 @@ bool spTraceSdfBvh(vec3 position,vec3 normal,vec3 direction,int size,int count,f
     return false;
 }
 
-bool spTraceSdf(vec3 position,vec3 normal,vec3 direction,out vec3 radiance) {
-    radiance=vec3(0.0);
+bool spTraceSdfHit(vec3 position,vec3 normal,vec3 direction,float maxRange,out SpSdfHit hit) {
+    float range=min(maxRange,SP_SDF_MAX_RANGE);
+    if(range<=0.0)return false;
     ivec2 atlas=textureSize(SdfAtlas,0);
-    float range=min(engine_Frame.CameraParams.y,SP_SDF_MAX_RANGE);
     int size=atlas.y-1;
-    if(size>=16&&size<=64&&atlas.x==size*size)return spTraceSingleSdf(position,normal,direction,size,range,radiance);
+    if(size>=16&&size<=64&&atlas.x==size*size)return spTraceSingleSdf(position,normal,direction,size,range,hit);
     if(atlas.x<256||atlas.x>4096)return false;
     size=int(sqrt(float(atlas.x)));
     uvec4 header=spSdfBytes(ivec2(0));
     int count=int(header.w);
     if(atlas.x!=size*size||any(notEqual(header.xyz,uvec3(83,68,70)))||count<1||count>SP_SDF_MAX_REGIONS
         ||atlas.y!=1+count*(size+1))return false;
-    return spTraceSdfBvh(position,normal,direction,size,count,range,radiance);
+    return spTraceSdfBvh(position,normal,direction,size,count,range,hit);
 }
+
+#ifndef SP_SDF_GEOMETRY_ONLY
+void spSdfMaterial(SpSdfHit hit,out vec3 albedo,out vec3 emissive) {
+    int material=4+6*int(min(hit.Material,31u));
+    int row=hit.FirstRow+hit.Size;
+    albedo=vec3(spSdfMetadata(material,row),spSdfMetadata(material+1,row),spSdfMetadata(material+2,row));
+    emissive=vec3(spSdfMetadata(material+3,row),spSdfMetadata(material+4,row),spSdfMetadata(material+5,row));
+}
+
+vec3 spSdfGradient(SpSdfHit hit) {
+    const vec2 offset=vec2(0.5,0.0);
+    vec3 p=hit.LocalPosition;
+    int size=hit.Size,firstRow=hit.FirstRow;
+    return vec3(spSdfInterpolated(p+offset.xyy,size,firstRow)-spSdfInterpolated(p-offset.xyy,size,firstRow),
+        spSdfInterpolated(p+offset.yxy,size,firstRow)-spSdfInterpolated(p-offset.yxy,size,firstRow),
+        spSdfInterpolated(p+offset.yyx,size,firstRow)-spSdfInterpolated(p-offset.yyx,size,firstRow));
+}
+
+vec3 spSdfAmbient(vec3 albedo,vec3 normal) {
+    // Low-cost diffuse sky approximation for the static surface.
+    return spChainEnabled(SP_CHAIN_ENVIRONMENT)?albedo*textureLod(Environment,normal,0.0).rgb:vec3(0.0);
+}
+
+bool spTraceSdf(vec3 position,vec3 normal,vec3 direction,out vec3 radiance) {
+    radiance=vec3(0.0);
+    SpSdfHit hit;
+    if(!spTraceSdfHit(position,normal,direction,engine_Frame.CameraParams.y,hit))return false;
+    vec3 albedo,emissive;
+    spSdfMaterial(hit,albedo,emissive);
+    if(spChainEnabled(SP_CHAIN_ENVIRONMENT)) {
+        vec3 gradient=spSdfGradient(hit);
+        vec3 hitNormal=dot(gradient,gradient)>1e-6?normalize(gradient):-direction;
+        emissive+=spSdfAmbient(albedo,hitNormal);
+    }
+    radiance=clamp(emissive,vec3(0.0),vec3(65504.0));
+    return true;
+}
+#endif

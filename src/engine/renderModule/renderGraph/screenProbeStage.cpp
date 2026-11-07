@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <cstring>
 #include <iostream>
 #include <set>
 #include <stdexcept>
@@ -16,6 +17,8 @@ namespace {
 	constexpr auto DdgiScrollBufferName = "DdgiScrollSettings";
 	constexpr auto SurfaceCacheBufferName = "SurfaceCacheSettings";
 	constexpr auto SurfaceCacheTextureName = "SPSurfaceRadiance";
+	constexpr auto SdfCacheLightsBufferName = "SdfCacheLights";
+	constexpr size_t SdfCacheMaxLights = 8;
 	constexpr int SdfTraceActiveBit = 1 << 4;
 	constexpr auto SdfAtlasTextureName = "SPSdfAtlas";
 	void Require(bool condition, const std::string& field, const std::string& rule) {
@@ -298,16 +301,41 @@ namespace {
 		return result;
 	}
 
+	void ConfigureSdfSurfaceCache(RenderGraphPipeline::Descriptor& descriptor, PipelineStage::Descriptor relight) {
+		const auto& settings = descriptor.ScreenProbes;
+		Require(
+			settings.Enabled && !settings.UseRayQuery && descriptor.SurfaceCache->Scene == RESOURCES::FileSystem::normalizePath(settings.SdfScene),
+			"SurfaceCache", "requires enabled screen probes and cards baked for the SDF scene");
+		auto& stages = descriptor.Stages;
+		auto trace = std::ranges::find(stages, "SPTrace", &PipelineStage::Descriptor::Name);
+		Require(trace != stages.end() && trace->Enabled && trace->Material == "/shaders/indirectLighting/screenProbes/spSdfTrace.mat", "SurfaceCache",
+			"requires the standard SDF screen trace");
+		auto& lights = descriptor.Buffers.emplace_back();
+		lights.Name = SdfCacheLightsBufferName;
+		lights.Type = RenderGraphPipeline::BufferType::STORAGE;
+		lights.Count = 1;
+		lights.Stride = sizeof(LightOGL);
+		relight.Material = "/shaders/indirectLighting/screenProbes/spSdfSurfaceRelight.mat";
+		relight.DispatchTexture = SurfaceCacheTextureName;
+		relight.Compute.Requires = trace->Compute.Requires;
+		relight.Reads = { SdfAtlasTextureName };
+		relight.Bypass = { { SurfaceCacheTextureName, trace->Bypass.at("SPRadiance") } };
+		relight.Uniforms.emplace("SurfaceRadiance", std::string(SurfaceCacheTextureName));
+		relight.Uniforms.emplace("SdfAtlas", std::string(SdfAtlasTextureName));
+		relight.BufferLinks = { { "ScreenProbe", ScreenProbeBufferName }, { "SurfaceCache", SurfaceCacheBufferName },
+			{ "SdfCacheLights", SdfCacheLightsBufferName } };
+		trace->Material = "/shaders/indirectLighting/screenProbes/spSdfCachedTrace.mat";
+		trace->Uniforms.emplace("SurfaceRadiance", std::string(SurfaceCacheTextureName));
+		trace->BufferLinks.insert(relight.BufferLinks.begin(), relight.BufferLinks.end());
+		trace->Reads.push_back(SurfaceCacheTextureName);
+		stages.insert(trace, std::move(relight));
+	}
+
 	void ConfigureSurfaceCache(RenderGraphPipeline::Descriptor& descriptor) {
 		const auto& settings = descriptor.ScreenProbes;
-		Require(!descriptor.Graph.Enabled && settings.UseRayQuery && settings.SdfAtlas.empty(), "SurfaceCache",
-			"requires the linear RT pipeline with UseRayQuery enabled");
+		const bool software = !settings.SdfAtlas.empty();
+		Require(!descriptor.Graph.Enabled && (software || settings.UseRayQuery), "SurfaceCache", "requires the linear SDF or ray-query pipeline");
 		auto& stages = descriptor.Stages;
-		auto trace = std::ranges::find(stages, "SPRayQueryTrace", &PipelineStage::Descriptor::Name);
-		Require(trace != stages.end() && trace->Enabled && trace->Draw == DrawContent::COMPUTE
-				&& trace->Program == "/shaders/indirectLighting/screenProbes/spRayQueryTrace.shader" && !trace->Bindings.contains("SurfaceCache")
-				&& !trace->Bindings.contains("SurfaceRadiance"),
-			"SurfaceCache", "requires the standard SPRayQueryTrace pass");
 		Require(std::ranges::none_of(stages, [](const auto& stage) { return stage.Name == SurfaceCacheRelightStageName; })
 				&& std::ranges::none_of(descriptor.Textures, [](const auto& texture) { return texture.Name == SurfaceCacheTextureName; }),
 			"SurfaceCache", "reserves SPSurfaceRelight and SPSurfaceRadiance");
@@ -327,13 +355,22 @@ namespace {
 		PipelineStage::Descriptor relight;
 		relight.Name = SurfaceCacheRelightStageName;
 		relight.Draw = DrawContent::COMPUTE;
+		relight.Unsupported = "BYPASS";
+		relight.Once = true;
+		relight.Writes = { texture.Name };
+		if (software) {
+			ConfigureSdfSurfaceCache(descriptor, std::move(relight));
+			return;
+		}
+		auto trace = std::ranges::find(stages, "SPRayQueryTrace", &PipelineStage::Descriptor::Name);
+		Require(trace != stages.end() && trace->Enabled && trace->Draw == DrawContent::COMPUTE
+				&& trace->Program == "/shaders/indirectLighting/screenProbes/spRayQueryTrace.shader" && !trace->Bindings.contains("SurfaceCache")
+				&& !trace->Bindings.contains("SurfaceRadiance"),
+			"SurfaceCache", "requires the standard SPRayQueryTrace pass");
 		relight.Program = "/shaders/indirectLighting/screenProbes/spSurfaceRelight.shader";
 		relight.HitGroupOffset = trace->HitGroupOffset;
 		relight.LaunchTexture = texture.Name;
-		relight.Unsupported = "BYPASS";
-		relight.Once = true;
 		relight.Reads = { "@Scene" };
-		relight.Writes = { texture.Name };
 		relight.Bypass = { { texture.Name, trace->Bypass.at("SPRadianceRT") } };
 		for (const auto* binding : { "SceneAS", "RTGeometry", "RTInstances", "RTAlbedoMaps", "engine_Lights" }) {
 			relight.Bindings.emplace(binding, trace->Bindings.at(binding));
@@ -439,7 +476,8 @@ void ResolveScreenProbes(RenderGraphPipeline::Descriptor& descriptor) {
 		linked |= LinksScreenProbeBuffer(*stage);
 	}
 	for (const auto& buffer : descriptor.Buffers) {
-		if (buffer.Name == ScreenProbeBufferName || buffer.Name == DdgiScrollBufferName || buffer.Name == SurfaceCacheBufferName) {
+		if (buffer.Name == ScreenProbeBufferName || buffer.Name == DdgiScrollBufferName || buffer.Name == SurfaceCacheBufferName
+			|| buffer.Name == SdfCacheLightsBufferName) {
 			throw std::runtime_error("Pipeline buffer name is reserved for ScreenProbes: " + buffer.Name);
 		}
 	}
@@ -523,7 +561,7 @@ void CreateScreenProbeBuffer(RenderGraphPipeline& pipeline, Renderer& renderer) 
 void UpdateSurfaceCache(RenderGraphPipeline& pipeline, Renderer& renderer, const std::string& scenePath, bool sceneChanged) {
 	const auto& config = pipeline.mDescriptor.SurfaceCache.value();
 	const auto relight = std::ranges::find_if(pipeline.mStages, [](const auto& stage) { return stage->mName == SurfaceCacheRelightStageName; });
-	const bool active = relight != pipeline.mStages.end() && (*relight)->mRayTracingProgram && !scenePath.empty()
+	const bool active = relight != pipeline.mStages.end() && ((*relight)->mRayTracingProgram || (*relight)->mCompute) && !scenePath.empty()
 		&& RESOURCES::FileSystem::normalizePath(scenePath) == config.Scene;
 	if (active != pipeline.mSurfaceCacheActive) {
 		auto gpu = config.Gpu;
@@ -544,6 +582,23 @@ void UpdateSurfaceCache(RenderGraphPipeline& pipeline, Renderer& renderer, const
 			(*relight)->mExecuted = false;
 		}
 	}
+}
+
+bool UpdateSdfCacheLights(RenderGraphPipeline& pipeline, Renderer& renderer, std::vector<LightOGL> lights) {
+	if (lights.empty()) {
+		lights.push_back(LightOGL::Inactive());
+	}
+	if (lights.size() > SdfCacheMaxLights) {
+		lights.resize(SdfCacheMaxLights);
+	}
+	const auto& previous = pipeline.mSdfCacheLights;
+	const auto bytes = lights.size() * sizeof(LightOGL);
+	if (lights.size() == previous.size() && std::memcmp(lights.data(), previous.data(), bytes) == 0) {
+		return false;
+	}
+	pipeline.mStorageBuffers.at(SdfCacheLightsBufferName) = renderer.createStorageBuffer(lights.data(), lights.size(), sizeof(LightOGL));
+	pipeline.mSdfCacheLights = std::move(lights);
+	return true;
 }
 
 void UpdateScrollingDdgi(RenderGraphPipeline& pipeline, Renderer& renderer, const MATH::Vector3f& camera) {

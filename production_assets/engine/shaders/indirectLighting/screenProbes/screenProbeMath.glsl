@@ -24,6 +24,7 @@ const int SP_CHAIN_SDF_ACTIVE=16;
 const float SP_KIND_HIT=1.0;
 const float SP_KIND_RAY_QUERY=0.875;
 const float SP_KIND_SURFACE_CACHE=0.8125;
+const float SP_KIND_SDF_CACHE=0.765625;
 const float SP_KIND_SDF=0.75;
 const float SP_KIND_DDGI_AFTER_RAY=0.6875;
 const float SP_KIND_DDGI=0.625;
@@ -46,7 +47,7 @@ bool spChainEnabled(int link) { return (ScreenProbe.Chain.x&link)!=0; }
 int spSampleSource(float kind) {
     if(kind>0.9375)return SP_SOURCE_SCREEN;
     if(kind>0.78)return SP_SOURCE_RAY_QUERY;
-    if(kind==SP_KIND_SDF)return SP_SOURCE_SDF;
+    if(kind==SP_KIND_SDF||kind==SP_KIND_SDF_CACHE)return SP_SOURCE_SDF;
     if(kind>0.59)return SP_SOURCE_DDGI;
     if(kind>0.25)return SP_SOURCE_ENVIRONMENT;
     return SP_SOURCE_INVALID;

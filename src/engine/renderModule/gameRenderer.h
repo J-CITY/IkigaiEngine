@@ -446,6 +446,7 @@ struct RenderGraphPipeline {
 	HistoryValidity mHistory;
 	DdgiScrollRuntime mDdgiScroll;
 	bool mSurfaceCacheActive = false;
+	std::vector<LightOGL> mSdfCacheLights;
 	// Temporal denoiser buffers and light change state (indirectLighting/temporalDenoiseStage.h).
 	TemporalDenoiseRuntime mTemporalDenoise;
 	std::map<std::string, std::shared_ptr<TextureInterface>> mAllocatedTextures;

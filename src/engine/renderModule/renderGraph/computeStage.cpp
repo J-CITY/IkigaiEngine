@@ -592,6 +592,9 @@ void GameRenderer::runComputeStage(PipelineStage& stage, bool async) {
 		}
 	}
 	stage.mExecuted = true;
+	if (mRenderPipeline->mDescriptor.SurfaceCache && stage.mName == SurfaceCacheRelightStageName) {
+		std::cout << "GI5_SURFACE_RELIGHT frame=" << mFrameCount << " cards=" << mRenderPipeline->mDescriptor.SurfaceCache->Gpu.State[0] << "\n";
+	}
 	if (!state.Logged) {
 		std::cout << "Pipeline generic compute: " << stage.mName << (state.UsesProgram ? " program" : " material") << " mode=" << int(state.Mode)
 				  << std::endl;
