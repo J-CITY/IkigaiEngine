@@ -1,6 +1,7 @@
 #include "driverDx12.h"
 #include "captureModule/screenshot.h"
 #include "renderModule/backends/driverFactory.h"
+#include "renderModule/backends/interface/integerColorAttachment.h"
 #include "utilsModule/memory/resourceAllocator.h"
 #include "utilsModule/time/loadTimer.h"
 #include "vertexFormatsDx12.h"
@@ -676,6 +677,9 @@ void DriverDx12::setClearColor(float r, float g, float b, float a) {
 
 void DriverDx12::clear(bool clearColor, bool clearDepth, bool clearStencil) {
 	std::shared_ptr<FrameBufferDx12> fb = mCurrentState.mFrameBuffer ? mCurrentState.mFrameBuffer : getDefaultFrameBuffer();
+	if (clearColor && std::ranges::any_of(fb->getTextures(), [](const auto& texture) { return texture->getFormat() == PixelFormat::RG32_INT; })) {
+		throw std::invalid_argument("RG32_INT attachments need clearIntColorAttachment");
+	}
 	for (auto& texture : fb->getTextures()) {
 		std::static_pointer_cast<TextureDx12>(texture)->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
 	}
@@ -706,11 +710,66 @@ void DriverDx12::clear(bool clearColor, bool clearDepth, bool clearStencil) {
 	}
 }
 
+void DriverDx12::clearIntColorAttachment(uint32_t attachment, int32_t red, int32_t green) {
+	requireOwnerThread();
+	const auto fb = mCurrentState.mFrameBuffer ? mCurrentState.mFrameBuffer : getDefaultFrameBuffer();
+	const auto& textures = fb->getTextures();
+	if (attachment >= textures.size() || textures[attachment]->getFormat() != PixelFormat::RG32_INT) {
+		throw std::invalid_argument("Integer clear requires an RG32_INT color attachment");
+	}
+	const float color[4] { Dx12IntegerRtvClearComponent(red), Dx12IntegerRtvClearComponent(green), 0.0f, 0.0f };
+	std::static_pointer_cast<TextureDx12>(textures[attachment])->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET);
+	const auto stride = mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	const CD3DX12_CPU_DESCRIPTOR_HANDLE handle(fb->getTexHeap()->GetCPUDescriptorHandleForHeapStart(), attachment, stride);
+	mCommandList->ClearRenderTargetView(handle, color, 0, nullptr);
+}
+
 void DriverDx12::draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) {
     if (!vertex_count || !instance_count) return;
     validateVertexDraw({vertex_count,vertex_offset,instance_count});
 	applyState();
 	mCommandList->DrawInstanced((UINT)vertex_count, (UINT)instance_count, (UINT)vertex_offset, 0);
+}
+
+Dx12Resource DriverDx12::copyTextureToReadback(TextureDx12& texture, UINT subresource, D3D12_PLACED_SUBRESOURCE_FOOTPRINT& footprint, UINT64& bytes) {
+	auto* resource = texture.getResource().Get();
+	const auto descriptor = resource->GetDesc();
+	mDevice->GetCopyableFootprints(&descriptor, subresource, 1, 0, &footprint, nullptr, nullptr, &bytes);
+	auto buffer = d3dUtil::CreateBuffer(bytes, D3D12_HEAP_TYPE_READBACK);
+	const auto previousState = texture.getState();
+	d3dUtil::OneTimeSubmit([&](ID3D12GraphicsCommandList* commandList) {
+		texture.setState(commandList, D3D12_RESOURCE_STATE_COPY_SOURCE);
+		const auto source = CD3DX12_TEXTURE_COPY_LOCATION(resource, subresource);
+		const auto destination = CD3DX12_TEXTURE_COPY_LOCATION(buffer.Get(), footprint);
+		commandList->CopyTextureRegion(&destination, 0, 0, 0, &source, nullptr);
+		texture.setState(commandList, previousState);
+	});
+	return buffer;
+}
+
+std::vector<int32_t> DriverDx12::readIntTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) {
+	requireOwnerThread();
+	const auto native = std::dynamic_pointer_cast<TextureDx12>(texture);
+	if (!native || native->getFormat() != PixelFormat::RG32_INT || mip != 0 || layer != 0) {
+		throw std::invalid_argument("DX12 integer readback requires an RG32_INT texture at mip and layer zero");
+	}
+	const size_t width = native->getWidth();
+	const size_t height = native->getHeight();
+	const size_t valuesPerRow = width * 2;
+	std::vector<int32_t> values(valuesPerRow * height);
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint {};
+	UINT64 bytes = 0;
+	auto buffer = copyTextureToReadback(*native, 0, footprint, bytes);
+	void* mapped = nullptr;
+	const D3D12_RANGE readRange { 0, static_cast<SIZE_T>(bytes) };
+	ThrowIfFailed(buffer.Get()->Map(0, &readRange, &mapped));
+	const auto* source = static_cast<const uint8_t*>(mapped) + footprint.Offset;
+	for (size_t row = 0; row < height; ++row) {
+		std::memcpy(values.data() + row * valuesPerRow, source + row * footprint.Footprint.RowPitch, valuesPerRow * sizeof(int32_t));
+	}
+	const D3D12_RANGE written { 0, 0 };
+	buffer.Get()->Unmap(0, &written);
+	return values;
 }
 
 std::vector<float> DriverDx12::readTexture(std::shared_ptr<TextureInterface> texture,unsigned mip,unsigned layer) {
@@ -720,20 +779,12 @@ std::vector<float> DriverDx12::readTexture(std::shared_ptr<TextureInterface> tex
 		&& texture->getFormat() != PixelFormat::R_FLOAT && texture->getType() != TextureType::DEPTH) {
 		throw std::runtime_error("Unsupported DX12 readback format");
 	}
-    auto t=std::static_pointer_cast<TextureDx12>(texture);auto resource=t->getResource().Get();auto desc=resource->GetDesc();
+	auto t = std::static_pointer_cast<TextureDx12>(texture);
 	const bool arrayed = t->getType() == TextureType::TEXTURE_CUBE || t->getType() == TextureType::TEXTURE_2D_ARRAY;
 	const UINT subresource = mip + (arrayed ? layer * t->getMipCount() : 0);
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT rows=0;UINT64 rowSize=0,bytes=0;
-    mDevice->GetCopyableFootprints(&desc,subresource,1,0,&footprint,&rows,&rowSize,&bytes);
-    auto buffer=d3dUtil::CreateBuffer(bytes,D3D12_HEAP_TYPE_READBACK);
-    const auto previousState=t->getState();
-    d3dUtil::OneTimeSubmit([&](ID3D12GraphicsCommandList* cmd) {
-        t->setState(cmd,D3D12_RESOURCE_STATE_COPY_SOURCE);
-        auto source=CD3DX12_TEXTURE_COPY_LOCATION(resource,subresource);
-        auto destination=CD3DX12_TEXTURE_COPY_LOCATION(buffer.Get(),footprint);
-        cmd->CopyTextureRegion(&destination,0,0,0,&source,nullptr);
-        t->setState(cmd,previousState);
-    });
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint {};
+	UINT64 bytes = 0;
+	auto buffer = copyTextureToReadback(*t, subresource, footprint, bytes);
 	const size_t channels = packed				  ? PackedFloatReadbackChannels(t->getFormat())
 		: t->getType() == TextureType::DEPTH	  ? 1
 		: t->getFormat() == PixelFormat::RG_FLOAT ? 2
@@ -1538,7 +1589,12 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DriverDx12::createNewState(const Sta
 	psoDescriptor.NumRenderTargets = textures.size();
 	int i = 0;
 	for (auto texture : textures) {
-		psoDescriptor.RTVFormats[i] = FormatMap.at(texture->getFormat());
+		const auto format = texture->getFormat();
+		psoDescriptor.RTVFormats[i] = FormatMap.at(format);
+		if (format == PixelFormat::RG32_INT && state.mBlend.has_value()) {
+			blendDescriptor.IndependentBlendEnable = true;
+			blendDescriptor.RenderTarget[i].BlendEnable = false;
+		}
 		++i;
 	}
 	psoDescriptor.DSVFormat = FormatMap.at(fb->getDepth()->getFormat());

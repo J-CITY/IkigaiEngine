@@ -118,6 +118,10 @@ SegmentSeparation convexSegmentSeparation(const ConvexPolyhedron& hull, Vec3 sta
 }
 
 bool collideConvex(const ShapeView3D& a, const ShapeView3D& b, Manifold3D& output) {
+	if (a.shape.kind == Shape3D::Kind::Compound || b.shape.kind == Shape3D::Kind::Compound) {
+		output = {};
+		return false;
+	}
 	if (a.shape.kind == Shape3D::Kind::Sphere || b.shape.kind == Shape3D::Kind::Sphere) {
 		const bool sphereFirst = a.shape.kind == Shape3D::Kind::Sphere;
 		const auto& sphere = sphereFirst ? a : b;

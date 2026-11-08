@@ -24,6 +24,11 @@ VirtualMeshRenderer::VirtualMeshRenderer(UTILS::Ref<Object> object, const Descri
 	setErrorThreshold(descriptor.ErrorThreshold);
 	setDebugMode(descriptor.DebugMode);
 	mFallbackModelPath = descriptor.FallbackModel;
+	if (descriptor.StreamPages && descriptor.VisibilityBuffers) {
+		throw std::invalid_argument("StreamPages and VisibilityBuffers cannot be enabled together");
+	}
+	mStreamPages = descriptor.StreamPages;
+	mVisibilityBuffers = descriptor.VisibilityBuffers;
 	setMaterials(descriptor.Materials);
 	setPath(descriptor.Path);
 }
@@ -37,6 +42,8 @@ VirtualMeshRenderer::Descriptor VirtualMeshRenderer::getDescriptor() const {
 	Descriptor descriptor;
 	descriptor.Type = GetType<VirtualMeshRenderer>();
 	descriptor.Path = mPath;
+	descriptor.StreamPages = mStreamPages;
+	descriptor.VisibilityBuffers = mVisibilityBuffers;
 	descriptor.Materials = mMaterialPaths;
 	descriptor.ErrorThreshold = mErrorThreshold;
 	descriptor.DebugMode = mDebugMode;
@@ -51,7 +58,16 @@ void VirtualMeshRenderer::setPath(const std::string& path) {
 	mLoadError.clear();
 	if (!path.empty()) {
 		try {
-			mAsset = RESOURCES::ServiceManager::Get<VG::VirtualMeshLoader>().loadResource(path, RESOURCES::ELoadingType::FILE);
+			auto& loader = RESOURCES::ServiceManager::Get<VG::VirtualMeshLoader>();
+			if (mStreamPages) {
+				mAsset = loader.loadStreamedResource(path);
+			}
+			else if (mVisibilityBuffers) {
+				mAsset = loader.loadVisibilityResource(path);
+			}
+			else {
+				mAsset = loader.loadResource(path, RESOURCES::ELoadingType::FILE);
+			}
 		} catch (const std::exception& error) {
 			mLoadError = error.what();
 		}
@@ -70,6 +86,21 @@ void VirtualMeshRenderer::setPath(const std::string& path) {
 			std::cerr << "VG_FALLBACK_MODEL_FAIL " << mFallbackModelPath << ": " << error.what() << std::endl;
 		}
 	}
+}
+
+void VirtualMeshRenderer::setStreamPages(bool enabled) {
+	if (enabled && mVisibilityBuffers) {
+		throw std::invalid_argument("StreamPages and VisibilityBuffers cannot be enabled together");
+	}
+	if (mStreamPages == enabled) {
+		return;
+	}
+	mStreamPages = enabled;
+	const auto path = mPath;
+	setPath(path);
+}
+bool VirtualMeshRenderer::streamsPages() const {
+	return mStreamPages;
 }
 
 const std::string& VirtualMeshRenderer::getPath() const {

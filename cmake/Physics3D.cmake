@@ -12,12 +12,16 @@ function(ikigai_add_physics3d_library)
     add_library(ikigai_physics3d STATIC
         "${root}/src/engine/physicsModule/body.cpp"
         "${root}/src/engine/physicsModule/contacts.cpp"
+        "${root}/src/engine/physicsModule/characterQueries.cpp"
         "${root}/src/engine/physicsModule/narrowPhase.cpp"
         "${root}/src/engine/physicsModule/physicWorld.cpp"
         "${root}/src/engine/physicsModule/rigidJoint.cpp"
         "${root}/src/engine/physicsModule/rigidJointSolver.cpp"
         "${root}/src/engine/physicsModule/particles.cpp")
     target_sources(ikigai_physics3d PRIVATE "${root}/src/engine/destructionModule/planeSlicer.cpp")
+    target_sources(ikigai_physics3d PRIVATE "${root}/src/engine/destructionModule/concaveDestruction.cpp")
+    target_sources(ikigai_physics3d PRIVATE "${root}/src/engine/destructionModule/supportGraph.cpp")
+    target_sources(ikigai_physics3d PRIVATE "${root}/src/engine/destructionModule/supportAnchors.cpp")
     target_sources(ikigai_physics3d PRIVATE "${root}/src/engine/destructionModule/fracturePreparation.cpp"
         "${root}/src/engine/destructionModule/destructionRuntime.cpp")
     target_sources(ikigai_physics3d PRIVATE "${root}/src/engine/destructionModule/destructibleDefinition.cpp"
@@ -40,7 +44,7 @@ function(ikigai_configure_physics3d target)
     get_target_property(sources ${target} SOURCES)
     list(FILTER sources EXCLUDE REGEX "collisionModule/.*\\.cpp$")
     list(FILTER sources EXCLUDE REGEX "destructionModule/.*\\.cpp$")
-    list(FILTER sources EXCLUDE REGEX "physicsModule/(body|contacts|narrowPhase|physicWorld|particles|rigidJoint|rigidJointSolver)\\.cpp$")
+    list(FILTER sources EXCLUDE REGEX "physicsModule/(body|contacts|characterQueries|narrowPhase|physicWorld|particles|rigidJoint|rigidJointSolver)\\.cpp$")
     list(FILTER sources EXCLUDE REGEX "(physics3dComponent|physicsComponent)\\.generated\\.cpp$")
     if(NOT USE_PHYSICS_3D)
         list(FILTER sources EXCLUDE REGEX "(destructibleMeshComponent|destructionSystem|destructibleManager)\\.cpp$")

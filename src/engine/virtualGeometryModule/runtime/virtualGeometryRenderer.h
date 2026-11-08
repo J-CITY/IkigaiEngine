@@ -20,6 +20,7 @@
 #include "virtualGeometryGpuSelection.h"
 #include "virtualGeometrySelection.h"
 #include "virtualGeometrySelectionPath.h"
+#include "virtualGeometryStreaming.h"
 
 namespace IKIGAI::SCENE_SYSTEM {
 class Scene;
@@ -35,11 +36,14 @@ class StorageBufferInterface;
 class TextureInterface;
 class UniformBufferInterface;
 class VertexBufferInterface;
+class ShaderInterface;
+class FrameBufferInterface;
 struct RenderChunk;
 }
 
 namespace IKIGAI::VG {
 class VirtualMeshAsset;
+class VirtualGeometrySoftwareRaster;
 
 // Debug modes of the two-phase HZB occlusion (M4-V2). PHASE_COLORS paints cluster albedo by the phase that drew it
 // (green: phase 1, red: phase 2). PHASE1_ONLY and UNSAFE_MIP are deliberately non-conservative negative controls of
@@ -51,6 +55,7 @@ enum class VirtualGeometryOcclusionDebug { NONE = 0, PHASE_COLORS = 1, PHASE1_ON
 struct VirtualGeometrySettings {
 	// false draws every virtual mesh through its fallback mesh on the regular path.
 	bool Enabled = true;
+	VirtualGeometryStreamingSettings Streaming {};
 	// Keeps the LOD cut of each instance from the frame the freeze started; culling still runs.
 	bool FreezeLod = false;
 	bool FrustumCulling = true;
@@ -60,6 +65,12 @@ struct VirtualGeometrySettings {
 	// Multiplies every component threshold (quality scaling).
 	float ThresholdScale = 1.0f;
 	VirtualGeometrySelectionPath SelectionPath = VirtualGeometrySelectionPath::AUTO;
+	// Opt-in until traversal has demonstrated a full-frame benefit on the target scene.
+	bool HierarchyTraversal = false;
+	// Experimental Vulkan resident visibility suffix. Unsupported or ambiguous triangles stay on HW.
+	bool SoftwareRaster = false;
+	uint32_t HierarchyQueueCapacity = 65535;
+	uint32_t HierarchyVisitBudget = UINT32_MAX;
 	// Two-phase HZB occlusion on the GPU path. Active only when the pipeline has a VIRTUAL_GEOMETRY_POST stage after an
 	// HZB build; otherwise selection is frustum + cone as in M4-V1. IKIGAI_VG_OCCLUSION=on|off overrides it.
 	bool OcclusionCulling = true;
@@ -69,12 +80,17 @@ struct VirtualGeometrySettings {
 		using namespace serde::attribute;
 		serde::serde_struct(context, value)
 			.field(&VirtualGeometrySettings::Enabled, "Enabled", default_ { true })
+			.field(&VirtualGeometrySettings::Streaming, "Streaming", default_ { VirtualGeometryStreamingSettings {} })
 			.field(&VirtualGeometrySettings::FreezeLod, "FreezeLod", default_ { false })
 			.field(&VirtualGeometrySettings::FrustumCulling, "FrustumCulling", default_ { true })
 			.field(&VirtualGeometrySettings::ConeCulling, "ConeCulling", default_ { true })
 			.field(&VirtualGeometrySettings::DebugOverride, "DebugOverride", default_ { ECS::VirtualMeshDebugMode::NONE })
 			.field(&VirtualGeometrySettings::ThresholdScale, "ThresholdScale", default_ { 1.0f })
 			.field(&VirtualGeometrySettings::SelectionPath, "SelectionPath", default_ { VirtualGeometrySelectionPath::AUTO })
+			.field(&VirtualGeometrySettings::HierarchyTraversal, "HierarchyTraversal", default_ { false })
+			.field(&VirtualGeometrySettings::SoftwareRaster, "SoftwareRaster", default_ { false })
+			.field(&VirtualGeometrySettings::HierarchyQueueCapacity, "HierarchyQueueCapacity", default_ { uint32_t { 65535 } })
+			.field(&VirtualGeometrySettings::HierarchyVisitBudget, "HierarchyVisitBudget", default_ { UINT32_MAX })
 			.field(&VirtualGeometrySettings::OcclusionCulling, "OcclusionCulling", default_ { true })
 			.field(&VirtualGeometrySettings::OcclusionDebug, "OcclusionDebug", default_ { VirtualGeometryOcclusionDebug::NONE });
 	}
@@ -87,6 +103,8 @@ void ValidateVirtualGeometrySettings(const VirtualGeometrySettings& settings);
 // FrustumCulledClusters, ConeCulledClusters, LodHistogram and OverflowDraws come from the GPU and are
 // GpuStatisticsLatency frames old (1: non-blocking readback of the previous frame); they stay zero
 // when GpuStatisticsValid is false. The other fields always describe the current frame.
+// With GPU hierarchy pruning, LodClusters/LodTriangles and FrustumCulledClusters count tested leaves only;
+// whole rejected subtrees do not contribute. VisibleClusters/VisibleTriangles remain the emitted result.
 struct VirtualGeometryFrameStatistics {
 	uint32_t Instances = 0;
 	uint32_t ClusterInstances = 0;
@@ -105,6 +123,11 @@ struct VirtualGeometryFrameStatistics {
 	uint32_t LodHistogram[8] = {};
 	double SelectionMilliseconds = 0.0;
 	bool GpuSelection = false;
+	bool VisibilityActive = false;
+	// A GPU classification/merge was recorded, not a count of accepted SW triangles.
+	bool SoftwareRasterScheduled = false;
+	uint64_t SoftwareRasterGpuBytes = 0;
+	uint32_t ResolveBins = 0;
 	bool GpuStatisticsValid = false;
 	uint32_t GpuStatisticsLatency = 0;
 	// Draws dropped because a segment was full (expected 0: segment capacities are proven bounds).
@@ -113,6 +136,14 @@ struct VirtualGeometryFrameStatistics {
 	uint32_t DrawCapacity = 0;
 	// Bytes of the GPU selection buffers.
 	uint64_t GpuSelectionBytes = 0;
+	uint64_t StreamingGpuBytes = 0;
+	uint64_t StreamingStagingBytes = 0;
+	VirtualGeometryStreamingStatistics StreamingStatistics {};
+	uint32_t HierarchyVisitedNodes = 0;
+	uint32_t HierarchyLeafTests = 0;
+	uint32_t HierarchyQueueOverflow = 0;
+	uint32_t HierarchyVisitOverflow = 0;
+	uint32_t HierarchyFallbacks = 0;
 	// Two-phase HZB occlusion (M4-V2). OcclusionActive: phase 2 runs this frame; OcclusionHistory: phase 1 tested
 	// against the previous HZB. The counters are GPU statistics with the same latency as above.
 	bool OcclusionActive = false;
@@ -137,8 +168,12 @@ struct VirtualGeometryFrameInput {
 	VirtualGeometryView View = {};
 	std::optional<VirtualGeometrySelectionPath> SelectionPath;
 	uint64_t Frame = 0;
+	// Stable camera identity; feedback from another view must not authorize page requests.
+	uint64_t ViewId = 0;
 	// The pipeline has an enabled G-buffer stage that calls drawGeometry this frame.
 	bool GeometryStageActive = false;
+	bool VisibilityRequested = false;
+	MATH::Matrix4f ViewMatrix = MATH::Matrix4f::Identity;
 	// Optional GPU timestamps of the selection passes (stages VgInstanceCull and VgClusterCull).
 	PROFILER::GpuStageProfiler* GpuProfiler = nullptr;
 	// Two-phase HZB occlusion (M4-V2). The pipeline runs an enabled VIRTUAL_GEOMETRY_POST stage this frame (validated
@@ -207,6 +242,10 @@ public:
 		std::vector<RENDER::RenderChunk>& viewChunks, std::vector<RENDER::RenderChunk>& shadowChunks);
 	// Records the cluster draws of the frame into the currently bound G-buffer framebuffer (phase 1 with occlusion).
 	void drawGeometry(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings);
+	void drawVisibility(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings,
+		const std::shared_ptr<RENDER::ShaderInterface>& shader, const std::shared_ptr<RENDER::FrameBufferInterface>& target = {});
+	void resolveVisibility(
+		RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings, const std::shared_ptr<RENDER::TextureInterface>& ids);
 	// Two-phase occlusion, phase 2 (VIRTUAL_GEOMETRY_POST stage): outside any render pass, re-tests what phase 1
 	// rejected against `hzb` (built from the phase-1 depth). Returns true when post draws may follow.
 	bool recordOcclusionPost(RENDER::Renderer& renderer, const std::shared_ptr<RENDER::TextureInterface>& hzb, PROFILER::GpuStageProfiler* profiler);
@@ -252,11 +291,13 @@ private:
 		const VirtualMeshAsset* Asset = nullptr;
 		uint32_t Slot = 0;
 		const RENDER::MaterialInterface* Material = nullptr;
+		uint32_t Page = UINT32_MAX;
 		bool operator<(const BatchKey& other) const {
-			return std::tie(Asset, Slot, Material) < std::tie(other.Asset, other.Slot, other.Material);
+			return std::tie(Asset, Slot, Material, Page) < std::tie(other.Asset, other.Slot, other.Material, other.Page);
 		}
 	};
 	struct Batch {
+		VirtualMeshGpuPagePool::SlotLease PageLease {};
 		std::shared_ptr<VirtualMeshAsset> Asset = {};
 		std::shared_ptr<RENDER::MaterialInterface> Material = {};
 		uint32_t Slot = 0;
@@ -282,7 +323,8 @@ private:
 	};
 	// One cluster-path instance of the frame before selection.
 	struct InstanceCandidate {
-		ECS::VirtualMeshRenderer* Component = nullptr;
+		std::shared_ptr<const VirtualGeometryStreamCut> StreamCut {};
+		std::vector<std::shared_ptr<RENDER::MaterialInterface>> Materials = {};
 		std::shared_ptr<VirtualMeshAsset> Asset = {};
 		MATH::Matrix4f World = MATH::Matrix4f::Identity;
 		MATH::Matrix4f PreviousWorld = MATH::Matrix4f::Identity;
@@ -298,7 +340,7 @@ private:
 	VirtualGeometrySelectionPath resolveSelectionPath(
 		RENDER::Renderer& renderer, bool clusterPath, std::optional<VirtualGeometrySelectionPath> selectionPath);
 	InstanceGpu makeInstanceGpu(const InstanceCandidate& candidate) const;
-	Batch& findBatch(const InstanceCandidate& candidate, uint32_t slot);
+	Batch& findBatch(const InstanceCandidate& candidate, uint32_t slot, uint32_t page = UINT32_MAX);
 	void selectOnCpu(const InstanceCandidate& candidate, const VirtualGeometryFrameInput& input, const VirtualGeometrySelectionSettings& selection,
 		VirtualGeometrySelectionStatistics& statistics);
 	// Builds the GPU tables; returns false (and logs) when a limit of the GPU path is exceeded.
@@ -306,18 +348,29 @@ private:
 	// Decides the two-phase occlusion state of the frame (settings, environment, pipeline, history).
 	void resolveOcclusion(const VirtualGeometryFrameInput& input);
 	void applyGpuStatistics(const VirtualGeometryGpuStatistics& statistics, uint32_t latency);
-	void drawBatches(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings, bool post);
+	void drawBatches(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings, bool post,
+		const std::shared_ptr<RENDER::ShaderInterface>& visibilityShader = {});
+	bool ensureResolveMaterial(RENDER::Renderer& renderer);
 	bool mGpuFrameRecorded = false;
 	void appendFallback(ECS::VirtualMeshRenderer& component, const MATH::Matrix4f& world, const MATH::Matrix4f& previousWorld, int ownerId,
 		float distance, std::vector<RENDER::RenderChunk>& chunks) const;
 	void uploadFrame(RENDER::Renderer& renderer);
-	void copySurfaceUniforms(const RENDER::MaterialInterface& surface);
+	void copySurfaceUniforms(RENDER::MaterialInterface& target, const RENDER::MaterialInterface& surface);
 
 	VirtualGeometrySettings mSettings = {};
+	std::unique_ptr<VirtualGeometryStreaming> mStreaming {};
+	bool mStreamingInitFailed = false;
 	VirtualGeometryFrameStatistics mStatistics = {};
 	bool mMaterialLoadAttempted = false;
 	bool mClusterPathAvailable = true;
 	std::shared_ptr<RENDER::MaterialInterface> mClusterMaterial = {};
+	std::shared_ptr<RENDER::MaterialInterface> mResolveMaterial = {};
+	std::shared_ptr<RENDER::UniformBufferInterface> mResolveRange = {};
+	bool mResolveMaterialAttempted = false;
+	bool mVisibilityActive = false;
+	std::unique_ptr<VirtualGeometrySoftwareRaster> mSoftwareRaster {};
+	std::shared_ptr<RENDER::StorageBufferInterface> mSoftwareRasterHwCount {};
+	uint32_t mSoftwareRasterFirstDraw = 0;
 	std::map<std::string, RENDER::MaterialInterface::UniformData> mClusterMaterialDefaults = {};
 	RENDER::VertexLayout mLayout = {};
 

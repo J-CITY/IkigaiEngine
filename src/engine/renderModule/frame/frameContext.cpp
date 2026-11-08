@@ -4,6 +4,10 @@
 #include <utility>
 
 namespace IKIGAI::RENDER {
+GpuCompletionToken FrameSubmissionReceipt::token() const noexcept {
+	return mToken;
+}
+
 FrameContext::FrameContext(uint64_t frameId, std::shared_ptr<RenderCommandBuffer> commands)
 	: mFrameId(frameId)
 	, mCommands(std::move(commands)) {
@@ -34,6 +38,7 @@ void FrameContext::submitted(GpuCompletionToken token) {
 		throw std::logic_error("Frame requires a valid GPU submission");
 	}
 	mCompletion = token;
+	mReceipt->mToken = token;
 	mState = State::SUBMITTED;
 }
 
@@ -67,6 +72,10 @@ FrameContext::State FrameContext::state() const noexcept {
 GpuCompletionToken FrameContext::completionToken() const noexcept {
 	return mCompletion;
 }
+std::shared_ptr<const FrameSubmissionReceipt> FrameContext::submissionReceipt() const noexcept {
+	return mReceipt;
+}
+
 std::shared_ptr<const RenderFrameSnapshot> FrameContext::snapshot() const noexcept {
 	return mSnapshot;
 }

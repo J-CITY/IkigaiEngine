@@ -158,6 +158,14 @@ void Renderer::addView(RenderViewSnapshot view) {
 	mActiveFrame->addView(std::move(view));
 }
 
+std::shared_ptr<const FrameSubmissionReceipt> Renderer::submissionReceipt() const {
+	mOwner.requireCurrentThread();
+	if (!mActiveFrame) {
+		throw std::logic_error("Submission receipt needs an active frame");
+	}
+	return mActiveFrame->submissionReceipt();
+}
+
 std::shared_ptr<const RenderFrameSnapshot> Renderer::lastSnapshot() const {
 	mOwner.requireCurrentThread();
 	return mLastSnapshot;
@@ -293,6 +301,9 @@ void Renderer::shutdown() {
 			mDriver->end();
 		}
 		const auto token = mDriver->completion().lastSubmitted();
+		if (token.Value <= mFrameStartSubmission) {
+			throw std::logic_error("Cancelled frame has no native GPU submission");
+		}
 		mActiveFrame->cancelledSubmission(token);
 		mExecutor->endFrame();
 		mDriver->waitForCompletion(token);

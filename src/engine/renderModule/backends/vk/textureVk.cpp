@@ -17,6 +17,8 @@
 #include <renderModule/backends/interface/atlasInterface.h>
 #include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
 
+#include "renderModule/backends/interface/integerColorAttachment.h"
+
 #include <cmath>
 #include <algorithm>
 static uint32_t GetMipCount(uint32_t width, uint32_t height) {
@@ -26,6 +28,7 @@ static uint32_t GetMipCount(uint32_t width, uint32_t height) {
 static const std::unordered_map<IKIGAI::RENDER::PixelFormat, vk::Format> FormatMap = {
 	{IKIGAI::RENDER::PixelFormat::R_FLOAT, vk::Format::eR32Sfloat},
 	{IKIGAI::RENDER::PixelFormat::RG_FLOAT, vk::Format::eR32G32Sfloat},
+	{ IKIGAI::RENDER::PixelFormat::RG32_INT, vk::Format::eR32G32Sint },
 	{IKIGAI::RENDER::PixelFormat::RGB_FLOAT, vk::Format::eR32G32B32Sfloat},
 	{IKIGAI::RENDER::PixelFormat::RGBA_FLOAT, vk::Format::eR32G32B32A32Sfloat},
 	{IKIGAI::RENDER::PixelFormat::R_INT, vk::Format::eR8Unorm},
@@ -45,6 +48,7 @@ static const std::unordered_map<IKIGAI::RENDER::PixelFormat, vk::Format> FormatM
 static const std::unordered_map<vk::Format, IKIGAI::RENDER::PixelFormat> FormatMap2 = {
 	{vk::Format::eR32Sfloat, IKIGAI::RENDER::PixelFormat::R_FLOAT},
 	{vk::Format::eR32G32Sfloat, IKIGAI::RENDER::PixelFormat::RG_FLOAT},
+	{ vk::Format::eR32G32Sint, IKIGAI::RENDER::PixelFormat::RG32_INT },
 	{vk::Format::eR32G32B32Sfloat, IKIGAI::RENDER::PixelFormat::RGB_FLOAT},
 	{vk::Format::eR32G32B32A32Sfloat, IKIGAI::RENDER::PixelFormat::RGBA_FLOAT},
 	{vk::Format::eR8Unorm, IKIGAI::RENDER::PixelFormat::R_INT},
@@ -108,6 +112,10 @@ IKIGAI::RENDER::AliasedRenderTargets IKIGAI::RENDER::DriverVk::createAliasedRend
 
 void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const std::vector<void*>& data, std::shared_ptr<VmaImage>* backing) {
 	const TextureResource& desc = descriptor;
+	const bool integerAttachment = desc.pixelType == PixelFormat::RG32_INT;
+	if (integerAttachment) {
+		ValidateRg32IntAttachment(desc, !data.empty());
+	}
 	if (desc.width == 0 || desc.height == 0) {
 		throw std::invalid_argument(
 			"Texture has zero width or height (failed to load?): " + (desc.pathTexture.empty() ? std::string("<memory>") : desc.pathTexture.front()));
@@ -125,6 +133,10 @@ void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const st
 	mType = desc.texType;
 	if (desc.texType != TextureType::DEPTH) {
 		usage = SupportedColorUsage(FormatMap.at(desc.pixelType), usage);
+		if (integerAttachment
+			&& (!(usage & vk::ImageUsageFlagBits::eColorAttachment) || (desc.storage && !(usage & vk::ImageUsageFlagBits::eStorage)))) {
+			throw UnsupportedGpuFeature("Vulkan device lacks requested RG32_INT attachment usage");
+		}
 	}
 
 	std::map<TextureType, vk::ImageViewType> ToTextureType = {
@@ -204,6 +216,9 @@ void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const st
 		.setMinLod(0.0f)
 		.setMaxLod(useMips ? static_cast<float>(mMipCount) : 0.0f)
 		.setMaxAnisotropy(1.0f);
+	if (integerAttachment) {
+		sampler_create_info.setBorderColor(vk::BorderColor::eIntTransparentBlack);
+	}
 	mSampler = UtilityVk::GetDriver()->mDevice.createSampler(sampler_create_info);
 
 	mDepth = std::max(1,descriptor.depth);
@@ -325,6 +340,9 @@ void IKIGAI::RENDER::TextureVk::releaseResources() {
 }
 
 void IKIGAI::RENDER::TextureVk::recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) {
+	if (descriptor.pixelType == PixelFormat::RG32_INT) {
+		ValidateRg32IntAttachment(descriptor, !fileData.empty());
+	}
 	requireOwnerThread();
 	++mRevision;
 	// Освобождаем старые VK-ресурсы (отложенно)
@@ -391,6 +409,10 @@ std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(con
 }
 
 std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(const TextureResource& descriptor, UTILS::IAllocator* allocator, TextureDeleter deleter) {
+	if (descriptor.pixelType == PixelFormat::RG32_INT) {
+		ValidateRg32IntAttachment(descriptor, false);
+		return AllocateTexture<TextureVk>(allocator, deleter, descriptor, std::vector<void*> {});
+	}
 	auto& _descriptor = const_cast<TextureResource&>(descriptor);
 	//Load data
 	std::vector<void*> textureData;
@@ -452,6 +474,10 @@ std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(con
 }
 
 std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator, TextureDeleter deleter) {
+	if (descriptor.pixelType == PixelFormat::RG32_INT) {
+		ValidateRg32IntAttachment(descriptor, !fileData.empty());
+		return AllocateTexture<TextureVk>(allocator, deleter, descriptor, std::vector<void*> {});
+	}
 	auto& _d = const_cast<TextureResource&>(descriptor);
 	std::vector<void*> textureData;
 	bool needFree = false;
@@ -601,6 +627,7 @@ static uint32_t GetFormatChannelsCount(IKIGAI::RENDER::PixelFormat format) {
 	static const std::unordered_map<IKIGAI::RENDER::PixelFormat, uint32_t> FormatChannelsMap = {
 		{IKIGAI::RENDER::PixelFormat::R_FLOAT, 1},
 		{IKIGAI::RENDER::PixelFormat::RG_FLOAT, 2},
+		{ IKIGAI::RENDER::PixelFormat::RG32_INT, 2 },
 		{IKIGAI::RENDER::PixelFormat::RGB_FLOAT, 3},
 		{IKIGAI::RENDER::PixelFormat::RGBA_FLOAT, 4},
 		{IKIGAI::RENDER::PixelFormat::R_INT, 1},
@@ -619,6 +646,7 @@ static uint32_t GetFormatChannelSize(IKIGAI::RENDER::PixelFormat format) {
 	static const std::unordered_map<IKIGAI::RENDER::PixelFormat, uint32_t> FormatChannelSizeMap = {
 		{IKIGAI::RENDER::PixelFormat::R_FLOAT, 4},
 		{IKIGAI::RENDER::PixelFormat::RG_FLOAT, 4},
+		{ IKIGAI::RENDER::PixelFormat::RG32_INT, 4 },
 		{IKIGAI::RENDER::PixelFormat::RGB_FLOAT, 4},
 		{IKIGAI::RENDER::PixelFormat::RGBA_FLOAT, 4},
 		{IKIGAI::RENDER::PixelFormat::R_INT, 1},
@@ -674,6 +702,9 @@ void IKIGAI::RENDER::TextureVk::setData(uint32_t width, uint32_t height, PixelFo
 }
 
 void IKIGAI::RENDER::TextureVk::generateMips() {
+	if (mFormat == PixelFormat::RG32_INT) {
+		throw std::invalid_argument("RG32_INT does not support automatic mip generation");
+	}
 	setState(UtilityVk::GetDriver()->getCurrentFrame().mCommandBuffer, vk::ImageLayout::eTransferSrcOptimal);
 	//for (uint32_t face = 1; face <= mDepth; face++) {
 		for (uint32_t i = 1; i < mMipCount; i++) {

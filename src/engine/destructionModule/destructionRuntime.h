@@ -52,6 +52,7 @@ struct RuntimeStatistics {
 	std::size_t workingBytes = 0;
 	std::size_t topologyBytes = 0;
 	std::size_t gpuBytes = 0;
+	std::size_t gpuReservedBytes = 0;
 	std::size_t uploadedBytes = 0;
 	unsigned activeJobs = 0;
 	double uploadMilliseconds = 0;
@@ -77,9 +78,13 @@ struct FractureJob {
 class DestructionRuntime {
 public:
 	using Executor = std::function<void(std::function<void()>)>;
+	enum class Admission { Ready, Wait, ExceedsBudget };
 	explicit DestructionRuntime(Executor executor);
 	~DestructionRuntime();
+	Admission admission(const FractureMesh& mesh, unsigned maximumTriangles, const RuntimeSettings& settings, bool concave = false) const;
 	std::shared_ptr<FractureJob> submit(FractureSnapshot snapshot, const RuntimeSettings& settings);
+	bool canPublish(const FractureJob& job) const;
+	bool canFitGpuBytes(std::size_t bytes, const RuntimeSettings& settings) const;
 	void beginFrame();
 	std::size_t cursor = 0;
 	unsigned operations = 0;

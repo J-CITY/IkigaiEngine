@@ -9,7 +9,10 @@
 #include "rigidJoint.h"
 #include <array>
 #include <map>
+#include <memory>
+#include <optional>
 #include <span>
+#include <stdexcept>
 #include <vector>
 
 namespace IKIGAI::PHYSICS {
@@ -29,6 +32,8 @@ struct BodyDef {
 	float linearDamping = 0.05f, angularDamping = 0.05f;
 	bool allowSleep = true;
 	std::uint32_t layer = 1, mask = ~0u;
+	// Required for dynamic compounds, about the body origin (which must be its COM).
+	std::optional<MATH::Matrix3f> compoundInertiaPerUnitMass {};
 };
 struct Body : RigidBody {
 	Id id = 0;
@@ -101,12 +106,18 @@ struct DebugDraw {
 	std::function<void(Vec3, float, std::uint32_t)> sphere;
 	std::function<void(Vec3, Vec3, Vec3, std::uint32_t)> triangle;
 };
+class ContactBudgetExceeded : public std::runtime_error {
+public:
+	ContactBudgetExceeded(unsigned required, unsigned maximum);
+	const unsigned requiredContacts;
+	const unsigned maximumContacts;
+};
 class PhysicWorld {
 public:
 	explicit PhysicWorld(unsigned maxContacts = 1024, unsigned iterations = 0);
 	explicit PhysicWorld(Settings settings, CollisionPipeline pipeline = {}, unsigned maxContacts = 1024);
-	explicit PhysicWorld(CollisionPipeline pipeline)
-		: PhysicWorld(Settings {}, std::move(pipeline)) { }
+	explicit PhysicWorld(CollisionPipeline pipeline);
+	~PhysicWorld();
 	const CollisionPipeline& collisionPipeline() const {
 		return mPipeline;
 	}
@@ -170,6 +181,7 @@ public:
 	void teleport(Id id, Vec3 position, MATH::QuaternionF orientation);
 	void setVelocity(Id id, Vec3 velocity, Vec3 angular = {});
 	void wake(Id id);
+	// ContactBudgetExceeded leaves the previous tick and submitted forces intact.
 	void step(float dt);
 	void debugDraw(const DebugDraw&) const;
 	void startFrame() { } // compatibility: step owns accumulator lifetime
@@ -194,6 +206,10 @@ private:
 	std::vector<ImpactEvent> mImpacts {};
 	std::map<std::pair<Id, Id>, size_t> mImpactLookup {};
 	std::uint64_t mTick = 0;
+	struct TickCheckpoint;
+	std::unique_ptr<TickCheckpoint> mTickCheckpoint {};
+	void refreshBroadPhase();
+	void advance(float dt);
 	void solveRigid(float dt, bool jointIteration = false);
 	void stepParticles(float dt);
 	void projectParticle(

@@ -21,6 +21,7 @@
 #include "renderGraph/pipelineExecution.h"
 #include "renderGraph/renderGraphDescriptor.h"
 #include "renderGraph/screenProbeSettings.h"
+#include "virtualGeometryModule/runtime/virtualGeometryShadows.h"
 #include <filesystem>
 #include <set>
 
@@ -88,7 +89,9 @@ enum class DrawContent {
 	WEATHER,
 	// Phase 2 of the virtual geometry HZB occlusion (renderModule/virtualGeometry/virtualGeometryPostStage.h).
 	VIRTUAL_GEOMETRY_POST,
-	GPU_SCENE_OCCLUSION_POST
+	GPU_SCENE_OCCLUSION_POST,
+	VIRTUAL_GEOMETRY_VISIBILITY,
+	VIRTUAL_GEOMETRY_RESOLVE
 };
 
 struct PipelineStage {
@@ -130,6 +133,7 @@ struct PipelineStage {
 		float ShadowRange = 100.0f;
 		int ShadowFace = -1;
 		int ShadowLightId = -1;
+		VG::VirtualGeometryShadowSettings VirtualGeometryShadows;
 		std::string LightPass;
 		bool Additive = false;
 		std::map<std::string, std::string> Bypass;
@@ -180,6 +184,7 @@ struct PipelineStage {
 				.field(&Self::ShadowRange, "ShadowRange", default_ { 100.0f })
 				.field(&Self::ShadowFace, "ShadowFace", default_ { -1 })
 				.field(&Self::ShadowLightId, "ShadowLightId", default_ { -1 })
+				.field(&Self::VirtualGeometryShadows, "VirtualGeometryShadows", default_ { VG::VirtualGeometryShadowSettings {} })
 				.field(&Self::LightPass, "LightPass", default_ { std::string {} })
 				.field(&Self::Additive, "Additive", default_ { false })
 				.field(&Self::Bypass, "Bypass", default_ { decltype(Bypass) {} })
@@ -195,6 +200,7 @@ struct PipelineStage {
 	std::string mName;
 	std::shared_ptr<::IKIGAI::RENDER::FrameBufferInterface> mFrameBuffer;
 	std::shared_ptr<::IKIGAI::RENDER::MaterialInterface> mMaterial;
+	std::shared_ptr<ShaderInterface> mVgShadowShader;
 	DrawContent mDrawContent;
 	std::map<std::string, UniformType> mUniforms;
 
@@ -405,6 +411,8 @@ struct RenderGraphPipeline {
 
 	StagesArr mStartStages;
 	StagesArr mStages;
+	std::shared_ptr<ShaderInterface> mVgVisibilityShader;
+	const std::shared_ptr<TextureInterface>* mVgVisibilityIds = nullptr;
 	std::vector<PipelineStage*> mStageIndex;
 	GRAPH::Plan mGraphPlan;
 	std::map<GRAPH::PassId, std::vector<std::shared_ptr<TextureInterface>>> mAliasActivations;
@@ -564,6 +572,7 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	PrimitiveRender mPrimitives;
 	std::shared_ptr<ParticleRenderer> mParticleRenderer;
 	std::shared_ptr<VG::VirtualGeometryRenderer> mVirtualGeometry;
+	VG::VirtualGeometryShadows mVirtualGeometryShadows;
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 	std::unique_ptr<GpuScene> mGpuScene;
 	PipelineStage* mGpuSceneStage = nullptr;
@@ -634,6 +643,7 @@ public:
 	}
 	// Cluster renderer for VirtualMeshRenderer components (settings, statistics, tests).
 	VG::VirtualGeometryRenderer& virtualGeometry();
+	[[nodiscard]] const VG::VirtualGeometryShadowStatistics& virtualGeometryShadowStatistics() const;
 	void Init();
 	void renderScene() override;
 	void renderLoadingScene(SCENE_SYSTEM::Scene* scene);

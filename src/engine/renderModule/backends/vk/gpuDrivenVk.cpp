@@ -79,6 +79,7 @@ void DriverVk::configureGpuFeatures(std::vector<const char*>& extensions) {
 	result.BufferTransfer = true;
 	result.BufferReadback = true;
 	result.DrawIndirect = true;
+	result.FragmentPrimitiveId = coreFeatures.geometryShader;
 	result.DispatchIndirect = true;
 	// multiDrawIndirect is passed through from the queried core features at device creation.
 	result.MaxDrawIndirectCount = coreFeatures.multiDrawIndirect ? core.limits.maxDrawIndirectCount : 1u;

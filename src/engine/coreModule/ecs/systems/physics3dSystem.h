@@ -17,13 +17,18 @@ public:
 	std::shared_ptr<PHYSICS::World> sharedSimulation() const {
 		return mSimulation;
 	}
-	bool paused = false, singleStep = false;
+	bool lastStepSucceeded() const {
+		return mLastStepSucceeded;
+	}
+	bool paused = false;
+	bool singleStep = false;
 #ifdef USE_EDITOR
 	void drawDebug();
 #endif
 private:
 	SCENE_SYSTEM::Scene& mScene;
 	std::shared_ptr<PHYSICS::World> mSimulation;
+	bool mLastStepSucceeded = false;
 };
 
 }

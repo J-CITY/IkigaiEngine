@@ -217,6 +217,11 @@ public:
 	virtual void setCull(CullFace cull_mode) = 0;
 	virtual void setTriangleOrientation(TriangleOrientation value) = 0;
 	virtual void clear(bool clearColor, bool clearDepth, bool clearStencil) = 0;
+	// Clear one RG32_INT color attachment in the current framebuffer. DX12 requires
+	// clear components exactly representable by its native float RTV clear API.
+	virtual void clearIntColorAttachment(uint32_t, int32_t, int32_t) {
+		throw UnsupportedGpuFeature("Integer attachment clear is unavailable on this backend");
+	}
 	virtual void setClearColor(const MATH::Vector4f& color) = 0;
 	virtual void setClearColor(float r, float g, float b, float a) = 0;
 	virtual void dispatch(uint32_t x, uint32_t y, uint32_t z) = 0;
@@ -403,6 +408,11 @@ public:
 		throw std::runtime_error("Ray query dispatch is unavailable on this backend");
 	}
 	// Synchronous diagnostic readback of one mip/face (or one 3D slice).
+	// Synchronous diagnostic readback of interleaved signed RG32_INT texels.
+	// Submit and complete the frame before calling, as for readTexture.
+	virtual std::vector<int32_t> readIntTexture(std::shared_ptr<TextureInterface>, unsigned, unsigned) {
+		throw UnsupportedGpuFeature("Integer texture readback is unavailable on this backend");
+	}
 	virtual std::vector<float> readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) {
 		throw std::runtime_error("Float texture readback is unavailable on this backend");
 	}

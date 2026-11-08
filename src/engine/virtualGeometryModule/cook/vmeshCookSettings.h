@@ -42,6 +42,8 @@ struct VMeshCookSettings {
 	// border vertices; the offending vertices are locked and the group is simplified again. Keeps every DAG cut of a
 	// closed model watertight and edge-manifold, at the cost of more root clusters around thin features.
 	bool PreserveTopology = true;
+	// Target size of an independently readable geometry page.
+	uint32_t PageBytes = 64u * 1024u;
 
 	template <class Context> constexpr static auto serde(Context& context, VMeshCookSettings& value) {
 		using Self = VMeshCookSettings;
@@ -61,7 +63,8 @@ struct VMeshCookSettings {
 			.field(&Self::MinFallbackTriangles, "MinFallbackTriangles", default_ { 64u })
 			.field(&Self::WeldPositionEpsilon, "WeldPositionEpsilon", default_ { 0.0f })
 			.field(&Self::BuildLodHierarchy, "BuildLodHierarchy", default_ { true })
-			.field(&Self::PreserveTopology, "PreserveTopology", default_ { true });
+			.field(&Self::PreserveTopology, "PreserveTopology", default_ { true })
+			.field(&Self::PageBytes, "PageBytes", default_ { 64u * 1024u });
 	}
 };
 

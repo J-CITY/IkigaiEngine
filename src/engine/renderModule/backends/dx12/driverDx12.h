@@ -35,6 +35,7 @@ class IndexBufferInterface;
 class VertexBufferInterface;
 class UniformBufferDx12;
 class FrameBufferDx12;
+class TextureDx12;
 class IndexBufferDx12;
 class VertexBufferDx12;
 class ShaderDx12;
@@ -142,6 +143,7 @@ public:
 
 	void draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) override;
 	std::vector<float> readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
+	std::vector<int32_t> readIntTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) override;
 	void renderGraphBarrier(bool uav) override;
 	AliasedRenderTargets createAliasedRenderTargets(std::span<const TextureResource> descriptors) override;
@@ -179,6 +181,7 @@ public:
 	void destroyDeferred(Dx12Resource object);
 	std::vector<Microsoft::WRL::ComPtr<ID3D12DeviceChild>>& getDestroyDeferredObjects();
 	void clear(bool clearColor, bool clearDepth, bool clearStencil) override;
+	void clearIntColorAttachment(uint32_t attachment, int32_t red, int32_t green) override;
 	std::shared_ptr<FrameBufferDx12>& getDefaultFrameBuffer() {
 		return mSwapchains[mCurrentWindowID].mDefaultFb[mFrameId];
 	}
@@ -296,6 +299,7 @@ public:
 	void immediateSubmit(const std::function<void(ID3D12GraphicsCommandList*)>& record);
 
 private:
+	Dx12Resource copyTextureToReadback(TextureDx12& texture, UINT subresource, D3D12_PLACED_SUBRESOURCE_FOOTPRINT& footprint, UINT64& bytes);
 	void begin() override;
 	void end() override;
 

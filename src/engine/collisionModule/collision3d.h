@@ -9,15 +9,19 @@ namespace IKIGAI::COLLISION {
 
 using Vec3 = MATH::Vector3f;
 
+class CompoundCollider3D;
+
 struct Shape3D {
-	enum class Kind { Sphere, Box, Convex };
+	enum class Kind { Sphere, Box, Convex, Compound };
 	Kind kind = Kind::Sphere;
 	float radius = 0.5f;
 	Vec3 halfSize { 0.5f, 0.5f, 0.5f };
 	std::shared_ptr<const ConvexPolyhedron> polyhedron {};
+	std::shared_ptr<const CompoundCollider3D> compoundCollider {};
 	static Shape3D sphere(float radius);
 	static Shape3D box(Vec3 halfSize);
 	static Shape3D convex(std::shared_ptr<const ConvexPolyhedron> polyhedron);
+	static Shape3D compound(std::shared_ptr<const CompoundCollider3D> compoundCollider);
 };
 
 struct ShapeView3D {

@@ -2,10 +2,11 @@
 #include "importedModel.h"
 #include "parseFlags.h"
 #include <assimp/scene.h>
+#include <functional>
 #include <renderModule/backends/interface/modelInterface.h>
+#include <span>
 #include <unordered_map>
 #include <vector>
-
 
 namespace IKIGAI::SKELETON {
 class Skeleton;
@@ -29,7 +30,9 @@ namespace RESOURCES {
 		// --- Model import, CPU stage ---
 		// Reentrant: reads the scene into plain data and never touches renderer state.
 		// The in-memory overload resolves sidecar files through the engine VFS.
-		static bool ImportModel(const std::string& fileName, ModelParserFlags parserFlags, ImportedModel& outModel);
+		using NativeImportDependency = std::function<void(const char*, std::span<const uint8_t>)>;
+		static bool ImportModel(
+			const std::string& fileName, ModelParserFlags parserFlags, ImportedModel& outModel, const NativeImportDependency& onDependency = {});
 		static bool ImportModel(const std::string& fileName, const std::vector<uint8_t>& data, ModelParserFlags parserFlags, ImportedModel& outModel);
 
 		// --- Model import, GPU stage ---

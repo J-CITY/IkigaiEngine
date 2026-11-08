@@ -30,6 +30,8 @@ public:
 		std::string Type = {};
 		// Cooked .vmesh file (virtual file system path).
 		std::string Path = {};
+		bool StreamPages = false;
+		bool VisibilityBuffers = false;
 		// One material per .vmesh material slot (importer material order, as MaterialRenderer).
 		std::vector<std::string> Materials = {};
 		// Screen-space error threshold in pixels (0 draws the original level-0 triangles).
@@ -43,6 +45,8 @@ public:
 			serde::serde_struct(context, value)
 				.field(&Descriptor::Type, "VirtualMeshRendererType")
 				.field(&Descriptor::Path, "Path")
+				.field(&Descriptor::StreamPages, "StreamPages", default_ { false })
+				.field(&Descriptor::VisibilityBuffers, "VisibilityBuffers", default_ { false })
 				.field(&Descriptor::Materials, "Materials", default_ { std::vector<std::string> {} })
 				.field(&Descriptor::ErrorThreshold, "ErrorThreshold", default_ { 1.0f })
 				.field(&Descriptor::DebugMode, "DebugMode", default_ { VirtualMeshDebugMode::NONE })
@@ -61,6 +65,8 @@ public:
 	// and uses FallbackModel when one is configured.
 	void setPath(const std::string& path);
 	const std::string& getPath() const;
+	void setStreamPages(bool enabled);
+	bool streamsPages() const;
 	const std::shared_ptr<VG::VirtualMeshAsset>& getAsset() const;
 	const std::string& getLoadError() const;
 
@@ -90,6 +96,8 @@ public:
 
 private:
 	std::string mPath = {};
+	bool mStreamPages = false;
+	bool mVisibilityBuffers = false;
 	std::vector<std::string> mMaterialPaths = {};
 	std::vector<std::shared_ptr<RENDER::MaterialInterface>> mMaterials = {};
 	float mErrorThreshold = 1.0f;

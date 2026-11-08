@@ -5,6 +5,8 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <stdexcept>
+#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -15,8 +17,34 @@ namespace STORAGE {
 }
 class FileSystemInternal;
 class FileInternal;
+class RangeFileBacking;
 
 enum class FileMode : uint8_t { READ = 1, WRITE = 2, READ_WRITE = READ | WRITE, APPEND = 4, TRUNCATE = 8 };
+
+enum class RangeFileErrorCode { NotFound, UnsupportedBacking, InvalidRange, InvalidArchive, IoError, ShortRead, Cancelled };
+
+class RangeFileError : public std::runtime_error {
+	RangeFileErrorCode mCode;
+
+public:
+	RangeFileError(RangeFileErrorCode code, const std::string& message);
+	RangeFileErrorCode code() const noexcept;
+};
+
+// Keeps the resolved backing open. The caller must treat its contents as immutable.
+class RangeFile {
+	friend class FileSystem;
+	std::shared_ptr<RangeFileBacking> mBacking;
+	uint64_t mOffset;
+	uint64_t mSize;
+
+	RangeFile(std::shared_ptr<RangeFileBacking> backing, uint64_t offset, uint64_t size);
+
+public:
+	uint64_t size() const noexcept;
+	// Reads exactly size bytes or throws RangeFileError. Concurrent reads have independent offsets.
+	std::vector<uint8_t> read(uint64_t offset, std::size_t size, std::stop_token stop = {}) const;
+};
 
 class File {
 	std::unique_ptr<FileInternal> mInternal;
@@ -106,6 +134,8 @@ public:
 	};
 
 	std::shared_ptr<File> getFile(const std::string& path, FileMode mode = FileMode::READ);
+	// Resolves the winning mount and opens a native file or a ZIP_STORED member.
+	std::shared_ptr<const RangeFile> openRange(const std::string& path) const;
 	std::optional<std::string> getFilePath(const std::string& path) const;
 	std::vector<DirectoryEntry> listDirectory(const std::string& path) const;
 	// Tooling reads that discover files created/deleted after native mount

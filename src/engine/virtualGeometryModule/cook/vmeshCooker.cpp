@@ -441,7 +441,7 @@ namespace {
 
 		// Appends one cluster to the output. parentError/parentBounds describe the group the cluster is merged into.
 		void emitCluster(const MaterialGeometry& material, const WorkCluster& cluster, const std::vector<uint32_t>& pool, float parentError,
-			const VMeshSphere& parentBounds) {
+			const VMeshSphere& parentBounds, uint32_t consumer = UINT32_MAX) {
 			const uint32_t level = cluster.Generation;
 			const uint32_t* indices = pool.data() + cluster.IndexOffset;
 			const meshopt_Bounds bounds = tightBounds(material, indices, cluster.IndexCount);
@@ -467,6 +467,7 @@ namespace {
 				m_output.Indices.push_back(material.VertexBase + indices[i]);
 			}
 			m_output.Clusters.push_back(out);
+			m_output.ClusterConsumers.push_back(consumer);
 			m_maxLevel = std::max(m_maxLevel, level);
 		}
 
@@ -685,9 +686,9 @@ namespace {
 		}
 
 		void emitGroup(const MaterialGeometry& material, const WorkCluster* group, size_t groupSize, const std::vector<uint32_t>& pool,
-			float parentError, const VMeshSphere& parentBounds) {
+			float parentError, const VMeshSphere& parentBounds, uint32_t consumer = UINT32_MAX) {
 			for (size_t i = 0; i < groupSize; ++i) {
-				emitCluster(material, group[i], pool, parentError, parentBounds);
+				emitCluster(material, group[i], pool, parentError, parentBounds, consumer);
 			}
 		}
 
@@ -757,7 +758,7 @@ namespace {
 						generation = std::max(generation, members[i].Generation + 1u);
 					}
 					const uint32_t groupId = m_nextGroupId++;
-					emitGroup(material, members, memberCount, pool, groupError, bounds);
+					emitGroup(material, members, memberCount, pool, groupError, bounds, groupId);
 					const size_t firstNew = pending.size();
 					clusterize(material, simplified.data(), simplified.size(), groupId, pending, pendingPool);
 					for (size_t i = firstNew; i < pending.size(); ++i) {

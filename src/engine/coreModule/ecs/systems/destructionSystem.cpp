@@ -1,5 +1,6 @@
 #include "destructionSystem.h"
 #if USE_PHYSICS_3D
+#include "collisionModule/compoundCollider.h"
 #include "collisionModule/convexCollision.h"
 #include "coreModule/ecs/components/chunkModelRenderer.h"
 #include "coreModule/ecs/components/destructibleMeshComponent.h"
@@ -181,7 +182,8 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 				c.mResource = RESOURCES::ServiceManager::Get<RESOURCES::DestructibleLoader>().loadResource(c.settings.Definition);
 				c.mMaterials = c.mResource->materials;
 				auto instance = std::make_shared<DESTRUCTION::DestructibleInstance>(c.mResource->definition);
-				const auto topologyBytes = DESTRUCTION::meshBytes(c.mResource->definition->mesh);
+				const auto& definition = *c.mResource->definition;
+				const auto topologyBytes = DESTRUCTION::pieceBytes(definition.mesh, definition.geometry.shape);
 				if (topologyBytes > limits.MaximumWorkingBytes || statistics.topologyBytes > limits.MaximumWorkingBytes - topologyBytes
 					|| runtime.budget->bytes.load() > limits.MaximumWorkingBytes - topologyBytes - statistics.topologyBytes) {
 					throw std::runtime_error("Initial mesh exceeds scene CPU budget");
@@ -191,7 +193,10 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 				for (const auto& batch : batches) {
 					bytes += batchBytes(batch);
 				}
-				if (bytes > limits.MaximumGpuBytes || statistics.gpuBytes > limits.MaximumGpuBytes - bytes) {
+				if (!runtime.canFitGpuBytes(bytes, limits)) {
+					if (bytes <= limits.MaximumGpuBytes && statistics.gpuReservedBytes != 0) {
+						continue;
+					}
 					throw std::runtime_error("Initial destructible exceeds scene GPU budget");
 				}
 				// Initial assets are preloaded; root upload is bounded by the same per-frame byte cap.
@@ -228,7 +233,7 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 				for (auto& pending : c.mRequests) {
 					if (pending.rootSpace) {
 						pending.slice.piece = c.pieces().front().id;
-						pending.slice.point -= c.mInstance->definition().center;
+						pending.slice.point -= c.mInstance->definition().geometry.center;
 						pending.slice.localSpace = true;
 						pending.rootSpace = false;
 					}
@@ -239,13 +244,29 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 				initialRender.previousRotation = initialRender.currentRotation = body->getOrientation();
 				c.mError.clear();
 			}
+			while (!c.mAnchorRequests.empty() && available()) {
+				auto request = std::move(c.mAnchorRequests.front());
+				c.mAnchorRequests.pop_front();
+				request.status = c.mInstance->setSupportAnchorEnabled(request.anchor, request.enabled);
+				request.error = c.mInstance->lastError();
+				if (request.status == DESTRUCTION::SupportAnchorStatus::Applied && c.mJob) {
+					c.mJob->cancelled.store(true);
+					c.complete(*c.mActive, DESTRUCTION::SliceStatus::Stale, "Support anchors changed during fracture preparation");
+					c.mActive.reset();
+					c.mJob.reset();
+					c.discardCandidates();
+					++statistics.rejected;
+				}
+				c.completeSupportAnchor(std::move(request));
+				++runtime.operations;
+			}
 			if (!c.mJob && !c.mRequests.empty() && available()) {
 				auto& pending = c.mRequests.front();
 				auto& request = pending.slice;
 				if (pending.rootSpace) {
 					const auto& piece = c.pieces().front();
 					request.piece = piece.id;
-					request.point -= c.mInstance->definition().center;
+					request.point -= c.mInstance->definition().geometry.center;
 					request.localSpace = true;
 					pending.rootSpace = false;
 				}
@@ -259,33 +280,42 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 					const auto found
 						= std::find_if(c.pieces().begin(), c.pieces().end(), [&](const auto& piece) { return piece.id == request.piece; });
 					const auto& settings = c.mInstance->definition().settings;
-					if (c.pieces().size() >= settings.MaximumPieces || found->depth >= settings.MaximumDepth
-						|| world->bodies().size() >= limits.MaximumBodies) {
+					if (found->depth >= settings.MaximumDepth
+						|| (!request.cutout && (c.pieces().size() >= settings.MaximumPieces || world->bodies().size() >= limits.MaximumBodies))) {
 						c.complete(pending, DESTRUCTION::SliceStatus::BudgetExceeded);
 						c.mRequests.pop_front();
 						++runtime.operations;
 					}
-					else if (runtime.budget->jobs.load() < limits.MaximumJobs) {
-						auto snapshot = c.mInstance->snapshot(request);
-						const auto reservation = DESTRUCTION::meshBytes(snapshot.mesh)
-							+ std::size_t(snapshot.settings.maximumTriangles) * 3 * (sizeof(Vertex) + 64) * 16;
-						if (reservation > limits.MaximumWorkingBytes || statistics.topologyBytes > limits.MaximumWorkingBytes - reservation) {
+					else {
+						using Admission = DESTRUCTION::DestructionRuntime::Admission;
+						const auto admission
+							= runtime.admission(found->mesh, settings.MaximumTriangles, limits, c.mInstance->definition().concave.has_value());
+						if (admission == Admission::ExceedsBudget) {
 							c.complete(pending, DESTRUCTION::SliceStatus::BudgetExceeded, "Fracture exceeds CPU working budget");
 							c.mRequests.pop_front();
 							++runtime.operations;
 						}
-						else if (auto job = runtime.submit(std::move(snapshot), limits)) {
-							c.mActive = pending;
+						else if (admission == Admission::Ready) {
+							try {
+								auto job = runtime.submit(c.mInstance->snapshot(request), limits);
+								if (!job) {
+									continue;
+								}
+								c.mActive = pending;
+								c.mJob = std::move(job);
+								c.mUploadPiece = 0;
+								c.mUploadBatch = 0;
+							} catch (const std::exception& error) {
+								c.complete(pending, DESTRUCTION::SliceStatus::UnsupportedMesh, error.what());
+								++statistics.rejected;
+							}
 							c.mRequests.pop_front();
-							c.mJob = std::move(job);
-							c.mUploadPiece = 0;
-							c.mUploadBatch = 0;
 							++runtime.operations;
 						}
 					}
 				}
 			}
-			if (!c.mJob || !c.mJob->done.load(std::memory_order_acquire) || !available()) {
+			if (!c.mJob || !available() || !runtime.canPublish(*c.mJob)) {
 				continue;
 			}
 			auto& prepared = c.mJob->result;
@@ -297,25 +327,48 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 				++runtime.operations;
 				continue;
 			}
-			c.mJob->stage.store(DESTRUCTION::RequestStage::Upload);
-			if (c.mCandidates.empty()) {
+			const auto count = prepared.pieces.size();
+			if (c.mJob->stage.load() != DESTRUCTION::RequestStage::Upload) {
+				const auto reject = [&](DESTRUCTION::SliceStatus status, const char* error) {
+					c.complete(*c.mActive, status, error);
+					c.mActive.reset();
+					c.mJob.reset();
+					++statistics.rejected;
+					++runtime.operations;
+				};
+				const auto source
+					= std::find_if(c.pieces().begin(), c.pieces().end(), [&](const auto& piece) { return piece.id == prepared.source; });
+				if (source == c.pieces().end()) {
+					reject(DESTRUCTION::SliceStatus::Stale, "Fracture source retired before upload");
+					continue;
+				}
+				if (c.pieces().size() - 1 + count > c.mInstance->definition().settings.MaximumPieces
+					|| world->bodies().size() - 1 + count > limits.MaximumBodies) {
+					reject(DESTRUCTION::SliceStatus::BudgetExceeded, "Fracture candidates exceed piece or body budget");
+					continue;
+				}
 				std::size_t bytes = 0;
+				std::size_t topologyBytes = 0;
 				for (const auto& piece : prepared.pieces) {
+					topologyBytes += DESTRUCTION::pieceBytes(piece.mesh, piece.geometry.shape);
 					for (const auto& batch : piece.uploads) {
 						bytes += batchBytes(batch);
 					}
 				}
-				if (bytes > limits.MaximumGpuBytes || statistics.gpuBytes > limits.MaximumGpuBytes - bytes) {
-					throw std::runtime_error("Fracture candidates exceed scene GPU budget");
+				if (topologyBytes > c.mJob->reservedBytes) {
+					reject(DESTRUCTION::SliceStatus::BudgetExceeded, "Fracture candidates exceed CPU reservation");
+					continue;
 				}
-				c.mCandidates.reserve(2);
-				for (unsigned side = 0; side < 2; ++side) {
-					DestructibleMeshComponent::RenderPiece render {};
-					render.object = renderObject(scene, c.mMaterials);
-					c.mCandidates.push_back(std::move(render));
+				if (!runtime.canFitGpuBytes(bytes, limits)) {
+					reject(DESTRUCTION::SliceStatus::BudgetExceeded, "Fracture candidates exceed scene GPU budget");
+					continue;
 				}
+				c.mJob->stage.store(DESTRUCTION::RequestStage::Upload);
+				c.mReservedGpuBytes = bytes;
+				statistics.gpuReservedBytes += bytes;
+				c.mCandidates.reserve(count);
 			}
-			while (c.mUploadPiece < 2 && available()) {
+			while (c.mUploadPiece < count && available()) {
 				auto& piece = prepared.pieces[c.mUploadPiece];
 				if (c.mUploadBatch == piece.uploads.size()) {
 					c.mCandidates[c.mUploadPiece].object->getComponent<ModelRenderer>()->getModel()->computeBoundingSphere();
@@ -328,19 +381,23 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 				if (bytes > limits.MaximumUploadBytesPerFrame - statistics.uploadedBytes) {
 					break;
 				}
-				if (bytes > limits.MaximumGpuBytes - statistics.gpuBytes) {
-					throw std::runtime_error("Scene GPU budget exhausted during upload");
-				}
 				const auto uploadStart = std::chrono::steady_clock::now();
+				if (c.mCandidates.size() == c.mUploadPiece) {
+					DestructibleMeshComponent::RenderPiece render {};
+					render.object = renderObject(scene, c.mMaterials);
+					c.mCandidates.push_back(std::move(render));
+				}
 				upload(*c.mCandidates[c.mUploadPiece].object, batch);
 				statistics.uploadMilliseconds += milliseconds(uploadStart);
 				statistics.uploadedBytes += bytes;
+				c.mReservedGpuBytes -= bytes;
+				statistics.gpuReservedBytes -= bytes;
 				statistics.gpuBytes += bytes;
 				c.mCandidates[c.mUploadPiece].gpuBytes += bytes;
 				++c.mUploadBatch;
 				++runtime.operations;
 			}
-			if (c.mUploadPiece != 2 || !available()) {
+			if (c.mUploadPiece != count || !available()) {
 				continue;
 			}
 			c.mJob->stage.store(DESTRUCTION::RequestStage::Ready);
@@ -348,8 +405,8 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 			const auto status = c.mInstance->commit(
 				std::move(prepared), c.mActive->slice,
 				[&](std::span<const DESTRUCTION::DestructiblePiece> pieces) {
-					for (unsigned side = 0; side < 2; ++side) {
-						c.mCandidates[side].id = pieces[side].id;
+					for (std::size_t index = 0; index < pieces.size(); ++index) {
+						c.mCandidates[index].id = pieces[index].id;
 					}
 				},
 				limits.MaximumBodies);
@@ -372,7 +429,7 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 				statistics.topologyBytes -= c.mTopologyBytes;
 				c.mTopologyBytes = 0;
 				for (const auto& piece : c.pieces()) {
-					c.mTopologyBytes += DESTRUCTION::meshBytes(piece.mesh);
+					c.mTopologyBytes += piece.topologyBytes;
 				}
 				statistics.topologyBytes += c.mTopologyBytes;
 				++statistics.committed;
@@ -384,11 +441,7 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 			c.complete(*c.mActive, status, c.mInstance->lastError());
 			c.mActive.reset();
 			c.mJob.reset();
-			for (auto& candidate : c.mCandidates) {
-				statistics.gpuBytes -= candidate.gpuBytes;
-				dispose(scene, candidate.object);
-			}
-			c.mCandidates.clear();
+			c.discardCandidates();
 			for (auto& render : c.mRenderPieces) {
 				if (!render.poseReady) {
 					const auto found = std::find_if(c.pieces().begin(), c.pieces().end(), [&](const auto& piece) { return piece.id == render.id; });
@@ -406,11 +459,7 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 					c.mJob->cancelled.store(true);
 				}
 				c.mJob.reset();
-				for (auto& candidate : c.mCandidates) {
-					statistics.gpuBytes -= candidate.gpuBytes;
-					dispose(scene, candidate.object);
-				}
-				c.mCandidates.clear();
+				c.discardCandidates();
 				++statistics.rejected;
 			}
 			else {
@@ -418,6 +467,12 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 					c.complete(pending, DESTRUCTION::SliceStatus::UnsupportedMesh, message);
 				}
 				c.mRequests.clear();
+				for (auto& request : c.mAnchorRequests) {
+					request.status = DESTRUCTION::SupportAnchorStatus::Rejected;
+					request.error = message;
+					c.completeSupportAnchor(std::move(request));
+				}
+				c.mAnchorRequests.clear();
 				c.release(false);
 				c.mFailed = true;
 				c.mError = message;
@@ -444,7 +499,7 @@ void DestructionSystem::afterPhysics(SCENE_SYSTEM::Scene& scene, float dt) {
 			statistics.topologyBytes -= c.mTopologyBytes;
 			c.mTopologyBytes = 0;
 			for (const auto& piece : c.pieces()) {
-				c.mTopologyBytes += DESTRUCTION::meshBytes(piece.mesh);
+				c.mTopologyBytes += piece.topologyBytes;
 			}
 			statistics.topologyBytes += c.mTopologyBytes;
 		}
@@ -538,13 +593,18 @@ void DestructionSystem::radialDamage(SCENE_SYSTEM::Scene& scene, MATH::Vector3f 
 				if (!body) {
 					continue;
 				}
-				auto local = MATH::QuaternionF::Conjugate(body->getOrientation()) * (center - body->getPosition());
-				const auto separation = COLLISION::convexSegmentSeparation(*body->shape.polyhedron, local, local, 0);
-				const float distance = std::max(0.f, separation.gap);
-				if (distance < nearest || (distance == nearest && nearestPiece && piece.id < nearestPiece)) {
-					nearest = distance;
-					nearestPiece = piece.id;
-					cutPoint = (body->getPosition() + body->getPointInWorldSpace(separation.point)) * .5f;
+				const auto shape = PHYSICS::geometry(*body);
+				for (std::size_t index = 0; index < COLLISION::compoundLeafCount(shape); ++index) {
+					const auto leaf = COLLISION::compoundLeafView(shape, index);
+					const auto local = leaf.local(center);
+					const auto& hull = *leaf.shape.polyhedron;
+					const auto separation = COLLISION::convexSegmentSeparation(hull, local, local, 0);
+					const float distance = std::max(0.f, separation.gap);
+					if (distance < nearest || (distance == nearest && nearestPiece && piece.id < nearestPiece)) {
+						nearest = distance;
+						nearestPiece = piece.id;
+						cutPoint = leaf.world((hull.center + separation.point) * .5f);
+					}
 				}
 			}
 			if (nearest < radius) {

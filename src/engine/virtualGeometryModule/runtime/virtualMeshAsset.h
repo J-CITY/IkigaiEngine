@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "virtualGeometryHierarchy.h"
 #include "virtualGeometryModule/format/vmeshIO.h"
 #include "virtualGeometrySelection.h"
 
@@ -17,6 +18,7 @@ class VertexBufferInterface;
 }
 
 namespace IKIGAI::VG {
+class VirtualMeshPageSource;
 // GPU copies of a cooked virtual mesh used by the cluster renderer (Vulkan and DirectX 12 only).
 struct VirtualMeshGpuBuffers {
 	// VMeshVertex[VertexCount], bound as vertex stream 0.
@@ -25,6 +27,11 @@ struct VirtualMeshGpuBuffers {
 	std::shared_ptr<RENDER::IndexBufferInterface> Indices = {};
 	// VMeshCluster[ClusterCount], read directly by the GPU selection (vgClusterCull.comp.glsl).
 	std::shared_ptr<RENDER::StorageBufferInterface> Clusters = {};
+	std::shared_ptr<RENDER::StorageBufferInterface> HierarchyNodes = {};
+	std::shared_ptr<RENDER::StorageBufferInterface> HierarchyClusters = {};
+	// The visibility opt-in mirrors the resident IA data at load time.
+	std::shared_ptr<RENDER::StorageBufferInterface> ResolveVertices = {};
+	std::shared_ptr<RENDER::StorageBufferInterface> ResolveIndices = {};
 };
 
 // True when the active backend can draw clusters: Vulkan or DirectX 12 with indirect draws and buffer usage flags.
@@ -40,18 +47,23 @@ class VirtualMeshAsset {
 public:
 	// Validated data from ReadVMesh. createClusterBuffers is false on backends without the GPU path; the
 	// fallback model is always created.
-	VirtualMeshAsset(std::string path, const VMeshData& data, bool createClusterBuffers);
+	VirtualMeshAsset(std::string path, const VMeshData& data, bool createClusterBuffers, std::shared_ptr<const VirtualMeshPageSource> pageSource = {},
+		bool visibilityBuffers = false);
+	VirtualMeshAsset(std::string path, std::shared_ptr<const VirtualMeshPageSource> source);
 	~VirtualMeshAsset();
 	VirtualMeshAsset(const VirtualMeshAsset&) = delete;
 	VirtualMeshAsset& operator=(const VirtualMeshAsset&) = delete;
 
 	const std::string& path() const;
+	const std::shared_ptr<const VirtualMeshPageSource>& pageSource() const;
 	const VMeshHeader& header() const;
 	const std::vector<VMeshCluster>& clusters() const;
+	const VirtualGeometryHierarchy& hierarchy() const;
 	uint32_t materialSlotCount() const;
 	uint32_t leafTriangleCount() const;
 	uint32_t fallbackTriangleCount() const;
 	bool hasClusterBuffers() const;
+	bool streamsPages() const;
 	const VirtualMeshGpuBuffers& gpuBuffers() const;
 	const std::shared_ptr<RENDER::ModelInterface>& fallbackModel() const;
 	// Bytes of the cluster renderer buffers (0 without them).
@@ -61,11 +73,14 @@ public:
 
 private:
 	void createFallbackModel(const VMeshData& data);
-	void createClusterBuffers(const VMeshData& data);
+	void createClusterBuffers(const VMeshData& data, bool visibilityBuffers);
 
 	std::string mPath = {};
+	std::shared_ptr<const VirtualMeshPageSource> mPageSource = {};
 	VMeshHeader mHeader = {};
 	std::vector<VMeshCluster> mClusters = {};
+	VirtualGeometryHierarchy mHierarchy = {};
+	bool mStreamsPages = false;
 	uint32_t mLeafTriangleCount = 0;
 	uint32_t mFallbackTriangleCount = 0;
 	VirtualMeshGpuBuffers mGpu = {};

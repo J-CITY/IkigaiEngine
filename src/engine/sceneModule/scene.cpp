@@ -104,18 +104,25 @@ void Scene::stepPhysics3D(std::chrono::duration<double> dt, bool beginDestructio
 	const bool destructionStep = !mPhysics3D->paused || mPhysics3D->singleStep;
 	if (destructionStep) {
 		ECS::DestructionSystem::beforePhysics(*this, float(dt.count()));
+		ECS::RagdollSystem::beforePhysics(*this, float(dt.count()));
 	}
-	ECS::RagdollSystem::beforePhysics(*this, float(dt.count()));
 	ECS::CommandBuffer commands;
 	mPhysics3D->onFixedUpdate(getWorld(), commands, dt);
 	commands.execute();
-	ECS::RagdollSystem::afterPhysics(*this);
-	if (destructionStep) {
+	if (mPhysics3D->lastStepSucceeded()) {
+		ECS::RagdollSystem::afterPhysics(*this);
 		ECS::DestructionSystem::afterPhysics(*this, float(dt.count()));
 	}
 	if (beginDestructionFrame) {
 		presentDestructibles(1);
 	}
+}
+bool Scene::physics3dPaused() const {
+	return mPhysics3D && mPhysics3D->paused;
+}
+void Scene::setPhysics3dPaused(bool paused) {
+	physics3d();
+	mPhysics3D->paused = paused;
 }
 void Scene::presentDestructibles(float alpha) {
 	ECS::DestructionSystem::present(*this, mPhysics3D && mPhysics3D->paused ? 1.f : alpha);

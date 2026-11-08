@@ -15,6 +15,7 @@
 #include "utilsModule/time/loadTimer.h"
 #include "virtualGeometry/virtualGeometryPostStage.h"
 #include "virtualGeometryModule/runtime/virtualGeometryRenderer.h"
+#include "virtualGeometryModule/runtime/virtualMeshAsset.h"
 #if USE_PHYSICS_3D
 #include "physics/deformableRenderer.h"
 #endif
@@ -123,6 +124,10 @@ VG::VirtualGeometryRenderer& GameRenderer::virtualGeometry() {
 		mVirtualGeometry = std::make_shared<VG::VirtualGeometryRenderer>();
 	}
 	return *mVirtualGeometry;
+}
+
+const VG::VirtualGeometryShadowStatistics& GameRenderer::virtualGeometryShadowStatistics() const {
+	return mVirtualGeometryShadows.statistics();
 }
 
 void GameRenderer::Init() {
@@ -765,6 +770,9 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		virtualGeometryInput.View.ProjectionScale = float(renderSize.y) * unjitteredProjection.getData()[1 * 4 + 1] * 0.5f;
 		virtualGeometryInput.View.ZNear = cameraComponent.getNear();
 		virtualGeometryInput.Frame = mFrameCount;
+		virtualGeometryInput.ViewId = static_cast<uint64_t>(cameraComponent.obj->getID().getUniqueId());
+		virtualGeometryInput.VisibilityRequested = bool(mRenderPipeline->mVgVisibilityShader);
+		virtualGeometryInput.ViewMatrix = cameraComponent.getCamera().getViewMatrix();
 		virtualGeometryInput.GpuProfiler = &mGpuProfiler;
 		virtualGeometryInput.GeometryStageActive
 			= std::any_of(mRenderPipeline->mStages.begin(), mRenderPipeline->mStages.end(), [](const auto& stage) {
@@ -779,6 +787,10 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		virtualGeometryInput.FallbackTexture = mEmptyTexture;
 		virtualGeometry().prepareFrame(*mContext.render, scene, virtualGeometryInput, chunks, shadowChunks);
 	}
+	const bool useVgShadows = virtualGeometry().settings().Enabled && std::ranges::any_of(mRenderPipeline->mStages, [](const auto& stage) {
+		return stage->mDescriptor.Enabled && bool(stage->mVgShadowShader);
+	});
+	mVirtualGeometryShadows.prepare(scene, useVgShadows);
 	for (auto i = mSkinningPoses.begin(); i != mSkinningPoses.end();) {
 		if (i->second.Frame + 1 < mFrameCount) {
 			i = mSkinningPoses.erase(i);
@@ -805,7 +817,10 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		}
 	}
 	if (raySceneNeeded) {
-		prepareRayTracingScene(shadowChunks);
+		// The RT lane consumes stable cooked fallback meshes. Raster cascades may
+		// skip selected draws but never change this input or its mesh identities.
+		const auto& rayProxyChunks = shadowChunks;
+		prepareRayTracingScene(rayProxyChunks);
 	}
 	else {
 		mRenderPipeline->mHistory.beginFrame();
@@ -958,6 +973,29 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		auto stageProfile = mGpuProfiler.measure(stage->mName);
 		auto stageStatistics = RenderStatistics::Get().measureStage(stage->mName);
 		auto stageCpuProfile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("Stage::" + stage->mName) : nullptr;
+		const bool vgVisibility = stage->mDrawContent == DrawContent::VIRTUAL_GEOMETRY_VISIBILITY;
+		if (vgVisibility || stage->mDrawContent == DrawContent::VIRTUAL_GEOMETRY_RESOLVE) {
+			auto& render = *mContext.render;
+			render.setFrameBuffer(stage->mFrameBuffer);
+			const MATH::Vector2f size(stage->mFrameBuffer->getWidth(), stage->mFrameBuffer->getHeight());
+			render.setViewport({ { 0, 0 }, size });
+			render.resetScissor();
+			uboData.ViewportSize = size;
+			render.updateUniformBuffer(mEngineUbo, uboData);
+			const VG::VirtualGeometryDrawBindings bindings { mEngineUbo, mFrameUbo, mEmptyTexture };
+			if (vgVisibility) {
+				render.clearIntColorAttachment(0, -1, -1);
+				virtualGeometry().drawVisibility(render, bindings, mRenderPipeline->mVgVisibilityShader, stage->mFrameBuffer);
+			}
+			else {
+				virtualGeometry().resolveVisibility(render, bindings, *mRenderPipeline->mVgVisibilityIds);
+			}
+			return;
+		}
+		if (mRenderPipeline->mVgVisibilityIds && stage->mDrawContent == DrawContent::TRANSPARENT_GEOMETRY
+			&& stage->mDescriptor.Material == "/materials/render/portable/forwardTransparent.mat" && stage->mMaterial->isDepthWriting()) {
+			throw std::invalid_argument("Visibility pipeline transparent material must keep depth writing disabled");
+		}
 		if (stage->mDrawContent == DrawContent::GPU_SCENE_OCCLUSION_POST) {
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 			auto& render = *mContext.render;
@@ -1381,6 +1419,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	if (computePending) {
 		mContext.render->execute([presentationDriver] { presentationDriver->joinGraphCompute(); });
 	}
+	mVirtualGeometryShadows.endFrame();
 	if (mVirtualGeometry) {
 		mVirtualGeometry->endFrame();
 	}
@@ -1502,6 +1541,11 @@ void GameRenderer::captureShadows(PipelineStage& active, const std::vector<Rende
 				gpuCasters = gpuScene->recordShadow(render, frustum);
 			}
 #endif
+			Frustum vgFrustum;
+			const bool vgCasters = lightType == 1 && stage->mVgShadowShader && mVirtualGeometry && mVirtualGeometry->settings().Enabled;
+			if (vgCasters) {
+				vgFrustum.make(proj * view);
+			}
 			if (DriverInterface::settings.backend != RenderSettings::Backend::OPENGL) {
 				auto correction = MATH::Matrix4f::Identity;
 				correction(2, 2) = .5f;
@@ -1527,8 +1571,21 @@ void GameRenderer::captureShadows(PipelineStage& active, const std::vector<Rende
 				render.setViewport(
 					{ { size.x / columns * (face % columns), size.y / rows * (face / columns) }, { size.x / columns, size.y / rows } });
 			}
+			if (vgCasters) {
+				VG::VirtualGeometryView shadowView;
+				shadowView.Frustum = &vgFrustum;
+				shadowView.Orthographic = true;
+				shadowView.ProjectionScale = size.y / rows * proj(1, 1) * 0.5f;
+				const Depth depth { stage->mMaterial->isDepthTest() ? stage->mMaterial->getDepthFunc() : DepthFunction::ALWAYS,
+					stage->mMaterial->isDepthWriting() };
+				mVirtualGeometryShadows.record(
+					render, shadowView, stage->mDescriptor.VirtualGeometryShadows, stage->mVgShadowShader, mShadowPassUbo, depth);
+			}
 			const auto drawCaster = [&](const Drawable& drawable) {
 				if (drawable.material && drawable.material->isCastShadow()) {
+					if (vgCasters && mVirtualGeometryShadows.replaces(drawable)) {
+						return;
+					}
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 					if (gpuCasters && gpuScene->containsShadow(drawable)) {
 						return;
@@ -2168,6 +2225,124 @@ static PipelineStage::ResolvedBindings ResolveStageBindings(
 	return result;
 }
 
+namespace {
+	struct VgVisibilityPair {
+		std::string Ids;
+		bool CompatibleGBuffer = false;
+	};
+
+	VgVisibilityPair ConfigureVgVisibility(RenderGraphPipeline::Descriptor& pipeline, bool canAllocate) {
+		using Stage = PipelineStage::Descriptor;
+		const auto isVisibility = [](const Stage& stage) { return stage.Draw == DrawContent::VIRTUAL_GEOMETRY_VISIBILITY; };
+		const auto isResolve = [](const Stage& stage) { return stage.Draw == DrawContent::VIRTUAL_GEOMETRY_RESOLVE; };
+		const auto hasVisibilityStages = [&](const std::vector<Stage>& stages) {
+			return std::ranges::any_of(stages, [&](const Stage& stage) { return isVisibility(stage) || isResolve(stage); });
+		};
+		if (hasVisibilityStages(pipeline.StartStages) || std::ranges::any_of(pipeline.LightPasses, [&](const auto& pass) {
+				return hasVisibilityStages(pass.InitStages) || hasVisibilityStages(pass.CaptureStages) || hasVisibilityStages(pass.PrepareStages)
+					|| hasVisibilityStages(pass.ResolveStages);
+			})) {
+			throw std::invalid_argument("Virtual geometry visibility stages must be per-frame main pipeline stages");
+		}
+		const auto visibility = std::ranges::find_if(pipeline.Stages, isVisibility);
+		const auto resolve = std::ranges::find_if(pipeline.Stages, isResolve);
+		if (visibility == pipeline.Stages.end() && resolve == pipeline.Stages.end()) {
+			return {};
+		}
+		const auto invalid = [] { throw std::invalid_argument("Invalid virtual geometry visibility/resolve stage pair"); };
+		const auto geometry = std::ranges::find_if(
+			pipeline.Stages, [](const Stage& stage) { return stage.Name == "Geometry" && stage.Draw == DrawContent::DEFERRED; });
+		if (std::ranges::count_if(pipeline.Stages, isVisibility) != 1 || std::ranges::count_if(pipeline.Stages, isResolve) != 1
+			|| geometry == pipeline.Stages.end() || visibility != geometry + 1 || resolve != visibility + 1 || !geometry->Enabled || geometry->Once
+			|| geometry->UpdateInterval != 1 || !geometry->ClearDepth || !visibility->Enabled || !resolve->Enabled || visibility->Once
+			|| resolve->Once || visibility->UpdateInterval != 1 || resolve->UpdateInterval != 1 || visibility->ClearColor || visibility->ClearDepth
+			|| resolve->ClearColor || resolve->ClearDepth || !visibility->Material.empty() || !resolve->Material.empty()
+			|| !visibility->Program.empty() || !resolve->Program.empty() || std::ranges::any_of(pipeline.Stages, [](const Stage& stage) {
+				   return stage.Enabled && (stage.Draw == DrawContent::VIRTUAL_GEOMETRY_POST || stage.Draw == DrawContent::GPU_SCENE_OCCLUSION_POST);
+			   })) {
+			invalid();
+		}
+		const auto frame = [&](const Stage& stage) {
+			return std::ranges::find_if(pipeline.FrameBuffers, [&](const auto& descriptor) { return descriptor.Name == stage.FrameBuffer; });
+		};
+		const auto geometryFrame = frame(*geometry);
+		const auto visibilityFrame = frame(*visibility);
+		const auto resolveFrame = frame(*resolve);
+		if (geometryFrame == pipeline.FrameBuffers.end() || visibilityFrame == pipeline.FrameBuffers.end()
+			|| resolveFrame == pipeline.FrameBuffers.end() || visibilityFrame->Textures.size() != 1 || geometryFrame->Depth.empty()
+			|| visibilityFrame->Depth != geometryFrame->Depth || !resolveFrame->Depth.empty() || resolveFrame->Textures != geometryFrame->Textures
+			|| geometryFrame->Mip || visibilityFrame->Mip || resolveFrame->Mip || geometryFrame->Layer || visibilityFrame->Layer
+			|| resolveFrame->Layer) {
+			invalid();
+		}
+		const auto ids = visibilityFrame->Textures.front();
+		const auto texture = std::ranges::find_if(pipeline.Textures, [&](const auto& value) { return value.Name == ids; });
+		const auto depth = std::ranges::find_if(pipeline.Textures, [&](const auto& value) { return value.Name == geometryFrame->Depth; });
+		const auto binding = resolve->Bindings.find("Visibility");
+		if (binding == resolve->Bindings.end() || binding->second != ids || texture == pipeline.Textures.end() || depth == pipeline.Textures.end()
+			|| texture->Resource.pixelType != PixelFormat::RG32_INT || texture->Resource.texType != TextureType::TEXTURE_2D
+			|| texture->Resource.useMipmap || texture->FullMipChain || texture->Resource.minFilter != MinMagFilter::NEAREST
+			|| texture->Resource.magFilter != MinMagFilter::NEAREST || texture->Size != depth->Size || texture->Scale != depth->Scale
+			|| texture->Resource.width != depth->Resource.width || texture->Resource.height != depth->Resource.height || texture->History
+			|| texture->Transient || depth->History || ids == geometryFrame->Depth
+			|| std::ranges::find(geometryFrame->Textures, ids) != geometryFrame->Textures.end()
+			|| std::ranges::count_if(pipeline.Textures, [&](const auto& value) { return value.Name == ids; }) != 1 || !texture->Path.empty()) {
+			invalid();
+		}
+		const auto protectedTarget = [&](const std::string& name) {
+			return name == ids || name == geometryFrame->Depth || std::ranges::find(geometryFrame->Textures, name) != geometryFrame->Textures.end();
+		};
+		for (auto stage = resolve + 1; stage != pipeline.Stages.end(); ++stage) {
+			if (!stage->Enabled) {
+				continue;
+			}
+			if (std::ranges::any_of(stage->Writes, protectedTarget) || std::ranges::any_of(stage->ResourceUses, [&](const auto& use) {
+					return GRAPH::IsWrite(use.Mode) && protectedTarget(use.Resource);
+				})) {
+				invalid();
+			}
+			const auto laterFrame = frame(*stage);
+			if (laterFrame == pipeline.FrameBuffers.end()) {
+				continue;
+			}
+			const bool stockTransparent = stage->Draw == DrawContent::TRANSPARENT_GEOMETRY && stage->OverrideMaterial && !stage->ClearDepth
+				&& stage->Material == "/materials/render/portable/forwardTransparent.mat";
+			if (std::ranges::any_of(laterFrame->Textures, protectedTarget) || (laterFrame->Depth == geometryFrame->Depth && !stockTransparent)) {
+				invalid();
+			}
+		}
+		if (!canAllocate) {
+			if (pipeline.Graph.Enabled) {
+				throw std::invalid_argument("Explicit visibility graph requires RG32_INT attachment support");
+			}
+			const auto rasterName = visibility->FrameBuffer;
+			const auto resolveName = resolve->FrameBuffer;
+			std::erase_if(pipeline.Stages, [&](const Stage& stage) { return isVisibility(stage) || isResolve(stage); });
+			std::erase_if(pipeline.FrameBuffers, [&](const auto& value) { return value.Name == rasterName || value.Name == resolveName; });
+			std::erase_if(pipeline.Textures, [&](const auto& value) { return value.Name == ids; });
+			return {};
+		}
+		return { ids, geometryFrame->Textures == std::vector<std::string> { "Velocity", "Normals", "Albedo", "Roughness" } };
+	}
+
+	void ValidateVgVisibilitySchedule(const RenderGraphPipeline::Descriptor& pipeline, const GRAPH::Plan& plan) {
+		if (!pipeline.Graph.Enabled) {
+			return;
+		}
+		const auto visibility
+			= std::ranges::find_if(pipeline.Stages, [](const auto& stage) { return stage.Draw == DrawContent::VIRTUAL_GEOMETRY_VISIBILITY; });
+		if (visibility == pipeline.Stages.end()) {
+			return;
+		}
+		const auto id = static_cast<GRAPH::PassId>(visibility - pipeline.Stages.begin());
+		const auto scheduled = std::ranges::find(plan.Schedule, id, &GRAPH::ScheduledPass::Id);
+		if (scheduled == plan.Schedule.end() || scheduled == plan.Schedule.begin() || scheduled + 1 == plan.Schedule.end()
+			|| (scheduled - 1)->Id != id - 1 || (scheduled + 1)->Id != id + 1) {
+			throw std::invalid_argument("Visibility graph must schedule Geometry, visibility, and resolve consecutively");
+		}
+	}
+}
+
 RenderGraphPipeline::RenderGraphPipeline(const Descriptor& descriptor, Renderer& renderer, const std::string& pipelineAsset)
 	: mDescriptor(ResolvePipelineSettings(descriptor))
 	, mSourceDescriptor(descriptor)
@@ -2175,7 +2350,11 @@ RenderGraphPipeline::RenderGraphPipeline(const Descriptor& descriptor, Renderer&
 	if (const auto frames = mDescriptor.Execution.FramesInFlight; frames && *frames != static_cast<int>(DriverInterface::settings.framesInFlight)) {
 		throw std::invalid_argument("Pipeline Execution.FramesInFlight must match the startup pipeline; select this pipeline at launch");
 	}
+	const auto backend = DriverInterface::settings.backend;
+	const auto visibility
+		= ConfigureVgVisibility(mDescriptor, backend == RenderSettings::Backend::VULKAN || backend == RenderSettings::Backend::DIRECTX12);
 	mGraphPlan = compileGraph(mDescriptor);
+	ValidateVgVisibilitySchedule(mDescriptor, mGraphPlan);
 	if (!mPipelineAsset.empty()) {
 		mPipelineWriteTime = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().lastWriteTime(mPipelineAsset);
 	}
@@ -2186,6 +2365,16 @@ RenderGraphPipeline::RenderGraphPipeline(const Descriptor& descriptor, Renderer&
 		mTextures.try_emplace(texture.Name);
 		if (texture.History) {
 			mTextures.try_emplace(texture.Name + "Previous");
+		}
+	}
+	if (!visibility.Ids.empty()) {
+		mVgVisibilityIds = &mTextures.at(visibility.Ids);
+		if (visibility.CompatibleGBuffer && renderer.gpuFeatures().FragmentPrimitiveId) {
+			try {
+				mVgVisibilityShader = RESOURCES::ShaderLoader::Create("/shaders/virtualGeometry/vgVisibility.shader");
+			} catch (const std::exception& error) {
+				std::cerr << "VG_VISIBILITY_FALLBACK " << error.what() << '\n';
+			}
 		}
 	}
 	CreatePipelineBuffers(*this, renderer);
@@ -2280,7 +2469,10 @@ void RenderGraphPipeline::reloadSettings(Renderer& renderer, const std::string& 
 		source.SettingsAsset = overrideAsset;
 	}
 	auto candidate = ResolvePipelineSettings(source);
+	const auto backend = DriverInterface::settings.backend;
+	ConfigureVgVisibility(candidate, backend == RenderSettings::Backend::VULKAN || backend == RenderSettings::Backend::DIRECTX12);
 	auto graphPlan = compileGraph(candidate);
+	ValidateVgVisibilitySchedule(candidate, graphPlan);
 	if (candidate.Graph.Enabled) {
 		for (size_t i = 0; i < candidate.Stages.size(); ++i) {
 			ValidateGraphMaterial(*mStageIndex[i], candidate.Stages[i]);
@@ -2912,6 +3104,25 @@ RenderGraphPipeline::StagesArr RenderGraphPipeline::loadStages(const std::vector
 			LoadComputeStage(*this, *stage);
 		}
 		stage->mResolved = ResolveStageBindings(*this, *stage, desc);
+		if (desc.VirtualGeometryShadows.Enabled) {
+			VG::ValidateVirtualGeometryShadowSettings(desc.VirtualGeometryShadows);
+			if (desc.Draw != DrawContent::SHADOW || desc.ShadowType != "directional" || !desc.OverrideMaterial || !stage->mMaterial
+				|| stage->mMaterial->getShader()->mPath != "/shaders/render/portable/shadow.shader" || stage->mMaterial->isBlendable()
+				|| !desc.Uniforms.empty() || !desc.BufferOverrides.empty() || !desc.BufferLinks.empty()) {
+				throw std::invalid_argument("VirtualGeometryShadows requires the stock directional shadow stage: " + desc.Name);
+			}
+			const auto* passAlpha = stage->mMaterial->findUniform("data_UBOu_Albedo");
+			const auto* color = passAlpha ? std::get_if<MATH::Vector4f>(passAlpha) : nullptr;
+			const auto* passTexture = stage->mMaterial->findUniform("u_AlbedoMap");
+			const auto* texture = passTexture ? std::get_if<std::shared_ptr<TextureInterface>>(passTexture) : nullptr;
+			if (desc.Enabled && color && color->w >= 0.5f && (!passTexture || (texture && !*texture)) && VG::IsVirtualGeometryGpuPathSupported()) {
+				try {
+					stage->mVgShadowShader = RESOURCES::ShaderLoader::Create("/shaders/virtualGeometry/vgDirectionalShadow.shader");
+				} catch (const std::exception& error) {
+					std::cerr << "VG_SHADOW_FALLBACK " << desc.Name << ": " << error.what() << '\n';
+				}
+			}
+		}
 		result.push_back(std::move(stage));
 	}
 	return result;

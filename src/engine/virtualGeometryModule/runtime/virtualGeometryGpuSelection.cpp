@@ -21,6 +21,9 @@ namespace {
 	constexpr const char* ClusterCullShaderPath = "/shaders/virtualGeometry/vgClusterCull.shader";
 	constexpr const char* InstanceCullPostShaderPath = "/shaders/virtualGeometry/vgInstanceCullPost.shader";
 	constexpr const char* ClusterCullPostShaderPath = "/shaders/virtualGeometry/vgClusterCullPost.shader";
+	constexpr const char* HierarchyTraverseShaderPath = "/shaders/virtualGeometry/vgHierarchyTraverse.shader";
+	constexpr const char* HierarchyFinalizeShaderPath = "/shaders/virtualGeometry/vgHierarchyFinalize.shader";
+	constexpr const char* HierarchyClusterCullShaderPath = "/shaders/virtualGeometry/vgHierarchyClusterCull.shader";
 	constexpr const char* ViewUniformName = "VgCullView";
 	constexpr const char* HzbName = "VgHzb";
 	constexpr const char* CullInstancesName = "engine_VgCullInstances";
@@ -40,14 +43,24 @@ namespace {
 	constexpr const char* OccludedClustersName = "engine_VgOccludedClusters";
 	constexpr const char* OccludedClusterCountsName = "engine_VgOccludedClusterCounts";
 	constexpr const char* PostClusterArgsName = "engine_VgPostClusterArgs";
+	constexpr const char* HierarchyNodesName = "engine_VgHierarchyNodes";
+	constexpr const char* HierarchyClustersName = "engine_VgHierarchyClusters";
+	constexpr const char* HierarchyCandidatesName = "engine_VgHierarchyCandidates";
+	constexpr const char* HierarchyStateName = "engine_VgHierarchyState";
+	constexpr const char* HierarchyDispatchName = "engine_VgHierarchyDispatch";
 	constexpr uint32_t GroupSize = 64;
 	// Words per asset in the dispatch buffers: DispatchIndirectCommand padded to 16 bytes.
 	constexpr uint32_t AssetDispatchWords = 4;
 	constexpr uint32_t SegmentWords = 4;
 	constexpr uint32_t DrawRecordBytes = 16;
 	constexpr uint32_t OccludedClusterBytes = 8;
-	constexpr uint32_t StatisticsWords = 25;
+	constexpr uint32_t StatisticsWords = 30;
 	constexpr uint32_t StatisticsBufferWords = 32;
+	constexpr size_t MaxPendingStatistics = 8;
+	constexpr uint32_t HierarchyEntryWords = 4;
+	constexpr uint32_t HierarchyMaxQueueCapacity = 1u << 20;
+	constexpr uint32_t HierarchyMaxTraversalGroups = 64;
+	constexpr uint32_t HierarchyNodesPerTraversalGroup = 128;
 	constexpr uint32_t MinimumCapacity = 256;
 	// Upload granularity: keeps DX12 upload-ring allocations inside its 4 MiB pages.
 	constexpr size_t UploadChunkBytes = 2u * 1024u * 1024u;
@@ -72,6 +85,17 @@ namespace {
 
 	uint32_t CeilDiv(uint32_t value, uint32_t divisor) {
 		return (value + divisor - 1) / divisor;
+	}
+
+	// Matches vgTraversalGroupCount in vgHierarchyTraverse.comp.glsl. A power of two maps each group to a binary path.
+	uint32_t HierarchyTraversalGroupCount(uint32_t nodeCount) {
+		uint32_t groups = 1;
+		uint32_t nodes = nodeCount - 1;
+		while (groups < HierarchyMaxTraversalGroups && nodes >= HierarchyNodesPerTraversalGroup) {
+			groups *= 2;
+			nodes >>= 1;
+		}
+		return groups;
 	}
 
 	PROFILER::GpuStageProfiler::Scope Measure(PROFILER::GpuStageProfiler* profiler, const char* name) {
@@ -107,6 +131,24 @@ bool VirtualGeometryGpuSelection::loadShaders() {
 		mClusterCullPostShader.reset();
 	}
 	return mShadersLoaded;
+}
+
+bool VirtualGeometryGpuSelection::loadHierarchyShaders() {
+	if (!mHierarchyShaderLoadAttempted) {
+		mHierarchyShaderLoadAttempted = true;
+		try {
+			mHierarchyTraverseShader = RESOURCES::ShaderLoader::Create(HierarchyTraverseShaderPath);
+			mHierarchyFinalizeShader = RESOURCES::ShaderLoader::Create(HierarchyFinalizeShaderPath);
+			mHierarchyClusterCullShader = RESOURCES::ShaderLoader::Create(HierarchyClusterCullShaderPath);
+		} catch (const std::exception& error) {
+			std::cerr << "VG_GPU_HIERARCHY_UNAVAILABLE using flat GPU selection: " << error.what() << std::endl;
+			return false;
+		}
+		if (!mHierarchyTraverseShader || !mHierarchyFinalizeShader || !mHierarchyClusterCullShader) {
+			std::cerr << "VG_GPU_HIERARCHY_UNAVAILABLE using flat GPU selection: missing hierarchy shader" << std::endl;
+		}
+	}
+	return mHierarchyTraverseShader && mHierarchyFinalizeShader && mHierarchyClusterCullShader;
 }
 
 std::string VirtualGeometryGpuSelection::unavailableReason(RENDER::Renderer& renderer) {
@@ -191,6 +233,44 @@ void VirtualGeometryGpuSelection::ensureCapacity(RENDER::Renderer& renderer, con
 	}
 }
 
+void VirtualGeometryGpuSelection::ensureHierarchyCapacity(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame) {
+	using RENDER::BufferUsage;
+	mHierarchyNodeCounts.clear();
+	if (!frame.Hierarchy.Enabled || !loadHierarchyShaders()) {
+		return;
+	}
+	for (const auto& entry : frame.Assets) {
+		const auto& buffers = entry.Asset->gpuBuffers();
+		const size_t nodeCount = entry.Asset->hierarchy().Nodes.size();
+		const bool available = buffers.HierarchyNodes && buffers.HierarchyClusters && nodeCount < UINT32_MAX;
+		mHierarchyNodeCounts.push_back(available ? static_cast<uint32_t>(nodeCount) : 0u);
+	}
+	const size_t missing = static_cast<size_t>(std::ranges::count(mHierarchyNodeCounts, 0u));
+	if (missing != 0 && !mHierarchyAssetWarningIssued) {
+		mHierarchyAssetWarningIssued = true;
+		std::cerr << "VG_GPU_HIERARCHY_UNAVAILABLE using flat GPU selection for " << missing << " asset(s) without a GPU hierarchy" << std::endl;
+	}
+	if (missing == mHierarchyNodeCounts.size()) {
+		mHierarchyNodeCounts.clear();
+		return;
+	}
+	const uint32_t queueCapacity = std::min(frame.Hierarchy.QueueCapacity, HierarchyMaxQueueCapacity);
+	if (!mHierarchyCandidates || queueCapacity > mHierarchyQueueCapacity) {
+		mHierarchyQueueCapacity = GrowCapacity(mHierarchyQueueCapacity, queueCapacity);
+		mHierarchyCandidates
+			= renderer.createStorageBuffer(nullptr, size_t(mHierarchyQueueCapacity) * HierarchyEntryWords, sizeof(uint32_t), BufferUsage::STORAGE);
+	}
+	if (!mHierarchyState || frame.Assets.size() > mHierarchyAssetCapacity) {
+		mHierarchyAssetCapacity = GrowCapacity(mHierarchyAssetCapacity, frame.Assets.size());
+		mHierarchyState = renderer.createStorageBuffer(
+			nullptr, size_t(mHierarchyAssetCapacity) * 2 * HierarchyEntryWords, sizeof(uint32_t), BufferUsage::STORAGE);
+	}
+	if (!mHierarchyDispatch) {
+		mHierarchyDispatch
+			= renderer.createStorageBuffer(nullptr, 2 * AssetDispatchWords, sizeof(uint32_t), BufferUsage::STORAGE | BufferUsage::INDIRECT);
+	}
+}
+
 void VirtualGeometryGpuSelection::setViewUniforms(RENDER::Renderer& renderer, const VirtualGeometryCullViewGpu& view) {
 	if (mViewUniformsUsed == mViewUniformPool.size()) {
 		mViewUniformPool.push_back(renderer.createUniformBuffer(&view, sizeof(view)));
@@ -200,10 +280,8 @@ void VirtualGeometryGpuSelection::setViewUniforms(RENDER::Renderer& renderer, co
 	renderer.setUniformBuffer(ViewUniformName, buffer);
 }
 
-void VirtualGeometryGpuSelection::bindClusterCullBuffers(
-	RENDER::Renderer& renderer, const std::shared_ptr<RENDER::StorageBufferInterface>& visibleInstances) {
+void VirtualGeometryGpuSelection::bindClusterCullBuffers(RENDER::Renderer& renderer) {
 	renderer.setStorageBuffer(CullInstancesName, mCullInstanceBuffer);
-	renderer.setStorageBuffer(VisibleInstancesName, visibleInstances);
 	renderer.setStorageBuffer(SlotBatchesName, mSlotBatchBuffer);
 	renderer.setStorageBuffer(SegmentsName, mSegmentBuffer);
 	renderer.setStorageBuffer(SegmentCountsName, mSegmentCountBuffer);
@@ -215,11 +293,98 @@ void VirtualGeometryGpuSelection::bindClusterCullBuffers(
 	renderer.setStorageBuffer(PostClusterArgsName, mPostClusterArgsBuffer);
 }
 
+void VirtualGeometryGpuSelection::recordClusterSelection(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame,
+	VirtualGeometryCullViewGpu view, const std::shared_ptr<RENDER::TextureInterface>& hzb, bool post, PROFILER::GpuStageProfiler* profiler) {
+	const auto& visibleInstances = post ? mPostVisibleInstanceBuffer : mVisibleInstanceBuffer;
+	const auto& instanceDispatch = post ? mPostInstanceDispatchBuffer : mAssetDispatchBuffer;
+	view.HierarchyQueueCapacity = std::min(frame.Hierarchy.QueueCapacity, HierarchyMaxQueueCapacity);
+	view.HierarchyVisitBudget = frame.Hierarchy.VisitBudget;
+	const auto bindFlat = [&] {
+		renderer.setShader(mClusterCullShader);
+		bindClusterCullBuffers(renderer);
+		renderer.setStorageBuffer(VisibleInstancesName, visibleInstances);
+		renderer.setTexture(HzbName, hzb);
+	};
+	bool flatBound = false;
+	for (uint32_t asset = 0; asset < view.AssetCount; ++asset) {
+		const auto& entry = frame.Assets[asset];
+		const auto& buffers = entry.Asset->gpuBuffers();
+		const size_t dispatchOffset = size_t(asset) * AssetDispatchWords * sizeof(uint32_t);
+		view.AssetDispatch = asset;
+		view.ClusterCount = static_cast<uint32_t>(entry.Asset->clusters().size());
+		view.VisibleSegment = entry.FirstInstance;
+		view.OccludedBase = entry.OccludedBase;
+		view.OccludedCapacity = !post && view.OcclusionTest ? entry.OccludedCapacity : 0u;
+		view.HierarchyNodeCount = mHierarchyNodeCounts.empty() ? 0u : mHierarchyNodeCounts[asset];
+		if (view.HierarchyNodeCount == 0) {
+			if (!flatBound) {
+				bindFlat();
+				flatBound = true;
+			}
+			setViewUniforms(renderer, view);
+			renderer.setStorageBuffer(ClustersName, buffers.Clusters);
+			renderer.dispatchIndirect(instanceDispatch, dispatchOffset);
+			continue;
+		}
+
+		view.HierarchyStateIndex = asset + (post ? view.AssetCount : 0u);
+		renderer.setShader(mHierarchyTraverseShader);
+		setViewUniforms(renderer, view);
+		const auto& viewUniform = mViewUniformPool[mViewUniformsUsed - 1];
+		renderer.setStorageBuffer(CullInstancesName, mCullInstanceBuffer);
+		renderer.setStorageBuffer(VisibleInstancesName, visibleInstances);
+		renderer.setStorageBuffer(HierarchyNodesName, buffers.HierarchyNodes);
+		renderer.setStorageBuffer(HierarchyStateName, mHierarchyState);
+		renderer.setStorageBuffer(HierarchyCandidatesName, mHierarchyCandidates);
+		renderer.setStorageBuffer(StatisticsName, mStatisticsBuffer);
+		{
+			auto scope = Measure(profiler, post ? "VgHierarchyTraversePost" : "VgHierarchyTraverse");
+			renderer.dispatchIndirect(instanceDispatch, dispatchOffset);
+		}
+
+		// RHI dispatch barriers order the scratch writes, the argument generation, and the indirect reads. Until
+		// the finalizer has checked the entire asset/phase, no traversal results enter the draw or HZB lists.
+		renderer.setShader(mHierarchyFinalizeShader);
+		renderer.setUniformBuffer(ViewUniformName, viewUniform);
+		renderer.setStorageBuffer(AssetDispatchName, instanceDispatch);
+		renderer.setStorageBuffer(HierarchyStateName, mHierarchyState);
+		renderer.setStorageBuffer(HierarchyDispatchName, mHierarchyDispatch);
+		renderer.setStorageBuffer(StatisticsName, mStatisticsBuffer);
+		{
+			auto scope = Measure(profiler, post ? "VgHierarchyFinalizePost" : "VgHierarchyFinalize");
+			renderer.dispatch(1, 1, 1);
+		}
+
+		renderer.setShader(mHierarchyClusterCullShader);
+		bindClusterCullBuffers(renderer);
+		renderer.setUniformBuffer(ViewUniformName, viewUniform);
+		renderer.setTexture(HzbName, hzb);
+		renderer.setStorageBuffer(ClustersName, buffers.Clusters);
+		renderer.setStorageBuffer(HierarchyStateName, mHierarchyState);
+		renderer.setStorageBuffer(HierarchyCandidatesName, mHierarchyCandidates);
+		renderer.setStorageBuffer(HierarchyClustersName, buffers.HierarchyClusters);
+		{
+			auto scope = Measure(profiler, post ? "VgHierarchyEmitPost" : "VgHierarchyEmit");
+			renderer.dispatchIndirect(mHierarchyDispatch, 0);
+		}
+
+		bindFlat();
+		flatBound = true;
+		renderer.setUniformBuffer(ViewUniformName, viewUniform);
+		renderer.setStorageBuffer(ClustersName, buffers.Clusters);
+		{
+			auto scope = Measure(profiler, post ? "VgHierarchyFlatFallbackPost" : "VgHierarchyFlatFallback");
+			renderer.dispatchIndirect(mHierarchyDispatch, AssetDispatchWords * sizeof(uint32_t));
+		}
+	}
+}
+
 void VirtualGeometryGpuSelection::record(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame, PROFILER::GpuStageProfiler* profiler) {
 	if (frame.Instances.empty() || !loadShaders()) {
 		return;
 	}
 	ensureCapacity(renderer, frame);
+	ensureHierarchyCapacity(renderer, frame);
 	mViewUniformsUsed = 0;
 	const auto& occlusion = frame.Occlusion;
 	const auto assets = static_cast<uint32_t>(frame.Assets.size());
@@ -229,7 +394,9 @@ void VirtualGeometryGpuSelection::record(RENDER::Renderer& renderer, const Virtu
 	mPostDispatchScratch.assign(size_t(assets) * AssetDispatchWords, 0u);
 	for (uint32_t asset = 0; asset < assets; ++asset) {
 		const auto clusters = static_cast<uint32_t>(frame.Assets[asset].Asset->clusters().size());
-		mAssetDispatchScratch[asset * AssetDispatchWords + 0] = CeilDiv(clusters, GroupSize);
+		const uint32_t hierarchyNodes = mHierarchyNodeCounts.empty() ? 0u : mHierarchyNodeCounts[asset];
+		mAssetDispatchScratch[asset * AssetDispatchWords + 0]
+			= hierarchyNodes != 0u ? HierarchyTraversalGroupCount(hierarchyNodes) : CeilDiv(clusters, GroupSize);
 		mAssetDispatchScratch[asset * AssetDispatchWords + 1] = 0u; // appended by vgInstanceCull
 		mAssetDispatchScratch[asset * AssetDispatchWords + 2] = 1u;
 		// Post cluster lists: X appended by vgClusterCull (one group per 64 entries).
@@ -260,6 +427,10 @@ void VirtualGeometryGpuSelection::record(RENDER::Renderer& renderer, const Virtu
 	UploadChunked(renderer, mStatisticsBuffer, mZeroScratch.data(), StatisticsBufferWords * sizeof(uint32_t));
 	UploadChunked(renderer, mOccludedClusterCountBuffer, mZeroScratch.data(), size_t(assets) * sizeof(uint32_t));
 	UploadChunked(renderer, mOccludedInstanceBuffer, mZeroScratch.data(), sizeof(uint32_t));
+	if (!mHierarchyNodeCounts.empty()) {
+		mZeroScratch.assign(size_t(assets) * 2 * HierarchyEntryWords, 0u);
+		UploadChunked(renderer, mHierarchyState, mZeroScratch.data(), mZeroScratch.size() * sizeof(uint32_t));
+	}
 	const uint32_t postInstanceArgs[AssetDispatchWords] = { 0u, 1u, 1u, 0u };
 	UploadChunked(renderer, mPostInstanceArgsBuffer, postInstanceArgs, sizeof(postInstanceArgs));
 
@@ -289,23 +460,10 @@ void VirtualGeometryGpuSelection::record(RENDER::Renderer& renderer, const Virtu
 	}
 	{
 		auto scope = Measure(profiler, "VgClusterCull");
-		renderer.setShader(mClusterCullShader);
-		bindClusterCullBuffers(renderer, mVisibleInstanceBuffer);
-		renderer.setTexture(HzbName, hzb);
-		for (uint32_t asset = 0; asset < assets; ++asset) {
-			const auto& entry = frame.Assets[asset];
-			view.AssetDispatch = asset;
-			view.ClusterCount = static_cast<uint32_t>(entry.Asset->clusters().size());
-			view.VisibleSegment = entry.FirstInstance;
-			view.OccludedBase = entry.OccludedBase;
-			view.OccludedCapacity = phaseOneOcclusion ? entry.OccludedCapacity : 0u;
-			setViewUniforms(renderer, view);
-			renderer.setStorageBuffer(ClustersName, entry.Asset->gpuBuffers().Clusters);
-			renderer.dispatchIndirect(mAssetDispatchBuffer, size_t(asset) * AssetDispatchWords * sizeof(uint32_t));
-		}
+		recordClusterSelection(renderer, frame, view, hzb, false, profiler);
 	}
 	if (!occlusion.Active) {
-		requestStatisticsReadback(renderer);
+		requestStatisticsReadback(renderer, frame.Frame);
 	}
 }
 
@@ -316,7 +474,7 @@ void VirtualGeometryGpuSelection::recordPost(RENDER::Renderer& renderer, const V
 	}
 	if ((frame.Occlusion.DebugFlags & VG_OCCLUSION_DEBUG_SKIP_POST) != 0u) {
 		// Negative control: phase-1 rejections stay rejected.
-		requestStatisticsReadback(renderer);
+		requestStatisticsReadback(renderer, frame.Frame);
 		return;
 	}
 	const auto assets = static_cast<uint32_t>(frame.Assets.size());
@@ -343,20 +501,7 @@ void VirtualGeometryGpuSelection::recordPost(RENDER::Renderer& renderer, const V
 	{
 		auto scope = Measure(profiler, "VgClusterCullPost");
 		// Revived instances: the full cluster test, occlusion against the current HZB.
-		renderer.setShader(mClusterCullShader);
-		bindClusterCullBuffers(renderer, mPostVisibleInstanceBuffer);
-		renderer.setTexture(HzbName, hzb);
-		for (uint32_t asset = 0; asset < assets; ++asset) {
-			const auto& entry = frame.Assets[asset];
-			view.AssetDispatch = asset;
-			view.ClusterCount = static_cast<uint32_t>(entry.Asset->clusters().size());
-			view.VisibleSegment = entry.FirstInstance;
-			view.OccludedBase = entry.OccludedBase;
-			view.OccludedCapacity = 0u;
-			setViewUniforms(renderer, view);
-			renderer.setStorageBuffer(ClustersName, entry.Asset->gpuBuffers().Clusters);
-			renderer.dispatchIndirect(mPostInstanceDispatchBuffer, size_t(asset) * AssetDispatchWords * sizeof(uint32_t));
-		}
+		recordClusterSelection(renderer, frame, view, hzb, true, profiler);
 		// Clusters listed by phase 1: only the occlusion test is repeated.
 		view.PassMode = static_cast<uint32_t>(VirtualGeometryCullPass::POST_CLUSTERS);
 		renderer.setShader(mClusterCullPostShader);
@@ -382,36 +527,59 @@ void VirtualGeometryGpuSelection::recordPost(RENDER::Renderer& renderer, const V
 			renderer.dispatchIndirect(mPostClusterArgsBuffer, size_t(asset) * AssetDispatchWords * sizeof(uint32_t));
 		}
 	}
-	requestStatisticsReadback(renderer);
+	requestStatisticsReadback(renderer, frame.Frame);
 }
 
-void VirtualGeometryGpuSelection::requestStatisticsReadback(RENDER::Renderer& renderer) {
-	if (!mAsyncReadback) {
+void VirtualGeometryGpuSelection::requestStatisticsReadback(RENDER::Renderer& renderer, uint64_t sourceFrame) {
+	if (!mAsyncReadback || mPendingStatistics.size() >= MaxPendingStatistics) {
 		return;
 	}
 	renderer.flush();
 	try {
-		mPendingTicket = renderer.getDriver()->requestBufferReadback(mStatisticsBuffer, 0, StatisticsWords * sizeof(uint32_t));
-		mHasPendingTicket = true;
+		const uint64_t ticket = renderer.getDriver()->requestBufferReadback(mStatisticsBuffer, 0, StatisticsWords * sizeof(uint32_t));
+		mPendingStatistics.push_back({ ticket, sourceFrame });
 	} catch (const RENDER::UnsupportedGpuFeature& error) {
 		// Statistics are optional: without asynchronous readback the GPU counters are simply not reported.
 		std::cout << "VG_GPU_STATISTICS_UNAVAILABLE " << error.what() << std::endl;
 		mAsyncReadback = false;
-		mHasPendingTicket = false;
 	}
 }
 
-bool VirtualGeometryGpuSelection::takeStatistics(RENDER::Renderer& renderer, VirtualGeometryGpuStatistics& statistics) {
-	if (!mHasPendingTicket) {
+bool VirtualGeometryGpuSelection::takeStatistics(RENDER::Renderer& renderer, VirtualGeometryGpuStatistics& statistics, uint64_t* sourceFrame) {
+	if (mPendingStatistics.empty()) {
 		return false;
 	}
+	auto* driver = renderer.getDriver();
 	std::vector<uint8_t> bytes;
-	if (!renderer.getDriver()->collectBufferReadback(mPendingTicket, bytes)) {
-		return false;
+	bool ready = false;
+	uint64_t newestFrame = 0;
+	size_t expired = 0;
+	// Poll newest first. Once a copy completes, an uncollectable older copy on this queue has expired
+	// from the backend's readback cache. Still collect the other older copies to release their staging buffers.
+	for (size_t remaining = mPendingStatistics.size(); remaining > 0; --remaining) {
+		const auto pending = mPendingStatistics.begin() + (remaining - 1);
+		if (driver->collectBufferReadback(pending->Ticket, bytes)) {
+			if (!ready || pending->Frame > newestFrame) {
+				statistics = decodeStatistics(bytes);
+				newestFrame = pending->Frame;
+			}
+			ready = true;
+		}
+		else if (ready) {
+			++expired;
+		}
+		else {
+			continue;
+		}
+		mPendingStatistics.erase(pending);
 	}
-	mHasPendingTicket = false;
-	statistics = decodeStatistics(bytes);
-	return true;
+	if (expired != 0) {
+		std::cerr << "VG_GPU_STATISTICS_EXPIRED " << expired << " readback ticket(s)" << std::endl;
+	}
+	if (ready && sourceFrame) {
+		*sourceFrame = newestFrame;
+	}
+	return ready;
 }
 
 VirtualGeometryGpuStatistics VirtualGeometryGpuSelection::decodeStatistics(const std::vector<uint8_t>& bytes) const {
@@ -438,6 +606,11 @@ VirtualGeometryGpuStatistics VirtualGeometryGpuSelection::decodeStatistics(const
 	result.ClustersOccludedPost = words[22];
 	result.PostTriangles = words[23];
 	result.OccludedListOverflow = words[24];
+	result.HierarchyVisitedNodes = words[25];
+	result.HierarchyLeafTests = words[26];
+	result.HierarchyQueueOverflow = words[27];
+	result.HierarchyFallbacks = words[28];
+	result.HierarchyVisitOverflow = words[29];
 	return result;
 }
 
@@ -530,6 +703,9 @@ size_t VirtualGeometryGpuSelection::gpuBytes() const {
 	bytes += size_t(mOccludedCapacity) * OccludedClusterBytes;
 	bytes += mPostInstanceArgsBuffer ? AssetDispatchWords * sizeof(uint32_t) : 0;
 	bytes += mStatisticsBuffer ? StatisticsBufferWords * sizeof(uint32_t) : 0;
+	bytes += size_t(mHierarchyQueueCapacity) * HierarchyEntryWords * sizeof(uint32_t);
+	bytes += size_t(mHierarchyAssetCapacity) * 2 * HierarchyEntryWords * sizeof(uint32_t);
+	bytes += mHierarchyDispatch ? 2 * AssetDispatchWords * sizeof(uint32_t) : 0;
 	return bytes;
 }
 }

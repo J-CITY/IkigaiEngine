@@ -29,6 +29,7 @@
 namespace IKIGAI::VG {
 inline constexpr uint32_t VMeshMagic = 0x48534D56u; // "VMSH" read as little-endian bytes
 inline constexpr uint32_t VMeshVersion = 1u;
+inline constexpr uint32_t VMeshPagedVersion = 2u;
 inline constexpr uint32_t VMeshVertexLayoutVersion = 1u;
 inline constexpr uint32_t VMeshMaxClusterTriangles = 128u;
 inline constexpr float VMeshRootError = 3.402823466e+38f; // FLT_MAX: a root cluster is never replaced by a coarser one
@@ -65,18 +66,18 @@ static_assert(sizeof(VMeshVertex) == 28);
 
 struct VMeshCluster {
 	uint32_t IndexOffset = 0; // first index in the Indices section
-	uint32_t IndexCount = 0;  // multiple of 3, at most 3 * VMeshMaxClusterTriangles
+	uint32_t IndexCount = 0; // multiple of 3, at most 3 * VMeshMaxClusterTriangles
 	uint32_t MaterialSlot = 0; // index into the model material list (importer material order); a cluster never mixes materials
-	uint32_t GroupId = 0;      // simplification group that produced this cluster (0xFFFFFFFF for level 0)
-	uint32_t LodLevel = 0;     // 0 = original geometry, increasing = coarser
-	uint32_t Flags = 0;        // VMeshClusterFlags
-	float Error = 0.0f;        // object-space error of this cluster against the original mesh (0 for level 0)
+	uint32_t GroupId = 0; // simplification group that produced this cluster (0xFFFFFFFF for level 0)
+	uint32_t LodLevel = 0; // 0 = original geometry, increasing = coarser
+	uint32_t Flags = 0; // VMeshClusterFlags
+	float Error = 0.0f; // object-space error of this cluster against the original mesh (0 for level 0)
 	float ParentError = VMeshRootError;
-	VMeshSphere Bounds;          // tight bounds of the cluster triangles (culling)
-	VMeshSphere LodBounds;       // sphere used to project Error; identical for all clusters of a group
+	VMeshSphere Bounds; // tight bounds of the cluster triangles (culling)
+	VMeshSphere LodBounds; // sphere used to project Error; identical for all clusters of a group
 	VMeshSphere ParentLodBounds; // sphere used to project ParentError; zero radius for roots
 	float ConeAxis[3] = { 0.0f, 0.0f, 0.0f }; // normal cone for backface culling (unit axis, or zero when disabled)
-	float ConeCutoff = 1.0f;                   // cos(half angle) + margin; >= 1 means "never cull"
+	float ConeCutoff = 1.0f; // cos(half angle) + margin; >= 1 means "never cull"
 };
 static_assert(sizeof(VMeshCluster) == 96);
 
@@ -90,8 +91,8 @@ static_assert(sizeof(VMeshFallbackRange) == 16);
 
 struct VMeshSection {
 	uint64_t Offset = 0; // from the start of the file
-	uint64_t Size = 0;   // bytes
-	uint32_t Count = 0;  // elements
+	uint64_t Size = 0; // bytes
+	uint32_t Count = 0; // elements
 	uint32_t Stride = 0; // bytes per element
 };
 static_assert(sizeof(VMeshSection) == 24);
@@ -101,8 +102,8 @@ struct VMeshHeader {
 	uint32_t Version = VMeshVersion;
 	uint32_t VertexLayoutVersion = VMeshVertexLayoutVersion;
 	uint32_t Flags = VMESH_FLAG_NONE; // VMeshHeaderFlags
-	uint64_t SourceHash = 0;          // hash of the source model bytes (and sidecars the importer read)
-	uint64_t SettingsHash = 0;        // hash of the serialized cook settings
+	uint64_t SourceHash = 0; // hash of the source model bytes (and sidecars the importer read)
+	uint64_t SettingsHash = 0; // hash of the serialized cook settings
 	uint32_t MaterialSlotCount = 0;
 	uint32_t LodLevelCount = 0;
 	float BoundsMin[3] = { 0.0f, 0.0f, 0.0f };
@@ -115,4 +116,39 @@ struct VMeshHeader {
 	uint32_t Reserved[8] = {};
 };
 static_assert(sizeof(VMeshHeader) == 208);
+
+// V2 keeps all selection data in a checksummed prefix. Each page is an independent
+// vertex array followed by local uint32 indices. Cluster IndexOffset is local to its page.
+struct VMeshPageEntry {
+	uint64_t Offset = 0;
+	uint64_t Size = 0;
+	uint64_t Checksum = 0;
+	uint32_t VertexCount = 0;
+	uint32_t IndexCount = 0;
+};
+static_assert(sizeof(VMeshPageEntry) == 32);
+
+struct VMeshTransition {
+	uint32_t CoarseFirst = 0;
+	uint32_t CoarseCount = 0;
+	uint32_t FineFirst = 0;
+	uint32_t FineCount = 0;
+};
+static_assert(sizeof(VMeshTransition) == 16);
+
+struct VMeshPagedHeader {
+	uint32_t Magic = VMeshMagic;
+	uint32_t Version = VMeshPagedVersion;
+	uint64_t FileSize = 0;
+	uint64_t MetadataSize = 0;
+	uint64_t MetadataChecksum = 0;
+	uint64_t CookKey = 0;
+	VMeshHeader Asset {};
+	VMeshSection ClusterPages {};
+	VMeshSection Transitions {};
+	VMeshSection TransitionClusters {};
+	VMeshSection Roots {};
+	VMeshSection Pages {};
+};
+static_assert(sizeof(VMeshPagedHeader) == 368);
 }

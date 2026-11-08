@@ -32,6 +32,8 @@ TextureGl::TextureGl(const TextureResource &descriptor, const std::vector<void *
 
 void TextureGl::create(const TextureResource &descriptor, const std::vector<void *> &data) {
 	switch (descriptor.pixelType) {
+	case PixelFormat::RG32_INT:
+		throw std::runtime_error("OpenGL backend does not support RG32_INT attachments");
 	case PixelFormat::RGBA16_FLOAT:
 	case PixelFormat::RG16_FLOAT:
 	case PixelFormat::R16_FLOAT:

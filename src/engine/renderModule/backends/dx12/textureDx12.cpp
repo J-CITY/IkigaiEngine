@@ -1,4 +1,5 @@
 #include "textureDx12.h"
+#include "renderModule/backends/interface/integerColorAttachment.h"
 
 #include "utilsModule/pathGetter.h"
 
@@ -65,6 +66,7 @@ static bool LoadTextureImageFromVfs(const std::string& path, bool isFloat, int& 
 static const std::map<PixelFormat, DXGI_FORMAT> FormatMap = {
 	{ PixelFormat::R_FLOAT, DXGI_FORMAT_R32_FLOAT },
 	{ PixelFormat::RG_FLOAT, DXGI_FORMAT_R32G32_FLOAT },
+	{ PixelFormat::RG32_INT, DXGI_FORMAT_R32G32_SINT },
 	{ PixelFormat::RGB_FLOAT, DXGI_FORMAT_R32G32B32_FLOAT },
 	{ PixelFormat::RGBA_FLOAT, DXGI_FORMAT_R32G32B32A32_FLOAT },
 	{ PixelFormat::R_INT, DXGI_FORMAT_R8_UNORM },
@@ -85,6 +87,7 @@ static uint32_t GetFormatChannelsCount(PixelFormat format) {
 	static const std::map<PixelFormat, uint32_t> FormatChannelsMap = {
 		{PixelFormat::R_FLOAT, 1},
 		{PixelFormat::RG_FLOAT, 2},
+		{ PixelFormat::RG32_INT, 2 },
 		{PixelFormat::RGB_FLOAT, 3},
 		{PixelFormat::RGBA_FLOAT, 4},
 		{PixelFormat::R_INT, 1},
@@ -106,6 +109,7 @@ static uint32_t GetFormatChannelSize(PixelFormat format) {
 	static const std::map<PixelFormat, uint32_t> FormatChannelSizeMap = {
 		{PixelFormat::R_FLOAT, 4},
 		{PixelFormat::RG_FLOAT, 4},
+		{ PixelFormat::RG32_INT, 4 },
 		{PixelFormat::RGB_FLOAT, 4},
 		{PixelFormat::RGBA_FLOAT, 4},
 		{PixelFormat::R_INT, 1},
@@ -149,6 +153,9 @@ TextureDx12::~TextureDx12() {
 }
 
 void TextureDx12::create(const TextureResource& descriptor, const std::vector<void*>& data, std::shared_ptr<AliasHeapDx12>* backing) {
+	if (descriptor.pixelType == PixelFormat::RG32_INT) {
+		ValidateRg32IntAttachment(descriptor, !data.empty());
+	}
 	mType = descriptor.texType;
 	mFormat = descriptor.pixelType;
 	mWidth = descriptor.width;
@@ -302,12 +309,18 @@ void TextureDx12::setData(const std::vector<void*>& data, size_t width, size_t h
 }
 
 void TextureDx12::generateMips(ID3D12GraphicsCommandList* cmdList) {
+	if (mFormat == PixelFormat::RG32_INT) {
+		throw std::invalid_argument("RG32_INT does not support automatic mip generation");
+	}
 	setState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	D3D12GenerateMips(d3dUtil::GetDriver()->getDevice().Get(), cmdList, mResource.Get(), d3dUtil::GetDriver()->getDestroyDeferredObjects());
 	mCurrentState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 }
 
 void TextureDx12::generateMips() {
+	if (mFormat == PixelFormat::RG32_INT) {
+		throw std::invalid_argument("RG32_INT does not support automatic mip generation");
+	}
 	d3dUtil::OneTimeSubmit([&](ID3D12GraphicsCommandList* cmdList) {
 		generateMips(cmdList);
 	});
@@ -329,6 +342,9 @@ void* TextureDx12::getImguiId() {
 }
 
 void TextureDx12::recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) {
+	if (descriptor.pixelType == PixelFormat::RG32_INT) {
+		ValidateRg32IntAttachment(descriptor, !fileData.empty());
+	}
 	requireOwnerThread();
 	++mRevision;
 	// Отложенное уничтожение старого DX12-ресурса
@@ -379,6 +395,10 @@ std::shared_ptr<TextureDx12> TextureDx12::Create(const std::string& path, UTILS:
 }
 
 std::shared_ptr<TextureDx12> TextureDx12::Create(const TextureResource& descriptor, UTILS::IAllocator* allocator, TextureDeleter deleter) {
+	if (descriptor.pixelType == PixelFormat::RG32_INT) {
+		ValidateRg32IntAttachment(descriptor, false);
+		return AllocateTexture<TextureDx12>(allocator, deleter, descriptor, std::vector<void*> {});
+	}
 	auto& _descriptor = const_cast<TextureResource&>(descriptor);
 	//Load data
 	std::vector<void*> textureData;
@@ -431,6 +451,10 @@ std::shared_ptr<TextureDx12> TextureDx12::Create(const TextureResource& descript
 }
 
 std::shared_ptr<TextureDx12> TextureDx12::Create(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator, TextureDeleter deleter) {
+	if (descriptor.pixelType == PixelFormat::RG32_INT) {
+		ValidateRg32IntAttachment(descriptor, !fileData.empty());
+		return AllocateTexture<TextureDx12>(allocator, deleter, descriptor, std::vector<void*> {});
+	}
 	auto& _d = const_cast<TextureResource&>(descriptor);
 	std::vector<void*> textureData;
 	bool needFree = false;

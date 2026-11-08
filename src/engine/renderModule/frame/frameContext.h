@@ -5,6 +5,17 @@
 #include <memory>
 
 namespace IKIGAI::RENDER {
+// Owner-thread receipt. It is unresolved while commands are being recorded;
+// the token is published only after an actual native submission.
+class FrameSubmissionReceipt final {
+public:
+	[[nodiscard]] GpuCompletionToken token() const noexcept;
+
+private:
+	friend class FrameContext;
+	GpuCompletionToken mToken {};
+};
+
 class FrameContext final {
 public:
 	enum class State { RECORDING, SEALED, SUBMITTED, COMPLETE };
@@ -17,6 +28,7 @@ public:
 	bool retire(const GpuCompletionSource& completion);
 	[[nodiscard]] State state() const noexcept;
 	[[nodiscard]] GpuCompletionToken completionToken() const noexcept;
+	[[nodiscard]] std::shared_ptr<const FrameSubmissionReceipt> submissionReceipt() const noexcept;
 	[[nodiscard]] std::shared_ptr<const RenderFrameSnapshot> snapshot() const noexcept;
 	[[nodiscard]] std::shared_ptr<RenderCommandBuffer> commands() const noexcept;
 
@@ -27,5 +39,6 @@ private:
 	std::shared_ptr<const RenderFrameSnapshot> mSnapshot {};
 	std::shared_ptr<RenderCommandBuffer> mCommands {};
 	GpuCompletionToken mCompletion {};
+	std::shared_ptr<FrameSubmissionReceipt> mReceipt = std::make_shared<FrameSubmissionReceipt>();
 };
 }

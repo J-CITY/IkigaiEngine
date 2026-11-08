@@ -3,6 +3,7 @@
 #include "coreModule/ecs/components/physics3dComponent.h"
 #include "coreModule/ecs/components/physicsComponent.h"
 #include "sceneModule/scene.h"
+#include "utilsModule/log/logger.h"
 #include <iostream>
 #include <set>
 #ifdef USE_EDITOR
@@ -158,6 +159,7 @@ Physics3DSystem::Physics3DSystem(SCENE_SYSTEM::Scene& scene, std::shared_ptr<P::
 	mName = "Physics3DSystem";
 }
 void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chrono::duration<double> dt) {
+	mLastStepSucceeded = false;
 	auto objects = mScene.getObjects();
 	for (auto& object : objects) {
 		auto& o = *object;
@@ -353,7 +355,18 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 		}
 	}
 	if (!paused || singleStep) {
-		mSimulation->step(static_cast<float>(dt.count()));
+		try {
+			mSimulation->step(static_cast<float>(dt.count()));
+			mLastStepSucceeded = true;
+		} catch (const P::ContactBudgetExceeded& error) {
+			// The kernel restored the last committed tick, including pending forces.
+			// Stop retries until the caller adjusts the scene/budget and resumes.
+			paused = true;
+			singleStep = false;
+			LOG_ERROR << "3D physics paused after rejected tick: " << error.what() << " (required at least " << error.requiredContacts << ", limit "
+					  << error.maximumContacts << "). Adjust maximumContacts or scene density before resuming.";
+			return;
+		}
 	}
 	singleStep = false;
 	for (auto& object : objects) {

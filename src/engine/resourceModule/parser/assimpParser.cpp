@@ -5,6 +5,8 @@
 #include "skeletalModule/animation.h"
 #include "skeletalModule/skeleton.h"
 #include "utilsModule/log/loggerDefine.h"
+#include <algorithm>
+#include <assimp/DefaultIOSystem.h>
 #include <assimp/IOStream.hpp>
 #include <assimp/IOSystem.hpp>
 #include <assimp/Importer.hpp>
@@ -13,15 +15,15 @@
 #include <assimp/postprocess.h>
 #include <assimp/scene.h>
 #include <cassert>
-#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
-#include <stdexcept>
+#include <memory>
 #include <renderModule/backends/interface/driverInterface.h>
 #include <renderModule/backends/interface/modelInterface.h>
 #include <renderModule/backends/meshFactory.h>
 #include <renderModule/vertex.h>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -120,6 +122,43 @@ public:
 		delete stream;
 	}
 };
+class TrackedNativeIO final : public Assimp::IOSystem {
+	Assimp::DefaultIOSystem mNative;
+	AssimpParser::NativeImportDependency mOnDependency;
+
+public:
+	explicit TrackedNativeIO(const AssimpParser::NativeImportDependency& onDependency)
+		: mOnDependency(onDependency) { }
+	bool Exists(const char* name) const override {
+		return mNative.Exists(name);
+	}
+	char getOsSeparator() const override {
+		return mNative.getOsSeparator();
+	}
+	bool ComparePaths(const char* first, const char* second) const override {
+		return mNative.ComparePaths(first, second);
+	}
+	Assimp::IOStream* Open(const char* name, const char* mode = "rb") override {
+		if (std::strchr(mode, 'w') || std::strchr(mode, '+') || std::strchr(mode, 'a')) {
+			return nullptr;
+		}
+		const auto close = [this](Assimp::IOStream* stream) { mNative.Close(stream); };
+		std::unique_ptr<Assimp::IOStream, decltype(close)> stream(mNative.Open(name, "rb"), close);
+		if (!stream) {
+			return nullptr;
+		}
+		std::vector<uint8_t> bytes(stream->FileSize());
+		if (!bytes.empty() && stream->Read(bytes.data(), 1, bytes.size()) != bytes.size()) {
+			throw std::runtime_error(std::string("Cannot read model dependency ") + name);
+		}
+		mOnDependency(name, bytes);
+		return new AssetStream(std::move(bytes));
+	}
+	void Close(Assimp::IOStream* stream) override {
+		delete stream;
+	}
+};
+
 const aiScene* ReadAssetScene(Assimp::Importer& importer, const std::string& fileName, const std::vector<uint8_t>& data, unsigned int flags) {
 	// Keep FBX pre/post rotations on the actual joint. Synthetic pivot nodes
 	// otherwise separate animated channels from the skin's joint hierarchy.
@@ -390,8 +429,12 @@ bool AssimpParser::ReadImportedModel(const aiScene* scene, ImportedModel& outMod
 	return true;
 }
 
-bool AssimpParser::ImportModel(const std::string& fileName, ModelParserFlags parserFlags, ImportedModel& outModel) {
+bool AssimpParser::ImportModel(
+	const std::string& fileName, ModelParserFlags parserFlags, ImportedModel& outModel, const NativeImportDependency& onDependency) {
 	Assimp::Importer importer;
+	if (onDependency) {
+		importer.SetIOHandler(new TrackedNativeIO(onDependency));
+	}
 	return ReadImportedModel(importer.ReadFile(fileName, static_cast<int>(parserFlags)), outModel);
 }
 

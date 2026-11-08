@@ -72,6 +72,7 @@ void DriverDx12::configureGpuFeatures() {
 	result.BufferTransfer = true;
 	result.BufferReadback = true;
 	result.DrawIndirect = true;
+	result.FragmentPrimitiveId = true;
 	// Test switch (like IKIGAI_DISABLE_RAY_QUERY): report indirect count draws as unsupported.
 	result.DrawIndirectCount = !std::getenv("IKIGAI_DISABLE_DRAW_INDIRECT_COUNT");
 	result.DispatchIndirect = true;

@@ -75,12 +75,12 @@ struct VirtualGeometryCullViewGpu {
 	float Camera[4] = {};
 	uint32_t FrustumCulling = 0;
 	uint32_t InstanceCount = 0;
-	uint32_t FlagsReserved0 = 0;
-	uint32_t FlagsReserved1 = 0;
+	uint32_t HierarchyQueueCapacity = 0;
+	uint32_t HierarchyVisitBudget = 0;
 	uint32_t AssetDispatch = 0;
 	uint32_t ClusterCount = 0;
 	uint32_t VisibleSegment = 0;
-	uint32_t AssetReserved = 0;
+	uint32_t HierarchyNodeCount = 0;
 	uint32_t PassMode = 0;
 	uint32_t AssetCount = 0;
 	uint32_t OccludedBase = 0;
@@ -88,7 +88,7 @@ struct VirtualGeometryCullViewGpu {
 	uint32_t OcclusionTest = 0;
 	uint32_t SegmentOffset = 0;
 	uint32_t OcclusionDebug = 0;
-	uint32_t OcclusionReserved = 0;
+	uint32_t HierarchyStateIndex = 0;
 	// Rows of the view-projection the HZB of this pass was rendered with.
 	float OcclusionViewProjection[4][4] = {};
 };
@@ -127,8 +127,17 @@ struct VirtualGeometryGpuSegment {
 	uint32_t Capacity = 0;
 };
 
+struct VirtualGeometryGpuHierarchy {
+	bool Enabled = false;
+	// Number of candidate leaf ranges the queue can hold for one asset and phase.
+	uint32_t QueueCapacity = 65535;
+	// Maximum number of node tests in one asset and phase. UINT32_MAX uses the tree's structural bound.
+	uint32_t VisitBudget = UINT32_MAX;
+};
+
 // CPU tables of one frame of GPU selection, built by VirtualGeometryRenderer.
 struct VirtualGeometryGpuFrame {
+	uint64_t Frame = 0;
 	std::vector<VirtualGeometryCullInstanceGpu> Instances = {};
 	std::vector<uint32_t> SlotBatches = {};
 	std::vector<VirtualGeometryGpuSegment> Segments = {};
@@ -138,6 +147,7 @@ struct VirtualGeometryGpuFrame {
 	// draws [DrawCapacity, 2 * DrawCapacity).
 	uint32_t DrawCapacity = 0;
 	VirtualGeometryGpuOcclusion Occlusion = {};
+	VirtualGeometryGpuHierarchy Hierarchy = {};
 };
 
 // Counters written by the cluster/instance passes (word order of VG_STAT_* in vgCullCommon.glsl).
@@ -161,6 +171,11 @@ struct VirtualGeometryGpuStatistics {
 	uint32_t ClustersOccludedPost = 0;
 	uint32_t PostTriangles = 0;
 	uint32_t OccludedListOverflow = 0;
+	uint32_t HierarchyVisitedNodes = 0;
+	uint32_t HierarchyLeafTests = 0;
+	uint32_t HierarchyQueueOverflow = 0;
+	uint32_t HierarchyFallbacks = 0;
+	uint32_t HierarchyVisitOverflow = 0;
 };
 
 // One visible (draw instance, cluster) pair read back from the draw records (tests and debug tools).
@@ -198,16 +213,15 @@ public:
 	// Empty when the GPU path can run on this backend, otherwise the reason (missing feature or shader).
 	std::string unavailableReason(RENDER::Renderer& renderer);
 	// Uploads the frame, records the selection passes and requests a non-blocking readback of the statistics,
-	// collected by takeStatistics in the next frame. With frame.Occlusion.Active this is phase 1 and the statistics
+	// collected by takeStatistics after completion. With frame.Occlusion.Active this is phase 1 and the statistics
 	// readback waits for recordPost.
 	void record(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame, PROFILER::GpuStageProfiler* profiler);
 	// Phase 2 (M4-V2), outside any render pass, after the HZB of the phase-1 depth was built: re-tests what phase 1
 	// rejected against `hzb` and fills the post segments. Then requests the statistics readback.
 	void recordPost(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame, const std::shared_ptr<RENDER::TextureInterface>& hzb,
 		PROFILER::GpuStageProfiler* profiler);
-	// Statistics of the previously recorded frame: false when none are available (no asynchronous readback on this
-	// backend, or the readback is still pending).
-	bool takeStatistics(RENDER::Renderer& renderer, VirtualGeometryGpuStatistics& statistics);
+	// Consume completed readbacks and report the newest source frame. Returns false while none are available.
+	bool takeStatistics(RENDER::Renderer& renderer, VirtualGeometryGpuStatistics& statistics, uint64_t* sourceFrame = nullptr);
 	// Tests and debug tools: copies the selection results of the frame recorded latest into readback memory
 	// (non-blocking; call between frames, before the next record). collectCapture succeeds once the GPU finished.
 	// No blocking readBuffer is used: its mid-frame flush trips Vulkan synchronization validation after presents.
@@ -225,10 +239,14 @@ public:
 
 private:
 	bool loadShaders();
+	bool loadHierarchyShaders();
+	void ensureHierarchyCapacity(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame);
 	void ensureCapacity(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame);
 	void setViewUniforms(RENDER::Renderer& renderer, const VirtualGeometryCullViewGpu& view);
-	void bindClusterCullBuffers(RENDER::Renderer& renderer, const std::shared_ptr<RENDER::StorageBufferInterface>& visibleInstances);
-	void requestStatisticsReadback(RENDER::Renderer& renderer);
+	void bindClusterCullBuffers(RENDER::Renderer& renderer);
+	void recordClusterSelection(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame, VirtualGeometryCullViewGpu view,
+		const std::shared_ptr<RENDER::TextureInterface>& hzb, bool post, PROFILER::GpuStageProfiler* profiler);
+	void requestStatisticsReadback(RENDER::Renderer& renderer, uint64_t sourceFrame);
 	VirtualGeometryGpuStatistics decodeStatistics(const std::vector<uint8_t>& bytes) const;
 
 	bool mShadersLoaded = false;
@@ -238,6 +256,11 @@ private:
 	std::shared_ptr<RENDER::ShaderInterface> mClusterCullShader = {};
 	std::shared_ptr<RENDER::ShaderInterface> mInstanceCullPostShader = {};
 	std::shared_ptr<RENDER::ShaderInterface> mClusterCullPostShader = {};
+	bool mHierarchyShaderLoadAttempted = false;
+	bool mHierarchyAssetWarningIssued = false;
+	std::shared_ptr<RENDER::ShaderInterface> mHierarchyTraverseShader = {};
+	std::shared_ptr<RENDER::ShaderInterface> mHierarchyFinalizeShader = {};
+	std::shared_ptr<RENDER::ShaderInterface> mHierarchyClusterCullShader = {};
 	// One uniform buffer per dispatch of the frame: a buffer updated between dispatches of one command list would
 	// rely on the backend versioning setData (V1 did); separate buffers make the ordering explicit.
 	std::vector<std::shared_ptr<RENDER::UniformBufferInterface>> mViewUniformPool = {};
@@ -262,6 +285,13 @@ private:
 	std::shared_ptr<RENDER::StorageBufferInterface> mOccludedClusterBuffer = {};
 	std::shared_ptr<RENDER::StorageBufferInterface> mOccludedClusterCountBuffer = {};
 	std::shared_ptr<RENDER::StorageBufferInterface> mPostClusterArgsBuffer = {};
+	// One queue is reused across serial asset/phase scopes. Separate state entries are reset once per frame.
+	std::shared_ptr<RENDER::StorageBufferInterface> mHierarchyCandidates = {};
+	std::shared_ptr<RENDER::StorageBufferInterface> mHierarchyState = {};
+	std::shared_ptr<RENDER::StorageBufferInterface> mHierarchyDispatch = {};
+	uint32_t mHierarchyQueueCapacity = 0;
+	uint32_t mHierarchyAssetCapacity = 0;
+	std::vector<uint32_t> mHierarchyNodeCounts = {};
 	uint32_t mInstanceCapacity = 0;
 	uint32_t mAssetCapacity = 0;
 	uint32_t mSlotBatchCapacity = 0;
@@ -274,7 +304,10 @@ private:
 	std::vector<uint32_t> mPostDispatchScratch = {};
 	std::vector<uint32_t> mSegmentScratch = {};
 	std::vector<uint32_t> mZeroScratch = {};
-	uint64_t mPendingTicket = 0;
-	bool mHasPendingTicket = false;
+	struct PendingStatistics {
+		uint64_t Ticket = 0;
+		uint64_t Frame = 0;
+	};
+	std::vector<PendingStatistics> mPendingStatistics = {};
 };
 }

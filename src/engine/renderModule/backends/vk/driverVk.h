@@ -30,6 +30,7 @@ class UniformBufferVk;
 class MeshInterface;
 class ShaderVk;
 class FrameBufferVk;
+class TextureVk;
 class CommandBuffer;
 
 class DriverVk : public DriverInterface {
@@ -370,6 +371,7 @@ public:
 	void setTriangleOrientation(TriangleOrientation value) override;
 	void draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) override;
 	std::vector<float> readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
+	std::vector<int32_t> readIntTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) override;
 	void renderGraphBarrier(bool uav) override;
 	AliasedRenderTargets createAliasedRenderTargets(std::span<const TextureResource> descriptors) override;
@@ -411,6 +413,7 @@ public:
 	;
 
 	void clear(bool clearColor, bool clearDepth, bool clearStencil) override;
+	void clearIntColorAttachment(uint32_t attachment, int32_t red, int32_t green) override;
 	void setClearColor(const MATH::Vector4f& color) override;
 	void setClearColor(float r, float g, float b, float a) override;
 
@@ -469,6 +472,7 @@ private:
 	uint32_t getBackbufferHeight();
 	vk::Format getBackbufferFormat();
 
+	VmaBuffer copyTextureToReadback(TextureVk& texture, unsigned mip, unsigned layer, size_t bytes);
 	void beginRenderPass();
 	void endRenderPass();
 

@@ -1,4 +1,5 @@
 #include "collision3d.h"
+#include "compoundCollider.h"
 #include "convexCollision.h"
 #include <limits>
 
@@ -36,6 +37,13 @@ Shape3D Shape3D::convex(std::shared_ptr<const ConvexPolyhedron> polyhedron) {
 }
 
 MATH::GEOMETRY::Aabb<3> bounds(const ShapeView3D& s) {
+	if (s.shape.kind == Shape3D::Kind::Compound) {
+		auto out = bounds(compoundLeafView(s, 0));
+		for (std::size_t child = 1; child < compoundLeafCount(s); ++child) {
+			out = MATH::GEOMETRY::Aabb<3>::merge(out, bounds(compoundLeafView(s, child)));
+		}
+		return out;
+	}
 	if (s.shape.kind == Shape3D::Kind::Convex) {
 		MATH::GEOMETRY::Aabb<3> out;
 		out.min.fill(std::numeric_limits<float>::max());
@@ -215,6 +223,7 @@ void DefaultNarrowPhase3D::setHandler(Shape3D::Kind a, Shape3D::Kind b, Handler 
 
 Status DefaultNarrowPhase3D::collide(const ShapeView3D& a, const ShapeView3D& b, Manifold3D& out) const {
 	out = {};
+	// A compound pair may require several independent normals.
 	auto ai = static_cast<unsigned>(a.shape.kind), bi = static_cast<unsigned>(b.shape.kind);
 	if (ai > 2 || bi > 2) {
 		return Status::Unsupported;

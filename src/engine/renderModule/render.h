@@ -241,6 +241,8 @@ public:
 	void addView(RenderViewSnapshot view);
 	void shutdown();
 	bool hasActiveFrame() const;
+	// Retain during recording, inspect on the owner thread after native submit.
+	std::shared_ptr<const FrameSubmissionReceipt> submissionReceipt() const;
 	std::shared_ptr<const RenderFrameSnapshot> lastSnapshot() const;
 
 	// Explicit serial boundary for legacy/native operations and synchronous resource creation.
@@ -384,6 +386,9 @@ public:
 	}
 	void clear(bool c, bool d, bool s) {
 		push<CmdClear>(OpCode::CLEAR, c, d, s);
+	}
+	void clearIntColorAttachment(uint32_t attachment, int32_t red, int32_t green) {
+		execute([driver = mDriver, attachment, red, green] { driver->clearIntColorAttachment(attachment, red, green); });
 	}
 	void setClearColor(const MATH::Vector4f& color) {
 		push<CmdSetClearColorVec>(OpCode::SET_CLEAR_COLOR_VEC, color);

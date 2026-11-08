@@ -37,15 +37,18 @@ void DestructibleMeshComponent::moveState(DestructibleMeshComponent& source) {
 	mRenderPieces = std::move(source.mRenderPieces);
 	mCandidates = std::move(source.mCandidates);
 	mRequests = std::move(source.mRequests);
+	mAnchorRequests = std::move(source.mAnchorRequests);
 	mActive = std::exchange(source.mActive, std::nullopt);
 	mJob = std::move(source.mJob);
 	mRuntime = std::move(source.mRuntime);
 	mResults = std::move(source.mResults);
+	mAnchorResults = std::move(source.mAnchorResults);
 	mNextRequestId = source.mNextRequestId;
 	mGeneration = source.mGeneration;
 	mUploadPiece = source.mUploadPiece;
 	mUploadBatch = source.mUploadBatch;
 	mTopologyBytes = std::exchange(source.mTopologyBytes, 0);
+	mReservedGpuBytes = std::exchange(source.mReservedGpuBytes, 0);
 	mFailed = source.mFailed;
 	mPath = std::move(source.mPath);
 	mError = std::move(source.mError);
@@ -70,10 +73,72 @@ std::uint64_t DestructibleMeshComponent::slicePiece(
 			&& mode != DESTRUCTION::StaticCutMode::KeepPositiveStatic)) {
 		throw std::invalid_argument("Slice requires finite point, nonzero normal, finite impulse and valid static mode");
 	}
+	return enqueue({ piece, point, normal, impulse, mode });
+}
+std::uint64_t DestructibleMeshComponent::cutoutBox(
+	std::uint64_t piece, MATH::Vector3f center, MATH::Vector3f halfExtents, MATH::QuaternionF orientation) {
+	const DESTRUCTION::BoxCutout box { halfExtents, orientation };
+	if (!piece || !PHYSICS_COMMON::finite(center) || !DESTRUCTION::validBoxCutout(box)) {
+		throw std::invalid_argument("Box cutout requires a piece ID, finite center, bounded half extents and unit orientation");
+	}
+	DESTRUCTION::SliceRequest request {};
+	request.piece = piece;
+	request.point = center;
+	request.cutout = box;
+	return enqueue(request);
+}
+std::uint64_t DestructibleMeshComponent::setSupportAnchorEnabled(DESTRUCTION::SupportId anchor, bool enabled) {
+	DESTRUCTION::SupportAnchorResult request {};
+	request.id = mNextRequestId++;
+	request.anchor = anchor;
+	request.enabled = enabled;
+	const auto id = request.id;
+	const auto limits = mScene && !mSceneLifetime.expired() ? mScene->destructionSettings : DESTRUCTION::RuntimeSettings {};
+	if (!anchor) {
+		request.error = "Support anchor ID must be nonzero";
+	}
+	else if (mReset) {
+		request.error = "Destructible reset is pending";
+	}
+	else if (mFailed && mPath == settings.Definition) {
+		request.error = mError;
+	}
+	else if (settings.Definition.empty()) {
+		request.error = "Configure destructible Definition before changing support anchors";
+	}
+	else if (pendingRequests() >= limits.MaximumPendingPerObject) {
+		request.error = "Destructible request queue is full";
+	}
+	if (request.error.empty()) {
+		mAnchorRequests.push_back(std::move(request));
+	}
+	else {
+		request.status = DESTRUCTION::SupportAnchorStatus::Rejected;
+		completeSupportAnchor(std::move(request));
+	}
+	return id;
+}
+std::optional<DESTRUCTION::SupportAnchorResult> DestructibleMeshComponent::supportAnchorResult(std::uint64_t id) const {
+	const auto matches = [id](const auto& result) { return result.id == id; };
+	const auto completed = std::find_if(mAnchorResults.begin(), mAnchorResults.end(), matches);
+	if (completed != mAnchorResults.end()) {
+		return *completed;
+	}
+	const auto queued = std::find_if(mAnchorRequests.begin(), mAnchorRequests.end(), matches);
+	return queued == mAnchorRequests.end() ? std::nullopt : std::optional { *queued };
+}
+void DestructibleMeshComponent::completeSupportAnchor(DESTRUCTION::SupportAnchorResult result) {
+	const auto maximum = mScene && !mSceneLifetime.expired() ? std::max(1u, mScene->destructionSettings.MaximumResults) : 64;
+	while (mAnchorResults.size() >= maximum) {
+		mAnchorResults.pop_front();
+	}
+	mAnchorResults.push_back(std::move(result));
+}
+std::uint64_t DestructibleMeshComponent::enqueue(DESTRUCTION::SliceRequest request) {
 	PendingRequest pending {};
 	pending.id = mNextRequestId++;
 	pending.generation = mGeneration;
-	pending.slice = { piece, point, normal, impulse, mode };
+	pending.slice = request;
 	pending.created = std::chrono::steady_clock::now();
 	const auto limits = mScene && !mSceneLifetime.expired() ? mScene->destructionSettings : DESTRUCTION::RuntimeSettings {};
 	if (mReset) {
@@ -85,7 +150,7 @@ std::uint64_t DestructibleMeshComponent::slicePiece(
 		return pending.id;
 	}
 	if (settings.Definition.empty()) {
-		complete(pending, DESTRUCTION::SliceStatus::UnsupportedMesh, "Configure destructible Definition before slicing");
+		complete(pending, DESTRUCTION::SliceStatus::UnsupportedMesh, "Configure destructible Definition before cutting");
 		return pending.id;
 	}
 	if (pendingRequests() >= limits.MaximumPendingPerObject) {
@@ -95,19 +160,20 @@ std::uint64_t DestructibleMeshComponent::slicePiece(
 	if (mInstance) {
 		const auto status = mInstance->bind(pending.slice);
 		if (status != DESTRUCTION::SliceStatus::Split) {
-			complete(pending, status, "No live intersected piece for the requested plane");
+			complete(pending, status,
+				request.cutout ? "Cutout requires a live piece of a Concave destructible" : "No live intersected piece for the requested plane");
 			return pending.id;
 		}
 	}
 	else {
-		if (piece) {
+		if (request.piece) {
 			complete(pending, DESTRUCTION::SliceStatus::Stale, "Piece does not exist");
 			return pending.id;
 		}
 		// Before initialization, capture in the root's material frame. Definition COM is resolved on initialization.
 		auto inverse = MATH::QuaternionF::Conjugate(obj->mTransform->getWorldRotation());
-		pending.slice.point = inverse * (point - obj->mTransform->getWorldPosition());
-		pending.slice.normal = inverse * normal;
+		pending.slice.point = inverse * (request.point - obj->mTransform->getWorldPosition());
+		pending.slice.normal = inverse * request.normal;
 		pending.rootSpace = true;
 	}
 	mRequests.push_back(pending);
@@ -152,6 +218,7 @@ void DestructibleMeshComponent::complete(const PendingRequest& pending, DESTRUCT
 	if (mJob && mActive && mActive->id == pending.id && mJob->done.load(std::memory_order_acquire)) {
 		result.slicingMilliseconds = mJob->result.slicingMilliseconds;
 		result.cookingMilliseconds = mJob->result.cookingMilliseconds;
+		mJob->stage.store(DESTRUCTION::RequestStage::Completed);
 	}
 	if (status != DESTRUCTION::SliceStatus::Split) {
 		mDamage = std::min(mDamage + pending.reservedDamage, 1e9f);
@@ -172,6 +239,12 @@ void DestructibleMeshComponent::cancelRequests() {
 		complete(pending, DESTRUCTION::SliceStatus::Cancelled, "Destructible lifecycle changed");
 	}
 	mRequests.clear();
+	for (auto& request : mAnchorRequests) {
+		request.status = DESTRUCTION::SupportAnchorStatus::Cancelled;
+		request.error = "Destructible lifecycle changed";
+		completeSupportAnchor(std::move(request));
+	}
+	mAnchorRequests.clear();
 	if (mActive) {
 		complete(*mActive, DESTRUCTION::SliceStatus::Cancelled, "Destructible lifecycle changed");
 	}
@@ -184,6 +257,21 @@ void DestructibleMeshComponent::reset() {
 	mDamage = 0;
 	mReset = true;
 	mFailed = false;
+}
+void DestructibleMeshComponent::discardCandidates() {
+	const auto runtime = mRuntime.lock();
+	if (runtime) {
+		runtime->statistics.gpuReservedBytes -= mReservedGpuBytes;
+	}
+	mReservedGpuBytes = 0;
+	for (auto& candidate : mCandidates) {
+		if (runtime) {
+			runtime->statistics.gpuBytes -= candidate.gpuBytes;
+		}
+		// Candidates are inactive and have never entered the BVH.
+		candidate.object->dispose();
+	}
+	mCandidates.clear();
 }
 std::optional<DESTRUCTION::RequestResult> DestructibleMeshComponent::requestResult(std::uint64_t id) const {
 	const auto found = std::find_if(mResults.begin(), mResults.end(), [&](const auto& result) { return result.id == id; });
@@ -215,7 +303,7 @@ const std::deque<DESTRUCTION::RequestResult>& DestructibleMeshComponent::complet
 	return mResults;
 }
 std::size_t DestructibleMeshComponent::pendingRequests() const {
-	return mRequests.size() + (mActive ? 1 : 0);
+	return mRequests.size() + mAnchorRequests.size() + (mActive ? 1 : 0);
 }
 float DestructibleMeshComponent::accumulatedDamage() const {
 	return mDamage;
@@ -253,7 +341,7 @@ void DestructibleMeshComponent::release(bool clearDamage) {
 		}
 		pieces.clear();
 	};
-	disposeRender(mCandidates);
+	discardCandidates();
 	disposeRender(mRenderPieces);
 	mRenderPieces.clear();
 	mInstance.reset();

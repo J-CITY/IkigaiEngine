@@ -4,6 +4,14 @@
 #include <stdexcept>
 
 namespace IKIGAI::DESTRUCTION {
+namespace {
+	std::size_t reservationBytes(const FractureMesh& mesh, unsigned maximumTriangles, bool concave) {
+		// Includes source/output/cooked hulls, seams, cap and clipping scratch.
+		// Concave work caps total output triangles and total convex child triangles across the whole result.
+		const auto scratchFactor = concave ? 48 : 16;
+		return meshBytes(mesh) + std::size_t(maximumTriangles) * 3 * (sizeof(Vertex) + 64) * scratchFactor;
+	}
+}
 void RuntimeSettings::validate() const {
 	if (!MaximumPendingPerObject || MaximumPendingPerObject > 1024 || !MaximumResults || MaximumResults > 4096 || !MaximumJobs || MaximumJobs > 16
 		|| !MaximumOperationsPerFrame || MaximumOperationsPerFrame > 1024 || MaximumBodies < 2 || MaximumBodies > 1048576
@@ -54,15 +62,23 @@ DestructionRuntime::~DestructionRuntime() {
 		}
 	}
 }
+DestructionRuntime::Admission DestructionRuntime::admission(
+	const FractureMesh& mesh, unsigned maximumTriangles, const RuntimeSettings& settings, bool concave) const {
+	const auto reservation = reservationBytes(mesh, maximumTriangles, concave);
+	if (reservation > settings.MaximumWorkingBytes || statistics.topologyBytes > settings.MaximumWorkingBytes - reservation) {
+		return Admission::ExceedsBudget;
+	}
+	if (budget->jobs.load() >= settings.MaximumJobs || budget->bytes.load() > settings.MaximumWorkingBytes - reservation - statistics.topologyBytes) {
+		return Admission::Wait;
+	}
+	return Admission::Ready;
+}
 std::shared_ptr<FractureJob> DestructionRuntime::submit(FractureSnapshot snapshot, const RuntimeSettings& settings) {
-	// Conservative reservation includes source/output/cooked hulls, seams, cap and clipping scratch.
-	const std::size_t reservation = meshBytes(snapshot.mesh) + std::size_t(snapshot.settings.maximumTriangles) * 3 * (sizeof(Vertex) + 64) * 16;
-	if (budget->jobs.load() >= settings.MaximumJobs || reservation > settings.MaximumWorkingBytes
-		|| statistics.topologyBytes > settings.MaximumWorkingBytes - reservation
-		|| budget->bytes.load() > settings.MaximumWorkingBytes - reservation - statistics.topologyBytes) {
+	const auto triangles = snapshot.concave ? snapshot.concave->slicing.maximumTriangles : snapshot.settings.maximumTriangles;
+	if (admission(snapshot.mesh, triangles, settings, snapshot.concave.has_value()) != Admission::Ready) {
 		return {};
 	}
-	auto job = std::make_shared<FractureJob>(budget, reservation);
+	auto job = std::make_shared<FractureJob>(budget, reservationBytes(snapshot.mesh, triangles, snapshot.concave.has_value()));
 	job->snapshot = std::move(snapshot);
 	std::erase_if(mJobs, [](const auto& weak) { return weak.expired(); });
 	mJobs.push_back(job);
@@ -79,6 +95,21 @@ std::shared_ptr<FractureJob> DestructionRuntime::submit(FractureSnapshot snapsho
 	});
 	++statistics.submitted;
 	return job;
+}
+bool DestructionRuntime::canPublish(const FractureJob& job) const {
+	// Workers prepare in parallel, but upload and commit follow scene admission order.
+	// A slow head can delay publication to a later fixed step.
+	for (const auto& weak : mJobs) {
+		const auto candidate = weak.lock();
+		if (candidate && !candidate->cancelled.load() && candidate->stage.load() != RequestStage::Completed) {
+			return candidate.get() == &job && job.done.load(std::memory_order_acquire);
+		}
+	}
+	return false;
+}
+bool DestructionRuntime::canFitGpuBytes(std::size_t bytes, const RuntimeSettings& settings) const {
+	return bytes <= settings.MaximumGpuBytes && statistics.gpuBytes <= settings.MaximumGpuBytes - bytes
+		&& statistics.gpuReservedBytes <= settings.MaximumGpuBytes - bytes - statistics.gpuBytes;
 }
 void DestructionRuntime::beginFrame() {
 	operations = 0;

@@ -83,6 +83,8 @@ public:
 	PHYSICS::PhysicWorld& physics3d();
 	std::shared_ptr<PHYSICS::PhysicWorld> physics3dShared();
 	void stepPhysics3D(std::chrono::duration<double> dt, bool beginDestructionFrame = true);
+	bool physics3dPaused() const;
+	void setPhysics3dPaused(bool paused);
 	void presentDestructibles(float alpha);
 	DESTRUCTION::RuntimeSettings destructionSettings {};
 	std::shared_ptr<DESTRUCTION::DestructionRuntime> destructionRuntime {};

@@ -1,4 +1,5 @@
 #include "physicWorld.h"
+#include "collisionModule/compoundCollider.h"
 #include "rigidJointSolver.h"
 #include "spatialGrid.h"
 #include <algorithm>
@@ -25,6 +26,120 @@ namespace {
 		return count;
 	}
 }
+// Reuse storage across ticks and copy only state the solver can mutate.
+struct PhysicWorld::TickCheckpoint {
+	struct BodyState {
+		Body* body = nullptr;
+		RigidBody rigid {};
+		Vec3 force {};
+		Vec3 torque {};
+	};
+	struct JointState {
+		RigidJoint* joint = nullptr;
+		Vec3 impulse {};
+		float previousStep = 0;
+	};
+	struct SoftState {
+		SoftBody* body = nullptr;
+		std::vector<Particle> particles {};
+		std::vector<Vec3> previous {};
+		std::vector<float> linkLambda {};
+		std::vector<float> volumeLambda {};
+	};
+	struct FluidState {
+		Fluid* body = nullptr;
+		std::vector<Particle> particles {};
+		std::vector<Vec3> previous {};
+	};
+	std::vector<BodyState> bodies {};
+	std::vector<JointState> joints {};
+	std::vector<SoftState> softBodies {};
+	std::vector<FluidState> fluids {};
+	std::vector<std::pair<Attachment*, float>> attachments {};
+	std::vector<Contact> contacts {};
+	std::vector<ImpactEvent> impacts {};
+	double time = 0;
+
+	void capture(PhysicWorld& world) {
+		bodies.clear();
+		bodies.reserve(world.mBodies.size());
+		for (auto& [id, b] : world.mBodies) {
+			bodies.push_back({ &b, b, b.force, b.torque });
+		}
+		joints.clear();
+		joints.reserve(world.mJoints.size());
+		for (auto& [id, joint] : world.mJoints) {
+			joints.push_back({ &joint, joint.anchorImpulse, joint.previousStep });
+		}
+		attachments.clear();
+		// Particle solves run after rigid contacts. A single substep cannot mutate them before overflow.
+		const bool saveParticles = world.settings.substeps > 1;
+		softBodies.resize(saveParticles ? world.mSoft.size() : 0);
+		fluids.resize(saveParticles ? world.mFluids.size() : 0);
+		if (saveParticles) {
+			auto nextSoft = softBodies.begin();
+			for (auto& [id, body] : world.mSoft) {
+				auto& state = *nextSoft++;
+				state.body = &body;
+				state.particles = body.particles;
+				state.previous = body.previous;
+				state.linkLambda = body.linkLambda;
+				state.volumeLambda = body.volumeLambda;
+			}
+			auto nextFluid = fluids.begin();
+			for (auto& [id, body] : world.mFluids) {
+				auto& state = *nextFluid++;
+				state.body = &body;
+				state.particles = body.particles;
+				state.previous = body.previous;
+			}
+			attachments.reserve(world.mAttachments.size());
+			for (auto& [id, attachment] : world.mAttachments) {
+				attachments.emplace_back(&attachment, attachment.lambda);
+			}
+		}
+		const auto currentContacts = world.contacts();
+		contacts.assign(currentContacts.begin(), currentContacts.end());
+		impacts = world.mImpacts;
+		time = world.mTime;
+	}
+
+	void restore(PhysicWorld& world) const {
+		// Preserve map nodes and particle storage referenced by contacts and existing callers.
+		for (const auto& state : bodies) {
+			static_cast<RigidBody&>(*state.body) = state.rigid;
+			state.body->force = state.force;
+			state.body->torque = state.torque;
+		}
+		for (const auto& state : joints) {
+			state.joint->anchorImpulse = state.impulse;
+			state.joint->previousStep = state.previousStep;
+		}
+		for (const auto& state : softBodies) {
+			std::ranges::copy(state.particles, state.body->particles.begin());
+			std::ranges::copy(state.previous, state.body->previous.begin());
+			std::ranges::copy(state.linkLambda, state.body->linkLambda.begin());
+			std::ranges::copy(state.volumeLambda, state.body->volumeLambda.begin());
+		}
+		for (const auto& state : fluids) {
+			std::ranges::copy(state.particles, state.body->particles.begin());
+			std::ranges::copy(state.previous, state.body->previous.begin());
+		}
+		for (const auto& [attachment, lambda] : attachments) {
+			attachment->lambda = lambda;
+		}
+		std::ranges::copy(contacts, world.mContacts.begin());
+		world.mContactCount = contacts.size();
+		world.mImpacts = impacts;
+		world.mImpactLookup.clear();
+		world.mTime = time;
+		world.refreshBroadPhase();
+	}
+};
+ContactBudgetExceeded::ContactBudgetExceeded(unsigned required, unsigned maximum)
+	: std::runtime_error("3D contact buffer exhausted (maximumContacts budget exceeded)")
+	, requiredContacts(required)
+	, maximumContacts(maximum) { }
 PhysicWorld::PhysicWorld(unsigned count, unsigned iterations)
 	: mContacts(capacity(count))
 	, mResolver(iterations ? iterations : 12) {
@@ -44,6 +159,9 @@ PhysicWorld::PhysicWorld(Settings config, CollisionPipeline pipeline, unsigned c
 	}
 	mPipeline.validate();
 }
+PhysicWorld::PhysicWorld(CollisionPipeline pipeline)
+	: PhysicWorld(Settings {}, std::move(pipeline)) { }
+PhysicWorld::~PhysicWorld() = default;
 COLLISION::Manifold3D PhysicWorld::detect(const COLLISION::ShapeView3D& a, const COLLISION::ShapeView3D& b) const {
 	COLLISION::Manifold3D m;
 	auto status = mPipeline.narrowPhase->collide(a, b, m);
@@ -53,7 +171,8 @@ COLLISION::Manifold3D PhysicWorld::detect(const COLLISION::ShapeView3D& a, const
 	if (status == COLLISION::Status::Separated) {
 		return {};
 	}
-	if (m.count < 1 || m.count > 4 || !finite(m.normal) || std::abs(m.normal.squareMagnitude() - 1) > 0.001f) {
+	if (status != COLLISION::Status::Contact || m.count < 1 || m.count > 4 || !finite(m.normal)
+		|| std::abs(m.normal.squareMagnitude() - 1) > 0.001f) {
 		throw std::runtime_error("Invalid 3D collision manifold");
 	}
 	for (int i = 0; i < m.count; ++i) {
@@ -83,13 +202,51 @@ Id PhysicWorld::createBody(const BodyDef& d) {
 			&& d.restitution <= 1 && std::isfinite(d.gravityScale) && std::isfinite(d.linearDamping) && d.linearDamping >= 0
 			&& std::isfinite(d.angularDamping) && d.angularDamping >= 0,
 		"Invalid body material");
-	require(d.shape.kind == Shape::Kind::Sphere || d.shape.kind == Shape::Kind::Box || d.shape.kind == Shape::Kind::Convex, "Invalid shape kind");
+	require(d.shape.kind == Shape::Kind::Sphere || d.shape.kind == Shape::Kind::Box || d.shape.kind == Shape::Kind::Convex
+			|| d.shape.kind == Shape::Kind::Compound,
+		"Invalid shape kind");
 	Body b;
 	b.shape = d.shape.kind == Shape::Kind::Sphere ? Shape::sphere(d.shape.radius)
 		: d.shape.kind == Shape::Kind::Box		  ? Shape::box(d.shape.halfSize)
-												  : Shape::convex(d.shape.polyhedron);
+		: d.shape.kind == Shape::Kind::Convex	  ? Shape::convex(d.shape.polyhedron)
+												  : Shape::compound(d.shape.compoundCollider);
 	if (d.shape.kind == Shape::Kind::Convex) {
 		require(d.shape.polyhedron->center.magnitude() < 1e-3f, "Convex body vertices must be centered at COM");
+	}
+	if (d.shape.kind == Shape::Kind::Compound && d.type == BodyType::Dynamic) {
+		require(d.compoundInertiaPerUnitMass.has_value(), "Dynamic compound requires inertia about its COM");
+		const auto& tensor = *d.compoundInertiaPerUnitMass;
+		std::array<double, 9> v {};
+		double scale = 0;
+		for (unsigned index = 0; index < 9; ++index) {
+			const auto value = tensor.getData()[index];
+			require(std::isfinite(value) && std::isfinite(value * d.mass), "Nonfinite compound inertia");
+			v[index] = value;
+			scale = std::max(scale, std::abs(v[index]));
+		}
+		for (const auto pair : { std::pair { 1u, 3u }, std::pair { 2u, 6u }, std::pair { 5u, 7u } }) {
+			require(std::abs(v[pair.first] - v[pair.second]) <= scale * 1e-6, "Compound inertia must be symmetric");
+			v[pair.first] = v[pair.second] = (v[pair.first] + v[pair.second]) * .5;
+		}
+		const double minor = double(v[0]) * v[4] - double(v[1]) * v[3];
+		const double determinant = double(v[0]) * (double(v[4]) * v[8] - double(v[5]) * v[7])
+			- double(v[1]) * (double(v[3]) * v[8] - double(v[5]) * v[6]) + double(v[2]) * (double(v[3]) * v[7] - double(v[4]) * v[6]);
+		require(v[0] > 0 && minor > 0 && determinant > 0, "Compound inertia must be positive definite");
+		// Invert in double precision: small fragments can underflow a float determinant.
+		MATH::Matrix3f inverse {};
+		for (unsigned row = 0; row < 3; ++row) {
+			for (unsigned column = 0; column < 3; ++column) {
+				const auto firstRow = (column + 1) % 3;
+				const auto secondRow = (column + 2) % 3;
+				const auto firstColumn = (row + 1) % 3;
+				const auto secondColumn = (row + 2) % 3;
+				const double cofactor = double(v[firstRow * 3 + firstColumn]) * v[secondRow * 3 + secondColumn]
+					- double(v[firstRow * 3 + secondColumn]) * v[secondRow * 3 + firstColumn];
+				inverse(row, column) = static_cast<float>(cofactor / determinant / d.mass);
+				require(std::isfinite(inverse(row, column)), "Compound inverse inertia overflow");
+			}
+		}
+		b.setInverseInertiaTensor(inverse);
 	}
 	b.id = mNextId++;
 	b.type = d.type;
@@ -117,8 +274,10 @@ Id PhysicWorld::createBody(const BodyDef& d) {
 			auto h = d.shape.halfSize;
 			inertia = Vec3(h.y * h.y + h.z * h.z, h.x * h.x + h.z * h.z, h.x * h.x + h.y * h.y) * (d.mass / 3);
 		}
-		b.setInertiaTensor(d.shape.kind == Shape::Kind::Convex ? d.shape.polyhedron->inertia * d.mass
-															   : MATH::Matrix3f(inertia.x, 0, 0, 0, inertia.y, 0, 0, 0, inertia.z));
+		if (d.shape.kind != Shape::Kind::Compound) {
+			b.setInertiaTensor(d.shape.kind == Shape::Kind::Convex ? d.shape.polyhedron->inertia * d.mass
+																   : MATH::Matrix3f(inertia.x, 0, 0, 0, inertia.y, 0, 0, 0, inertia.z));
+		}
 	}
 	b.calculateDerivedData();
 	mBodies.emplace(b.id, b);
@@ -140,16 +299,19 @@ std::vector<Id> PhysicWorld::createBodies(std::span<const BodyDef> definitions) 
 	}
 	return result;
 }
-std::vector<Id> PhysicWorld::queryBodies(const MATH::GEOMETRY::Aabb<3>& bounds) {
-	bounds.validate();
-	// Queries may follow teleport/create/projection. Refresh proxies from authoritative poses.
+void PhysicWorld::refreshBroadPhase() {
 	auto& broad = *mPipeline.broadPhase;
 	broad.reset(settings.cellSize);
 	for (const auto& [id, body] : mBodies) {
 		broad.upsert(id, COLLISION::bounds(geometry(body)));
 	}
+}
+std::vector<Id> PhysicWorld::queryBodies(const MATH::GEOMETRY::Aabb<3>& bounds) {
+	bounds.validate();
+	// Queries may follow teleport/create/projection. Refresh proxies from authoritative poses.
+	refreshBroadPhase();
 	std::vector<Id> result {};
-	broad.query(bounds, result);
+	mPipeline.broadPhase->query(bounds, result);
 	std::sort(result.begin(), result.end());
 	result.erase(std::unique(result.begin(), result.end()), result.end());
 	return result;
@@ -166,8 +328,12 @@ Id PhysicWorld::createJoint(const RigidJointDef& definition) {
 	if (!joint.collideConnected) {
 		++mJointCollisionExclusions[std::minmax(joint.bodyA, joint.bodyB)];
 	}
-	wake(definition.bodyA);
-	wake(definition.bodyB);
+	if (body(definition.bodyA)->type == BodyType::Dynamic) {
+		wake(definition.bodyA);
+	}
+	if (body(definition.bodyB)->type == BodyType::Dynamic) {
+		wake(definition.bodyB);
+	}
 	return joint.id;
 }
 void PhysicWorld::destroyJoint(Id id) {
@@ -180,9 +346,15 @@ void PhysicWorld::destroyJoint(Id id) {
 				}
 			}
 		}
-		wake(found->second.bodyA);
-		wake(found->second.bodyB);
+		const auto bodyA = found->second.bodyA;
+		const auto bodyB = found->second.bodyB;
 		mJoints.erase(found);
+		if (body(bodyA)->type == BodyType::Dynamic) {
+			wake(bodyA);
+		}
+		if (body(bodyB)->type == BodyType::Dynamic) {
+			wake(bodyB);
+		}
 	}
 }
 const std::map<Id, RigidJoint>& PhysicWorld::joints() const {
@@ -192,13 +364,14 @@ bool PhysicWorld::collisionEnabled(Id a, Id b) const {
 	return !mJointCollisionExclusions.contains(std::minmax(a, b));
 }
 void PhysicWorld::destroyBody(Id id) {
-	mPipeline.broadPhase->remove(id);
-	// Removing a support may invalidate any resting contact island.
-	for (auto& [bid, b] : mBodies) {
-		if (b.type == BodyType::Dynamic) {
-			b.setAwake(true);
-		}
+	const auto found = mBodies.find(id);
+	if (found == mBodies.end()) {
+		return;
 	}
+	const auto* removed = &found->second;
+	// Wake before removing edges. Static bodies connect only the islands they directly support.
+	wake(id);
+	mPipeline.broadPhase->remove(id);
 	std::erase_if(mAttachments, [=](auto& e) { return e.second.body == id; });
 	std::vector<Id> jointsToRemove {};
 	for (const auto& [jointId, joint] : mJoints) {
@@ -210,8 +383,12 @@ void PhysicWorld::destroyBody(Id id) {
 		destroyJoint(jointId);
 	}
 	forces.removeTarget(id);
-	mContactCount = 0;
-	mBodies.erase(id);
+	// Keep the other contacts available for wake traversal if another body is removed this tick.
+	const auto end = mContacts.begin() + mContactCount;
+	const auto remaining = std::remove_if(
+		mContacts.begin(), end, [removed](const Contact& contact) { return contact.body[0] == removed || contact.body[1] == removed; });
+	mContactCount = static_cast<std::size_t>(remaining - mContacts.begin());
+	mBodies.erase(found);
 }
 void PhysicWorld::destroySoftBody(Id id) {
 	std::erase_if(mAttachments, [=](auto& e) { return e.second.soft == id; });
@@ -226,6 +403,7 @@ void PhysicWorld::destroyAttachment(Id id) {
 	mAttachments.erase(id);
 }
 void PhysicWorld::clear() {
+	mTickCheckpoint.reset();
 	mImpacts.clear();
 	mImpactLookup.clear();
 	mPipeline.broadPhase->reset(settings.cellSize);
@@ -266,14 +444,10 @@ void PhysicWorld::wake(Id id) {
 				pending.push_back(joint.bodyA);
 			}
 		}
-		for (auto c : contacts()) {
+		for (const auto& c : contacts()) {
 			for (int i = 0; i < 2; ++i) {
 				if (c.body[i] == b && c.body[1 - i]) {
-					for (auto& [other, member] : mBodies) {
-						if (&member == c.body[1 - i]) {
-							pending.push_back(other);
-						}
-					}
+					pending.push_back(static_cast<const Body*>(c.body[1 - i])->id);
 				}
 			}
 		}
@@ -321,13 +495,9 @@ void PhysicWorld::setVelocity(Id id, Vec3 v, Vec3 angular) {
 	}
 }
 void PhysicWorld::solveRigid(float dt, bool jointIteration) {
-	auto& broad = *mPipeline.broadPhase;
-	broad.reset(settings.cellSize);
-	for (const auto& [id, b] : mBodies) {
-		broad.upsert(id, COLLISION::bounds(geometry(b)));
-	}
+	refreshBroadPhase();
 	std::vector<std::pair<Id, Id>> pairs;
-	broad.pairs(pairs);
+	mPipeline.broadPhase->pairs(pairs);
 	PHYSICS_COMMON::canonicalPairs(pairs);
 	mContactCount = 0;
 	for (auto [aid, bid] : pairs) {
@@ -342,26 +512,44 @@ void PhysicWorld::solveRigid(float dt, bool jointIteration) {
 		if (!COLLISION::bounds(geometry(a)).overlaps(COLLISION::bounds(geometry(b)))) {
 			continue;
 		}
-		auto manifold = detect(geometry(a), geometry(b));
-		if (mContactCount + manifold.count > settings.maximumContacts) {
-			throw std::runtime_error("3D contact buffer exhausted (maximumContacts budget exceeded)");
-		}
-		if (mContactCount + manifold.count > mContacts.size()) {
-			const auto required = mContactCount + manifold.count;
-			if (required > settings.maximumContacts) {
-				throw std::runtime_error("3D contact buffer exhausted (maximumContacts budget exceeded)");
+		const auto viewA = geometry(a);
+		const auto viewB = geometry(b);
+		const auto countA = COLLISION::compoundLeafCount(viewA);
+		const auto countB = COLLISION::compoundLeafCount(viewB);
+		const bool compound = a.shape.kind == Shape::Kind::Compound || b.shape.kind == Shape::Kind::Compound;
+		std::array<MATH::GEOMETRY::Aabb<3>, COLLISION::CompoundCollider3D::MaxChildren> boundsB {};
+		if (compound) {
+			for (size_t childB = 0; childB < countB; ++childB) {
+				boundsB[childB] = COLLISION::bounds(COLLISION::compoundLeafView(viewB, childB));
 			}
-			mContacts.resize(std::min<size_t>(settings.maximumContacts, std::max(required, mContacts.size() * 2)));
 		}
-		for (int i = 0; i < manifold.count; ++i) {
-			auto& c = mContacts[mContactCount++];
-			c.contactPoint = manifold.points[i].position;
-			c.penetration = manifold.points[i].penetration;
-			c.contactNormal = -manifold.normal; // Legacy solver uses B-to-A.
-			c.setBodyData(&a, &b, std::sqrt(a.friction * b.friction), std::max(a.restitution, b.restitution));
-			const auto relative = a.getVelocity() + a.getRotation().cross(c.contactPoint - a.getPosition()) - b.getVelocity()
-				- b.getRotation().cross(c.contactPoint - b.getPosition());
-			c.closingSpeed = std::max(0.f, -relative.dot(c.contactNormal));
+		for (size_t childA = 0; childA < countA; ++childA) {
+			const auto leafA = COLLISION::compoundLeafView(viewA, childA);
+			const auto boundsA = compound ? COLLISION::bounds(leafA) : MATH::GEOMETRY::Aabb<3> {};
+			for (size_t childB = 0; childB < countB; ++childB) {
+				if (compound && !boundsA.overlaps(boundsB[childB])) {
+					continue;
+				}
+				const auto leafB = COLLISION::compoundLeafView(viewB, childB);
+				auto manifold = detect(leafA, leafB);
+				const auto required = mContactCount + manifold.count;
+				if (required > settings.maximumContacts) {
+					throw ContactBudgetExceeded(static_cast<unsigned>(required), settings.maximumContacts);
+				}
+				if (required > mContacts.size()) {
+					mContacts.resize(std::min<size_t>(settings.maximumContacts, std::max(required, mContacts.size() * 2)));
+				}
+				for (int i = 0; i < manifold.count; ++i) {
+					auto& c = mContacts[mContactCount++];
+					c.contactPoint = manifold.points[i].position;
+					c.penetration = manifold.points[i].penetration;
+					c.contactNormal = -manifold.normal; // Legacy solver uses B-to-A.
+					c.setBodyData(&a, &b, std::sqrt(a.friction * b.friction), std::max(a.restitution, b.restitution));
+					const auto relative = a.getVelocity() + a.getRotation().cross(c.contactPoint - a.getPosition()) - b.getVelocity()
+						- b.getRotation().cross(c.contactPoint - b.getPosition());
+					c.closingSpeed = std::max(0.f, -relative.dot(c.contactNormal));
+				}
+			}
 		}
 	}
 	mResolver.setIterations(jointIteration ? 1 : settings.velocityIterations, jointIteration ? 1 : settings.positionIterations);
@@ -391,9 +579,6 @@ void PhysicWorld::solveRigid(float dt, bool jointIteration) {
 	}
 }
 void PhysicWorld::step(float dt) {
-	mImpacts.clear();
-	mImpactLookup.clear();
-	++mTick;
 	require(std::isfinite(dt) && dt > 0 && finite(settings.gravity) && std::isfinite(settings.cellSize) && settings.cellSize > 0
 			&& settings.substeps > 0 && settings.substeps <= 128 && settings.velocityIterations > 0 && settings.positionIterations > 0
 			&& settings.particleIterations > 0 && settings.maximumContacts > 0 && settings.maximumContacts <= 1048576,
@@ -401,6 +586,21 @@ void PhysicWorld::step(float dt) {
 	for (auto& [id, f] : forces.fields()) {
 		f.validate();
 	}
+	if (!mTickCheckpoint) {
+		mTickCheckpoint = std::make_unique<TickCheckpoint>();
+	}
+	mTickCheckpoint->capture(*this);
+	try {
+		advance(dt);
+	} catch (const ContactBudgetExceeded&) {
+		mTickCheckpoint->restore(*this);
+		throw;
+	}
+	++mTick;
+}
+void PhysicWorld::advance(float dt) {
+	mImpacts.clear();
+	mImpactLookup.clear();
 	// Preserve inputs submitted through the inherited RigidBody API as well.
 	for (auto& [id, b] : mBodies) {
 		b.force += b.getAccumulatedForce();
@@ -480,27 +680,29 @@ void PhysicWorld::debugDraw(const DebugDraw& draw) const {
 		}
 	}
 	for (auto& [id, b] : mBodies) {
-		if (b.shape.kind == Shape::Kind::Sphere) {
-			if (draw.sphere) {
-				draw.sphere(b.getPosition(), b.shape.radius, 0x50e080ff);
+		for (size_t child = 0; child < COLLISION::compoundLeafCount(geometry(b)); ++child) {
+			const auto leaf = COLLISION::compoundLeafView(geometry(b), child);
+			if (leaf.shape.kind == Shape::Kind::Sphere) {
+				if (draw.sphere) {
+					draw.sphere(leaf.position, leaf.shape.radius, 0x50e080ff);
+				}
 			}
-		}
-		else if (b.shape.kind == Shape::Kind::Convex && draw.line) {
-			for (const auto& edge : b.shape.polyhedron->edges) {
-				draw.line(b.getPointInWorldSpace(b.shape.polyhedron->vertices[edge[0]]),
-					b.getPointInWorldSpace(b.shape.polyhedron->vertices[edge[1]]), 0x50e080ff);
+			else if (leaf.shape.kind == Shape::Kind::Convex && draw.line) {
+				for (const auto& edge : leaf.shape.polyhedron->edges) {
+					draw.line(leaf.world(leaf.shape.polyhedron->vertices[edge[0]]), leaf.world(leaf.shape.polyhedron->vertices[edge[1]]), 0x50e080ff);
+				}
 			}
-		}
-		else if (draw.line) {
-			std::array<Vec3, 8> v;
-			for (int i = 0; i < 8; ++i) {
-				v[i] = b.getPointInWorldSpace(Vec3(i & 1 ? b.shape.halfSize.x : -b.shape.halfSize.x, i & 2 ? b.shape.halfSize.y : -b.shape.halfSize.y,
-					i & 4 ? b.shape.halfSize.z : -b.shape.halfSize.z));
-			}
-			for (int i = 0; i < 8; ++i) {
-				for (int axis = 0; axis < 3; ++axis) {
-					if (!(i & (1 << axis))) {
-						draw.line(v[i], v[i | (1 << axis)], 0x50e080ff);
+			else if (draw.line) {
+				std::array<Vec3, 8> v;
+				for (int i = 0; i < 8; ++i) {
+					v[i] = leaf.world(Vec3(i & 1 ? leaf.shape.halfSize.x : -leaf.shape.halfSize.x,
+						i & 2 ? leaf.shape.halfSize.y : -leaf.shape.halfSize.y, i & 4 ? leaf.shape.halfSize.z : -leaf.shape.halfSize.z));
+				}
+				for (int i = 0; i < 8; ++i) {
+					for (int axis = 0; axis < 3; ++axis) {
+						if (!(i & (1 << axis))) {
+							draw.line(v[i], v[i | (1 << axis)], 0x50e080ff);
+						}
 					}
 				}
 			}

@@ -47,8 +47,8 @@ namespace {
 		float radius = 1;
 		for (const auto& piece : component.pieces()) {
 			if (auto* body = scene.physics3d().body(piece.body)) {
-				for (auto vertex : body->shape.polyhedron->vertices) {
-					radius = std::max(radius, (body->getPointInWorldSpace(vertex) - center).magnitude());
+				for (const auto& vertex : piece.mesh.vertices) {
+					radius = std::max(radius, (body->getPointInWorldSpace(vertex.position) - center).magnitude());
 				}
 			}
 		}
@@ -80,59 +80,48 @@ namespace {
 			if (!body) {
 				continue;
 			}
-			const auto& hull = *body->shape.polyhedron;
 			const auto color = piece.id == state.piece ? IM_COL32(255, 185, 65, 255) : IM_COL32(125, 165, 195, 255);
-			std::vector<Vec3> intersections {};
-			for (const auto& edge : hull.edges) {
-				const auto a = body->getPointInWorldSpace(hull.vertices[edge[0]]);
-				const auto b = body->getPointInWorldSpace(hull.vertices[edge[1]]);
-				draw->AddLine(project(a), project(b), color);
-				const auto da = normal.dot(a - state.point);
-				const auto db = normal.dot(b - state.point);
-				if (validNormal && da * db < 0) {
-					intersections.push_back(a + (b - a) * (da / (da - db)));
+			// Draw triangle-local section segments: a concave section can have several loops and holes.
+			for (size_t triangle = 0; triangle < piece.mesh.indices.size(); triangle += 3) {
+				std::array<Vec3, 3> vertices {};
+				for (unsigned corner = 0; corner < 3; ++corner) {
+					vertices[corner] = body->getPointInWorldSpace(piece.mesh.vertices[piece.mesh.indices[triangle + corner]].position);
 				}
-			}
-			if (intersections.size() >= 3 && (!state.piece || state.piece == piece.id)) {
-				Vec3 centroid {};
-				for (auto point : intersections) {
-					centroid += point;
+				std::array<Vec3, 3> intersections {};
+				unsigned count = 0;
+				for (unsigned corner = 0; corner < 3; ++corner) {
+					const auto a = vertices[corner];
+					const auto b = vertices[(corner + 1) % 3];
+					draw->AddLine(project(a), project(b), color);
+					const auto da = normal.dot(a - state.point);
+					const auto db = normal.dot(b - state.point);
+					if (validNormal && ((da <= 0 && db > 0) || (db <= 0 && da > 0))) {
+						intersections[count++] = a + (b - a) * (da / (da - db));
+					}
 				}
-				centroid /= float(intersections.size());
-				std::sort(intersections.begin(), intersections.end(), [&](Vec3 a, Vec3 b) {
-					return std::atan2((a - centroid).dot(bitangent), (a - centroid).dot(tangent))
-						< std::atan2((b - centroid).dot(bitangent), (b - centroid).dot(tangent));
-				});
-				for (std::size_t i = 0; i < intersections.size(); ++i) {
-					draw->AddLine(project(intersections[i]), project(intersections[(i + 1) % intersections.size()]), IM_COL32(255, 90, 70, 255), 2);
+				if (count == 2 && (!state.piece || state.piece == piece.id)) {
+					draw->AddLine(project(intersections[0]), project(intersections[1]), IM_COL32(255, 90, 70, 255), 2);
+				}
+				if (clicked) {
+					const auto edgeA = vertices[1] - vertices[0];
+					const auto edgeB = vertices[2] - vertices[0];
+					const auto cross = rayDirection.cross(edgeB);
+					const auto determinant = edgeA.dot(cross);
+					if (std::abs(determinant) <= 1e-8f) {
+						continue;
+					}
+					const auto offset = rayStart - vertices[0];
+					const auto u = offset.dot(cross) / determinant;
+					const auto q = offset.cross(edgeA);
+					const auto v = rayDirection.dot(q) / determinant;
+					const auto distance = edgeB.dot(q) / determinant;
+					if (u >= 0 && v >= 0 && u + v <= 1 && distance >= 0 && distance < nearest) {
+						nearest = distance;
+						selected = piece.id;
+					}
 				}
 			}
 			draw->AddCircleFilled(project(body->getPosition()), 3, color);
-			if (clicked) {
-				const auto start = body->getPointInLocalSpace(rayStart);
-				const auto direction = body->getDirectionInLocalSpace(rayDirection);
-				float enter = 0;
-				float leave = nearest;
-				for (const auto& face : hull.faces) {
-					const auto distance = face.offset - face.normal.dot(start);
-					const auto denominator = face.normal.dot(direction);
-					if (std::abs(denominator) < 1e-8f) {
-						if (distance < 0) {
-							leave = -1;
-						}
-					}
-					else if (denominator < 0) {
-						enter = std::max(enter, distance / denominator);
-					}
-					else {
-						leave = std::min(leave, distance / denominator);
-					}
-				}
-				if (enter <= leave && enter < nearest) {
-					nearest = enter;
-					selected = piece.id;
-				}
-			}
 		}
 		if (validNormal) {
 			draw->AddLine(project(state.point), project(state.point + normal * radius * .5f), IM_COL32(255, 90, 70, 255), 2);
@@ -230,6 +219,7 @@ void DrawDestructionEditor(ECS::DestructibleMeshComponent& component) {
 		const auto& stats = scene.destructionRuntime->statistics;
 		ImGui::Text("Jobs %u; CPU %.2f MiB; GPU %.2f MiB", stats.activeJobs, (stats.workingBytes + stats.topologyBytes) / 1048576.0,
 			stats.gpuBytes / 1048576.0);
+		ImGui::Text("GPU pending upload: %.2f MiB reserved", stats.gpuReservedBytes / 1048576.0);
 		ImGui::Text("Frame: %.3f ms; upload %.3f ms / %zu bytes; commit %.3f ms", stats.mainThreadMilliseconds, stats.uploadMilliseconds,
 			stats.uploadedBytes, stats.commitMilliseconds);
 		ImGui::Text("Submitted %llu; committed %llu; rejected %llu", static_cast<unsigned long long>(stats.submitted),

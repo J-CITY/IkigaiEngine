@@ -18,6 +18,8 @@ function(ikigai_add_collision_library dimension)
     set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     if(dimension EQUAL 3)
         target_sources(${target} PRIVATE "${IKIGAI_COLLISION_ROOT}/src/engine/collisionModule/convexPolyhedron.cpp"
+            "${IKIGAI_COLLISION_ROOT}/src/engine/collisionModule/closedSurfaceMesh.cpp"
+            "${IKIGAI_COLLISION_ROOT}/src/engine/collisionModule/compoundCollider.cpp"
             "${IKIGAI_COLLISION_ROOT}/src/engine/collisionModule/convexCollision.cpp")
         # Dependencies of the engine's math types, independent of physics/ECS.
         target_include_directories(${target} PUBLIC "${IKIGAI_COLLISION_ROOT}/3rd/serdepp/include"

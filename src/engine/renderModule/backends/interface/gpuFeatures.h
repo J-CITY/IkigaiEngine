@@ -11,6 +11,7 @@ struct GpuFeatures {
 	bool BufferTransfer = false;
 	bool BufferReadback = false;
 	bool DrawIndirect = false;
+	bool FragmentPrimitiveId = false;
 	bool DrawIndirectCount = false;
 	bool DispatchIndirect = false;
 	bool StorageImageMipViews = false;

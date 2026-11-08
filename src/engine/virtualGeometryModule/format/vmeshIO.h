@@ -2,6 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -13,6 +15,8 @@
 namespace IKIGAI::VG {
 inline constexpr uint32_t VMeshLeafGroupId = 0xFFFFFFFFu;
 inline constexpr uint64_t VMeshSectionAlignment = 16u;
+inline constexpr uint32_t VMeshDefaultPageBytes = 64u * 1024u;
+inline constexpr uint32_t VMeshMaxPageBytes = 16u * 1024u * 1024u;
 
 // In-memory form of a .vmesh file. Header.Vertices/Indices/Clusters/FallbackRanges describe the file layout:
 // ReadVMesh fills them from the file, WriteVMesh recomputes them from the vectors.
@@ -22,7 +26,34 @@ struct VMeshData {
 	std::vector<uint32_t> Indices {};
 	std::vector<VMeshCluster> Clusters {};
 	std::vector<VMeshFallbackRange> FallbackRanges {};
+	// Cook-only input for v2 serialization. UINT32_MAX identifies a root.
+	std::vector<uint32_t> ClusterConsumers {};
 };
+
+struct VMeshPagedMetadata {
+	VMeshPagedHeader Header {};
+	std::vector<VMeshCluster> Clusters {};
+	std::vector<uint32_t> ClusterPages {};
+	std::vector<VMeshTransition> Transitions {};
+	std::vector<uint32_t> TransitionClusters {};
+	std::vector<uint32_t> Roots {};
+	std::vector<VMeshPageEntry> Pages {};
+	VMeshData FallbackData {};
+};
+
+struct VMeshPageData {
+	std::vector<VMeshVertex> Vertices {};
+	std::vector<uint32_t> Indices {};
+};
+
+VMeshPagedHeader ReadVMeshPagedHeader(std::span<const uint8_t> bytes, uint64_t fileSize);
+VMeshPagedMetadata ReadVMeshPagedMetadata(std::span<const uint8_t> bytes, uint64_t fileSize);
+VMeshPageData ReadVMeshPage(const VMeshPagedMetadata& metadata, uint32_t pageId, std::span<const uint8_t> bytes);
+// Pages must have been validated with ReadVMeshPage and supplied in directory order.
+VMeshData MaterializeVMeshPages(const VMeshPagedMetadata& metadata, std::span<const VMeshPageData> pages);
+VMeshData MaterializeVMeshPages(const VMeshPagedMetadata& metadata, const std::function<VMeshPageData(uint32_t)>& readPage);
+std::vector<uint8_t> WriteVMeshPaged(const VMeshData& data, uint64_t cookKey, uint32_t pageBytes = VMeshDefaultPageBytes);
+void WriteVMeshPagedFile(const std::string& nativePath, const VMeshData& data, uint64_t cookKey, uint32_t pageBytes = VMeshDefaultPageBytes);
 
 // Every failure of ValidateVMesh/ReadVMesh/WriteVMesh is reported with this exception; the message names the
 // failed check and the offending element.

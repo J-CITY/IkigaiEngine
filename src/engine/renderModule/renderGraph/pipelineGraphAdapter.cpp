@@ -132,7 +132,8 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 		const bool compute = stage.Draw == DrawContent::COMPUTE;
 		const bool raster = stage.Draw == DrawContent::CLEAR || stage.Draw == DrawContent::QUAD || stage.Draw == DrawContent::FORWARD
 			|| stage.Draw == DrawContent::DEFERRED || stage.Draw == DrawContent::TRANSPARENT_GEOMETRY || stage.Draw == DrawContent::GUI
-			|| stage.Draw == DrawContent::GPU_SCENE_OCCLUSION_POST;
+			|| stage.Draw == DrawContent::GPU_SCENE_OCCLUSION_POST || stage.Draw == DrawContent::VIRTUAL_GEOMETRY_VISIBILITY
+			|| stage.Draw == DrawContent::VIRTUAL_GEOMETRY_RESOLVE;
 		if ((!raster && !compute) || !stage.Enabled || stage.Once || stage.UpdateInterval != 1 || !stage.Bypass.empty()
 			|| stage.Unsupported == "BYPASS" || stage.Name == "CloudShadowMap"
 			|| (compute && !stage.Program.empty() && stage.Compute.ProgramKind != ComputeProgramKind::COMPUTE)) {
@@ -180,8 +181,12 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 					RequireUse(stage, name, Access::ATTACHMENT_READ);
 				}
 			};
+			const bool visibilityClear = stage.Draw == DrawContent::VIRTUAL_GEOMETRY_VISIBILITY;
 			for (const auto& name : frame->Textures) {
-				attachment(name, stage.ClearColor);
+				attachment(name, stage.ClearColor || visibilityClear);
+				if (visibilityClear) {
+					pass.ClearedColorAttachments.push_back(resolve(name));
+				}
 			}
 			if (stage.ClearColor && frame->Textures.size() == 1 && frame->Depth.empty()
 				&& (stage.Draw == DrawContent::CLEAR || stage.Draw == DrawContent::QUAD)) {
@@ -224,6 +229,9 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 		}
 		if (stage.Draw == DrawContent::GPU_SCENE_OCCLUSION_POST) {
 			RequireUse(stage, stage.Bindings.at("Hzb"), Access::SAMPLED);
+		}
+		if (stage.Draw == DrawContent::VIRTUAL_GEOMETRY_RESOLVE) {
+			RequireUse(stage, stage.Bindings.at("Visibility"), Access::SAMPLED);
 		}
 		for (const auto& name : stage.Writes) {
 			RequireUse(stage, name, Access::STORAGE_WRITE);

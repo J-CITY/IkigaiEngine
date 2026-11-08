@@ -5,6 +5,7 @@
 #include "profilerModule/profiler.h"
 #include "profilerModule/profilerSpy.h"
 #include "renderModule/backends/interface/driverInterface.h"
+#include "renderModule/backends/interface/frameBufferInterface.h"
 #include "renderModule/backends/interface/meshInterface.h"
 #include "renderModule/backends/interface/modelInterface.h"
 #include "renderModule/backends/interface/storageBufferInterface.h"
@@ -16,7 +17,9 @@
 #include "resourceModule/materialManager.h"
 #include "resourceModule/serviceManager.h"
 #include "sceneModule/scene.h"
+#include "virtualGeometrySoftwareRaster.h"
 #include "virtualMeshAsset.h"
+#include "virtualMeshPageSource.h"
 
 #include <algorithm>
 #include <cctype>
@@ -34,6 +37,39 @@ namespace {
 	constexpr const char* InstanceBufferName = "engine_VgInstances";
 	constexpr const char* DrawBufferName = "engine_VgDraws";
 	constexpr uint32_t ClusterVertexBinding = 0;
+
+	bool SupportsVisibilityMaterial(const RENDER::MaterialInterface& material) {
+		const auto shader = material.getShader();
+		if (!shader || (shader->mPath != "/shaders/render/portable/gbuffer.shader" && shader->mPath != "/shaders/virtualGeometry/vgGBuffer.shader")
+			|| material.getGPUInstances() != 1 || material.isBlendable() || material.deformation().Mode != RENDER::DeformationMode::None
+			|| !material.pbrLayers().Layers.empty()) {
+			return false;
+		}
+		for (const auto* name : { "u_AlbedoMap", "u_DiffuseMap" }) {
+			if (const auto* uniform = material.findUniform(name)) {
+				const auto* texture = std::get_if<std::shared_ptr<RENDER::TextureInterface>>(uniform);
+				if (!texture || *texture) {
+					return false;
+				}
+			}
+		}
+		for (const auto* name : { "data_UBOu_Albedo", "u_Albedo", "data_UBOu_Diffuse" }) {
+			if (const auto* uniform = material.findUniform(name)) {
+				const auto* color = std::get_if<MATH::Vector4f>(uniform);
+				if (!color || !(color->w >= 0.5f)) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	bool IsBeyondNearPlane(const VMeshSphere& sphere, const VirtualGeometryInstanceTransform& transform, const VirtualGeometryFrameInput& input) {
+		auto modelView = input.ViewMatrix * transform.World;
+		const auto center = modelView * MATH::Vector4f(sphere.Center[0], sphere.Center[1], sphere.Center[2], 1.0f);
+		const auto radiusZ = sphere.Radius * std::hypot(modelView(2, 0), modelView(2, 1), modelView(2, 2));
+		return -center.z - radiusZ > input.View.ZNear;
+	}
 	constexpr uint32_t DrawIndexBinding = 1;
 	constexpr uint32_t MinimumCapacity = 256;
 	// Upload granularity: keeps DX12 upload-ring allocations inside its 4 MiB pages.
@@ -152,6 +188,14 @@ namespace {
 }
 
 void ValidateVirtualGeometrySettings(const VirtualGeometrySettings& settings) {
+	const auto& pool = settings.Streaming.Pool;
+	const auto& requests = settings.Streaming.Requests;
+	if (!pool.SlotCount || pool.SlotCount > 4096 || pool.MaxPageBytes < sizeof(VMeshVertex) || pool.MaxPageBytes > VMeshMaxPageBytes
+		|| 2ull * pool.SlotCount * pool.MaxPageBytes > 512ull * 1024u * 1024u || !requests.WorkerCount || requests.WorkerCount > 8
+		|| !requests.MaxRequests || requests.MaxRequests > 4096 || !requests.MaxStagingBytes || !settings.Streaming.MaxFeedbackAgeFrames
+		|| settings.Streaming.MaxFeedbackAgeFrames > 64 || !settings.Streaming.MaxReadBytesPerFrame || !settings.Streaming.MaxUploadBytesPerFrame) {
+		throw std::invalid_argument("Invalid VG streaming pool or request limits");
+	}
 	if (!std::isfinite(settings.ThresholdScale) || settings.ThresholdScale < 0.0f) {
 		throw std::invalid_argument("VirtualGeometrySettings.ThresholdScale must be finite and non-negative");
 	}
@@ -188,6 +232,21 @@ void VirtualGeometryRenderer::setSettings(const VirtualGeometrySettings& setting
 	if (!settings.FreezeLod) {
 		mFrozenCuts.clear();
 		mFrozenLodViews.clear();
+	}
+	const auto& old = mSettings.Streaming;
+	const auto& next = settings.Streaming;
+	if (old.Pool.SlotCount != next.Pool.SlotCount || old.Pool.MaxPageBytes != next.Pool.MaxPageBytes
+		|| old.Requests.WorkerCount != next.Requests.WorkerCount || old.Requests.MaxRequests != next.Requests.MaxRequests
+		|| old.Requests.MaxStagingBytes != next.Requests.MaxStagingBytes || old.GpuFeedback != next.GpuFeedback
+		|| old.MaxFeedbackAgeFrames != next.MaxFeedbackAgeFrames || old.MaxReadBytesPerFrame != next.MaxReadBytesPerFrame
+		|| old.MaxUploadBytesPerFrame != next.MaxUploadBytesPerFrame) {
+		if (mStreaming) {
+			throw std::invalid_argument("VG streaming budgets are fixed for this renderer lifetime");
+		}
+		mStreamingInitFailed = false;
+	}
+	if (!mSettings.Enabled && settings.Enabled) {
+		mStreamingInitFailed = false;
 	}
 	mSettings = settings;
 }
@@ -327,6 +386,7 @@ void VirtualGeometryRenderer::endFrame() {
 	mCandidates.clear();
 	mDrawCount = 0;
 	mGpuDrawActive = false;
+	mVisibilityActive = false;
 }
 
 VirtualGeometrySelectionPath VirtualGeometryRenderer::resolveSelectionPath(
@@ -396,21 +456,39 @@ bool VirtualGeometryRenderer::ensureClusterMaterial() {
 	return true;
 }
 
-void VirtualGeometryRenderer::copySurfaceUniforms(const RENDER::MaterialInterface& surface) {
+bool VirtualGeometryRenderer::ensureResolveMaterial(RENDER::Renderer& renderer) {
+	if (!mResolveMaterialAttempted) {
+		mResolveMaterialAttempted = true;
+		try {
+			auto descriptor = mClusterMaterial->getDescriptor();
+			descriptor.ShaderPath = "/shaders/virtualGeometry/vgResolve.shader";
+			auto material = renderer.createMaterial(descriptor);
+			if (material && material->hasShader()) {
+				mResolveRange = renderer.createUniformBuffer<std::array<uint32_t, 4>>({});
+				mResolveMaterial = std::move(material);
+			}
+		} catch (const std::exception& error) {
+			std::cerr << "VG_VISIBILITY_FALLBACK " << error.what() << '\n';
+		}
+	}
+	return bool(mResolveMaterial);
+}
+
+void VirtualGeometryRenderer::copySurfaceUniforms(RENDER::MaterialInterface& target, const RENDER::MaterialInterface& surface) {
 	// Same parameter mapping as the G-buffer override path in GameRenderer::drawDrawable.
 	for (const auto& [key, value] : mClusterMaterialDefaults) {
-		mClusterMaterial->set(key, value);
+		target.set(key, value);
 	}
-	const auto copyUniform = [&](const std::string& target, const std::string& source) {
+	const auto copyUniform = [&](const std::string& key, const std::string& source) {
 		const auto* value = surface.findUniform(source);
-		if (!value || !mClusterMaterial->findUniform(target)) {
+		if (!value || !target.findUniform(key)) {
 			return false;
 		}
-		mClusterMaterial->set(target, *value);
+		target.set(key, *value);
 		return true;
 	};
-	for (const auto& uniform : mClusterMaterial->getShader()->getReflection().mUniforms) {
-		if (mClusterMaterial->isEngineUniform(uniform.mName)) {
+	for (const auto& uniform : target.getShader()->getReflection().mUniforms) {
+		if (target.isEngineUniform(uniform.mName)) {
 			continue;
 		}
 		if (uniform.mMembers.empty()) {
@@ -464,10 +542,18 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 	mMaxDrawIndirectCount = clusterPath ? std::max(1u, renderer.gpuFeatures().MaxDrawIndirectCount) : 1u;
 	mActivePath = resolveSelectionPath(renderer, clusterPath, input.SelectionPath);
 	bool gpuSelection = mActivePath == VirtualGeometrySelectionPath::GPU;
+	bool visibilityEligible = clusterPath && input.VisibilityRequested && renderer.gpuFeatures().FragmentPrimitiveId && !mSettings.FreezeLod
+		&& !input.OcclusionPostStageActive;
 	// Use the previous GPU statistics when the readback is ready.
 	VirtualGeometryGpuStatistics gpuStatistics;
-	const bool previousGpuStatistics = gpuSelection && mGpuSelection.takeStatistics(renderer, gpuStatistics);
+	uint64_t statisticsFrame = 0;
+	// Poll even on the CPU path: completed diagnostics must not occupy tickets across path switches.
+	const bool statisticsReady = mGpuSelection.takeStatistics(renderer, gpuStatistics, &statisticsFrame);
+	const bool previousGpuStatistics = gpuSelection && statisticsReady && statisticsFrame < input.Frame;
 	mGpuFrameRecorded = false;
+	if (mStreaming) {
+		mStreaming->beginFrame(renderer, input.Frame);
+	}
 
 	for (auto& component : components) {
 		auto& object = component.obj;
@@ -484,7 +570,7 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 		appendFallback(component, world, previousWorld, ownerId, distance, shadowChunks);
 
 		const auto& asset = component.getAsset();
-		bool drawClusters = clusterPath && asset && asset->hasClusterBuffers();
+		bool drawClusters = clusterPath && asset && (asset->hasClusterBuffers() || asset->streamsPages());
 		bool singleSided = true;
 		for (uint32_t slot = 0; drawClusters && slot < asset->materialSlotCount(); ++slot) {
 			const auto material = component.getMaterial(slot);
@@ -501,7 +587,10 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 		}
 		++mStatistics.ClusterInstances;
 		InstanceCandidate candidate;
-		candidate.Component = &component;
+		candidate.Materials.reserve(asset->materialSlotCount());
+		for (uint32_t slot = 0; slot < asset->materialSlotCount(); ++slot) {
+			candidate.Materials.push_back(component.getMaterial(slot));
+		}
 		candidate.Asset = asset;
 		candidate.World = world;
 		candidate.PreviousWorld = previousWorld;
@@ -510,9 +599,56 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 		candidate.OwnerId = ownerId;
 		candidate.Threshold = component.getErrorThreshold() * mSettings.ThresholdScale;
 		candidate.DebugMode = mSettings.DebugOverride != ECS::VirtualMeshDebugMode::NONE ? mSettings.DebugOverride : component.getDebugMode();
+		if (visibilityEligible) {
+			const auto& buffers = asset->gpuBuffers();
+			visibilityEligible = !asset->streamsPages() && buffers.ResolveVertices && buffers.ResolveIndices
+				&& candidate.DebugMode == ECS::VirtualMeshDebugMode::NONE
+				&& IsBeyondNearPlane(asset->header().BoundingSphere, candidate.Transform, input)
+				&& std::ranges::all_of(candidate.Materials, [](const auto& material) { return SupportsVisibilityMaterial(*material); });
+		}
+		if (asset->streamsPages()) {
+			if (mSettings.FreezeLod) {
+				--mStatistics.ClusterInstances;
+				++mStatistics.FallbackInstances;
+				appendFallback(component, world, previousWorld, ownerId, distance, viewChunks);
+				continue;
+			}
+			if (mSettings.FrustumCulling && !IsInstanceVisible(asset->header().BoundingSphere, candidate.Transform, input.View)) {
+				++mStatistics.InstancesCulled;
+				continue;
+			}
+			if (!mStreaming && !mStreamingInitFailed) {
+				try {
+					auto streaming = std::make_unique<VirtualGeometryStreaming>(renderer, mSettings.Streaming);
+					streaming->beginFrame(renderer, input.Frame);
+					mStreaming = std::move(streaming);
+				} catch (const std::exception& error) {
+					mStreamingInitFailed = true;
+					std::cerr << "VG_STREAM_INIT_FAILED " << error.what() << std::endl;
+				}
+			}
+			if (mStreaming) {
+				candidate.StreamCut = mStreaming->select(renderer, asset, candidate.Transform, input.View, candidate.Threshold,
+					static_cast<uint64_t>(object->getID().getUniqueId()), input.ViewId, input.GpuProfiler);
+			}
+			if (!candidate.StreamCut) {
+				--mStatistics.ClusterInstances;
+				++mStatistics.FallbackInstances;
+				appendFallback(component, world, previousWorld, ownerId, distance, viewChunks);
+				continue;
+			}
+			gpuSelection = false;
+			mActivePath = VirtualGeometrySelectionPath::CPU;
+		}
 		mCandidates.push_back(std::move(candidate));
 	}
 
+	if (visibilityEligible && !mCandidates.empty() && ensureResolveMaterial(renderer)) {
+		mVisibilityActive = true;
+		mStatistics.VisibilityActive = true;
+		gpuSelection = false;
+		mActivePath = VirtualGeometrySelectionPath::CPU;
+	}
 	if (gpuSelection) {
 		resolveOcclusion(input);
 	}
@@ -540,7 +676,7 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 		mStatistics.OcclusionHistory = mGpuFrame.Occlusion.History;
 		mStatistics.OccludedCapacity = mGpuFrame.Occlusion.OccludedCapacity;
 		if (previousGpuStatistics) {
-			applyGpuStatistics(gpuStatistics, 1);
+			applyGpuStatistics(gpuStatistics, static_cast<uint32_t>(std::min<uint64_t>(input.Frame - statisticsFrame, UINT32_MAX)));
 		}
 		mStatistics.Batches = static_cast<uint32_t>(mBatches.size());
 		mStatistics.DrawCapacity = mGpuFrame.DrawCapacity;
@@ -567,6 +703,11 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 			uploadFrame(renderer);
 		}
 	}
+	if (mStreaming) {
+		mStatistics.StreamingGpuBytes = mStreaming->gpuBytes();
+		mStatistics.StreamingStagingBytes = mStreaming->stagingBytes();
+		mStatistics.StreamingStatistics = mStreaming->statistics();
+	}
 	mStatistics.SelectionMilliseconds = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 	RENDER::RenderStatistics::Get().recordVirtualGeometry(
 		mStatistics.ClusterInstances, mStatistics.FallbackInstances, mStatistics.VisibleClusters, mStatistics.VisibleTriangles);
@@ -582,12 +723,15 @@ VirtualGeometryRenderer::InstanceGpu VirtualGeometryRenderer::makeInstanceGpu(co
 	return gpu;
 }
 
-VirtualGeometryRenderer::Batch& VirtualGeometryRenderer::findBatch(const InstanceCandidate& candidate, uint32_t slot) {
-	auto material = candidate.Component->getMaterial(slot);
-	const BatchKey key { candidate.Asset.get(), slot, material.get() };
+VirtualGeometryRenderer::Batch& VirtualGeometryRenderer::findBatch(const InstanceCandidate& candidate, uint32_t slot, uint32_t page) {
+	auto material = candidate.Materials.at(slot);
+	const BatchKey key { candidate.Asset.get(), slot, material.get(), page };
 	auto [found, inserted] = mBatches.try_emplace(key);
 	if (inserted) {
 		found->second.Asset = candidate.Asset;
+		if (candidate.StreamCut) {
+			found->second.PageLease = candidate.StreamCut->Pages.at(page);
+		}
 		found->second.Material = std::move(material);
 		found->second.Slot = slot;
 	}
@@ -603,17 +747,32 @@ void VirtualGeometryRenderer::selectOnCpu(const InstanceCandidate& candidate, co
 		return;
 	}
 	mScratchClusters.clear();
-	if (mSettings.FreezeLod) {
+	const auto selectCut = [&](std::vector<uint32_t>& selected) {
+		if (!mSettings.HierarchyTraversal) {
+			SelectLodCut(asset->clusters(), instance, input.View, candidate.Threshold, selected);
+			return;
+		}
+		const auto statistics = SelectHierarchyLodCut(
+			asset->hierarchy(), asset->clusters(), instance, input.View, candidate.Threshold, selected, mSettings.HierarchyVisitBudget);
+		mStatistics.HierarchyVisitedNodes += statistics.NodesVisited;
+		mStatistics.HierarchyLeafTests += statistics.ClustersTested;
+		mStatistics.HierarchyFallbacks += statistics.UsedFlatFallback ? 1u : 0u;
+	};
+	if (candidate.StreamCut) {
+		const auto clusters = candidate.StreamCut->Cut->clusters();
+		mScratchClusters.assign(clusters.begin(), clusters.end());
+	}
+	else if (mSettings.FreezeLod) {
 		auto& frozen = mFrozenCuts[candidate.OwnerId];
 		if (frozen.Asset != asset.get()) {
 			frozen.Asset = asset.get();
 			frozen.Clusters.clear();
-			SelectLodCut(asset->clusters(), instance, input.View, candidate.Threshold, frozen.Clusters);
+			selectCut(frozen.Clusters);
 		}
 		mScratchClusters = frozen.Clusters;
 	}
 	else {
-		SelectLodCut(asset->clusters(), instance, input.View, candidate.Threshold, mScratchClusters);
+		selectCut(mScratchClusters);
 	}
 	mStatistics.LodClusters += static_cast<uint32_t>(mScratchClusters.size());
 	for (const uint32_t clusterIndex : mScratchClusters) {
@@ -631,11 +790,14 @@ void VirtualGeometryRenderer::selectOnCpu(const InstanceCandidate& candidate, co
 	const auto& clusters = asset->clusters();
 	mSlotBatches.assign(asset->materialSlotCount(), nullptr);
 	for (uint32_t slot = 0; slot < asset->materialSlotCount(); ++slot) {
-		mSlotBatches[slot] = &findBatch(candidate, slot);
+		if (!candidate.StreamCut) {
+			mSlotBatches[slot] = &findBatch(candidate, slot);
+		}
 	}
 	for (const uint32_t clusterIndex : mScratchClusters) {
 		const auto& cluster = clusters[clusterIndex];
-		auto& batch = *mSlotBatches[cluster.MaterialSlot];
+		auto& batch = candidate.StreamCut ? findBatch(candidate, cluster.MaterialSlot, asset->pageSource()->metadata().ClusterPages[clusterIndex])
+										  : *mSlotBatches[cluster.MaterialSlot];
 		RENDER::DrawIndexedIndirectCommand command;
 		command.IndexCount = cluster.IndexCount;
 		command.InstanceCount = 1;
@@ -655,6 +817,10 @@ bool VirtualGeometryRenderer::buildGpuFrame(RENDER::Renderer& renderer, const Vi
 	std::stable_sort(mCandidates.begin(), mCandidates.end(),
 		[](const InstanceCandidate& left, const InstanceCandidate& right) { return left.Asset.get() < right.Asset.get(); });
 	auto& frame = mGpuFrame;
+	frame.Frame = input.Frame;
+	frame.Hierarchy.Enabled = mSettings.HierarchyTraversal;
+	frame.Hierarchy.QueueCapacity = mSettings.HierarchyQueueCapacity;
+	frame.Hierarchy.VisitBudget = mSettings.HierarchyVisitBudget;
 	frame.Instances.clear();
 	frame.SlotBatches.clear();
 	frame.Segments.clear();
@@ -843,6 +1009,11 @@ void VirtualGeometryRenderer::applyGpuStatistics(const VirtualGeometryGpuStatist
 	mStatistics.FrustumCulledClusters = statistics.FrustumCulled;
 	mStatistics.ConeCulledClusters = statistics.ConeCulled;
 	mStatistics.OverflowDraws = statistics.Overflow;
+	mStatistics.HierarchyVisitedNodes = statistics.HierarchyVisitedNodes;
+	mStatistics.HierarchyLeafTests = statistics.HierarchyLeafTests;
+	mStatistics.HierarchyQueueOverflow = statistics.HierarchyQueueOverflow;
+	mStatistics.HierarchyVisitOverflow = statistics.HierarchyVisitOverflow;
+	mStatistics.HierarchyFallbacks = statistics.HierarchyFallbacks;
 	for (uint32_t level = 0; level < 8; ++level) {
 		mStatistics.LodHistogram[level] = statistics.LodHistogram[level];
 	}
@@ -908,7 +1079,97 @@ void VirtualGeometryRenderer::uploadFrame(RENDER::Renderer& renderer) {
 }
 
 void VirtualGeometryRenderer::drawGeometry(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings) {
-	drawBatches(renderer, bindings, false);
+	if (!mVisibilityActive) {
+		drawBatches(renderer, bindings, false);
+	}
+}
+
+void VirtualGeometryRenderer::drawVisibility(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings,
+	const std::shared_ptr<RENDER::ShaderInterface>& shader, const std::shared_ptr<RENDER::FrameBufferInterface>& target) {
+	mSoftwareRasterHwCount.reset();
+	if (!mVisibilityActive || !shader) {
+		return;
+	}
+	// Only the last batch may contribute a SW suffix: earlier equal-depth winners must keep precedence.
+	if (mSettings.SoftwareRaster && !mGpuDrawActive && !mBatches.empty() && target && target->getDepth()
+		&& target->getDepth()->getFormat() == RENDER::PixelFormat::DEPTH32_FLOAT && target->getTextures().size() == 1
+		&& target->getTextures().front()->getFormat() == RENDER::PixelFormat::RG32_INT && target->getWidth() <= 1920 && target->getHeight() <= 1080
+		&& mClusterMaterial->isDepthTest() && mClusterMaterial->isDepthWriting() && mClusterMaterial->getDepthFunc() == RENDER::DepthFunction::LESS) {
+		const auto& batch = mBatches.rbegin()->second;
+		if (batch.DrawCount && !batch.PageLease && !batch.Asset->streamsPages() && !batch.Material->isBackfaceCulling()) {
+			const auto& buffers = batch.Asset->gpuBuffers();
+			VirtualGeometrySoftwareRaster::Input input {};
+			input.FirstDraw = batch.FirstDraw;
+			input.DrawCount = batch.DrawCount;
+			input.Width = static_cast<uint32_t>(target->getWidth());
+			input.Height = static_cast<uint32_t>(target->getHeight());
+			input.Vertices = buffers.ResolveVertices;
+			input.Indices = buffers.ResolveIndices;
+			input.Clusters = buffers.Clusters;
+			input.DrawRecords = mDrawRecordBuffer;
+			input.Instances = mInstanceBuffer;
+			input.EngineUbo = bindings.EngineUbo;
+			renderer.resetFrameBuffer();
+			try {
+				if (!mSoftwareRaster) {
+					mSoftwareRaster = std::make_unique<VirtualGeometrySoftwareRaster>();
+				}
+				if (mSoftwareRaster->prepare(renderer, input)) {
+					mSoftwareRasterHwCount = mSoftwareRaster->countBuffer();
+					mSoftwareRasterFirstDraw = batch.FirstDraw;
+					mStatistics.SoftwareRasterScheduled = true;
+				}
+			} catch (const std::exception& error) {
+				std::cerr << "VG_SOFTWARE_RASTER_FALLBACK " << error.what() << '\n';
+			}
+			renderer.setFrameBuffer(target);
+			renderer.setViewport({ { 0, 0 }, { float(input.Width), float(input.Height) } });
+			renderer.resetScissor();
+		}
+	}
+	if (mSoftwareRaster) {
+		mStatistics.SoftwareRasterGpuBytes = mSoftwareRaster->gpuBytes();
+	}
+	drawBatches(renderer, bindings, false, shader);
+	if (mSoftwareRasterHwCount) {
+		mSoftwareRaster->merge(renderer);
+		mSoftwareRasterHwCount.reset();
+	}
+}
+
+void VirtualGeometryRenderer::resolveVisibility(
+	RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings, const std::shared_ptr<RENDER::TextureInterface>& ids) {
+	if (!mVisibilityActive || !mDrawCount) {
+		return;
+	}
+	renderer.resetDepth();
+	renderer.resetStencil();
+	renderer.resetBlending();
+	renderer.setCull(RENDER::CullFace::NONE);
+	for (const auto& [key, batch] : mBatches) {
+		if (!batch.DrawCount) {
+			continue;
+		}
+		copySurfaceUniforms(*mResolveMaterial, *batch.Material);
+		renderer.setShader(mResolveMaterial->getShader());
+		mResolveMaterial->bind(bindings.EmptyTexture, true);
+		renderer.setUniformBuffer("engine_UBO", bindings.EngineUbo);
+		renderer.setUniformBuffer("engine_Frame", bindings.FrameUbo);
+		const std::array<uint32_t, 4> range { batch.FirstDraw, batch.DrawCount, 0, 0 };
+		renderer.updateUniformBuffer(mResolveRange, range);
+		renderer.setUniformBuffer("engine_VgResolveRange", mResolveRange);
+		renderer.setStorageBuffer(InstanceBufferName, mInstanceBuffer);
+		renderer.setStorageBuffer(DrawBufferName, mDrawRecordBuffer);
+		const auto& buffers = batch.Asset->gpuBuffers();
+		renderer.setStorageBuffer("engine_VgResolveVertices", buffers.ResolveVertices);
+		renderer.setStorageBuffer("engine_VgResolveIndices", buffers.ResolveIndices);
+		renderer.setStorageBuffer("engine_VgResolveClusters", buffers.Clusters);
+		renderer.setTexture("engine_VgVisibility", ids);
+		renderer.setPrimitiveMode(RENDER::PrimitiveMode::TRIANGLES);
+		renderer.draw(3, 0, 1);
+		mResolveMaterial->unbind();
+		++mStatistics.ResolveBins;
+	}
 }
 
 void VirtualGeometryRenderer::drawOcclusionPost(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings) {
@@ -918,7 +1179,8 @@ void VirtualGeometryRenderer::drawOcclusionPost(RENDER::Renderer& renderer, cons
 	drawBatches(renderer, bindings, true);
 }
 
-void VirtualGeometryRenderer::drawBatches(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings, bool post) {
+void VirtualGeometryRenderer::drawBatches(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings, bool post,
+	const std::shared_ptr<RENDER::ShaderInterface>& visibilityShader) {
 	if (mBatches.empty() || !mClusterMaterial || (!mDrawCount && !mGpuDrawActive)) {
 		return;
 	}
@@ -928,7 +1190,11 @@ void VirtualGeometryRenderer::drawBatches(RENDER::Renderer& renderer, const Virt
 	const auto& drawRecords = mGpuDrawActive ? mGpuSelection.drawRecordBuffer() : mDrawRecordBuffer;
 	const auto& drawIndexStream = mGpuDrawActive ? mGpuSelection.drawIndexStream() : mDrawIndexStream;
 	auto* driver = renderer.getDriver();
-	const auto shader = mClusterMaterial->getShader();
+	const auto shader = visibilityShader ? visibilityShader : mClusterMaterial->getShader();
+	const auto visibilityLayout = visibilityShader
+		? RENDER::VertexLayout { mLayout.streams, { mLayout.attributes.front(), mLayout.attributes.back() } }
+		: RENDER::VertexLayout {};
+	const auto& layout = visibilityShader ? visibilityLayout : mLayout;
 	const auto& reflected = shader->getReflection().mNameToUniforms;
 	constexpr uint32_t stride = sizeof(RENDER::DrawIndexedIndirectCommand);
 	for (auto& [key, batch] : mBatches) {
@@ -936,13 +1202,17 @@ void VirtualGeometryRenderer::drawBatches(RENDER::Renderer& renderer, const Virt
 		if (!drawCount) {
 			continue;
 		}
-		copySurfaceUniforms(*batch.Material);
+		if (!visibilityShader) {
+			copySurfaceUniforms(*mClusterMaterial, *batch.Material);
+		}
 		renderer.setDepth({ mClusterMaterial->isDepthTest() ? mClusterMaterial->getDepthFunc() : RENDER::DepthFunction::ALWAYS,
 			mClusterMaterial->isDepthWriting() });
 		renderer.setCull(batch.Material->isBackfaceCulling() ? RENDER::CullFace::BACK : RENDER::CullFace::NONE);
 		renderer.resetBlending();
 		renderer.setShader(shader);
-		mClusterMaterial->bind(bindings.EmptyTexture, true);
+		if (!visibilityShader) {
+			mClusterMaterial->bind(bindings.EmptyTexture, true);
+		}
 		if (reflected.contains("engine_UBO")) {
 			renderer.setUniformBuffer("engine_UBO", bindings.EngineUbo);
 		}
@@ -956,10 +1226,12 @@ void VirtualGeometryRenderer::drawBatches(RENDER::Renderer& renderer, const Virt
 			renderer.setStorageBuffer(DrawBufferName, drawRecords);
 		}
 		const auto& gpu = batch.Asset->gpuBuffers();
-		renderer.execute([driver, layout = mLayout, vertices = gpu.Vertices, indices = gpu.Indices, drawIndex = drawIndexStream]() {
-			driver->setVertexStreams(layout, { { ClusterVertexBinding, vertices }, { DrawIndexBinding, drawIndex } });
-			driver->setIndexBuffer(indices);
-		});
+		renderer.execute(
+			[driver, layout, vertices = batch.PageLease ? batch.PageLease->vertices() : gpu.Vertices,
+				indices = batch.PageLease ? batch.PageLease->indices() : gpu.Indices, pageLease = batch.PageLease, drawIndex = drawIndexStream]() {
+				driver->setVertexStreams(layout, { { ClusterVertexBinding, vertices }, { DrawIndexBinding, drawIndex } });
+				driver->setIndexBuffer(indices);
+			});
 		renderer.setPrimitiveMode(RENDER::PrimitiveMode::TRIANGLES);
 		if (mGpuDrawActive) {
 			// One draw per batch: the GPU wrote the segment and its counter; maxDrawCount is the segment capacity.
@@ -969,13 +1241,20 @@ void VirtualGeometryRenderer::drawBatches(RENDER::Renderer& renderer, const Virt
 			mClusterMaterial->unbind();
 			continue;
 		}
+		if (visibilityShader && mSoftwareRasterHwCount && batch.FirstDraw == mSoftwareRasterFirstDraw) {
+			renderer.drawIndexedIndirectCount(mIndirectBuffer, size_t(batch.FirstDraw) * stride, mSoftwareRasterHwCount, 0, drawCount, stride);
+			++mStatistics.IndirectCalls;
+			continue;
+		}
 		for (uint32_t done = 0; done < drawCount;) {
 			const uint32_t count = std::min(drawCount - done, mMaxDrawIndirectCount);
 			renderer.drawIndexedIndirect(mIndirectBuffer, size_t(batch.FirstDraw + done) * stride, count, stride);
 			++mStatistics.IndirectCalls;
 			done += count;
 		}
-		mClusterMaterial->unbind();
+		if (!visibilityShader) {
+			mClusterMaterial->unbind();
+		}
 	}
 	renderer.execute([driver]() { driver->resetVertexStreams(); });
 }

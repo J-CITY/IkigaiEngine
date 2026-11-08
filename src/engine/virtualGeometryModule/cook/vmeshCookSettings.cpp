@@ -35,6 +35,7 @@ void ValidateCookSettings(const VMeshCookSettings& settings) {
 	Require(std::isfinite(settings.SloppyErrorFactor) && settings.SloppyErrorFactor >= 1.0f, "SloppyErrorFactor must be >= 1");
 	Require(InOpenUnitRange(settings.FallbackTriangleRatio) || settings.FallbackTriangleRatio == 1.0f, "FallbackTriangleRatio must be in (0, 1]");
 	Require(settings.MinFallbackTriangles >= 1u, "MinFallbackTriangles must be at least 1");
+	Require(settings.PageBytes > 0 && settings.PageBytes <= VMeshMaxPageBytes, "PageBytes must be in [1, 16777216]");
 	Require(
 		std::isfinite(settings.WeldPositionEpsilon) && settings.WeldPositionEpsilon >= 0.0f, "WeldPositionEpsilon must be finite and non-negative");
 }

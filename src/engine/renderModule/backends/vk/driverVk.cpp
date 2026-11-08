@@ -1407,8 +1407,8 @@ void DriverVk::EnsureBlendMode(vk::raii::CommandBuffer& cmdlist) {
 		color_blend_equation_array = { color_blend_equation };
 	}
 	else {
-		for (size_t i = 0; i < mCurrentState.mFrameBuffer->getTextures().size(); i++) {
-			blend_enable_array.push_back(mBlendMode.has_value());
+		for (const auto& target : mCurrentState.mFrameBuffer->getTextures()) {
+			blend_enable_array.push_back(mBlendMode.has_value() && target->getFormat() != PixelFormat::RG32_INT);
 			color_mask_array.push_back(color_mask);
 			color_blend_equation_array.push_back(color_blend_equation);
 		}
@@ -2316,6 +2316,11 @@ void DriverVk::setTriangleOrientation(TriangleOrientation value) {
 }
 
 void DriverVk::clear(bool clearColor, bool clearDepth, bool clearStencil) {
+	const auto targets = mCurrentState.mFrameBuffer ? mCurrentState.mFrameBuffer : getCurrentFrame().mFrameBuffer;
+	if (clearColor
+		&& std::ranges::any_of(targets->getTextures(), [](const auto& texture) { return texture->getFormat() == PixelFormat::RG32_INT; })) {
+		throw std::invalid_argument("RG32_INT attachments need clearIntColorAttachment");
+	}
 	activateRenderPass();
 	// vkCmdClearAttachments is clipped by the scissor. Set it before the clear,
 	// otherwise MoltenVK keeps a stale rect and only part of the image is cleared.
@@ -2333,7 +2338,6 @@ void DriverVk::clear(bool clearColor, bool clearDepth, bool clearStencil) {
 
 		auto clear_value = vk::ClearValue().setColor(clear_color_value);
 
-		const auto targets = mCurrentState.mFrameBuffer ? mCurrentState.mFrameBuffer : getCurrentFrame().mFrameBuffer;
 		std::vector<vk::ClearAttachment> attachments;
 		for (uint32_t i = 0; i < targets->getTextures().size(); ++i) {
 			attachments.push_back(
@@ -2367,6 +2371,27 @@ void DriverVk::clear(bool clearColor, bool clearDepth, bool clearStencil) {
 	}
 }
 
+void DriverVk::clearIntColorAttachment(uint32_t attachment, int32_t red, int32_t green) {
+	requireOwnerThread();
+	const auto targets = mCurrentState.mFrameBuffer ? mCurrentState.mFrameBuffer : getCurrentFrame().mFrameBuffer;
+	const auto& textures = targets->getTextures();
+	if (attachment >= textures.size() || textures[attachment]->getFormat() != PixelFormat::RG32_INT) {
+		throw std::invalid_argument("Integer clear requires an RG32_INT color attachment");
+	}
+	activateRenderPass();
+	auto& commandBuffer = getCurrentFrame().mCommandBuffer;
+	EnsureViewport(commandBuffer);
+	EnsureScissor(commandBuffer);
+	const auto clearRect
+		= vk::ClearRect().setBaseArrayLayer(0).setLayerCount(1).setRect({ { 0, 0 }, { getBackbufferWidth(), getBackbufferHeight() } });
+	const auto color = vk::ClearColorValue().setInt32({ red, green, 0, 0 });
+	const auto clear = vk::ClearAttachment()
+						   .setAspectMask(vk::ImageAspectFlagBits::eColor)
+						   .setColorAttachment(attachment)
+						   .setClearValue(vk::ClearValue().setColor(color));
+	commandBuffer.clearAttachments({ clear }, { clearRect });
+}
+
 void DriverVk::draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) {
 	if (!vertex_count || !instance_count) {
 		return;
@@ -2374,6 +2399,57 @@ void DriverVk::draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t inst
 	validateVertexDraw({ vertex_count, vertex_offset, instance_count });
 	EnsureGraphicsState(false);
 	getCurrentFrame().mCommandBuffer.draw(vertex_count, instance_count, vertex_offset, 0);
+}
+
+VmaBuffer DriverVk::copyTextureToReadback(TextureVk& texture, unsigned mip, unsigned layer, size_t bytes) {
+	const uint32_t width = std::max<size_t>(1, texture.getWidth() >> mip);
+	const uint32_t height = std::max<size_t>(1, texture.getHeight() >> mip);
+	const bool depth = texture.getType() == TextureType::DEPTH;
+	const bool arrayed = texture.getType() == TextureType::TEXTURE_CUBE || texture.getType() == TextureType::TEXTURE_2D_ARRAY;
+	auto buffer = UtilityVk::CreateBuffer(bytes, vk::BufferUsageFlagBits::eTransferDst, UtilityVk::MemoryUsage::Staging);
+	const auto previousLayout = texture.mCurrentState;
+	UtilityVk::OneTimeSubmit([&](const auto& commandBuffer) {
+		texture.setState(commandBuffer, vk::ImageLayout::eTransferSrcOptimal);
+		const auto layers = vk::ImageSubresourceLayers()
+								.setAspectMask(depth ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor)
+								.setMipLevel(mip)
+								.setBaseArrayLayer(arrayed ? layer : 0)
+								.setLayerCount(1);
+		const auto copy = vk::BufferImageCopy()
+							  .setImageSubresource(layers)
+							  .setImageOffset({ 0, 0, texture.getType() == TextureType::TEXTURE_3D ? static_cast<int>(layer) : 0 })
+							  .setImageExtent({ width, height, 1 });
+		commandBuffer.copyImageToBuffer(texture.mImagePtr, vk::ImageLayout::eTransferSrcOptimal, *buffer, copy);
+		texture.setState(commandBuffer, previousLayout);
+	});
+	return buffer;
+}
+
+std::vector<int32_t> DriverVk::readIntTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) {
+	requireOwnerThread();
+	const auto native = std::dynamic_pointer_cast<TextureVk>(texture);
+	if (!native || native->getFormat() != PixelFormat::RG32_INT || mip != 0 || layer != 0) {
+		throw std::invalid_argument("Vulkan integer readback requires an RG32_INT texture at mip and layer zero");
+	}
+	if (native->mCurrentState == vk::ImageLayout::eUndefined) {
+		throw std::invalid_argument("Integer texture readback requires initialized contents");
+	}
+	std::vector<int32_t> values(native->getWidth() * native->getHeight() * 2);
+	const auto bytes = values.size() * sizeof(int32_t);
+	auto buffer = copyTextureToReadback(*native, mip, layer, bytes);
+	void* mapped = nullptr;
+	if (vmaMapMemory(mAllocator, buffer.allocation(), &mapped) != VK_SUCCESS) {
+		throw std::runtime_error("Integer texture readback map failed");
+	}
+	const auto result = vmaInvalidateAllocation(mAllocator, buffer.allocation(), 0, VK_WHOLE_SIZE);
+	if (result == VK_SUCCESS) {
+		std::memcpy(values.data(), mapped, bytes);
+	}
+	vmaUnmapMemory(mAllocator, buffer.allocation());
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error("Integer texture readback invalidate failed");
+	}
+	return values;
 }
 
 std::vector<float> DriverVk::readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) {
@@ -2394,22 +2470,7 @@ std::vector<float> DriverVk::readTexture(std::shared_ptr<TextureInterface> textu
 	std::vector<float> values(static_cast<size_t>(w) * h * channels);
 	const size_t stagingBytes
 		= packed ? static_cast<size_t>(w) * h * PackedFloatTexelBytes(t->getFormat()) : values.size() * (unorm ? 1 : sizeof(float));
-	auto buffer = UtilityVk::CreateBuffer(stagingBytes, vk::BufferUsageFlagBits::eTransferDst, UtilityVk::MemoryUsage::Staging);
-	const auto old = t->mCurrentState;
-	UtilityVk::OneTimeSubmit([&](const auto& cmd) {
-		t->setState(cmd, vk::ImageLayout::eTransferSrcOptimal);
-		auto layers = vk::ImageSubresourceLayers()
-						  .setAspectMask(depth ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor)
-						  .setMipLevel(mip)
-						  .setBaseArrayLayer(t->getType() == TextureType::TEXTURE_CUBE || t->getType() == TextureType::TEXTURE_2D_ARRAY ? layer : 0)
-						  .setLayerCount(1);
-		auto copy = vk::BufferImageCopy()
-						.setImageSubresource(layers)
-						.setImageOffset({ 0, 0, t->getType() == TextureType::TEXTURE_3D ? static_cast<int>(layer) : 0 })
-						.setImageExtent({ w, h, 1 });
-		cmd.copyImageToBuffer(t->mImagePtr, vk::ImageLayout::eTransferSrcOptimal, *buffer, copy);
-		t->setState(cmd, old);
-	});
+	auto buffer = copyTextureToReadback(*t, mip, layer, stagingBytes);
 	void* mapped = nullptr;
 	if (vmaMapMemory(mAllocator, buffer.allocation(), &mapped) != VK_SUCCESS) {
 		throw std::runtime_error("Readback map failed");

@@ -8,6 +8,15 @@
 namespace IKIGAI::SCENE_SYSTEM {
 class Scene;
 }
+namespace IKIGAI::DESTRUCTION {
+struct SupportAnchorResult {
+	std::uint64_t id = 0;
+	SupportId anchor = 0;
+	bool enabled = false;
+	SupportAnchorStatus status = SupportAnchorStatus::Queued;
+	std::string error {};
+};
+}
 namespace IKIGAI::ECS {
 class DestructibleMeshComponent : public ComponentBase {
 public:
@@ -35,8 +44,13 @@ public:
 	std::uint64_t slice(MATH::Vector3f point, MATH::Vector3f normal);
 	std::uint64_t slicePiece(std::uint64_t piece, MATH::Vector3f point, MATH::Vector3f normal, MATH::Vector3f impulse = {},
 		DESTRUCTION::StaticCutMode mode = DESTRUCTION::StaticCutMode::BothDynamic);
+	// World-space pose. An explicit live piece of a Concave definition is required.
+	std::uint64_t cutoutBox(std::uint64_t piece, MATH::Vector3f center, MATH::Vector3f halfExtents, MATH::QuaternionF orientation = { 0, 0, 0, 1 });
 	std::uint64_t applyDamage(float amount, MATH::Vector3f point, MATH::Vector3f cuttingNormal);
 	std::uint64_t applyDamagePiece(std::uint64_t piece, float amount, MATH::Vector3f point, MATH::Vector3f cuttingNormal);
+	// Deferred until the scene's next available physics safe point.
+	std::uint64_t setSupportAnchorEnabled(DESTRUCTION::SupportId anchor, bool enabled);
+	std::optional<DESTRUCTION::SupportAnchorResult> supportAnchorResult(std::uint64_t id) const;
 	void reset();
 	std::optional<DESTRUCTION::RequestResult> requestResult(std::uint64_t id) const;
 	const std::deque<DESTRUCTION::RequestResult>& completedRequests() const;
@@ -70,7 +84,10 @@ private:
 		std::chrono::steady_clock::time_point created {};
 	};
 	void complete(const PendingRequest& pending, DESTRUCTION::SliceStatus status, std::string error = {});
+	void completeSupportAnchor(DESTRUCTION::SupportAnchorResult result);
+	std::uint64_t enqueue(DESTRUCTION::SliceRequest request);
 	void cancelRequests();
+	void discardCandidates();
 	void moveState(DestructibleMeshComponent& source);
 	void release(bool clearDamage = true);
 	SCENE_SYSTEM::Scene* mScene = nullptr;
@@ -81,15 +98,18 @@ private:
 	std::vector<RenderPiece> mRenderPieces {};
 	std::vector<RenderPiece> mCandidates {};
 	std::deque<PendingRequest> mRequests {};
+	std::deque<DESTRUCTION::SupportAnchorResult> mAnchorRequests {};
 	std::optional<PendingRequest> mActive {};
 	std::shared_ptr<DESTRUCTION::FractureJob> mJob {};
 	std::weak_ptr<DESTRUCTION::DestructionRuntime> mRuntime {};
 	std::deque<DESTRUCTION::RequestResult> mResults {};
+	std::deque<DESTRUCTION::SupportAnchorResult> mAnchorResults {};
 	std::uint64_t mNextRequestId = 1;
 	std::uint64_t mGeneration = 1;
 	std::size_t mUploadPiece = 0;
 	std::size_t mUploadBatch = 0;
 	std::size_t mTopologyBytes = 0;
+	std::size_t mReservedGpuBytes = 0;
 	bool mFailed = false;
 	std::string mPath {};
 	std::string mError {};

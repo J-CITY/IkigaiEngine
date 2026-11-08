@@ -1,4 +1,5 @@
 #include "virtualMeshAsset.h"
+#include "virtualMeshPageSource.h"
 
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/backends/interface/indexBufferInterface.h"
@@ -23,6 +24,15 @@
 
 namespace IKIGAI::VG {
 namespace {
+	VMeshData StreamedAssetData(const std::shared_ptr<const VirtualMeshPageSource>& source) {
+		if (!source) {
+			throw std::invalid_argument("Streamed asset requires a page source");
+		}
+		auto data = source->metadata().FallbackData;
+		data.Clusters = source->metadata().Clusters;
+		return data;
+	}
+
 	struct TriangleRange {
 		uint32_t MaterialSlot = 0;
 		uint32_t IndexOffset = 0;
@@ -90,8 +100,10 @@ bool IsVirtualGeometryGpuPathSupported() {
 	return features.DrawIndirect && features.BufferUsageFlags && features.MaxDrawIndirectCount > 0;
 }
 
-VirtualMeshAsset::VirtualMeshAsset(std::string path, const VMeshData& data, bool createClusterBuffersFlag)
+VirtualMeshAsset::VirtualMeshAsset(std::string path, const VMeshData& data, bool createClusterBuffersFlag,
+	std::shared_ptr<const VirtualMeshPageSource> pageSource, bool visibilityBuffers)
 	: mPath(std::move(path))
+	, mPageSource(std::move(pageSource))
 	, mHeader(data.Header)
 	, mClusters(data.Clusters) {
 	for (const auto& cluster : mClusters) {
@@ -100,16 +112,29 @@ VirtualMeshAsset::VirtualMeshAsset(std::string path, const VMeshData& data, bool
 		}
 	}
 	mCutBounds = ComputeSlotCutBounds(mClusters, mHeader.MaterialSlotCount);
+	mHierarchy = BuildVirtualGeometryHierarchy(mClusters);
 	createFallbackModel(data);
 	if (createClusterBuffersFlag) {
-		createClusterBuffers(data);
+		createClusterBuffers(data, visibilityBuffers);
 	}
 }
 
+VirtualMeshAsset::VirtualMeshAsset(std::string path, std::shared_ptr<const VirtualMeshPageSource> source)
+	: VirtualMeshAsset(std::move(path), StreamedAssetData(source), false, source) {
+	mStreamsPages = true;
+}
+
+bool VirtualMeshAsset::streamsPages() const {
+	return mStreamsPages;
+}
 VirtualMeshAsset::~VirtualMeshAsset() = default;
 
 const std::string& VirtualMeshAsset::path() const {
 	return mPath;
+}
+
+const std::shared_ptr<const VirtualMeshPageSource>& VirtualMeshAsset::pageSource() const {
+	return mPageSource;
 }
 
 const VMeshHeader& VirtualMeshAsset::header() const {
@@ -118,6 +143,10 @@ const VMeshHeader& VirtualMeshAsset::header() const {
 
 const std::vector<VMeshCluster>& VirtualMeshAsset::clusters() const {
 	return mClusters;
+}
+
+const VirtualGeometryHierarchy& VirtualMeshAsset::hierarchy() const {
+	return mHierarchy;
 }
 
 uint32_t VirtualMeshAsset::materialSlotCount() const {
@@ -213,7 +242,7 @@ void VirtualMeshAsset::createFallbackModel(const VMeshData& data) {
 	}
 }
 
-void VirtualMeshAsset::createClusterBuffers(const VMeshData& data) {
+void VirtualMeshAsset::createClusterBuffers(const VMeshData& data, bool visibilityBuffers) {
 	auto* driver = RENDER::DriverInterface::Get();
 	if (!driver || data.Vertices.empty() || data.Indices.empty()) {
 		return;
@@ -221,6 +250,20 @@ void VirtualMeshAsset::createClusterBuffers(const VMeshData& data) {
 	mGpu.Vertices = CreateVertexBuffer(data.Vertices.data(), data.Vertices.size(), sizeof(VMeshVertex));
 	mGpu.Indices = CreateIndexBuffer(data.Indices);
 	mGpu.Clusters = driver->createStorageBuffer(data.Clusters.data(), data.Clusters.size(), sizeof(VMeshCluster), RENDER::BufferUsage::STORAGE);
+	if (!mHierarchy.Nodes.empty()) {
+		mGpu.HierarchyNodes = driver->createStorageBuffer(
+			mHierarchy.Nodes.data(), mHierarchy.Nodes.size(), sizeof(VirtualGeometryHierarchyNode), RENDER::BufferUsage::STORAGE);
+		mGpu.HierarchyClusters
+			= driver->createStorageBuffer(mHierarchy.ClusterIds.data(), mHierarchy.ClusterIds.size(), sizeof(uint32_t), RENDER::BufferUsage::STORAGE);
+	}
 	mGpuBytes = data.Vertices.size() * sizeof(VMeshVertex) + data.Indices.size() * sizeof(uint32_t) + data.Clusters.size() * sizeof(VMeshCluster);
+	mGpuBytes += mHierarchy.bytes();
+	if (visibilityBuffers) {
+		static_assert(sizeof(VMeshVertex) == 7 * sizeof(uint32_t));
+		mGpu.ResolveVertices
+			= driver->createStorageBuffer(data.Vertices.data(), data.Vertices.size() * 7, sizeof(uint32_t), RENDER::BufferUsage::STORAGE);
+		mGpu.ResolveIndices = driver->createStorageBuffer(data.Indices.data(), data.Indices.size(), sizeof(uint32_t), RENDER::BufferUsage::STORAGE);
+		mGpuBytes += data.Vertices.size() * sizeof(VMeshVertex) + data.Indices.size() * sizeof(uint32_t);
+	}
 }
 }

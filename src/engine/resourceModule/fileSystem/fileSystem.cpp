@@ -12,14 +12,217 @@
 #include <android/asset_manager.h>
 #endif
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
+#include <cstring>
+#include <fstream>
+#include <iterator>
+#include <limits>
 #include <mutex>
 #include <set>
 #include <stdexcept>
+#include <unordered_map>
 
 namespace IKIGAI::RESOURCES {
+RangeFileError::RangeFileError(RangeFileErrorCode code, const std::string& message)
+	: std::runtime_error(message)
+	, mCode(code) { }
+RangeFileErrorCode RangeFileError::code() const noexcept {
+	return mCode;
+}
+
 namespace {
+	void CheckRangeStop(std::stop_token stop) {
+		if (stop.stop_requested()) {
+			throw RangeFileError(RangeFileErrorCode::Cancelled, "Range read cancelled");
+		}
+	}
+}
+
+class RangeFileBacking {
+	std::mutex mReadMutex;
+
+	virtual size_t readAt(uint64_t offset, std::span<uint8_t> output) = 0;
+
+public:
+	virtual ~RangeFileBacking() = default;
+	void readExact(uint64_t offset, std::span<uint8_t> output, std::stop_token stop = {}) {
+		std::lock_guard lock(mReadMutex);
+		CheckRangeStop(stop);
+		if (output.empty()) {
+			return;
+		}
+		const auto count = readAt(offset, output);
+		CheckRangeStop(stop);
+		if (count != output.size()) {
+			throw RangeFileError(RangeFileErrorCode::ShortRead, "Short range read");
+		}
+	}
+};
+
+RangeFile::RangeFile(std::shared_ptr<RangeFileBacking> backing, uint64_t offset, uint64_t size)
+	: mBacking(std::move(backing))
+	, mOffset(offset)
+	, mSize(size) { }
+uint64_t RangeFile::size() const noexcept {
+	return mSize;
+}
+std::vector<uint8_t> RangeFile::read(uint64_t offset, std::size_t size, std::stop_token stop) const {
+	CheckRangeStop(stop);
+	if (offset > mSize || size > mSize - offset) {
+		throw RangeFileError(RangeFileErrorCode::InvalidRange, "Read exceeds file range");
+	}
+	std::vector<uint8_t> bytes(size);
+	mBacking->readExact(mOffset + offset, bytes, stop);
+	return bytes;
+}
+
+namespace {
+	class LooseRangeBacking final : public RangeFileBacking {
+		std::ifstream mStream;
+		uint64_t mSize;
+
+		size_t readAt(uint64_t offset, std::span<uint8_t> output) override {
+			if (output.size() > static_cast<uint64_t>(std::numeric_limits<std::streamsize>::max())) {
+				throw RangeFileError(RangeFileErrorCode::InvalidRange, "Range exceeds stream read limit");
+			}
+			mStream.clear();
+			mStream.seekg(static_cast<std::streamoff>(offset));
+			if (!mStream) {
+				throw RangeFileError(RangeFileErrorCode::IoError, "Cannot seek native backing");
+			}
+			mStream.read(reinterpret_cast<char*>(output.data()), static_cast<std::streamsize>(output.size()));
+			if (mStream.bad()) {
+				throw RangeFileError(RangeFileErrorCode::IoError, "Cannot read native backing");
+			}
+			return static_cast<size_t>(mStream.gcount());
+		}
+
+	public:
+		explicit LooseRangeBacking(const std::filesystem::path& path)
+			: mStream(path, std::ios::binary | std::ios::ate)
+			, mSize(0) {
+			const auto end = mStream.tellg();
+			if (end < 0) {
+				throw RangeFileError(RangeFileErrorCode::IoError, "Cannot open native backing");
+			}
+			mSize = static_cast<uint64_t>(end);
+		}
+		uint64_t size() const {
+			return mSize;
+		}
+	};
+
+	class ZipRangeBacking final : public RangeFileBacking {
+		mz_zip_archive mArchive {};
+		std::unordered_map<std::string, mz_uint> mMembers;
+		std::vector<uint64_t> mLocalOffsets;
+
+		size_t readAt(uint64_t offset, std::span<uint8_t> output) override {
+			return mArchive.m_pRead(mArchive.m_pIO_opaque, offset, output.data(), output.size());
+		}
+
+		static void validateExtra(std::span<const uint8_t> extra, const std::string& path) {
+			constexpr size_t fieldHeaderSize = 4;
+			constexpr uint16_t zip64Field = 1;
+			while (!extra.empty()) {
+				if (extra.size() < fieldHeaderSize) {
+					throw RangeFileError(RangeFileErrorCode::InvalidArchive, "Truncated ZIP extra field: " + path);
+				}
+				const auto fieldSize = MZ_READ_LE16(extra.data() + 2);
+				if (fieldSize > extra.size() - fieldHeaderSize) {
+					throw RangeFileError(RangeFileErrorCode::InvalidArchive, "Truncated ZIP extra field: " + path);
+				}
+				if (MZ_READ_LE16(extra.data()) == zip64Field) {
+					throw RangeFileError(RangeFileErrorCode::UnsupportedBacking, "ZIP64 extra field is unsupported: " + path);
+				}
+				extra = extra.subspan(fieldHeaderSize + fieldSize);
+			}
+		}
+
+	public:
+		struct Extent {
+			uint64_t offset;
+			uint64_t size;
+		};
+
+		explicit ZipRangeBacking(const std::string& path) {
+			if (!mz_zip_reader_init_file(&mArchive, path.c_str(), 0)) {
+				throw RangeFileError(RangeFileErrorCode::InvalidArchive, "Invalid ZIP: " + path);
+			}
+		}
+		~ZipRangeBacking() override {
+			mz_zip_reader_end(&mArchive);
+		}
+		mz_zip_archive& archive() {
+			return mArchive;
+		}
+		void addMember(const std::string& virtualPath, const mz_zip_archive_file_stat& entry) {
+			mMembers.insert_or_assign(virtualPath, entry.m_file_index);
+			mLocalOffsets.push_back(entry.m_local_header_ofs);
+		}
+		void finishIndex() {
+			std::sort(mLocalOffsets.begin(), mLocalOffsets.end());
+		}
+
+		Extent storedExtent(const std::string& path) {
+			const auto found = mMembers.find(path);
+			mz_zip_archive_file_stat entry {};
+			if (found == mMembers.end() || !mz_zip_reader_file_stat(&mArchive, found->second, &entry)) {
+				throw RangeFileError(RangeFileErrorCode::InvalidArchive, "Missing ZIP entry metadata: " + path);
+			}
+			constexpr uint32_t zip32Limit = std::numeric_limits<uint32_t>::max();
+			constexpr uint16_t utf8Flag = 1u << 11;
+			if (mArchive.m_archive_size >= zip32Limit || entry.m_version_needed >= 45 || entry.m_comp_size >= zip32Limit
+				|| entry.m_uncomp_size >= zip32Limit || entry.m_local_header_ofs >= zip32Limit || entry.m_method != 0
+				|| (entry.m_bit_flag & ~utf8Flag) != 0) {
+				throw RangeFileError(RangeFileErrorCode::UnsupportedBacking, "Range reads require plain ZIP32 stored entries: " + path);
+			}
+
+			const auto current = std::lower_bound(mLocalOffsets.begin(), mLocalOffsets.end(), entry.m_local_header_ofs);
+			const auto next = std::next(current);
+			const auto boundary = next == mLocalOffsets.end() ? mArchive.m_central_directory_file_ofs : *next;
+			std::array<uint8_t, MZ_ZIP_LOCAL_DIR_HEADER_SIZE> header {};
+			const auto offset = entry.m_local_header_ofs;
+			if (boundary > mArchive.m_central_directory_file_ofs || offset > boundary || header.size() > boundary - offset) {
+				throw RangeFileError(RangeFileErrorCode::InvalidArchive, "ZIP local header lies outside its extent: " + path);
+			}
+			readExact(offset, header);
+			if (MZ_READ_LE16(header.data() + MZ_ZIP_LDH_VERSION_NEEDED_OFS) >= 45) {
+				throw RangeFileError(RangeFileErrorCode::UnsupportedBacking, "ZIP64 local header is unsupported: " + path);
+			}
+			const auto nameSize = MZ_READ_LE16(header.data() + MZ_ZIP_LDH_FILENAME_LEN_OFS);
+			const auto extraSize = MZ_READ_LE16(header.data() + MZ_ZIP_LDH_EXTRA_LEN_OFS);
+			const auto nameOffset = offset + header.size();
+			if (MZ_READ_LE32(header.data()) != MZ_ZIP_LOCAL_DIR_HEADER_SIG || MZ_READ_LE16(header.data() + MZ_ZIP_LDH_METHOD_OFS) != entry.m_method
+				|| MZ_READ_LE16(header.data() + MZ_ZIP_LDH_BIT_FLAG_OFS) != entry.m_bit_flag
+				|| MZ_READ_LE32(header.data() + MZ_ZIP_LDH_CRC32_OFS) != entry.m_crc32
+				|| MZ_READ_LE32(header.data() + MZ_ZIP_LDH_COMPRESSED_SIZE_OFS) != entry.m_comp_size
+				|| MZ_READ_LE32(header.data() + MZ_ZIP_LDH_DECOMPRESSED_SIZE_OFS) != entry.m_uncomp_size || entry.m_comp_size != entry.m_uncomp_size
+				|| nameSize != std::strlen(entry.m_filename) || static_cast<uint32_t>(nameSize) + extraSize > boundary - nameOffset) {
+				throw RangeFileError(RangeFileErrorCode::InvalidArchive, "Invalid or inconsistent ZIP local header: " + path);
+			}
+			const auto* central = mz_zip_reader_get_cdh(&mArchive, found->second);
+			const auto centralNameSize = MZ_READ_LE16(central + MZ_ZIP_CDH_FILENAME_LEN_OFS);
+			if (centralNameSize != nameSize) {
+				throw RangeFileError(RangeFileErrorCode::InvalidArchive, "Invalid ZIP central filename: " + path);
+			}
+			validateExtra({ central + MZ_ZIP_CENTRAL_DIR_HEADER_SIZE + centralNameSize, MZ_READ_LE16(central + MZ_ZIP_CDH_EXTRA_LEN_OFS) }, path);
+			const auto dataOffset = nameOffset + nameSize + extraSize;
+			if (entry.m_uncomp_size > boundary - dataOffset) {
+				throw RangeFileError(RangeFileErrorCode::InvalidArchive, "ZIP payload extends past its boundary: " + path);
+			}
+			std::vector<uint8_t> localNameAndExtra(static_cast<size_t>(nameSize) + extraSize);
+			readExact(nameOffset, localNameAndExtra);
+			if (std::memcmp(localNameAndExtra.data(), entry.m_filename, nameSize) != 0) {
+				throw RangeFileError(RangeFileErrorCode::InvalidArchive, "ZIP local and central filenames differ: " + path);
+			}
+			validateExtra(std::span(localNameAndExtra).subspan(nameSize), path);
+			return { dataOffset, entry.m_uncomp_size };
+		}
+	};
+
 	bool Contains(const std::string& base, const std::string& path) {
 		return base == "/" || path == base || path.starts_with(base + "/");
 	}
@@ -31,6 +234,7 @@ namespace {
 		vfspp::IFileSystemPtr fs;
 		std::shared_ptr<STORAGE::UserStorage> storage;
 		std::string prefix;
+		std::shared_ptr<ZipRangeBacking> zipRange;
 		std::string storagePath(const std::string& path) const {
 			const auto relative = STORAGE::Utf8(std::filesystem::u8path(path).lexically_relative(std::filesystem::u8path(info.alias)));
 			return relative == "." ? prefix : prefix + "/" + relative;
@@ -65,12 +269,13 @@ public:
 	mutable std::recursive_mutex mutex;
 	uint64_t nextId = 1;
 	std::atomic<uint64_t> generation { 0 };
-	FileSystem::MountId add(vfspp::IFileSystemPtr fs, std::vector<std::string> deleted = { }) {
+	FileSystem::MountId add(vfspp::IFileSystemPtr fs, std::vector<std::string> deleted = {}, std::shared_ptr<ZipRangeBacking> zipRange = {}) {
 		if (!fs->Initialize())
 			throw std::runtime_error("Cannot initialize filesystem: " + fs->BasePath());
 		std::lock_guard lock(mutex);
 		auto alias = FileSystem::normalizePath(fs->VirtualPath());
-		auto record = std::make_shared<Mount>(Mount { { nextId++, fs->BasePath(), alias, fs->IsReadOnly(), std::move(deleted) }, fs });
+		auto record = std::make_shared<Mount>(
+			Mount { { nextId++, fs->BasePath(), alias, fs->IsReadOnly(), std::move(deleted) }, fs, {}, {}, std::move(zipRange) });
 		mounts.push_back(record);
 		++generation;
 		return record->info.id;
@@ -246,15 +451,8 @@ FileSystem::MountId FileSystem::mountZip(const std::string& path, const std::str
 			throw std::runtime_error("Invalid deletion: " + item);
 		deleted.push_back(key);
 	}
-	mz_zip_archive zip { };
-	if (!mz_zip_reader_init_file(&zip, path.c_str(), 0))
-		throw std::runtime_error("Invalid ZIP: " + path);
-	struct Close {
-		mz_zip_archive* zip;
-		~Close() {
-			mz_zip_reader_end(zip);
-		}
-	} close { &zip };
+	auto backing = std::make_shared<ZipRangeBacking>(path);
+	auto& zip = backing->archive();
 	std::set<std::string> names;
 	uint64_t total = 0;
 	const auto count = mz_zip_reader_get_num_files(&zip);
@@ -270,6 +468,7 @@ FileSystem::MountId FileSystem::mountZip(const std::string& path, const std::str
 		auto key = normalizePath((normalized == "/" ? "" : normalized) + "/" + raw);
 		if (Reserved(key))
 			throw std::runtime_error("ZIP contains reserved path");
+		backing->addMember(vfspp::EntryInfo(normalized, "", raw).VirtualPath(), stat);
 		std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		if (!names.insert(key).second)
 			throw std::runtime_error("Duplicate ZIP path: " + raw);
@@ -277,7 +476,8 @@ FileSystem::MountId FileSystem::mountZip(const std::string& path, const std::str
 			throw std::runtime_error("ZIP size limit exceeded");
 		total += stat.m_uncomp_size;
 	}
-	return mInternal->add(std::make_shared<vfspp::ZipFileSystem>(normalized, path), std::move(deleted));
+	backing->finishIndex();
+	return mInternal->add(std::make_shared<vfspp::ZipFileSystem>(normalized, path), std::move(deleted), std::move(backing));
 }
 void FileSystem::addNativeFileSystem(const std::string& path, const std::string& alias) {
 	mountNative(path, alias);
@@ -364,6 +564,29 @@ uintmax_t FileSystem::fileSize(const std::string& path) {
 			return size;
 	}
 	return getFile(path)->getSize();
+}
+std::shared_ptr<const RangeFile> FileSystem::openRange(const std::string& path) const {
+	const auto key = normalizePath(path);
+	const auto mount = mInternal->resolve(key);
+	if (!mount) {
+		throw RangeFileError(RangeFileErrorCode::NotFound, "Range file not found: " + key);
+	}
+	const auto entry = Entry(*mount, key);
+	if (!entry || entry->IsDirectory()) {
+		throw RangeFileError(RangeFileErrorCode::NotFound, "Range file not found: " + key);
+	}
+	if (mount->zipRange) {
+		const auto extent = mount->zipRange->storedExtent(entry->VirtualPath());
+		return std::shared_ptr<const RangeFile>(new RangeFile(mount->zipRange, extent.offset, extent.size));
+	}
+	if (std::dynamic_pointer_cast<vfspp::NativeFileSystem>(mount->fs)) {
+		const auto relative = std::filesystem::path(key).lexically_relative(mount->info.alias).generic_string();
+		const auto native = STORAGE::Child(std::filesystem::u8path(mount->info.source), relative);
+		auto backing = std::make_shared<LooseRangeBacking>(native);
+		const auto size = backing->size();
+		return std::shared_ptr<const RangeFile>(new RangeFile(std::move(backing), 0, size));
+	}
+	throw RangeFileError(RangeFileErrorCode::UnsupportedBacking, "Mount does not support range reads: " + key);
 }
 std::shared_ptr<File> FileSystem::getFile(const std::string& path, FileMode mode) {
 	const auto key = normalizePath(path);
