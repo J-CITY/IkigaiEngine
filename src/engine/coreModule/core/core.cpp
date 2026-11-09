@@ -16,6 +16,7 @@
 #include "coroutineModule/scheduler.h"
 #include "resourceModule/particleManager.h"
 #include "uiModule/viewHost.h"
+#include "utilsModule/assertion.h"
 #include "utilsModule/log/loggerDefine.h"
 
 #include "resourceModule/fileWatcher.h"
@@ -70,6 +71,9 @@
 #include "resourceModule/skeletonBlendspaceManager.h"
 #include "resourceModule/skeletonManager.h"
 #include "resourceModule/skeletonStateGraphManager.h"
+#if USE_LUA
+#include "scriptModule/scriptInterpreter.h"
+#endif
 #include "virtualGeometryModule/runtime/virtualMeshLoader.h"
 #include <coreModule/ecs/components/scriptComponent.h>
 #include <renderModule/gameRenderer.h>
@@ -253,9 +257,6 @@ Core::Core(const PlatformStartup& platform)
 
 	std::cout << "Create driver\n";
 
-#if USE_LUA
-	scriptInterpreter = std::make_unique<SCRIPTING::ScriptInterpreter>(Config::ROOT + Config::USER_ASSETS_PATH + "scripts/");
-#endif
 	audioManager = std::make_unique<AUDIO::AudioManager>();
 	audioSourceLoader = std::make_unique<RESOURCES::AudioSourceLoader>();
 	taskManger = std::make_unique<TASK::TaskSystem>();
@@ -287,7 +288,6 @@ Core::Core(const PlatformStartup& platform)
 #endif
 		ECS::RegisterSceneComponentReflection();
 #if USE_LUA
-
 		sysMgr->registerSystem<ECS::ScriptSystem>();
 #endif
 		sysMgr->registerSystem<ECS::GuiLayoutSystem>();
@@ -337,15 +337,17 @@ Core::Core(const PlatformStartup& platform)
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonBlendspaceLoader>(skeletonBlendspaceLoader.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonAnimationLoader>(skeletonAnimationLoader.get());
 
+#if USE_LUA
+	// If startup throws, close Lua before the Core members it depends on unwind.
+	auto startupInterpreter = std::make_unique<SCRIPTING::ScriptInterpreter>(Config::ROOT + Config::USER_ASSETS_PATH + "scripts/");
+#endif
 	{
 		UTILS::LoadTimer timing("renderer");
 		auto gameRenderer = std::make_unique<RENDER::GameRenderer>(*this);
 		RESOURCES::ServiceManager::Set<RENDER::PrimitiveRender>(&gameRenderer->primitives());
 		renderer = std::move(gameRenderer);
 	}
-	if (!renderer) {
-		throw;
-	}
+	IKIGAI_VERIFY(renderer, "Core startup requires an active game renderer");
 
 	std::cout << "Create render\n";
 #ifndef OCULUS
@@ -362,6 +364,9 @@ Core::Core(const PlatformStartup& platform)
 
 	sceneManager->getCurrentScene().init();
 	std::cout << "Init Core";
+#if USE_LUA
+	scriptInterpreter = std::move(startupInterpreter);
+#endif
 }
 
 Core::~Core() {
@@ -403,11 +408,8 @@ Core::~Core() {
 	editorRender.reset();
 #endif
 #if USE_LUA
-	// Lua detaches component tables through the ECS. Do this while both the
-	// scene's components and the world still exist.
-	if (scriptInterpreter) {
-		scriptInterpreter->destroyLuaContext();
-	}
+	// Drop subscriptions and detach component tables before destroying their scene and ECS.
+	scriptInterpreter.reset();
 #endif
 	if (sceneManager) {
 		sceneManager->unloadCurrentScene();

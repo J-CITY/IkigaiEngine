@@ -22,10 +22,12 @@ DriverVk* UtilityVk::GetDriver() {
 
 VmaBuffer UtilityVk::CreateBuffer(uint64_t size, vk::BufferUsageFlags usage, MemoryUsage memoryUsage)
 {
-    if(GetDriver()->mRayTracingCapabilities.AccelerationStructure &&
-        (usage&(vk::BufferUsageFlagBits::eVertexBuffer|vk::BufferUsageFlagBits::eIndexBuffer))) {
-        usage|=vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR|vk::BufferUsageFlagBits::eShaderDeviceAddress;
-    }
+	auto* driver = GetDriver();
+	driver->requireUsableDevice();
+	if (driver->mRayTracingCapabilities.AccelerationStructure
+		&& (usage & (vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eIndexBuffer))) {
+		usage |= vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR | vk::BufferUsageFlagBits::eShaderDeviceAddress;
+	}
 	auto buffer_create_info = vk::BufferCreateInfo()
 	                          .setSize(size)
 	                          .setUsage(usage)
@@ -42,7 +44,10 @@ VmaBuffer UtilityVk::CreateBuffer(uint64_t size, vk::BufferUsageFlags usage, Mem
 
 	VkBuffer buffer = VK_NULL_HANDLE;
 	VmaAllocation allocation = nullptr;
-	const VkResult result = vmaCreateBuffer(GetDriver()->mAllocator, &vkBufferInfo, &allocInfo, &buffer, &allocation, nullptr);
+	const VkResult result = vmaCreateBuffer(driver->mAllocator, &vkBufferInfo, &allocInfo, &buffer, &allocation, nullptr);
+	if (result == VK_ERROR_DEVICE_LOST) {
+		driver->checkFrameResult(result, "vmaCreateBuffer");
+	}
 	if (result != VK_SUCCESS) {
 		throw std::runtime_error("vmaCreateBuffer failed");
 	}
@@ -56,7 +61,7 @@ VmaBuffer UtilityVk::CreateBuffer(uint64_t size, vk::BufferUsageFlags usage, Mem
     else if (usage & vk::BufferUsageFlagBits::eUniformBuffer) kind = PROFILER::GpuResourceKind::UniformBuffer;
     else if (usage & vk::BufferUsageFlagBits::eStorageBuffer) kind = PROFILER::GpuResourceKind::StorageBuffer;
 #endif
-	return VmaBuffer(GetDriver()->mAllocator, buffer, allocation, kind, size);
+	return VmaBuffer(driver->mAllocator, buffer, allocation, kind, size);
 }
 
 vk::raii::ImageView UtilityVk::CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspect_flags, size_t layers, vk::ImageViewType type, uint32_t mip_levels ) {
@@ -71,7 +76,13 @@ vk::raii::ImageView UtilityVk::CreateImageView(vk::Image image, vk::Format forma
 	                              .setFormat(format)
 	                              .setSubresourceRange(image_subresource_range);
 
-	return GetDriver()->mDevice.createImageView(image_view_create_info);
+	auto* driver = GetDriver();
+	driver->requireUsableDevice();
+	try {
+		return driver->mDevice.createImageView(image_view_create_info);
+	} catch (const vk::DeviceLostError&) {
+		driver->rethrowRenderException(std::current_exception());
+	}
 }
 
 std::tuple<VmaImage, vk::raii::ImageView> UtilityVk::CreateImage(uint32_t width, uint32_t height, vk::Format format, vk::ImageUsageFlags usage,
@@ -97,6 +108,7 @@ std::tuple<VmaImage, vk::raii::ImageView> UtilityVk::CreateImage(uint32_t width,
 	allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 
 	auto* driver = GetDriver();
+	driver->requireUsableDevice();
 	if (backing) {
 		if (!vkGetDeviceImageMemoryRequirements) {
 			throw UnsupportedGpuFeature("Vulkan device image memory requirements unavailable");
@@ -124,6 +136,9 @@ std::tuple<VmaImage, vk::raii::ImageView> UtilityVk::CreateImage(uint32_t width,
 	VmaAllocation allocation = nullptr;
 	const VkResult result = backing && *backing ? vmaCreateAliasingImage(driver->mAllocator, (*backing)->allocation(), &vkImageInfo, &image)
 												: vmaCreateImage(driver->mAllocator, &vkImageInfo, &allocInfo, &image, &allocation, nullptr);
+	if (result == VK_ERROR_DEVICE_LOST) {
+		driver->checkFrameResult(result, "vmaCreateImage");
+	}
 	if (result != VK_SUCCESS) {
 		throw std::runtime_error("vmaCreateImage failed");
 	}
@@ -306,7 +321,7 @@ void UtilityVk::SetImageMemoryBarrier(const vk::raii::CommandBuffer& cmdbuf, vk:
 		base_array_layer, layer_count);
 }
 
-void UtilityVk::OneTimeSubmit(std::function<void(const vk::raii::CommandBuffer&)> func) {
+void UtilityVk::OneTimeSubmit(std::function<void(const vk::raii::CommandBuffer&)> func) try {
 	mDriver->requireUsableDevice();
 	auto command_buffer_allocate_info = vk::CommandBufferAllocateInfo()
 	                                    .setCommandBufferCount(1)
@@ -326,11 +341,11 @@ void UtilityVk::OneTimeSubmit(std::function<void(const vk::raii::CommandBuffer&)
 	auto submit_info = vk::SubmitInfo()
 		.setCommandBuffers(*cmdbuf);
 
-	const auto& queue = mDriver->mQueue;
-	mDriver->checkFrameResult(
-		queue.getDispatcher()->vkQueueSubmit(*queue, 1, &static_cast<const VkSubmitInfo&>(submit_info), VK_NULL_HANDLE), "vkQueueSubmit (one-time)");
-	mDriver->checkFrameResult(queue.getDispatcher()->vkQueueWaitIdle(*queue), "vkQueueWaitIdle (one-time)");
+	const auto fence = mDriver->mDevice.createFence({});
+	mDriver->submitToQueue(mDriver->mQueue, submit_info, *fence, "vkQueueSubmit (one-time)");
+	mDriver->waitFrameFence(fence, "vkWaitForFences (one-time)");
+} catch (const vk::DeviceLostError&) {
+	mDriver->checkFrameResult(VK_ERROR_DEVICE_LOST, "record one-time submission");
 }
-
 
 #endif

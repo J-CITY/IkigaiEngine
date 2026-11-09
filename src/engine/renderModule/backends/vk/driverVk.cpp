@@ -24,6 +24,7 @@
 #include "backends/imgui_impl_vulkan.h"
 #include "renderModule/backends/interface/pixelFormatConversion.h"
 #include "renderModule/backends/interface/storageBufferInterface.h"
+#include "utilsModule/crashReport.h"
 #include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
 #include "utilsModule/log/loggerDefine.h"
 
@@ -243,7 +244,7 @@ void DriverVk::initializePipelineCache() noexcept {
 }
 
 void DriverVk::savePipelineCache() noexcept {
-	if (!*mPipelineCache || mFrameFailure.load() != VK_SUCCESS) {
+	if (!*mPipelineCache || hasGpuFailure()) {
 		return;
 	}
 	try {
@@ -271,22 +272,13 @@ DriverVk::~DriverVk() {
 	}
 #endif
 	try {
-		if (working && mFrameFailure.load() == VK_SUCCESS) {
+		if (!mShuttingDown && working && !hasGpuFailure() && std::uncaught_exceptions() == 0) {
 			DriverVk::end();
 		}
 	} catch (const std::exception& error) {
 		std::cerr << "Vulkan final submission failed: " << error.what() << '\n';
 	}
-	if (*mDevice && mFrameFailure.load() != VK_ERROR_DEVICE_LOST) {
-		const auto result = mDevice.getDispatcher()->vkDeviceWaitIdle(*mDevice);
-		if (result != VK_SUCCESS) {
-			try {
-				checkFrameResult(result, "vkDeviceWaitIdle during shutdown");
-			} catch (const std::exception&) {
-				// Continue releasing native objects after a failed drain.
-			}
-		}
-	}
+	drainForShutdown();
 	savePipelineCache();
 	mPipelineCache.clear();
 	// Readback staging buffers are VMA allocations: release them while the allocator exists.
@@ -941,7 +933,7 @@ bool DriverVk::checkInstanceExtensionSupport(const std::vector<const char*>& ext
 	return true;
 }
 
-void DriverVk::begin() {
+void DriverVk::begin() try {
 	requireUsableDevice();
 	working = true;
 	UniformBufferVk::BeginFrame(settings.framesInFlight);
@@ -965,6 +957,8 @@ void DriverVk::begin() {
 
 	auto tex = std::static_pointer_cast<TextureVk>(getCurrentFrame().mFrameBuffer->getTextures()[0]);
 	tex->setState(getCurrentFrame().mCommandBuffer, vk::ImageLayout::eColorAttachmentOptimal);
+} catch (const vk::DeviceLostError&) {
+	checkFrameResult(VK_ERROR_DEVICE_LOST, "begin frame");
 }
 
 void DriverVk::invalidateCommandState() {
@@ -984,7 +978,7 @@ void DriverVk::invalidateCommandState() {
 	setDirty(Dirty::TRIANGULATION_ORDER);
 }
 
-void DriverVk::end() {
+void DriverVk::end() try {
 	if (!working) {
 		return;
 	}
@@ -1024,6 +1018,8 @@ void DriverVk::end() {
 		frame.RayTracingResources.swap(mRayTracingFrameResources);
 		frame.BindlessResources.swap(mBindlessFrameResources);
 	}
+} catch (const vk::DeviceLostError&) {
+	checkFrameResult(VK_ERROR_DEVICE_LOST, "end frame");
 }
 
 void DriverVk::submitGraphics(vk::Semaphore renderComplete, uint64_t graphSignal, vk::Fence fence) {
@@ -1033,12 +1029,12 @@ void DriverVk::submitGraphics(vk::Semaphore renderComplete, uint64_t graphSignal
 	const std::array<vk::PipelineStageFlags, 2> stages { vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands };
 	uint32_t waitCount = 0;
 	if (mAcquireWaitPending) {
-		const auto& swapchain = getCurrentSwapchainContext();
-		const auto& acquire = swapchain.frames.at(mSemaphoreIndex);
+		auto& swapchain = getCurrentSwapchainContext();
+		auto& acquire = swapchain.frames.at(mSemaphoreIndex);
 		if (!renderComplete && !swapchain.sdkAcquire) {
 			// An early submission splits the frame before presentation. Establish
 			// WSI ownership before consuming the acquire semaphore in that prefix.
-			waitFrameFence(acquire.AcquireFence);
+			waitAcquireFence(acquire);
 		}
 		waits[waitCount++] = *acquire.mImageAcquiredSemaphore;
 	}
@@ -1054,7 +1050,7 @@ void DriverVk::submitGraphics(vk::Semaphore renderComplete, uint64_t graphSignal
 	if (graphSignal || mGraphGraphicsWait) {
 		submit.setPNext(&timeline);
 	}
-	checkFrameResult(mQueue.getDispatcher()->vkQueueSubmit(*mQueue, 1, &static_cast<const VkSubmitInfo&>(submit), fence), "vkQueueSubmit (graphics)");
+	submitToQueue(mQueue, submit, fence, "vkQueueSubmit (graphics)");
 	mAcquireWaitPending = false;
 	mGraphGraphicsWait = 0;
 }
@@ -1661,7 +1657,8 @@ void DriverVk::EnsureGraphicsDescriptors(vk::raii::CommandBuffer& cmdlist) {
 	}
 }
 
-void DriverVk::EnsureGraphicsState(bool draw_indexed) {
+void DriverVk::EnsureGraphicsState(bool draw_indexed) try {
+	requireUsableDevice();
 	auto& cmdlist = getCurrentFrame().mCommandBuffer;
 
 	EnsureMemoryState(cmdlist, vk::PipelineStageFlagBits2::eAllGraphics);
@@ -1682,6 +1679,8 @@ void DriverVk::EnsureGraphicsState(bool draw_indexed) {
 	EnsureDepthMode(cmdlist);
 	EnsureStencilMode(cmdlist);
 	activateRenderPass();
+} catch (const vk::DeviceLostError& error) {
+	checkFrameResult(VK_ERROR_DEVICE_LOST, error.what());
 }
 
 void DriverVk::wait() {
@@ -1702,21 +1701,43 @@ void DriverVk::waitForPresentedFrame() {
 	waitFrameFence(*it->second.frames.at(mFrameIndex).fence);
 }
 
-void DriverVk::waitFrameFence(const vk::raii::Fence& fence) {
-	requireUsableDevice();
+void DriverVk::waitFrameFence(const vk::raii::Fence& fence, const char* operation) {
+	if (isDeviceLost()) {
+		requireUsableDevice();
+	}
 	const VkFence nativeFence = *fence;
-	checkFrameResult(mDevice.getDispatcher()->vkWaitForFences(*mDevice, 1, &nativeFence, VK_TRUE, UINT64_MAX), "vkWaitForFences");
+	checkFrameResult(mDevice.getDispatcher()->vkWaitForFences(*mDevice, 1, &nativeFence, VK_TRUE, GpuWaitTimeoutNs), operation, true);
+}
+
+void DriverVk::waitAcquireFence(Frame& frame) {
+	if (frame.AcquireFencePending) {
+		waitFrameFence(frame.AcquireFence, "vkWaitForFences (acquire)");
+		frame.AcquireFencePending = false;
+	}
 }
 
 void DriverVk::requireUsableDevice() const {
-	const auto result = mFrameFailure.load();
-	if (result != VK_SUCCESS) {
-		throw std::runtime_error("Vulkan rendering stopped after " + vk::to_string(static_cast<vk::Result>(result)));
+	if (hasGpuFailure()) {
+		std::lock_guard lock(mFailureMutex);
+		throw std::runtime_error(mFirstFailure);
 	}
 }
 
 bool DriverVk::isDeviceLost() const noexcept {
-	return mFrameFailure.load() == VK_ERROR_DEVICE_LOST;
+	return mDeviceLost.load();
+}
+
+bool DriverVk::hasGpuFailure() const noexcept {
+	return mGpuFailed.load();
+}
+
+[[noreturn]] void DriverVk::rethrowRenderException(std::exception_ptr error) {
+	try {
+		std::rethrow_exception(error);
+	} catch (const vk::DeviceLostError& lost) {
+		checkFrameResult(VK_ERROR_DEVICE_LOST, lost.what());
+		throw;
+	}
 }
 
 void DriverVk::reportDeviceFault() const {
@@ -1760,29 +1781,72 @@ void DriverVk::reportDeviceFault() const {
 #endif
 }
 
-void DriverVk::checkFrameResult(VkResult result, const char* operation) {
+void DriverVk::checkFrameResult(VkResult result, const char* operation, bool completionUnknown) {
 	if (result == VK_SUCCESS) {
 		return;
 	}
-	const auto message
-		= std::string("Vulkan ") + operation + " failed with " + vk::to_string(static_cast<vk::Result>(result)) + " (" + std::to_string(result) + ')';
-	VkResult previous = VK_SUCCESS;
-	const bool firstFailure
-		= result == VK_ERROR_DEVICE_LOST ? mFrameFailure.exchange(result) != result : mFrameFailure.compare_exchange_strong(previous, result);
-	if (firstFailure) {
+	std::lock_guard lock(mFailureMutex);
+	const bool firstFailure = !mGpuFailed.exchange(true);
+	const bool firstLoss = result == VK_ERROR_DEVICE_LOST && !mDeviceLost.exchange(true);
+	if (firstFailure || firstLoss || (completionUnknown && !isDeviceLost())) {
+		const auto message = std::string("Vulkan ") + operation + " failed with " + vk::to_string(static_cast<vk::Result>(result)) + " ("
+			+ std::to_string(result) + ')';
+		if (firstFailure) {
+			mFirstFailure = message;
+		}
 		const auto properties = mPhysicalDevice.getProperties();
 		std::cerr << message << " on " << properties.deviceName.data() << ", driver " << properties.driverVersion << ", last submission "
 				  << completion().lastSubmitted().Value << '\n';
-		if (result == VK_ERROR_DEVICE_LOST) {
+		if (firstLoss) {
 			reportDeviceFault();
 		}
+		if (completionUnknown && !isDeviceLost()) {
+			UTILS::CRASH::terminate(message.c_str());
+		}
 	}
-	throw std::runtime_error(message);
+	throw std::runtime_error(mFirstFailure);
+}
+
+void DriverVk::submitToQueue(const vk::raii::Queue& queue, const vk::SubmitInfo& submit, VkFence fence, const char* operation) {
+	std::lock_guard lock(mQueueMutex);
+	requireUsableDevice();
+	checkFrameResult(queue.getDispatcher()->vkQueueSubmit(*queue, 1, &static_cast<const VkSubmitInfo&>(submit), fence), operation);
 }
 
 void DriverVk::waitDeviceIdle() {
-	requireUsableDevice();
-	checkFrameResult(mDevice.getDispatcher()->vkDeviceWaitIdle(*mDevice), "vkDeviceWaitIdle");
+	std::lock_guard lock(mQueueMutex);
+	// Vulkan has no timed device-idle call. Keep the native drain, including
+	// queues used by presentation, and terminate before freeing live objects if it stalls.
+	VkResult drainResult = VK_ERROR_UNKNOWN;
+	watchGpuWait(
+		"Vulkan vkDeviceWaitIdle timed out with GPU completion unknown", [&] { drainResult = mDevice.getDispatcher()->vkDeviceWaitIdle(*mDevice); });
+	checkFrameResult(drainResult, "vkDeviceWaitIdle", true);
+	for (auto& [_, swapchain] : mSwapchains) {
+		for (auto& frame : swapchain.frames) {
+			waitAcquireFence(frame);
+		}
+	}
+}
+
+void DriverVk::drainForShutdown() {
+	if (mShuttingDown) {
+		return;
+	}
+	if (*mDevice && !isDeviceLost()) {
+		try {
+			if (mFrameGeneration) {
+				mFrameGeneration->waitForPresents();
+			}
+			waitDeviceIdle();
+			completionSource()->completed(completion().lastSubmitted());
+		} catch (const std::exception&) {
+			if (!isDeviceLost()) {
+				UTILS::CRASH::terminate("Vulkan shutdown could not establish GPU completion");
+			}
+		}
+	}
+	working = false;
+	mShuttingDown = true;
 }
 
 std::function<void()> DriverVk::presentedFrameWait(GpuCompletionToken token) {
@@ -2009,18 +2073,20 @@ void DriverVk::nextFrame() {
 		recreateSwapchain(ctx.width, ctx.height);
 	}
 	const auto acquireImage = [&]() {
-		const auto& slot = ctx.frames.at(mSemaphoreIndex);
+		auto& slot = ctx.frames.at(mSemaphoreIndex);
 		if (slot.AcquireConsumed.Value) {
 			waitForCompletion(slot.AcquireConsumed);
 		}
 		if (ctx.sdkAcquire) {
 			return ctx.sdkAcquire(*slot.mImageAcquiredSemaphore, &mFrameIndex);
 		}
-		waitFrameFence(slot.AcquireFence);
+		waitAcquireFence(slot);
 		const VkFence fence = *slot.AcquireFence;
 		checkFrameResult(mDevice.getDispatcher()->vkResetFences(*mDevice, 1, &fence), "vkResetFences (acquire)");
-		return mDevice.getDispatcher()->vkAcquireNextImageKHR(
-			*mDevice, *ctx.swapchain, UINT64_MAX, *slot.mImageAcquiredSemaphore, fence, &mFrameIndex);
+		const auto result = mDevice.getDispatcher()->vkAcquireNextImageKHR(
+			*mDevice, *ctx.swapchain, GpuWaitTimeoutNs, *slot.mImageAcquiredSemaphore, fence, &mFrameIndex);
+		slot.AcquireFencePending = result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR;
+		return result;
 	};
 	auto result = acquireImage();
 	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
@@ -2429,7 +2495,7 @@ void DriverVk::PushDescriptors(vk::raii::CommandBuffer& cmdlist, vk::PipelineBin
 	cmdlist.bindDescriptorSets(pipeline_bind_point, *pipeline_layout, 0, set, {});
 }
 
-void DriverVk::resize(size_t width, size_t height) {
+void DriverVk::resize(size_t width, size_t height) try {
 	requireUsableDevice();
 	auto found = mSwapchains.find(mCurrentWindowID);
 	if (found == mSwapchains.end() || (!*found->second.swapchain && !found->second.sdkSwapchain)) {
@@ -2454,15 +2520,17 @@ void DriverVk::resize(size_t width, size_t height) {
 	recreateSwapchain(targetWidth, targetHeight);
 	nextFrame();
 	begin();
+} catch (const vk::DeviceLostError&) {
+	checkFrameResult(VK_ERROR_DEVICE_LOST, "resize frame");
 }
 
 void DriverVk::recreateSwapchain(uint32_t width, uint32_t height) try {
 	auto& ctx = getCurrentSwapchainContext();
-	waitDeviceIdle();
 	if (mFrameGeneration) {
 		mFrameGeneration->suspend();
 		mFrameGeneration->waitForPresents();
 	}
+	waitDeviceIdle();
 	completionSource()->completed(completionSource()->lastSubmitted());
 	mWidth = width;
 	mHeight = height;
@@ -2820,7 +2888,8 @@ void DriverVk::dispatchMipCompute(
 	cmd.pipelineBarrier2(vk::DependencyInfo().setImageMemoryBarriers(barrier));
 }
 
-void DriverVk::EnsureComputeState(vk::raii::CommandBuffer& cmd) {
+void DriverVk::EnsureComputeState(vk::raii::CommandBuffer& cmd) try {
+	requireUsableDevice();
 	// Orders earlier graphics/transfer work (including indirect-argument reads) before compute writes.
 	EnsureMemoryState(cmd, vk::PipelineStageFlagBits2::eComputeShader);
 	deactivateRenderPass();
@@ -2869,6 +2938,8 @@ void DriverVk::EnsureComputeState(vk::raii::CommandBuffer& cmd) {
 	mBoundPipelineKey.reset();
 	graphics_pipeline_ignore_bindings.clear();
 	setDirty(Dirty::PIPELINE);
+} catch (const vk::DeviceLostError& error) {
+	checkFrameResult(VK_ERROR_DEVICE_LOST, error.what());
 }
 
 void DriverVk::drawIndexed(uint32_t index_count, uint32_t index_offset, uint32_t instance_count) {
@@ -2944,7 +3015,7 @@ void DriverVk::submit() {
 	finishPresent();
 }
 
-void DriverVk::presentFrame() {
+void DriverVk::presentFrame() try {
 	requireUsableDevice();
 	if (!mPresentationUIRendered) {
 		if (auto* imgui = IKIGAI::IMGUI::Get()) {
@@ -3003,6 +3074,8 @@ void DriverVk::presentFrame() {
 	if (!settings.pipelined()) {
 		++mSubmissionEpoch;
 	}
+} catch (const vk::DeviceLostError&) {
+	checkFrameResult(VK_ERROR_DEVICE_LOST, "present frame");
 }
 
 void DriverVk::finishPresent() {

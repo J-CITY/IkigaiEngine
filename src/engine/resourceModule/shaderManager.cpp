@@ -4,6 +4,7 @@
 #include "fileWatcher.h"
 #include "renderModule/backends/gl/shaderGl.h"
 #include "renderModule/backends/interface/resourceStruct.h"
+#include "renderModule/backends/interface/shaderInterface.h"
 #include "renderModule/render.h"
 #include "serviceManager.h"
 #include "utilsModule/assertion.h"
@@ -255,7 +256,7 @@ ResourcePtr<RENDER::ShaderInterface> ShaderLoader::Create(const std::string& _fi
 }
 
 ResourcePtr<RENDER::ShaderInterface> ShaderLoader::CreateFromResource(
-	const RENDER::ShaderResource& res, UTILS::IAllocator* allocator, RENDER::ShaderDeleter deleter) {
+	const RENDER::ShaderResource& res, UTILS::IAllocator* allocator, RENDER::ShaderDeleter deleter) try {
 	if (!res.Shaders.empty() || !res.Groups.empty()) {
 		throw std::invalid_argument("Named shader modules/groups require a Program pipeline step: " + res.path);
 	}
@@ -273,6 +274,11 @@ ResourcePtr<RENDER::ShaderInterface> ShaderLoader::CreateFromResource(
 	}
 	shader->mSourceDependencies = std::move(dependencies);
 	return shader;
+} catch (const RENDER::SpirvError& error) {
+	if (res.path.empty()) {
+		throw;
+	}
+	throw RENDER::SpirvError("Shader asset " + res.path + ": " + error.what());
 }
 
 ResourcePtr<RENDER::ShaderInterface> ShaderLoader::CreateFromSource(const std::string& vertexShader, const std::string& fragmentShader,

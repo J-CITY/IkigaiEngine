@@ -268,7 +268,14 @@ void DispatchRenderCommand(const CommandHeader* command, DriverInterface* driver
 	if (!driver && command->op != OpCode::LAMBDA && command->op != OpCode::EXIT) {
 		throw std::invalid_argument("Render command requires a driver");
 	}
-	PacketDispatcher::Dispatch(command, driver);
+	try {
+		PacketDispatcher::Dispatch(command, driver);
+	} catch (...) {
+		if (driver) {
+			driver->rethrowRenderException(std::current_exception());
+		}
+		throw;
+	}
 }
 
 void Renderer::setPushConstant(ShaderType stage, uint32_t offset, uint32_t dataSize, const void* data) {

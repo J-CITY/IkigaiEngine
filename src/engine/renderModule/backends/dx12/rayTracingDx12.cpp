@@ -809,7 +809,7 @@ void DriverDx12::dispatchGraphCompute(const RayTracingDispatch& dispatch) {
 	mDeviceHealth->check(mCommandQueue->Signal(mGraphGraphicsFence.Get(), value), "Signal graph graphics fence");
 	mDeviceHealth->check(mGraphComputeQueue->Wait(mGraphGraphicsFence.Get(), value), "Wait for graph graphics fence");
 	ID3D12CommandList* list = recording->List.Get();
-	mGraphComputeQueue->ExecuteCommandLists(1, &list);
+	mDeviceHealth->execute(mGraphComputeQueue.Get(), 1, &list);
 	mDeviceHealth->check(mGraphComputeQueue->Signal(mGraphComputeFence.Get(), value), "Signal graph compute fence");
 	mGraphComputePending = value;
 	if (mGraphTiming) {

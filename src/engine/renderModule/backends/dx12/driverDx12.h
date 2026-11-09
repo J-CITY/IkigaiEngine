@@ -582,6 +582,8 @@ private:
 	void waitForPresentedFrame() override;
 	std::function<void()> presentedFrameWait(GpuCompletionToken token) override;
 	bool isDeviceLost() const noexcept override;
+	bool hasGpuFailure() const noexcept override;
+	void drainForShutdown() override;
 	void finishPresent() override;
 	void releaseCompletedFrame();
 	void collectCompletedFrames();

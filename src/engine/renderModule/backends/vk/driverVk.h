@@ -4,6 +4,7 @@
 #include <compare>
 #include <deque>
 #include <memory>
+#include <mutex>
 #include <unordered_set>
 #include <variant>
 #include <vector>
@@ -40,10 +41,14 @@ class CommandBuffer;
 class DriverVk : public DriverInterface {
 	friend class FsrFrameGenerationVk;
 	friend class StreamlineFrameGenerationVk;
+	friend struct UtilityVk;
 
 public:
 	void waitForCompletion(GpuCompletionToken token) override;
 	bool isDeviceLost() const noexcept override;
+	bool hasGpuFailure() const noexcept override;
+	void drainForShutdown() override;
+	[[noreturn]] void rethrowRenderException(std::exception_ptr error) override;
 	bool hasOpenRecording() const noexcept override {
 		return working;
 	}
@@ -160,11 +165,17 @@ public:
 
 	bool working = false;
 	bool mShuttingDown = false;
-	std::atomic<VkResult> mFrameFailure { VK_SUCCESS };
+	std::atomic_bool mGpuFailed { false };
+	std::atomic_bool mDeviceLost { false };
+	mutable std::mutex mFailureMutex;
+	std::mutex mQueueMutex;
+	std::string mFirstFailure;
 	bool mDeviceFaultEnabled = false;
+	static constexpr uint64_t GpuWaitTimeoutNs = 30'000'000'000;
 	void requireUsableDevice() const;
 	void reportDeviceFault() const;
-	void checkFrameResult(VkResult result, const char* operation);
+	void checkFrameResult(VkResult result, const char* operation, bool completionUnknown = false);
+	void submitToQueue(const vk::raii::Queue& queue, const vk::SubmitInfo& submit, VkFence fence, const char* operation);
 	void waitDeviceIdle();
 
 	bool render_pass_active = false;
@@ -186,6 +197,7 @@ public:
 		std::shared_ptr<FrameBufferVk> mFrameBuffer;
 		vk::raii::Semaphore mImageAcquiredSemaphore = nullptr;
 		vk::raii::Fence AcquireFence = nullptr;
+		bool AcquireFencePending = false;
 		GpuCompletionToken AcquireConsumed {};
 		vk::raii::Semaphore mRenderCompleteSemaphore = nullptr;
 		vk::raii::CommandBuffer mCommandBuffer = nullptr;
@@ -516,7 +528,8 @@ private:
 	void releaseCompletedFrame();
 	void releaseFrame(Frame& frame);
 	void collectCompletedFrames();
-	void waitFrameFence(const vk::raii::Fence& fence);
+	void waitFrameFence(const vk::raii::Fence& fence, const char* operation = "vkWaitForFences (frame)");
+	void waitAcquireFence(Frame& frame);
 	void createSwapchain(unsigned int windowID, uint32_t width, uint32_t height);
 	void createSwapchainFrames(unsigned windowID, const std::vector<vk::Image>&);
 	void nextFrame();

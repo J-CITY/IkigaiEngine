@@ -102,7 +102,10 @@ StreamlineCallbacks DriverVk::streamlineCallbacks(){
 			info.semaphoreCount = 1;
 			info.pSemaphores = &waitSemaphore;
 			info.pValues = &value;
-			checkFrameResult(vkWaitSemaphores(*mDevice, &info, UINT64_MAX), "vkWaitSemaphores (Streamline)");
+			if (isDeviceLost()) {
+				requireUsableDevice();
+			}
+			checkFrameResult(vkWaitSemaphores(*mDevice, &info, GpuWaitTimeoutNs), "vkWaitSemaphores (Streamline)", true);
 		} };
 }
 void DriverVk::streamlinePresenter(bool enable,bool commandOpen){
@@ -143,10 +146,12 @@ void DriverVk::streamlinePresenter(bool enable,bool commandOpen){
     auto acquire=reinterpret_cast<PFN_vkAcquireNextImageKHR>(get(*mDevice,"vkAcquireNextImageKHR"));
     auto present=reinterpret_cast<PFN_vkQueuePresentKHR>(get(*mDevice,"vkQueuePresentKHR"));
     auto images=reinterpret_cast<PFN_vkGetSwapchainImagesKHR>(get(*mDevice,"vkGetSwapchainImagesKHR"));
-    ctx.sdkAcquire=[this,acquire](VkSemaphore semaphore,uint32_t* index){return acquire(*mDevice,getCurrentSwapchainContext().sdkSwapchain,UINT64_MAX,semaphore,VK_NULL_HANDLE,index);};
-    ctx.sdkPresent=[this,present](const VkPresentInfoKHR* info){return present(*mQueue,info);};
-    ctx.streamline=true;
-    ctx.sdkDestroy=[this,get](){
+	ctx.sdkAcquire = [this, acquire](VkSemaphore semaphore, uint32_t* index) {
+		return acquire(*mDevice, getCurrentSwapchainContext().sdkSwapchain, GpuWaitTimeoutNs, semaphore, VK_NULL_HANDLE, index);
+	};
+	ctx.sdkPresent = [this, present](const VkPresentInfoKHR* info) { return present(*mQueue, info); };
+	ctx.streamline = true;
+	ctx.sdkDestroy=[this,get](){
         auto& c=getCurrentSwapchainContext();
         if(c.sdkSwapchain)reinterpret_cast<PFN_vkDestroySwapchainKHR>(get(*mDevice,"vkDestroySwapchainKHR"))(*mDevice,c.sdkSwapchain,nullptr);
         c.sdkSwapchain=VK_NULL_HANDLE;c.streamline=false;

@@ -3,7 +3,6 @@
 #include "shaderMetal.h"
 #include "gpuMemoryMetal.h"
 
-#include <cstring>
 #include <exception>
 #include <map>
 #include <vector>
@@ -19,15 +18,6 @@
 #include "../interface/driverInterface.h"
 
 namespace IKIGAI::RENDER {
-
-	static bool IsSpirvBytes(const std::string& source) {
-		if (source.size() < 4) {
-			return false;
-		}
-		uint32_t magic = 0;
-		std::memcpy(&magic, source.data(), sizeof(magic));
-		return magic == 0x07230203u;
-	}
 
 	static spv::ExecutionModel ExecutionModelFor(ShaderType stage) {
 		switch (stage) {
@@ -165,11 +155,10 @@ namespace IKIGAI::RENDER {
 				if (source.empty()) {
 					continue;
 				}
-				if (IsSpirvBytes(source)) {
-					std::vector<uint32_t> words(source.size() / sizeof(uint32_t));
-					std::memcpy(words.data(), source.data(), words.size() * sizeof(uint32_t));
-					spirv[type] = std::move(words);
-				} else {
+				if (auto words = TryDecodeSpirv(source)) {
+					spirv[type] = std::move(*words);
+				}
+				else {
 					spirv[type] = CompileGlslToSpirv(type, source, {});
 				}
 			}

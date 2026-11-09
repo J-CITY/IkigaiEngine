@@ -4,6 +4,7 @@
 #include "renderModule/backends/interface/integerColorAttachment.h"
 #include "renderModule/backends/interface/pipelineCacheStorage.h"
 #include "resourceModule/fileSystem/storage.h"
+#include "utilsModule/crashReport.h"
 #include "utilsModule/memory/resourceAllocator.h"
 #include "utilsModule/time/loadTimer.h"
 #include "vertexFormatsDx12.h"
@@ -357,15 +358,14 @@ DriverDx12::~DriverDx12() {
     if (mMemorySampler) mMemorySampler->disable();
 #endif
 	try {
-		if (mDeviceHealth && mCommandQueue && mFence && !isDeviceLost()) {
-			mDeviceHealth->requireHealthy();
+		if (!mShuttingDown && mDeviceHealth && mCommandQueue && mFence && !hasGpuFailure() && std::uncaught_exceptions() == 0) {
 			DriverDx12::end();
-			wait();
 		}
 	} catch (...) {
-		// A failing queue cannot be drained reliably during unwinding.
+		// Drain any work already submitted, even if the current list failed.
 	}
-	if (!isDeviceLost()) {
+	drainForShutdown();
+	if (!hasGpuFailure()) {
 		savePipelineLibrary();
 	}
 	mPipelineLibrary.Reset();
@@ -647,11 +647,14 @@ void DriverDx12::freeImGuiSrv(D3D12_CPU_DESCRIPTOR_HANDLE cpu, D3D12_GPU_DESCRIP
 }
 
 void DriverDx12::executeRecordedCommands() {
-	ThrowIfFailed(mCommandList->Close());
+	mDeviceHealth->requireHealthy();
+	mDeviceHealth->check(mCommandList->Close(), "Close graphics segment");
+	mRecording = false;
 	ID3D12CommandList* lists[] = { mCommandList.Get() };
-	mCommandQueue->ExecuteCommandLists(1, lists);
+	mDeviceHealth->execute(mCommandQueue.Get(), 1, lists);
 	// The allocator still backs the executed list; Reset on the list alone only reopens recording.
-	ThrowIfFailed(mCommandList->Reset(mCommandAllocator.Get(), nullptr));
+	mDeviceHealth->check(mCommandList->Reset(mCommandAllocator.Get(), nullptr), "Reset graphics segment");
+	mRecording = true;
 	for (auto flag :
 		{ Dirty::VIEWPORT, Dirty::SCISSOR, Dirty::PRIMITIVE_MODE, Dirty::RASTERIZATION_MODE, Dirty::VERTEX_BUFFER, Dirty::INDEX_BUFFER }) {
 		setDirty(flag);
@@ -1332,7 +1335,7 @@ bool DriverDx12::supportsGraphComputeImages() const noexcept {
 void DriverDx12::splitGraphGraphics() {
 	endCommandList(mCommandQueue.Get(), mCommandList.Get(), false);
 	// The allocator covers every graphics segment until the final frame fence.
-	ThrowIfFailed(mCommandList->Reset(mCommandAllocator.Get(), nullptr));
+	mDeviceHealth->check(mCommandList->Reset(mCommandAllocator.Get(), nullptr), "Reset graphics segment for graph compute");
 	mRecording = true;
 	setDirty(Dirty::VIEWPORT);
 	setDirty(Dirty::SCISSOR);
@@ -1367,16 +1370,17 @@ void DriverDx12::beginCommandList(ID3D12CommandAllocator* cmdAlloc, ID3D12Graphi
 }
 
 void DriverDx12::endCommandList(ID3D12CommandQueue* cmdQueue, ID3D12GraphicsCommandList* cmdList, bool needWait) {
+	mDeviceHealth->requireHealthy();
 	mDeviceHealth->check(cmdList->Close(), "Close frame command list");
 	mRecording = false;
-	cmdQueue->ExecuteCommandLists(1, CommandListCast(&cmdList));
+	Microsoft::WRL::ComPtr<ID3D12Fence> fence;
 	if (needWait) {
-		Microsoft::WRL::ComPtr<ID3D12Fence> fence;
-		ThrowIfFailed(mDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(fence.GetAddressOf())));
-
+		mDeviceHealth->check(mDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(fence.GetAddressOf())), "Create command list fence");
 		DirectX::SetDebugObjectName(fence.Get(), L"ResourceUploadBatch");
-
-		mDeviceHealth->check(cmdQueue->Signal(fence.Get(), 1), "Signal command list fence");
+	}
+	mDeviceHealth->execute(cmdQueue, 1, CommandListCast(&cmdList));
+	if (needWait) {
+		mDeviceHealth->check(cmdQueue->Signal(fence.Get(), 1), "Signal command list fence", true);
 		mDeviceHealth->waitForFence(fence.Get(), 1, "Wait for command list fence");
 	}
 }
@@ -1571,6 +1575,43 @@ void DriverDx12::waitForPresentedFrame() {
 
 bool DriverDx12::isDeviceLost() const noexcept {
 	return mDeviceHealth && mDeviceHealth->isDeviceLost();
+}
+
+bool DriverDx12::hasGpuFailure() const noexcept {
+	return mDeviceHealth && mDeviceHealth->hasFailure();
+}
+
+void DriverDx12::drainForShutdown() {
+	if (mShuttingDown) {
+		return;
+	}
+	if (mDeviceHealth && mCommandQueue && mFence && !isDeviceLost()) {
+		try {
+			mDeviceHealth->check(mDevice->GetDeviceRemovedReason(), "DX12 shutdown");
+			if (mFrameGeneration) {
+				if (!hasGpuFailure() && std::uncaught_exceptions() == 0) {
+					mFrameGeneration->suspend();
+				}
+				mFrameGeneration->waitForPresents();
+			}
+			// A partial frame may have submitted work to compute without joining it back to graphics.
+			if (mGraphComputeQueue && mGraphComputeFence) {
+				const auto value = ++mGraphComputeValue;
+				mDeviceHealth->check(mGraphComputeQueue->Signal(mGraphComputeFence.Get(), value), "Signal compute shutdown fence", true);
+				mDeviceHealth->waitForFence(mGraphComputeFence.Get(), value, "Wait for compute shutdown fence", mFenceEvent, true);
+			}
+			const auto value = mFenceValue++;
+			mDeviceHealth->check(mCommandQueue->Signal(mFence.Get(), value), "Signal graphics shutdown fence", true);
+			mDeviceHealth->waitForFence(mFence.Get(), value, "Wait for graphics shutdown fence", mFenceEvent, true);
+			completionSource()->completed(completion().lastSubmitted());
+		} catch (const std::exception& error) {
+			if (!isDeviceLost()) {
+				UTILS::CRASH::terminate(error.what());
+			}
+		}
+	}
+	mRecording = false;
+	mShuttingDown = true;
 }
 
 void DriverDx12::releaseCompletedFrame() {

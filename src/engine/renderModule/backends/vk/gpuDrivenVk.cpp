@@ -307,7 +307,7 @@ bool DriverVk::collectBufferReadback(uint64_t ticket, std::vector<uint8_t>& byte
 	return true;
 }
 
-void DriverVk::flushRecordedCommands() {
+void DriverVk::flushRecordedCommands() try {
 	requireUsableDevice();
 	// Submits everything recorded so far in this frame and waits for it, then reopens the
 	// frame command buffer. Consume the WSI acquire wait only on the first
@@ -315,10 +315,11 @@ void DriverVk::flushRecordedCommands() {
 	joinGraphCompute();
 	deactivateRenderPass();
 	auto& frame = getCurrentFrame();
+	const auto fence = mDevice.createFence({});
 	frame.mCommandBuffer.end();
 	working = false;
-	submitGraphics({}, 0, {});
-	checkFrameResult(mQueue.getDispatcher()->vkQueueWaitIdle(*mQueue), "vkQueueWaitIdle (readback)");
+	submitGraphics({}, 0, *fence);
+	waitFrameFence(fence, "vkWaitForFences (readback)");
 	// Everything recorded so far (including asynchronous readback copies) has completed.
 	mCompletedEpoch = mSubmissionEpoch++;
 
@@ -327,6 +328,8 @@ void DriverVk::flushRecordedCommands() {
 	frame.mCommandBuffer.begin(beginInfo);
 	working = true;
 	invalidateCommandState();
+} catch (const vk::DeviceLostError&) {
+	checkFrameResult(VK_ERROR_DEVICE_LOST, "record readback submission");
 }
 
 void DriverVk::renderGraphIndirectBarrier(const std::shared_ptr<StorageBufferInterface>& arguments) {

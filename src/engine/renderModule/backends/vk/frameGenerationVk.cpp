@@ -72,12 +72,18 @@ class FsrFrameGenerationVk final : public FrameGenerationInterface {
         attached=true;ctx.sdkSwapchain=raw;observedPresents=0;
         functions.header.type=FFX_API_QUERY_DESC_TYPE_FGSWAPCHAIN_FUNCTIONS_VK;
         check(query(&swap,&functions.header),"FSR FG Vulkan replacement functions");
-        ctx.sdkAcquire=[this](VkSemaphore semaphore,uint32_t* image){return functions.pOutAcquireNextImageKHR(*d.mDevice,d.getCurrentSwapchainContext().sdkSwapchain,UINT64_MAX,semaphore,VK_NULL_HANDLE,image);};
-        ctx.sdkPresent=[this](const VkPresentInfoKHR* info){return functions.pOutQueuePresentKHR(*d.mQueue,info);};
-        ctx.sdkResize=[this](uint32_t w,uint32_t h){
-            releaseFG();releaseSwap();d.createSwapchain(d.mCurrentWindowID,w,h);attach(false);
-        };
-        uint32_t count=0;check(functions.pOutGetSwapchainImagesKHR(*d.mDevice,raw,&count,nullptr),"FSR FG Vulkan image count");
+		ctx.sdkAcquire = [this](VkSemaphore semaphore, uint32_t* image) {
+			return functions.pOutAcquireNextImageKHR(
+				*d.mDevice, d.getCurrentSwapchainContext().sdkSwapchain, DriverVk::GpuWaitTimeoutNs, semaphore, VK_NULL_HANDLE, image);
+		};
+		ctx.sdkPresent = [this](const VkPresentInfoKHR* info) { return functions.pOutQueuePresentKHR(*d.mQueue, info); };
+		ctx.sdkResize = [this](uint32_t w, uint32_t h) {
+			releaseFG();
+			releaseSwap();
+			d.createSwapchain(d.mCurrentWindowID, w, h);
+			attach(false);
+		};
+		uint32_t count=0;check(functions.pOutGetSwapchainImagesKHR(*d.mDevice,raw,&count,nullptr),"FSR FG Vulkan image count");
         std::vector<vk::Image> images(count);
         check(functions.pOutGetSwapchainImagesKHR(*d.mDevice,raw,&count,reinterpret_cast<VkImage*>(images.data())),"FSR FG Vulkan images");
         d.createSwapchainFrames(d.mCurrentWindowID,images);
@@ -213,10 +219,14 @@ public:
         prepared=false;state.Active=false;
     }
     void waitForPresents() override {
-        if(swap){ffxDispatchDescFrameGenerationSwapChainWaitForPresentsVK wait{};wait.header.type=FFX_API_DISPATCH_DESC_TYPE_FGSWAPCHAIN_WAIT_FOR_PRESENTS_VK;
-            check(dispatch(&swap,&wait.header),"FSR Vulkan FG wait for presents");}
-    }
-    void afterPresent() override {
+		if (swap) {
+			ffxDispatchDescFrameGenerationSwapChainWaitForPresentsVK wait {};
+			wait.header.type = FFX_API_DISPATCH_DESC_TYPE_FGSWAPCHAIN_WAIT_FOR_PRESENTS_VK;
+			DriverVk::watchGpuWait("Vulkan FSR frame generation wait for presents timed out",
+				[&] { check(dispatch(&swap, &wait.header), "FSR Vulkan FG wait for presents"); });
+		}
+	}
+	void afterPresent() override {
         if(prepared){++state.RealFrames;
             const auto count=functions.pOutGetLastPresentCountFFXAPI(d.getCurrentSwapchainContext().sdkSwapchain);
             const auto batch=count>=observedPresents?count-observedPresents:count;

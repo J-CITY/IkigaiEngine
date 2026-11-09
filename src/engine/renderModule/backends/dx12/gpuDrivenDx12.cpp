@@ -221,7 +221,7 @@ void DriverDx12::fillBuffers(std::span<const BufferFill> fills) {
 		copy.Buffer->transition(mCommandList.Get(), D3D12_RESOURCE_STATE_COPY_DEST);
 	}
 	executeRecordedCommands();
-	mCommandQueue->ExecuteCommandLists(static_cast<UINT>(std::size(nativeLists)), nativeLists);
+	mDeviceHealth->execute(mCommandQueue.Get(), static_cast<UINT>(std::size(nativeLists)), nativeLists);
 	for (const auto& copy : copies) {
 		copy.Buffer->transition(mCommandList.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	}
@@ -328,13 +328,15 @@ bool DriverDx12::collectBufferReadback(uint64_t ticket, std::vector<uint8_t>& by
 }
 
 void DriverDx12::flushRecordedCommands() {
+	mDeviceHealth->requireHealthy();
 	// Executes everything recorded in this frame, waits for it and reopens the command list.
 	// Pipeline, root signature, heaps and render targets are re-applied by applyState().
 	enqueueGraphComputeWait();
 	mGraphTiming.reset();
-	ThrowIfFailed(mCommandList->Close());
+	mDeviceHealth->check(mCommandList->Close(), "Close readback command list");
+	mRecording = false;
 	ID3D12CommandList* lists[] = { mCommandList.Get() };
-	mCommandQueue->ExecuteCommandLists(1, lists);
+	mDeviceHealth->execute(mCommandQueue.Get(), 1, lists);
 	wait();
 	beginCommandList(mCommandAllocator.Get(), mCommandList.Get());
 	for (auto flag :

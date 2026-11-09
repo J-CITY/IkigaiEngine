@@ -6,6 +6,9 @@
 #include "utilsModule/time/loadTimer.h"
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
+#include <memory>
+#include <stdexcept>
 #include <tuple>
 
 void IKIGAI::RENDER::ShaderInterface::swapCompiledInterface(ShaderInterface& replacement) {
@@ -76,12 +79,43 @@ void IKIGAI::RENDER::ShaderInterface::configureResourceInterface(const ShaderRes
 #include "spirv_glsl.hpp"
 #include "spirv_hlsl.hpp"
 #include "spirv_reflect.h"
-#include "utilsModule/assertion.h"
+
+std::optional<std::vector<uint32_t>> IKIGAI::RENDER::TryDecodeSpirv(std::string_view source) {
+	uint32_t magic = 0;
+	if (source.size() < sizeof(magic)) {
+		return std::nullopt;
+	}
+	std::memcpy(&magic, source.data(), sizeof(magic));
+	if (magic != SpvMagicNumber) {
+		return std::nullopt;
+	}
+	if (source.size() % sizeof(uint32_t) != 0) {
+		throw SpirvError("SPIR-V byte count must be a multiple of four");
+	}
+	std::vector<uint32_t> words(source.size() / sizeof(uint32_t));
+	std::memcpy(words.data(), source.data(), source.size());
+	return words;
+}
 
 void IKIGAI::RENDER::ShaderInterface::GetReflection(ShaderReflection& reflection, const std::vector<uint32_t>& shaderCode, ShaderType type) {
-	SpvReflectShaderModule module;
-	SpvReflectResult result = spvReflectCreateShaderModule(shaderCode.size() * sizeof(uint32_t), shaderCode.data(), &module);
-	ASSERT_IF(result == SPV_REFLECT_RESULT_SUCCESS, "spvReflectCreateShaderModule error");
+	constexpr size_t headerWords = 5;
+	if (shaderCode.size() < headerWords || shaderCode.front() != SpvMagicNumber) {
+		throw SpirvError("Invalid SPIR-V header");
+	}
+	for (size_t offset = headerWords; offset < shaderCode.size();) {
+		const size_t instructionWords = shaderCode[offset] >> 16;
+		if (instructionWords == 0 || instructionWords > shaderCode.size() - offset) {
+			throw SpirvError("Invalid SPIR-V instruction length");
+		}
+		offset += instructionWords;
+	}
+
+	SpvReflectShaderModule module {};
+	const auto result = spvReflectCreateShaderModule(shaderCode.size() * sizeof(uint32_t), shaderCode.data(), &module);
+	if (result != SPV_REFLECT_RESULT_SUCCESS) {
+		throw SpirvError("SPIR-V reflection failed with code " + std::to_string(result));
+	}
+	const std::unique_ptr<SpvReflectShaderModule, decltype(&spvReflectDestroyShaderModule)> moduleLifetime(&module, spvReflectDestroyShaderModule);
 
 	if (type == ShaderType::COMPUTE && module.entry_point_count) {
 		const auto local = module.entry_points[0].local_size;
@@ -376,8 +410,6 @@ void IKIGAI::RENDER::ShaderInterface::GetReflection(ShaderReflection& reflection
 			}
 		}
 	}
-
-	spvReflectDestroyShaderModule(&module);
 }
 
 const TBuiltInResource DefaultTBuiltInResource = {

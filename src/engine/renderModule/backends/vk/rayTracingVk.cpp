@@ -16,7 +16,10 @@
 
 using namespace IKIGAI::RENDER;
 namespace {
-void check(VkResult result, const char* operation) {
+void check(DriverVk& driver, VkResult result, const char* operation) {
+	if (result == VK_ERROR_DEVICE_LOST) {
+		driver.checkFrameResult(result, operation);
+	}
 	if (result != VK_SUCCESS)
 		throw std::runtime_error(std::string(operation) + ": VkResult=" + std::to_string(result));
 }
@@ -220,7 +223,7 @@ std::shared_ptr<ASVk> buildAS(DriverVk& driver, std::vector<VkAccelerationStruct
 		create.buffer = data.Storage.handle();
 		create.size = sizes.accelerationStructureSize;
 		create.type = build.type;
-		check(vkCreateAccelerationStructureKHR(data.Device, &create, nullptr, &data.Handle), "vkCreateAccelerationStructureKHR");
+		check(driver, vkCreateAccelerationStructureKHR(data.Device, &create, nullptr, &data.Handle), "vkCreateAccelerationStructureKHR");
 	}
 	const auto alignment = driver.mASProperties.minAccelerationStructureScratchOffsetAlignment;
 	build.srcAccelerationStructure = update ? data.Handle : VK_NULL_HANDLE;
@@ -541,7 +544,7 @@ std::shared_ptr<RayTracingProgram> DriverVk::createRayTracingProgramImpl(const R
 		moduleInfo.codeSize = code.size() * 4;
 		moduleInfo.pCode = code.data();
 		VkShaderModule module;
-		check(vkCreateShaderModule(data.Device, &moduleInfo, nullptr, &module), "vkCreateShaderModule");
+		check(*this, vkCreateShaderModule(data.Device, &moduleInfo, nullptr, &module), "vkCreateShaderModule");
 		data.Modules.push_back(module);
 #if IKIGAI_ENABLE_MEMORY_TRACKING
         try { data.MemoryObjects.push_back(IKIGAI::PROFILER::TrackGpuObject(IKIGAI::PROFILER::GpuBackend::Vulkan,
@@ -614,7 +617,7 @@ std::shared_ptr<RayTracingProgram> DriverVk::createRayTracingProgramImpl(const R
 		info.bindingCount = static_cast<uint32_t>(bindings.size());
 		info.pBindings = bindings.data();
 		VkDescriptorSetLayout layout;
-		check(vkCreateDescriptorSetLayout(data.Device, &info, nullptr, &layout), "vkCreateDescriptorSetLayout");
+		check(*this, vkCreateDescriptorSetLayout(data.Device, &info, nullptr, &layout), "vkCreateDescriptorSetLayout");
 		data.Sets.push_back(layout);
 	}
 	VkPushConstantRange push { VK_SHADER_STAGE_ALL, 0, data.PushSize };
@@ -625,14 +628,15 @@ std::shared_ptr<RayTracingProgram> DriverVk::createRayTracingProgramImpl(const R
 		layout.pushConstantRangeCount = 1;
 		layout.pPushConstantRanges = &push;
 	}
-	check(vkCreatePipelineLayout(data.Device, &layout, nullptr, &data.Layout), "vkCreatePipelineLayout");
+	check(*this, vkCreatePipelineLayout(data.Device, &layout, nullptr, &data.Layout), "vkCreatePipelineLayout");
 	if (compute) {
 		if (!resource.Groups.empty())
 			throw std::runtime_error("Compute ray query programs do not use SBT groups");
 		VkComputePipelineCreateInfo pipeline { VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
 		pipeline.stage = stages.front();
 		pipeline.layout = data.Layout;
-		check(vkCreateComputePipelines(data.Device, *mPipelineCache, 1, &pipeline, nullptr, &data.Pipeline), "vkCreateComputePipelines(RayQuery)");
+		check(*this, vkCreateComputePipelines(data.Device, *mPipelineCache, 1, &pipeline, nullptr, &data.Pipeline),
+			"vkCreateComputePipelines(RayQuery)");
 #if IKIGAI_ENABLE_MEMORY_TRACKING
         try { data.MemoryObjects.push_back(IKIGAI::PROFILER::TrackGpuObject(IKIGAI::PROFILER::GpuBackend::Vulkan,
             reinterpret_cast<std::uintptr_t>(data.Device), IKIGAI::PROFILER::GpuHandleValue(data.Pipeline),
@@ -694,7 +698,7 @@ std::shared_ptr<RayTracingProgram> DriverVk::createRayTracingProgramImpl(const R
 	pipeline.pGroups = groups.data();
 	pipeline.maxPipelineRayRecursionDepth = resource.MaxRecursionDepth;
 	pipeline.layout = data.Layout;
-	check(vkCreateRayTracingPipelinesKHR(data.Device, VK_NULL_HANDLE, *mPipelineCache, 1, &pipeline, nullptr, &data.Pipeline),
+	check(*this, vkCreateRayTracingPipelinesKHR(data.Device, VK_NULL_HANDLE, *mPipelineCache, 1, &pipeline, nullptr, &data.Pipeline),
 		"vkCreateRayTracingPipelinesKHR");
 #if IKIGAI_ENABLE_MEMORY_TRACKING
         try { data.MemoryObjects.push_back(IKIGAI::PROFILER::TrackGpuObject(IKIGAI::PROFILER::GpuBackend::Vulkan,
@@ -704,7 +708,8 @@ std::shared_ptr<RayTracingProgram> DriverVk::createRayTracingProgramImpl(const R
 	const uint64_t handleSize = mRTProperties.shaderGroupHandleSize, handleAlign = mRTProperties.shaderGroupHandleAlignment,
 				   baseAlign = mRTProperties.shaderGroupBaseAlignment;
 	std::vector<uint8_t> handles(groups.size() * handleSize);
-	check(vkGetRayTracingShaderGroupHandlesKHR(data.Device, data.Pipeline, 0, static_cast<uint32_t>(groups.size()), handles.size(), handles.data()),
+	check(*this,
+		vkGetRayTracingShaderGroupHandlesKHR(data.Device, data.Pipeline, 0, static_cast<uint32_t>(groups.size()), handles.size(), handles.data()),
 		"vkGetRayTracingShaderGroupHandlesKHR");
 	std::array<uint64_t, 4> offsets { }, strides { };
 	uint64_t bytes = 0;
@@ -754,8 +759,9 @@ void DriverVk::dispatchComputeProgram(const RayTracingDispatch& dispatch) {
 	executeRayProgram(dispatch, true);
 }
 
-void DriverVk::dispatchGraphCompute(const RayTracingDispatch& dispatch) {
+void DriverVk::dispatchGraphCompute(const RayTracingDispatch& dispatch) try {
 	requireOwnerThread();
+	requireUsableDevice();
 	if (!hasGraphComputeQueue() || mGraphComputePending) {
 		throw std::logic_error("Vulkan graph compute queue is unavailable");
 	}
@@ -773,7 +779,7 @@ void DriverVk::dispatchGraphCompute(const RayTracingDispatch& dispatch) {
 		const VkQueryPoolCreateInfo queryInfo {
 			.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO, .queryType = VK_QUERY_TYPE_TIMESTAMP, .queryCount = 4
 		};
-		check(vkCreateQueryPool(*mDevice, &queryInfo, nullptr, &timing->Queries), "Create graph queue timestamps");
+		check(*this, vkCreateQueryPool(*mDevice, &queryInfo, nullptr, &timing->Queries), "Create graph queue timestamps");
 		mRayTracingFrameResources.push_back(timing);
 		vkCmdResetQueryPool(*list, timing->Queries, 0, 2);
 		vkCmdWriteTimestamp2(*list, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, timing->Queries, 0);
@@ -800,9 +806,7 @@ void DriverVk::dispatchGraphCompute(const RayTracingDispatch& dispatch) {
 	const vk::TimelineSemaphoreSubmitInfo timeline(1, &value, 1, &value);
 	vk::SubmitInfo submit(1, &wait, &stage, 1, &command, 1, &signal);
 	submit.setPNext(&timeline);
-	checkFrameResult(
-		mGraphComputeQueue.getDispatcher()->vkQueueSubmit(*mGraphComputeQueue, 1, &static_cast<const VkSubmitInfo&>(submit), VK_NULL_HANDLE),
-		"vkQueueSubmit (graph compute)");
+	submitToQueue(mGraphComputeQueue, submit, VK_NULL_HANDLE, "vkQueueSubmit (graph compute)");
 	frame.TransferLists.push_back(std::move(list));
 	mGraphComputePending = value;
 	if (timing) {
@@ -810,6 +814,8 @@ void DriverVk::dispatchGraphCompute(const RayTracingDispatch& dispatch) {
 		vkCmdResetQueryPool(*frame.mCommandBuffer, mGraphTiming, 2, 2);
 		vkCmdWriteTimestamp2(*frame.mCommandBuffer, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, mGraphTiming, 2);
 	}
+} catch (const vk::DeviceLostError&) {
+	checkFrameResult(VK_ERROR_DEVICE_LOST, "record graph compute submission");
 }
 
 void DriverVk::executeRayProgram(const RayTracingDispatch& dispatch, bool rayQuery, VkCommandBuffer computeList) {
@@ -851,7 +857,7 @@ void DriverVk::executeRayProgram(const RayTracingDispatch& dispatch, bool rayQue
 		VkQueryPoolCreateInfo info { VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO };
 		info.queryType = VK_QUERY_TYPE_TIMESTAMP;
 		info.queryCount = 2;
-		check(vkCreateQueryPool(*mDevice, &info, nullptr, &frame->Timestamps), "vkCreateQueryPool(RT)");
+		check(*this, vkCreateQueryPool(*mDevice, &info, nullptr, &frame->Timestamps), "vkCreateQueryPool(RT)");
 		frame->TimestampPeriod = limits.timestampPeriod;
 		frame->Compute = data.Compute;
 		frame->RayQuery = data.RequiresRayQuery;
@@ -868,12 +874,12 @@ void DriverVk::executeRayProgram(const RayTracingDispatch& dispatch, bool rayQue
 		pool.maxSets = static_cast<uint32_t>(sets.size());
 		pool.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 		pool.pPoolSizes = poolSizes.data();
-		check(vkCreateDescriptorPool(*mDevice, &pool, nullptr, &frame->Pool), "vkCreateDescriptorPool(RT)");
+		check(*this, vkCreateDescriptorPool(*mDevice, &pool, nullptr, &frame->Pool), "vkCreateDescriptorPool(RT)");
 		VkDescriptorSetAllocateInfo alloc { VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
 		alloc.descriptorPool = frame->Pool;
 		alloc.descriptorSetCount = static_cast<uint32_t>(sets.size());
 		alloc.pSetLayouts = data.Sets.data();
-		check(vkAllocateDescriptorSets(*mDevice, &alloc, sets.data()), "vkAllocateDescriptorSets(RT)");
+		check(*this, vkAllocateDescriptorSets(*mDevice, &alloc, sets.data()), "vkAllocateDescriptorSets(RT)");
 	}
 	if (!computeList) {
 		deactivateRenderPass();

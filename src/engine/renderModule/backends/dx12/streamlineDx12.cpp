@@ -59,6 +59,9 @@ StreamlineCallbacks DriverDx12::streamlineCallbacks() {
 			mDeviceHealth->waitForFence(fence, value, "Wait for Streamline fence", mFenceEvent, true);
 		},
 		[this]() {
+			if (mShuttingDown || hasGpuFailure()) {
+				return;
+			}
 			end();
 			wait();
 			mDeviceHealth->check(mSwapchains.at(mCurrentWindowID).mSwapChain->Present(0, 0), "Streamline Present");

@@ -7,7 +7,6 @@
 #include "utilsModule/pathGetter.h"
 
 #ifdef VULKAN_BACKEND
-#include <cstring>
 #include <exception>
 #include <map>
 
@@ -271,18 +270,8 @@ void IKIGAI::RENDER::ShaderVk::create(const ShaderResource& res) {
 	}
 	else {
 		for (auto& [type, source] : res.sources) {
-			bool isSpirv = false;
-			if (source.size() >= 4) {
-				uint32_t magic = *reinterpret_cast<const uint32_t*>(source.data());
-				if (magic == 0x07230203) {
-					isSpirv = true;
-				}
-			}
-
-			if (isSpirv) {
-				std::vector<uint32_t> spirv(source.size() / 4);
-				std::memcpy(spirv.data(), source.data(), source.size());
-				res.spirvSources[type] = spirv;
+			if (auto spirv = TryDecodeSpirv(source)) {
+				res.spirvSources[type] = std::move(*spirv);
 				GetReflection(mReflection, res.spirvSources[type], type);
 			}
 			else {

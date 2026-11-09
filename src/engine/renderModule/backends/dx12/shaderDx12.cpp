@@ -10,7 +10,6 @@
 #include <resourceModule/fileSystem/fileSystem.h>
 #include "utilsModule/log/loggerDefine.h"
 #include "spirv_hlsl.hpp"
-#include <cstring>
 #include <algorithm>
 #include <vector>
 
@@ -281,20 +280,11 @@ void ShaderDx12::create(const ShaderResource& res) {
 		}
 	} else {
 		for (auto& [type, source] : local.sources) {
-			bool isSpirv = false;
-			if (source.size() >= 4) {
-				const uint32_t magic = *reinterpret_cast<const uint32_t*>(source.data());
-				if (magic == 0x07230203) {
-					isSpirv = true;
-				}
-			}
-
-			if (isSpirv) {
-				std::vector<uint32_t> spirv(source.size() / 4);
-				std::memcpy(spirv.data(), source.data(), source.size());
-				local.spirvSources[type] = std::move(spirv);
+			if (auto spirv = TryDecodeSpirv(source)) {
+				local.spirvSources[type] = std::move(*spirv);
 				GetReflection(mReflection, local.spirvSources[type], type);
-			} else {
+			}
+			else {
 				local.spirvSources[type] = CompileGlslToSpirv(type, source, defines);
 				if (!local.spirvSources[type].empty()) {
 					GetReflection(mReflection, local.spirvSources[type], type);

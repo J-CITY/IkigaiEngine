@@ -95,14 +95,14 @@ public:
 	}
 	~FsrFrameGenerationDx12() override {
 		try {
-			if (attached && !d.mShuttingDown) {
+			if (attached && !d.mShuttingDown && !d.hasGpuFailure()) {
 				d.end();
 				d.wait();
 			}
-			if (fg) {
+			if (fg && !d.isDeviceLost()) {
 				suspend();
 			}
-			if (swap) {
+			if (swap && !d.isDeviceLost()) {
 				waitForPresents();
 			}
 			releaseFG();
@@ -118,7 +118,7 @@ public:
 				d.mCurrentState.mFrameBuffer.reset();
 				d.clearForDestroy();
 				ctx.mSwapChain.Reset();
-				if (!d.mShuttingDown) {
+				if (!d.mShuttingDown && !d.hasGpuFailure()) {
 					d.createSwapChain(d.mCurrentWindowID, ctx.width, ctx.height);
 					d.mFrameId = ctx.mSwapChain->GetCurrentBackBufferIndex();
 					d.createDefaultFrameBuffer(d.mCurrentWindowID, ctx.width, ctx.height);
@@ -283,7 +283,8 @@ public:
 		if (swap) {
 			ffxDispatchDescFrameGenerationSwapChainWaitForPresentsDX12 wait {};
 			wait.header.type = FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATIONSWAPCHAIN_WAIT_FOR_PRESENTS_DX12;
-			check(dispatch(&swap, &wait.header), "FSR FG wait for presents");
+			DriverDx12::watchGpuWait(
+				"DX12 FSR frame generation wait for presents timed out", [&] { check(dispatch(&swap, &wait.header), "FSR FG wait for presents"); });
 			UINT count = 0;
 			if (SUCCEEDED(d.mSwapchains.at(d.mCurrentWindowID).mSwapChain->GetLastPresentCount(&count))) {
 				const auto batch = count >= observedPresents ? count - observedPresents : count;

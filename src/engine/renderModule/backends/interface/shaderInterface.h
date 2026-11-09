@@ -2,7 +2,9 @@
 #include "renderResourceOwner.h"
 
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -16,6 +18,11 @@ class PushConstantInterface;
 class UniformBufferInterface;
 class UniformVkInterface;
 struct UniformInform;
+
+class SpirvError : public std::runtime_error {
+public:
+	using std::runtime_error::runtime_error;
+};
 
 class ShaderInterface : protected RenderResourceOwner {
 public:
@@ -89,6 +96,7 @@ public:
 };
 
 std::vector<uint32_t> CompileGlslToSpirv(IKIGAI::RENDER::ShaderType stage, const std::string& code, const std::vector<std::string>& defines);
+std::optional<std::vector<uint32_t>> TryDecodeSpirv(std::string_view source);
 std::string CompileSpirvToHlsl(const std::vector<uint32_t>& spirv, uint32_t version);
 std::string CompileSpirvToGlsl(
 	const std::vector<uint32_t>& spirv, bool es, uint32_t version, bool enable_420pack_extension, bool force_flattened_io_blocks);

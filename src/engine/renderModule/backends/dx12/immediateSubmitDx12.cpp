@@ -62,9 +62,9 @@ void ImmediateSubmitDx12::submit(const std::function<void(ID3D12GraphicsCommandL
 	}
 	mHealth->check(mCommandList->Close(), "Close immediate command list");
 	ID3D12CommandList* lists[] = { mCommandList.Get() };
-	mQueue->ExecuteCommandLists(1, lists);
+	mHealth->execute(mQueue.Get(), 1, lists);
 	const auto value = ++mFenceValue;
-	mHealth->check(mQueue->Signal(mFence.Get(), value), "Signal immediate submission fence");
+	mHealth->check(mQueue->Signal(mFence.Get(), value), "Signal immediate submission fence", true);
 	mHealth->waitForFence(mFence.Get(), value, "Wait for immediate submission fence", mEvent);
 }
 
@@ -80,12 +80,12 @@ void ImmediateSubmitDx12::submitTransient(const std::function<void(ID3D12Graphic
 	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> commandList;
 	ThrowIfFailed(mDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), nullptr, IID_PPV_ARGS(commandList.GetAddressOf())));
 	record(commandList.Get());
-	ThrowIfFailed(commandList->Close());
-	ID3D12CommandList* lists[] = { commandList.Get() };
-	queue->ExecuteCommandLists(1, lists);
+	mHealth->check(commandList->Close(), "Close transient command list");
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence;
-	ThrowIfFailed(mDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(fence.GetAddressOf())));
-	mHealth->check(queue->Signal(fence.Get(), 1), "Signal transient submission fence");
+	mHealth->check(mDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(fence.GetAddressOf())), "Create transient submission fence");
+	ID3D12CommandList* lists[] = { commandList.Get() };
+	mHealth->execute(queue.Get(), 1, lists);
+	mHealth->check(queue->Signal(fence.Get(), 1), "Signal transient submission fence", true);
 	mHealth->waitForFence(fence.Get(), 1, "Wait for transient submission fence");
 }
 }

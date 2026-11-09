@@ -285,16 +285,19 @@ void Renderer::shutdown() {
 	if (mShutdown) {
 		return;
 	}
+	bool presentFailed = false;
 	try {
 		waitForPendingPresent();
 	} catch (const std::exception& error) {
 		std::cerr << "Render thread present failed: " << error.what() << '\n';
 		mPendingPresents.clear();
+		presentFailed = true;
 	}
 	mRenderThread.reset();
 	mGpuWaitThread.reset();
+	std::exception_ptr drainFailure;
 	try {
-		if (mDriver && !mDriver->isDeviceLost()) {
+		if (mDriver && !mDriver->hasGpuFailure() && !presentFailed && std::uncaught_exceptions() == 0) {
 			if (mActiveFrame) {
 				mExecutor->cancel();
 				// A failed present may already have submitted work. Do not submit an ended native list twice.
@@ -303,19 +306,16 @@ void Renderer::shutdown() {
 					mDriver->end();
 				}
 				const auto token = mDriver->completion().lastSubmitted();
-				if (token.Value <= mFrameStartSubmission) {
-					throw std::logic_error("Cancelled frame has no native GPU submission");
+				if (token.Value > mFrameStartSubmission) {
+					mDriver->waitForCompletion(token);
+					if (mDriver->mFrameGeneration) {
+						mDriver->mFrameGeneration->waitForPresents();
+					}
+					mActiveFrame->cancelledSubmission(token);
+					if (!mActiveFrame->retire(mDriver->completion())) {
+						throw std::logic_error("Backend wait returned before GPU completion");
+					}
 				}
-				mActiveFrame->cancelledSubmission(token);
-				mExecutor->endFrame();
-				mDriver->waitForCompletion(token);
-				if (mDriver->mFrameGeneration) {
-					mDriver->mFrameGeneration->waitForPresents();
-				}
-				if (!mActiveFrame->retire(mDriver->completion())) {
-					throw std::logic_error("Backend wait returned before GPU completion");
-				}
-				mActiveFrame.reset();
 			}
 			if (DriverInterface::settings.pipelined()) {
 				mDriver->waitForCompletion(mDriver->completion().lastSubmitted());
@@ -323,23 +323,26 @@ void Renderer::shutdown() {
 			retireFrames(true);
 		}
 	} catch (const std::exception& error) {
-		if (!mDriver || !mDriver->isDeviceLost()) {
-			throw;
-		}
-		std::cerr << "GPU lost while draining renderer: " << error.what() << '\n';
+		std::cerr << "Render drain failed: " << error.what() << '\n';
+		drainFailure = std::current_exception();
+	} catch (...) {
+		drainFailure = std::current_exception();
 	}
 	mShutdown = true;
 	mExecutor->cancel();
-	if (mDriver && mDriver->isDeviceLost()) {
-		// Join presentation before releasing references held by discarded frames.
+	if (mDriver) {
+		mDriver->drainForShutdown();
 		mDriver->stopPresentation();
-		if (mActiveFrame) {
-			mExecutor->endFrame();
-			mActiveFrame.reset();
-		}
-		mSubmittedFrames.clear();
 	}
+	if (mActiveFrame) {
+		mExecutor->endFrame();
+		mActiveFrame.reset();
+	}
+	mSubmittedFrames.clear();
 	mFreeFrameCommands.clear();
+	if (drainFailure && (!mDriver || !mDriver->hasGpuFailure())) {
+		std::rethrow_exception(drainFailure);
+	}
 }
 
 void Renderer::updateUniformBuffer(std::shared_ptr<UniformBufferInterface> buffer, const void* data, size_t bytes, size_t offset) {

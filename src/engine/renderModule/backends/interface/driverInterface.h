@@ -4,6 +4,7 @@
 #include "vertexLayout.h"
 
 #include <bitset>
+#include <exception>
 #include <span>
 #include <string>
 
@@ -162,6 +163,13 @@ public:
 	virtual bool isDeviceLost() const noexcept {
 		return false;
 	}
+	virtual bool hasGpuFailure() const noexcept {
+		return isDeviceLost();
+	}
+	// Make it safe to release frame resources even when normal rendering has stopped.
+	virtual void drainForShutdown();
+	[[noreturn]] virtual void rethrowRenderException(std::exception_ptr error);
+	static void watchGpuWait(const char* timeoutMessage, const std::function<void()>& wait);
 	virtual void submit() = 0;
 	virtual void cleanup() = 0;
 

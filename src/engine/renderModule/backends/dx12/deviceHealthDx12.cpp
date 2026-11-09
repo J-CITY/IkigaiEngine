@@ -1,9 +1,9 @@
 #include "deviceHealthDx12.h"
 
 #ifdef DX12_BACKEND
+#include "utilsModule/crashReport.h"
 #include "windowMessageWait.h"
 #include <algorithm>
-#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <sstream>
@@ -65,25 +65,39 @@ void DeviceHealthDx12::enableDred() {
 }
 
 bool DeviceHealthDx12::isDeviceLost() const noexcept {
-	return mDeviceLost.load() || FAILED(mDevice->GetDeviceRemovedReason());
+	return mDeviceLost.load();
 }
 
-void DeviceHealthDx12::requireHealthy() const {
-	std::lock_guard lock(mMutex);
-	if (!mFailure.empty()) {
+bool DeviceHealthDx12::hasFailure() const noexcept {
+	return mFailed.load();
+}
+
+void DeviceHealthDx12::requireHealthy() {
+	if (mFailed.load()) {
+		std::lock_guard lock(mMutex);
 		throw std::runtime_error(mFailure);
 	}
 }
 
-void DeviceHealthDx12::check(HRESULT result, const char* operation) {
+void DeviceHealthDx12::check(HRESULT result, const char* operation, bool completionUnknown) {
 	if (FAILED(result)) {
-		fail(result, operation);
+		fail(result, operation, completionUnknown);
 	}
-	requireHealthy();
+}
+
+void DeviceHealthDx12::execute(ID3D12CommandQueue* queue, UINT count, ID3D12CommandList* const* lists) {
+	check(mDevice->GetDeviceRemovedReason(), "Before ExecuteCommandLists");
+	{
+		std::lock_guard lock(mMutex);
+		if (mFailed.load()) {
+			throw std::runtime_error(mFailure);
+		}
+		queue->ExecuteCommandLists(count, lists);
+	}
+	check(mDevice->GetDeviceRemovedReason(), "ExecuteCommandLists");
 }
 
 UINT64 DeviceHealthDx12::completedValue(ID3D12Fence* fence, const char* operation) {
-	requireHealthy();
 	const auto completed = fence->GetCompletedValue();
 	if (completed == (std::numeric_limits<UINT64>::max)()) {
 		fail(DXGI_ERROR_DEVICE_REMOVED, operation);
@@ -130,10 +144,9 @@ void DeviceHealthDx12::fail(HRESULT result, const char* operation, bool completi
 	const auto reason = mDevice->GetDeviceRemovedReason();
 	const bool removed = FAILED(reason) || result == DXGI_ERROR_DEVICE_REMOVED || result == DXGI_ERROR_DEVICE_RESET
 		|| result == DXGI_ERROR_DEVICE_HUNG || result == DXGI_ERROR_DRIVER_INTERNAL_ERROR;
-	if (removed) {
-		mDeviceLost.store(true);
-	}
-	if (mFailure.empty()) {
+	const bool firstFailure = !mFailed.exchange(true);
+	const bool firstRemoval = removed && !mDeviceLost.exchange(true);
+	if (firstFailure || firstRemoval || (completionUnknown && !removed)) {
 		const char* failureType = "operation failed";
 		if (removed) {
 			failureType = "device lost";
@@ -147,12 +160,15 @@ void DeviceHealthDx12::fail(HRESULT result, const char* operation, bool completi
 		if (removed) {
 			appendDred(report, mDevice.Get());
 		}
-		mFailure = report.str();
-		std::cerr << mFailure << '\n';
-	}
-	// Unwinding would release resources the live GPU could still be using.
-	if (completionUnknown && !mDeviceLost.load()) {
-		std::abort();
+		const auto message = report.str();
+		if (firstFailure) {
+			mFailure = message;
+		}
+		std::cerr << message << '\n';
+		// Unwinding could release resources still owned by the GPU.
+		if (completionUnknown && !mDeviceLost.load()) {
+			UTILS::CRASH::terminate(message.c_str());
+		}
 	}
 	throw std::runtime_error(mFailure);
 }

@@ -1,10 +1,67 @@
 #include "driverInterface.h"
+#include "utilsModule/crashReport.h"
 #include <algorithm>
+#include <chrono>
+#include <condition_variable>
 #include <limits>
+#include <mutex>
 #include <stdexcept>
+#include <thread>
 #include <unordered_set>
 
 namespace IKIGAI::RENDER {
+namespace {
+	class GpuWaitWatchdog {
+	public:
+		bool arm(const char* message) {
+			std::lock_guard lock(mMutex);
+			if (mMessage) {
+				return false;
+			}
+			mMessage = message;
+			mDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+			++mGeneration;
+			mWake.notify_one();
+			return true;
+		}
+
+		void disarm() {
+			std::lock_guard lock(mMutex);
+			mMessage = nullptr;
+			++mGeneration;
+			mWake.notify_one();
+		}
+
+	private:
+		void run(std::stop_token stop) {
+			std::unique_lock lock(mMutex);
+			while (mWake.wait(lock, stop, [&] { return mMessage != nullptr; }) && !stop.stop_requested()) {
+				const auto generation = mGeneration;
+				const auto deadline = mDeadline;
+				if (!mWake.wait_until(lock, stop, deadline, [&] { return mGeneration != generation; }) && !stop.stop_requested()) {
+					UTILS::CRASH::terminate(mMessage);
+				}
+			}
+		}
+
+		std::mutex mMutex;
+		std::condition_variable_any mWake;
+		const char* mMessage = nullptr;
+		std::chrono::steady_clock::time_point mDeadline {};
+		uint64_t mGeneration = 0;
+		std::jthread mThread { [this](std::stop_token stop) { run(stop); } };
+	};
+
+	GpuWaitWatchdog& gpuWaitWatchdog() {
+		try {
+			thread_local GpuWaitWatchdog watchdog;
+			return watchdog;
+		} catch (const std::exception&) {
+			UTILS::CRASH::terminate("Could not start the GPU wait watchdog");
+		}
+	}
+}
+
 BindlessResourceHandle BindlessResourceTable::add(uint32_t binding, BindlessResourceEntry value, uint32_t limit) {
 	if (!value.texture && !value.buffer) {
 		throw std::invalid_argument("Null bindless resource");
@@ -177,5 +234,31 @@ void DriverInterface::waitForCompletion(GpuCompletionToken token) {
 	if (!mCompletion->isComplete(token)) {
 		throw std::logic_error("Backend does not implement GPU completion waits");
 	}
+}
+
+void DriverInterface::drainForShutdown() {
+	waitForCompletion(completion().lastSubmitted());
+	if (mFrameGeneration) {
+		mFrameGeneration->waitForPresents();
+	}
+}
+
+[[noreturn]] void DriverInterface::rethrowRenderException(std::exception_ptr error) {
+	std::rethrow_exception(error);
+}
+
+void DriverInterface::watchGpuWait(const char* timeoutMessage, const std::function<void()>& wait) {
+	auto& watchdog = gpuWaitWatchdog();
+	struct ScopedWait {
+		GpuWaitWatchdog& Watchdog;
+		bool Armed;
+		~ScopedWait() {
+			if (Armed) {
+				Watchdog.disarm();
+			}
+		}
+	} scope { watchdog, watchdog.arm(timeoutMessage) };
+	// Keep the native wait on the queue owner, including SDK thread affinity.
+	wait();
 }
 }
