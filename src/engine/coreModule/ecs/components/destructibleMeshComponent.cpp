@@ -171,8 +171,8 @@ std::uint64_t DestructibleMeshComponent::enqueue(DESTRUCTION::SliceRequest reque
 			return pending.id;
 		}
 		// Before initialization, capture in the root's material frame. Definition COM is resolved on initialization.
-		auto inverse = MATH::QuaternionF::Conjugate(obj->mTransform->getWorldRotation());
-		pending.slice.point = inverse * (request.point - obj->mTransform->getWorldPosition());
+		auto inverse = MATH::QuaternionF::Conjugate(obj->tryGetTransform()->getWorldRotation());
+		pending.slice.point = inverse * (request.point - obj->tryGetTransform()->getWorldPosition());
 		pending.slice.normal = inverse * request.normal;
 		pending.rootSpace = true;
 	}

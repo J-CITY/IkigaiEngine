@@ -243,261 +243,50 @@ template <typename T> void getPropsImpl(IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::Comp
 
 template <typename T>
 void getPropsImpl(const std::string& name, const IKIGAI::ECS::Object::Id& id, IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::ComponentBase> comp) {
-	if (comp->getName() == IKIGAI::ECS::GetComponentName<T>()) {
-		auto cm = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::ECS::World>().getComponentManager();
-		auto props = T::GetMembers();
-		std::apply(
-			[&comp, &name, &id, cm]<typename... Args>(Args&... tpl) {
-				auto drawElem = [&comp, &name, &id, cm](auto& prop) {
-					const auto propName = prop.getName();
-					const auto wType = std::get<IKIGAI::UTILS::WidgetType>(prop.getMetadata().at(IKIGAI::UTILS::MetaParam::EDIT_WIDGET));
-					const auto lineName = name + comp->getName() + propName;
-					switch (wType) {
-					case IKIGAI::UTILS::WidgetType::DRAG_FLOAT_4: {
-						if constexpr (std::is_same_v<decltype(prop.getPropType()), IKIGAI::MATH::Vector4f>) {
-							ObjProps[lineName] = Prop { name, id, comp->getName(), propName,
-								IKIGAI::ANIMATION::AnimationProperty(
-									lineName,
-									[prop, id, cm](IKIGAI::ANIMATION::PropType val) {
-										auto component = cm->getComponent<T>(id);
-										prop.set(*component.get(), std::get<IKIGAI::MATH::Vector4f>(val));
-									},
-									[prop, id, cm]() {
-										auto component = cm->getComponent<T>(id);
-										return prop.get(*component.get());
-									}),
-								prop.getPropType() };
-						}
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::DRAG_COLOR_4: {
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::DRAG_FLOAT_3: {
-						if constexpr (std::is_same_v<decltype(prop.getPropType()), IKIGAI::MATH::Vector3f>) {
-							ObjProps[lineName] = Prop { name, id, comp->getName(), propName,
-								IKIGAI::ANIMATION::AnimationProperty(
-									lineName,
-									[prop, id, cm](IKIGAI::ANIMATION::PropType val) {
-										auto component = cm->getComponent<T>(id);
-										prop.set(*component.get(), std::get<IKIGAI::MATH::Vector3f>(val));
-									},
-									[prop, id, cm]() {
-										auto component = cm->getComponent<T>(id);
-										return prop.get(*component.get());
-									}),
-								prop.getPropType() };
-						}
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::DRAG_COLOR_3: {
-						// widgetColor3(static_cast<T*>(comp.get()), prop);
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::DRAG_FLOAT: {
-						if constexpr (std::is_same_v<decltype(prop.getPropType()), float>) {
-							ObjProps[lineName] = Prop { name, id, comp->getName(), propName,
-								IKIGAI::ANIMATION::AnimationProperty(
-									lineName,
-									[prop, id, cm](IKIGAI::ANIMATION::PropType val) {
-										auto component = cm->getComponent<T>(id);
-										prop.set(*component.get(), std::get<float>(val));
-									},
-									[prop, id, cm]() {
-										auto component = cm->getComponent<T>(id);
-										return prop.get(*component.get());
-									}),
-								prop.getPropType() };
-						}
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::DRAG_INT: {
-						if constexpr (std::is_same_v<decltype(prop.getPropType()), int>) {
-							ObjProps[lineName] = Prop { name, id, comp->getName(), propName,
-								IKIGAI::ANIMATION::AnimationProperty(
-									lineName,
-									[prop, id, cm](IKIGAI::ANIMATION::PropType val) {
-										auto component = cm->getComponent<T>(id);
-										prop.set(*component.get(), std::get<int>(val));
-									},
-									[prop, id, cm]() {
-										auto component = cm->getComponent<T>(id);
-										return prop.get(*component.get());
-									}),
-								prop.getPropType() };
-						}
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::BOOL: {
-						if constexpr (std::is_same_v<decltype(prop.getPropType()), bool>) {
-							ObjProps[lineName] = Prop { name, id, comp->getName(), propName,
-								IKIGAI::ANIMATION::AnimationProperty(
-									lineName,
-									[prop, id, cm](IKIGAI::ANIMATION::PropType val) {
-										auto component = cm->getComponent<T>(id);
-										prop.set(*component.get(), std::get<bool>(val));
-									},
-									[prop, id, cm]() {
-										auto component = cm->getComponent<T>(id);
-										return prop.get(*component.get());
-									}),
-								prop.getPropType() };
-						}
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::STRING: {
-						// widgetString(static_cast<T*>(comp.get()), prop);
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::COMBO: {
-						// widgetCombo(static_cast<T*>(comp.get()), prop);
-						break;
-					}
-					}
-				};
-				(drawElem(tpl), ...);
-			},
-			props);
+	using namespace IKIGAI;
+	const auto componentName = comp->getName();
+	if (componentName != ECS::GetComponentName<T>()) {
+		return;
 	}
+	auto& world = comp->obj->getWorld();
+	const auto manager = world.getComponentManagerWeak();
+	const auto handle = world.getComponentManager()->getComponentHandle<T>(id);
+	auto members = T::GetMembers();
+	std::apply(
+		[&](auto&... member) {
+			auto collect = [&](auto& property) {
+				const auto& propertyName = property.getName();
+				const auto trackName = name + componentName + propertyName;
+				ANIMATION::AnimationProperty animationProperty;
+				ANIMATION::PropType defaultValue;
+				if (ANIMATION::detail::tryBindTimelineMember(
+						manager, handle, property, trackName, ANIMATION::InterpolationType::LINEAR, animationProperty, &defaultValue)) {
+					ObjProps[trackName] = Prop { name, id, componentName, propertyName, std::move(animationProperty), std::move(defaultValue) };
+				}
+			};
+			(collect(member), ...);
+		},
+		members);
 }
+
 template <typename T>
 void getPropsImpl(
 	const std::string& name, const IKIGAI::ECS::Object::Id& id, const std::string& componentName, const std::string& propName, Prop& prop) {
-	if (componentName == IKIGAI::ECS::GetComponentName<T>()) {
-		auto props = T::GetMembers();
-
-		auto& scene = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::SCENE_SYSTEM::SceneManager>().getCurrentScene();
-		auto obj = scene.findObjectByID(id);
-
-		if (!obj) {
-			// problem
-			return;
-		}
-
-		auto comp = obj->getComponent<T>();
-		auto cm = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::ECS::World>().getComponentManager();
-
-		std::apply(
-			[&comp, &name, &id, &propName, &prop, cm]<typename... Args>(Args&... tpl) {
-				auto drawElem = [&comp, &name, &id, &propName, &prop, cm](auto& _prop) {
-					const auto _propName = _prop.getName();
-					if (propName != _propName) {
-						return;
-					}
-
-					const auto wType = std::get<IKIGAI::UTILS::WidgetType>(_prop.getMetadata().at(IKIGAI::UTILS::MetaParam::EDIT_WIDGET));
-					const auto lineName = name + comp->getName() + propName;
-					switch (wType) {
-					case IKIGAI::UTILS::WidgetType::DRAG_FLOAT_4: {
-						if constexpr (std::is_same_v<decltype(_prop.getPropType()), IKIGAI::MATH::Vector4f>) {
-							prop = Prop { name, id, comp->getName(), propName,
-								IKIGAI::ANIMATION::AnimationProperty(
-									lineName,
-									[_prop, id, cm](IKIGAI::ANIMATION::PropType val) {
-										auto component = cm->getComponent<T>(id);
-										_prop.set(*component.get(), std::get<IKIGAI::MATH::Vector4f>(val));
-									},
-									[_prop, id, cm]() {
-										auto component = cm->getComponent<T>(id);
-										return _prop.get(*component.get());
-									},
-									IKIGAI::ANIMATION::InterpolationType::CUSTOM),
-								_prop.getPropType() };
-						}
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::DRAG_COLOR_4: {
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::DRAG_FLOAT_3: {
-						if constexpr (std::is_same_v<decltype(_prop.getPropType()), IKIGAI::MATH::Vector3f>) {
-							prop = Prop { name, id, comp->getName(), propName,
-								IKIGAI::ANIMATION::AnimationProperty(
-									lineName,
-									[_prop, id, cm](IKIGAI::ANIMATION::PropType val) {
-										auto component = cm->getComponent<T>(id);
-										_prop.set(*component.get(), std::get<IKIGAI::MATH::Vector3f>(val));
-									},
-									[_prop, id, cm]() {
-										auto component = cm->getComponent<T>(id);
-										return _prop.get(*component.get());
-									},
-									IKIGAI::ANIMATION::InterpolationType::CUSTOM),
-								_prop.getPropType() };
-						}
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::DRAG_COLOR_3: {
-						// widgetColor3(static_cast<T*>(comp.get()), prop);
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::DRAG_FLOAT: {
-						if constexpr (std::is_same_v<decltype(_prop.getPropType()), float>) {
-							prop = Prop { name, id, comp->getName(), propName,
-								IKIGAI::ANIMATION::AnimationProperty(
-									lineName,
-									[_prop, id, cm](IKIGAI::ANIMATION::PropType val) {
-										auto component = cm->getComponent<T>(id);
-										_prop.set(*component.get(), std::get<float>(val));
-									},
-									[_prop, id, cm]() {
-										auto component = cm->getComponent<T>(id);
-										return _prop.get(*component.get());
-									},
-									IKIGAI::ANIMATION::InterpolationType::CUSTOM),
-								_prop.getPropType() };
-						}
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::DRAG_INT: {
-						if constexpr (std::is_same_v<decltype(_prop.getPropType()), int>) {
-							prop = Prop { name, id, comp->getName(), propName,
-								IKIGAI::ANIMATION::AnimationProperty(
-									lineName,
-									[_prop, id, cm](IKIGAI::ANIMATION::PropType val) {
-										auto component = cm->getComponent<T>(id);
-										_prop.set(*component.get(), std::get<int>(val));
-									},
-									[_prop, id, cm]() {
-										auto component = cm->getComponent<T>(id);
-										return _prop.get(*component.get());
-									},
-									IKIGAI::ANIMATION::InterpolationType::CUSTOM),
-								_prop.getPropType() };
-						}
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::BOOL: {
-						if constexpr (std::is_same_v<decltype(_prop.getPropType()), bool>) {
-							prop = Prop { name, id, comp->getName(), propName,
-								IKIGAI::ANIMATION::AnimationProperty(
-									lineName,
-									[_prop, id, cm](IKIGAI::ANIMATION::PropType val) {
-										auto component = cm->getComponent<T>(id);
-										_prop.set(*component.get(), std::get<bool>(val));
-									},
-									[_prop, id, cm]() {
-										auto component = cm->getComponent<T>(id);
-										return _prop.get(*component.get());
-									},
-									IKIGAI::ANIMATION::InterpolationType::CUSTOM),
-								_prop.getPropType() };
-						}
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::STRING: {
-						// widgetString(static_cast<T*>(comp.get()), prop);
-						break;
-					}
-					case IKIGAI::UTILS::WidgetType::COMBO: {
-						// widgetCombo(static_cast<T*>(comp.get()), prop);
-						break;
-					}
-					}
-				};
-				(drawElem(tpl), ...);
-			},
-			props);
+	using namespace IKIGAI;
+	if (componentName != ECS::GetComponentName<T>()) {
+		return;
+	}
+	auto& scene = RESOURCES::ServiceManager::Get<SCENE_SYSTEM::SceneManager>().getCurrentScene();
+	const auto object = scene.findObjectByID(id);
+	if (!object) {
+		return;
+	}
+	const auto trackName = name + componentName + propName;
+	ANIMATION::AnimationProperty animationProperty;
+	ANIMATION::PropType defaultValue;
+	if (ANIMATION::detail::bindTimelineFromMembers<T>(
+			object->getWorld(), id, propName, trackName, animationProperty, ANIMATION::InterpolationType::CUSTOM, &defaultValue)) {
+		prop = Prop { name, id, componentName, propName, std::move(animationProperty), std::move(defaultValue) };
 	}
 }
 

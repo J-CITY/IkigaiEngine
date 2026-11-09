@@ -157,45 +157,36 @@ template <class D> Task<> PrepareComponent(D descriptor, std::shared_ptr<SceneLo
 
 void EnsureComponentPreparers() {
 	static const bool ready = [] {
-		auto& catalog = ECS::ComponentCatalog::instance();
-		auto bind = [](auto name, auto read) {
-			ECS::ComponentCatalog::instance().setPrepare(name,
+		auto bind = [](std::type_index type, auto read) {
+			ECS::ComponentCatalog::instance().setPrepare(type,
 				[read](const nlohmann::json& json, std::shared_ptr<SceneLoadState> state, std::vector<std::shared_ptr<void>>& resources) -> Task<> {
 					auto document = json;
 					co_await PrepareComponent(read(document), state, resources);
 				});
 		};
-		(void)catalog;
-		bind(ECS::GetComponentName<ECS::ParticleSystem2DComponent>(),
+		bind(typeid(ECS::ParticleSystem2DComponent),
 			[](nlohmann::json& document) { return serde::deserialize<ECS::ParticleSystem2DComponent::Descriptor>(document); });
-		bind(ECS::GetComponentName<ECS::ParticleSystem3DComponent>(),
+		bind(typeid(ECS::ParticleSystem3DComponent),
 			[](nlohmann::json& document) { return serde::deserialize<ECS::ParticleSystem3DComponent::Descriptor>(document); });
-		bind(ECS::GetComponentName<ECS::ModelRenderer>(),
-			[](nlohmann::json& document) { return serde::deserialize<ECS::ModelRenderer::Descriptor>(document); });
-		bind(ECS::GetComponentName<ECS::ModelLODRenderer>(),
-			[](nlohmann::json& document) { return serde::deserialize<ECS::ModelLODRenderer::Descriptor>(document); });
-		bind(ECS::GetComponentName<ECS::SurfaceComponent>(),
+		bind(typeid(ECS::ModelRenderer), [](nlohmann::json& document) { return serde::deserialize<ECS::ModelRenderer::Descriptor>(document); });
+		bind(typeid(ECS::ModelLODRenderer), [](nlohmann::json& document) { return serde::deserialize<ECS::ModelLODRenderer::Descriptor>(document); });
+		bind(typeid(ECS::SurfaceComponent),
 			[](nlohmann::json& document) { return DATA::readDescriptor<ECS::SurfaceComponent::Descriptor>(document); });
-		bind(ECS::GetComponentName<ECS::FoliageComponent>(),
+		bind(typeid(ECS::FoliageComponent),
 			[](nlohmann::json& document) { return DATA::readDescriptor<ECS::FoliageComponent::Descriptor>(document); });
-		bind(ECS::GetComponentName<ECS::MaterialRenderer>(),
-			[](nlohmann::json& document) { return serde::deserialize<ECS::MaterialRenderer::Descriptor>(document); });
-		bind(ECS::GetComponentName<ECS::SpriteComponent>(),
-			[](nlohmann::json& document) { return serde::deserialize<ECS::SpriteComponent::Descriptor>(document); });
+		bind(typeid(ECS::MaterialRenderer), [](nlohmann::json& document) { return serde::deserialize<ECS::MaterialRenderer::Descriptor>(document); });
+		bind(typeid(ECS::SpriteComponent), [](nlohmann::json& document) { return serde::deserialize<ECS::SpriteComponent::Descriptor>(document); });
 #if USE_PHYSICS_3D
-		bind(ECS::GetComponentName<ECS::RagdollComponent>(),
-			[](nlohmann::json& document) { return serde::deserialize<ECS::RagdollComponent::Descriptor>(document); });
-		bind(ECS::GetComponentName<ECS::DestructibleMeshComponent>(),
+		bind(typeid(ECS::RagdollComponent), [](nlohmann::json& document) { return serde::deserialize<ECS::RagdollComponent::Descriptor>(document); });
+		bind(typeid(ECS::DestructibleMeshComponent),
 			[](nlohmann::json& document) { return serde::deserialize<ECS::DestructibleMeshComponent::Descriptor>(document); });
 #endif
-		bind(ECS::GetComponentName<ECS::SkeletalComponent>(),
+		bind(typeid(ECS::SkeletalComponent),
 			[](nlohmann::json& document) { return serde::deserialize<ECS::SkeletalComponent::Descriptor>(document); });
-		bind(ECS::GetComponentName<ECS::SkeletalAnimationComponent>(),
+		bind(typeid(ECS::SkeletalAnimationComponent),
 			[](nlohmann::json& document) { return serde::deserialize<ECS::SkeletalAnimationComponent::Descriptor>(document); });
-		bind(ECS::GetComponentName<ECS::AudioComponent>(),
-			[](nlohmann::json& document) { return serde::deserialize<ECS::AudioComponent::Descriptor>(document); });
-		bind(ECS::GetComponentName<ECS::SdfTextComponent>(),
-			[](nlohmann::json& document) { return serde::deserialize<ECS::SdfTextComponent::Descriptor>(document); });
+		bind(typeid(ECS::AudioComponent), [](nlohmann::json& document) { return serde::deserialize<ECS::AudioComponent::Descriptor>(document); });
+		bind(typeid(ECS::SdfTextComponent), [](nlohmann::json& document) { return serde::deserialize<ECS::SdfTextComponent::Descriptor>(document); });
 		return true;
 	}();
 	(void)ready;

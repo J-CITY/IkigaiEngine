@@ -5,6 +5,7 @@
 
 namespace IKIGAI::ECS {
 class Component;
+template <class T, template <class, class> class CONT, unsigned ChunkSize> class ComponentArray;
 }
 
 namespace IKIGAI::UTILS {
@@ -12,21 +13,26 @@ class ControlBlockHandler;
 
 class ControlBlock {
 public:
-	std::atomic_int mRC = 0;
-	ControlBlockHandler* mPtr = nullptr;
+	explicit ControlBlock(ControlBlockHandler* ptr)
+		: mPtr(ptr) { }
+	std::atomic_size_t mRC = 1;
+	std::atomic<ControlBlockHandler*> mPtr;
 };
 
 class ControlBlockHandler {
-	UTILS::ControlBlock* mCb = nullptr;
+	template <class T, template <class, class> class CONT, unsigned ChunkSize> friend class ECS::ComponentArray;
+
+	std::atomic<ControlBlock*> mCb = nullptr;
+	void swapControlBlocks(ControlBlockHandler& other) noexcept;
+	void invalidateWeakReferences() noexcept;
 
 public:
-	ControlBlockHandler();
-	ControlBlockHandler(ECS::Component* ptr);
-	// Copy shares the block and retargets it at the copy. Arrays relocate components by copy.
-	ControlBlockHandler(const ControlBlockHandler& obj);
-	ControlBlockHandler& operator=(const ControlBlockHandler& obj);
-	ControlBlockHandler(ControlBlockHandler&& obj) noexcept;
-	ControlBlockHandler& operator=(ControlBlockHandler&& obj) noexcept;
+	ControlBlockHandler() noexcept = default;
+	// Value construction creates a distinct identity. Assignment retains the destination identity.
+	ControlBlockHandler(const ControlBlockHandler&) noexcept;
+	ControlBlockHandler& operator=(const ControlBlockHandler&) noexcept;
+	ControlBlockHandler(ControlBlockHandler&&) noexcept;
+	ControlBlockHandler& operator=(ControlBlockHandler&&) noexcept;
 	virtual ~ControlBlockHandler();
 	virtual ControlBlock* getControlBlock();
 };
@@ -83,6 +89,7 @@ template <typename Ptr, typename T> struct is_convertible_smart_pointer<Ptr, T, 
 template <typename T>
 concept ComponentT = requires(T t) { std::is_base_of_v<ECS::Component, decltype(t)>; };
 
+// A weak reference tracks identity across ECS relocation. Dereference requires the storage to stay live.
 template <ComponentT T> class WeakPtr {
 	template <ComponentT U> friend class WeakPtr;
 
@@ -132,7 +139,7 @@ public:
 		obj.mCb = nullptr;
 	}
 
-	template <typename U, typename = std::enable_if_t<std::is_convertible<U*, T*>::value>> constexpr WeakPtr(U* ptr_) noexcept {
+	template <typename U, typename = std::enable_if_t<std::is_convertible<U*, T*>::value>> WeakPtr(U* ptr_) {
 		if (!ptr_) {
 			return;
 		}
@@ -140,7 +147,7 @@ public:
 		retain();
 	}
 
-	template <typename Ptr, typename = std::enable_if_t<std::is_convertible<Ptr, T>::value>> constexpr WeakPtr(const WeakPtr<Ptr>& other) noexcept {
+	template <typename U, typename = std::enable_if_t<std::is_convertible<U*, T*>::value>> WeakPtr(const WeakPtr<U>& other) noexcept {
 		mCb = other.mCb;
 		retain();
 	}
@@ -176,26 +183,16 @@ public:
 		return *this;
 	}
 
-	bool operator==(const WeakPtr& c) const {
-		if ((mCb ? mCb->mPtr : nullptr) == (c.mCb ? c.mCb->mPtr : nullptr)) {
-			return true;
-		}
-		return false;
-	}
-
-	bool operator!=(const WeakPtr& c) {
-		if ((mCb ? mCb->mPtr : nullptr) != (c.mCb ? c.mCb->mPtr : nullptr)) {
-			return true;
-		}
-		return false;
+	bool operator==(const WeakPtr& other) const noexcept {
+		return currentPointer() == other.currentPointer();
 	}
 
 	explicit operator bool() const {
 		return isAlive();
 	}
 
-	[[nodiscard]] bool isAlive() const {
-		return mCb && (mCb->mPtr != nullptr);
+	[[nodiscard]] bool isAlive() const noexcept {
+		return currentPointer() != nullptr;
 	}
 
 	T& operator*() const {
@@ -215,11 +212,18 @@ public:
 	}
 
 private:
+	friend struct std::hash<WeakPtr<T>>;
+
+	ControlBlockHandler* currentPointer() const noexcept {
+		return mCb ? mCb->mPtr.load(std::memory_order_acquire) : nullptr;
+	}
+
 	T* alivePointer() const {
-		if (!isAlive()) {
+		auto* ptr = currentPointer();
+		if (!ptr) {
 			throw std::bad_weak_ptr();
 		}
-		return static_cast<T*>(mCb->mPtr);
+		return static_cast<T*>(ptr);
 	}
 
 	void cleanup() const {
@@ -236,10 +240,8 @@ private:
 namespace std {
 template <typename T> struct hash<IKIGAI::UTILS::WeakPtr<T>> {
 	size_t operator()(IKIGAI::UTILS::WeakPtr<T> const& p) const noexcept {
-		if (!p.isAlive()) {
-			return 0;
-		}
-		return hash<T*>()(p.operator->());
+		auto* ptr = static_cast<T*>(p.currentPointer());
+		return ptr ? hash<T*>()(ptr) : 0;
 	}
 };
 

@@ -4,9 +4,6 @@
 #include "coreModule/testHooks.h"
 #include "coroutineModule/scheduler.h"
 #include "ecsModule/world.h"
-#if USE_PHYSICS_3D
-#include "coreModule/ecs/systems/destructionSystem.h"
-#endif
 #include "editorModule/editorRender.h"
 #include "networkModule/networkRuntime.h"
 #include "profilerModule/profiler.h"
@@ -164,32 +161,15 @@ void App::update(std::chrono::duration<double> dt) {
 	}
 	constexpr int kMaxFixedStepsPerFrame = 8;
 	int fixedSteps = 0;
-#if USE_PHYSICS_3D
 	if (simulate) {
-		ECS::DestructionSystem::beginFrame(core.sceneManager->getCurrentScene());
+		core.sceneManager->getCurrentScene().beginSimulationFrame();
 	}
-#endif
 	while (m_fixedTimeAccumulator >= fixedDt && fixedSteps < kMaxFixedStepsPerFrame) {
 		m_fixedTimeAccumulator -= fixedDt;
 		++fixedSteps;
 
 		if (core.sceneManager->hasCurrentScene()) {
-			auto& currentScene = core.sceneManager->getCurrentScene();
-
-			currentScene.fixedUpdate(fixedDt);
-
-			auto& world = RESOURCES::ServiceManager::Get<ECS::World>();
-			auto systemManager = world.getSystemManager();
-
-			systemManager->runFixedUpdate(fixedDt);
-
-#if USE_PHYSICS_3D
-			currentScene.stepPhysics3D(fixedDt, false);
-#endif
-#if USE_PHYSICS_2D
-			currentScene.stepPhysics2D(fixedDt);
-#endif
-			currentScene.finishFixedUpdate(fixedDt);
+			core.sceneManager->getCurrentScene().simulateFixedStep(fixedDt);
 		}
 	}
 	if (m_fixedTimeAccumulator >= fixedDt) {
@@ -210,20 +190,8 @@ void App::update(std::chrono::duration<double> dt) {
 
 	bool presentationAllowed = true;
 	if (simulate) {
-
-		auto& currentScene = core.sceneManager->getCurrentScene();
-
-		auto& world = RESOURCES::ServiceManager::Get<ECS::World>();
-		auto systemManager = world.getSystemManager();
-
-		systemManager->runUpdate(dt);
-
-		currentScene.update(dt);
-#if USE_PHYSICS_3D
-		currentScene.presentDestructibles(float(m_fixedTimeAccumulator.count() / fixedDt.count()));
-#endif
-
-		systemManager->runLateUpdate(dt);
+		const float interpolationAlpha = static_cast<float>(m_fixedTimeAccumulator.count() / fixedDt.count());
+		core.sceneManager->getCurrentScene().simulateFrame(dt, interpolationAlpha);
 	}
 	else {
 		core.sceneManager->updateLoadingScene(TIME::Timer::GetInstance().getDeltaTimeUnscaled());

@@ -321,14 +321,17 @@ double Animation::frameToTime(int frame) const {
 	return static_cast<double>(frame) / static_cast<double>(FPS);
 }
 
-std::unique_ptr<Animation> Animation::createFromDescriptor(const TimelineAnimationDescriptor& desc) {
+std::unique_ptr<Animation> Animation::createFromDescriptor(const TimelineAnimationDescriptor& desc, ECS::World& world) {
 	auto animation = std::make_unique<Animation>(static_cast<unsigned int>(desc.framesCount), static_cast<unsigned int>(desc.FPS), desc.isLooped);
 	animation->trackDescriptors = desc.tracks;
 
 	for (const auto& track : desc.tracks) {
 		AnimationProperty property;
-		const auto objectId = ECS::Object::Id(ECS::Object::Id::ID(track.second.objectId));
-		if (!tryBindTimelineProperty(objectId, track.second.componentName, track.second.propertyName, property, track.first)) {
+		// Event tracks have no target component and can carry the unset object ID.
+		const int objectId = track.second.componentName == "EVENT" ? 0 : track.second.objectId;
+		if (objectId < 0
+			|| !tryBindTimelineProperty(
+				world, ECS::Entity(ECS::Entity::ID(objectId)), track.second.componentName, track.second.propertyName, property, track.first)) {
 			LOG_WARNING << "Property animation: skipped track '" << track.first << "' (bind failed for " << track.second.componentName << '.'
 						<< track.second.propertyName << ')';
 			continue;

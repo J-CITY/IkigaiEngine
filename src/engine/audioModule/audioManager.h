@@ -88,7 +88,7 @@ namespace AUDIO {
 
 		void setListenerVelocity(MATH::Vector3f vel);
 		void setListenerUp(MATH::Vector3f up);
-		void setSourcePos(SoundResource& source, MATH::Vector3f pos);
+		void setSourcePos(const SoundResource& source, MATH::Vector3f pos);
 		void setSourceVelocity(SoundResource& source, MATH::Vector3f vel);
 		void setSourceMinMaxDistance(SoundResource& source, float minDistance, float maxDistance);
 		void setSourceAttenuation(SoundResource& source, unsigned int model, float factor);

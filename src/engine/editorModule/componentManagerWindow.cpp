@@ -35,7 +35,6 @@
 
 using namespace IKIGAI::EDITOR;
 
-
 std::vector<std::string> genComponentsStringArray2() {
 	std::vector<std::string> res;
 	auto& manager = IKIGAI::UTILS::ReflectionManager::Instance();
@@ -58,10 +57,6 @@ std::vector<std::string> genComponentsStringArray() {
 
 void addComponentForObject(std::shared_ptr<IKIGAI::ECS::Object> obj, std::string_view compName) {
 	IKIGAI::ECS::ComponentCatalog::instance().createOnObject(*obj, compName);
-}
-
-void removeComponentFromObject(std::shared_ptr<IKIGAI::ECS::Object> obj, std::string_view compName) {
-	IKIGAI::ECS::ComponentCatalog::instance().removeFromObject(*obj, compName);
 }
 
 void getProps(IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::ComponentBase> comp) {
@@ -106,7 +101,6 @@ const std::string& drawSearchBox(const char* lable, const std::vector<std::strin
 
 //----------------------------------
 
-
 void addComponentForObject2(std::shared_ptr<IKIGAI::ECS::Object> obj, std::string_view compName) {
 	auto& manager = IKIGAI::UTILS::ReflectionManager::Instance();
 	if (auto* typeInfo = manager.getType(compName)) {
@@ -118,7 +112,6 @@ void addComponentForObject2(std::shared_ptr<IKIGAI::ECS::Object> obj, std::strin
 
 //----------------------------------
 
-
 void removeComponentFromObject2(std::shared_ptr<IKIGAI::ECS::Object> obj, std::string_view compName) {
 	auto& manager = IKIGAI::UTILS::ReflectionManager::Instance();
 	if (auto* typeInfo = manager.getType(compName)) {
@@ -129,7 +122,6 @@ void removeComponentFromObject2(std::shared_ptr<IKIGAI::ECS::Object> obj, std::s
 }
 
 //----------------------------------
-
 
 void ComponentManagerWindow::draw() {
 	const auto selectObject = EditorRender::GlobalState.mSelectObject;
@@ -187,13 +179,13 @@ void ComponentManagerWindow::draw() {
 	}
 
 	auto components = selectObject->getComponents();
-	for (auto& [_, component] : components) {
+	for (auto& [type, component] : components) {
 		auto title = iconComp[component->getName()] + std::string(" ") + component->getName();
 		bool needDelComponent = true;
 		if (ImGui::CollapsingHeader(title.c_str(), PREFABS::Member(*selectObject) ? nullptr : &needDelComponent,
 				ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_OpenOnArrow)) {
 			if (!needDelComponent) {
-				removeComponentFromObject(selectObject, component->getTypeidName());
+				ECS::ComponentCatalog::instance().removeFromObject(*selectObject, type);
 				break;
 			}
 

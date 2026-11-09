@@ -30,11 +30,12 @@ Object::Descriptor Object::getDescriptor() const {
 	d.IsVisible = mIsVisible;
 	std::vector<std::pair<std::string, nlohmann::json>> components;
 	const auto& catalog = ComponentCatalog::instance();
-	for (const auto& [_, component] : mComponents) {
+	for (const auto& [type, handle] : mComponents) {
+		const auto* component = resolveStoredComponent(handle);
 		if (!component) {
 			continue;
 		}
-		const auto* record = catalog.findByName(component->getName());
+		const auto* record = catalog.findByType(type);
 		if (!record) {
 			continue;
 		}
@@ -52,7 +53,7 @@ Object::Object(ECS::Entity actorID, const std::string& name, const std::string& 
 	, mEntity(actorID)
 	, mName(name)
 	, mTag(tag) {
-	mTransform = addComponent<TransformComponent>();
+	addComponent<TransformComponent>();
 	createdEvent.run(*this);
 }
 
@@ -68,7 +69,6 @@ Object::Object(const Descriptor& _descriptor, ECS::World* world, bool deferred)
 	getWorld().registerEntity(mEntity);
 	for (const auto& component : _descriptor.Components) {
 		ComponentCatalog::instance().read(*this, component);
-		mTransform = getComponent<TransformComponent>();
 	}
 }
 
@@ -91,7 +91,7 @@ void Object::dispose() {
 	if (CommandBuffer* commands = activeCommandBuffer()) {
 		const Entity entity = mEntity;
 		if (std::shared_ptr<Object> self = sharedFromThisOrNull()) {
-			mDisposing = true;
+			// A failed ECS batch may discard this command.
 			commands->addCommand([self, entity]() { self->disposeImmediate(entity); });
 			return;
 		}
@@ -127,14 +127,14 @@ void Object::disposeImmediate(Entity entity) {
 	toDetach.clear();
 
 	detachFromParent();
-	for (auto& [key, val] : mComponents) {
-		if (val) {
-			componentRemovedEvent.run(val.get());
+	for (const auto& [type, handle] : mComponents) {
+		if (auto* component = resolveStoredComponent(handle)) {
+			componentRemovedEvent.run(component);
 		}
 	}
 	getWorld().getComponentManager()->destroyEntity(entity);
 	mComponents.clear();
-	mTransform = nullptr;
+	mTransform = {};
 	mDisposed = true;
 	mIsDestroyed = true;
 	mIsActive = false;
@@ -159,7 +159,6 @@ void Object::setTag(const std::string& val) {
 
 void Object::addSerializedComponent(const nlohmann::json& descriptor) {
 	ComponentCatalog::instance().read(*this, descriptor);
-	mTransform = getComponent<TransformComponent>();
 }
 
 void Object::activateLoaded() {
@@ -169,8 +168,8 @@ void Object::activateLoaded() {
 		ScriptComponentEvents::createdEvent.run(script);
 	}
 #endif
-	for (auto& [key, component] : mComponents) {
-		if (component) {
+	for (const auto& [type, handle] : mComponents) {
+		if (auto* component = resolveStoredComponent(handle)) {
 			component->onAwake();
 		}
 	}
@@ -245,7 +244,7 @@ void Object::detachFromParent() {
 	dettachEvent.run(*this);
 
 	if (auto p = mParent.lock()) {
-		p->mChildren.erase(std::remove_if(p->mChildren.begin(), p->mChildren.end(), [this](std::shared_ptr<Object> e) { return e.get() == this; }));
+		std::erase_if(p->mChildren, [this](const std::shared_ptr<Object>& child) { return child.get() == this; });
 	}
 	mParent.reset();
 	if (auto transform = getComponent<TransformComponent>()) {
@@ -285,42 +284,42 @@ bool Object::isAlive() const {
 
 void Object::onStart() {
 	mIsReady = true;
-	for (auto& [key, val] : mComponents) {
-		if (val) {
-			val.get()->onStart();
+	for (const auto& [type, handle] : mComponents) {
+		if (auto* component = resolveStoredComponent(handle)) {
+			component->onStart();
 		}
 	}
 }
 
 void Object::onEnable() {
-	for (auto& [key, val] : mComponents) {
-		if (val) {
-			val.get()->onEnable();
+	for (const auto& [type, handle] : mComponents) {
+		if (auto* component = resolveStoredComponent(handle)) {
+			component->onEnable();
 		}
 	}
 }
 
 void Object::onDisable() {
-	for (auto& [key, val] : mComponents) {
-		if (val) {
-			val.get()->onDisable();
+	for (const auto& [type, handle] : mComponents) {
+		if (auto* component = resolveStoredComponent(handle)) {
+			component->onDisable();
 		}
 	}
 }
 
 void Object::onDestroy() {
-	for (auto& [key, val] : mComponents) {
-		if (val) {
-			val.get()->onDestroy();
+	for (const auto& [type, handle] : mComponents) {
+		if (auto* component = resolveStoredComponent(handle)) {
+			component->onDestroy();
 		}
 	}
 }
 
 void Object::onUpdate(std::chrono::duration<double> dt) {
 	if (getIsActive()) {
-		for (auto& [key, val] : mComponents) {
-			if (val) {
-				val.get()->onUpdate(dt);
+		for (const auto& [type, handle] : mComponents) {
+			if (auto* component = resolveStoredComponent(handle)) {
+				component->onUpdate(dt);
 			}
 		}
 	}
@@ -328,9 +327,9 @@ void Object::onUpdate(std::chrono::duration<double> dt) {
 
 void Object::onFixedUpdate(std::chrono::duration<double> dt) {
 	if (getIsActive()) {
-		for (auto& [key, val] : mComponents) {
-			if (val) {
-				val.get()->onFixedUpdate(dt);
+		for (const auto& [type, handle] : mComponents) {
+			if (auto* component = resolveStoredComponent(handle)) {
+				component->onFixedUpdate(dt);
 			}
 		}
 	}
@@ -338,9 +337,9 @@ void Object::onFixedUpdate(std::chrono::duration<double> dt) {
 
 void Object::onLateUpdate(std::chrono::duration<double> dt) {
 	if (getIsActive()) {
-		for (auto& [key, val] : mComponents) {
-			if (val) {
-				val.get()->onLateUpdate(dt);
+		for (const auto& [type, handle] : mComponents) {
+			if (auto* component = resolveStoredComponent(handle)) {
+				component->onLateUpdate(dt);
 			}
 		}
 	}
@@ -368,8 +367,26 @@ void Object::recursiveActiveUpdate() {
 	}
 }
 
+ComponentBase* Object::resolveStoredComponent(const ComponentHandle<Component>& handle) const {
+	return static_cast<ComponentBase*>(getWorld().getComponentManager()->resolveComponent(handle));
+}
+
+std::map<std::type_index, UTILS::WeakPtr<ComponentBase>> Object::getComponents() const {
+	std::map<std::type_index, UTILS::WeakPtr<ComponentBase>> components;
+	if (!mDisposed) {
+		for (const auto& [type, handle] : mComponents) {
+			components.try_emplace(type, resolveStoredComponent(handle));
+		}
+	}
+	return components;
+}
+
 UTILS::WeakPtr<TransformComponent> Object::getTransform() const {
-	return mTransform;
+	return UTILS::WeakPtr<TransformComponent>(tryGetTransform());
+}
+
+TransformComponent* Object::tryGetTransform() const {
+	return mDisposed ? nullptr : getWorld().getComponentManager()->resolveComponent(mTransform);
 }
 
 int Object::getIDInt() const {

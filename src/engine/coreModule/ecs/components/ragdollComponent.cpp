@@ -49,8 +49,8 @@ void RagdollComponent::release() {
 		if (auto skeleton = obj->getComponent<SkeletalComponent>()) {
 			skeleton->clearPoseOverride(mInstance.get());
 		}
-		obj->mTransform->setLocalPosition(mSavedLocalPosition);
-		obj->mTransform->setLocalRotation(mSavedLocalRotation);
+		obj->tryGetTransform()->setLocalPosition(mSavedLocalPosition);
+		obj->tryGetTransform()->setLocalRotation(mSavedLocalRotation);
 		if (mMotor) {
 			auto& motor = static_cast<CharacterMotorComponent&>(*mMotor);
 			motor.motor.reset(mSavedMotorPosition);

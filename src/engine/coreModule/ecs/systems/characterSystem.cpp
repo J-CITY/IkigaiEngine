@@ -10,9 +10,9 @@
 #include "coreModule/ecs/componentReference.inl"
 #include "coreModule/ecs/components/cameraComponent.h"
 #include "coreModule/ecs/components/physics3dComponent.h"
+#include "coreModule/ecs/components/thirdPersonController.h"
 #include "coreModule/testHooks.h"
 #include "resourceModule/serviceManager.h"
-#include "coreModule/ecs/components/thirdPersonController.h"
 #include "windowModule/window/window.h"
 #include <limits>
 namespace IKIGAI::ECS {
@@ -26,13 +26,13 @@ namespace {
 	}
 	void setWorldPosition(TransformComponent& transform, Vec3 position) {
 		if (auto parent = transform.obj->getParent()) {
-			position = MATH::Matrix4f::Inverse(parent->mTransform->getWorldMatrix()) * position;
+			position = MATH::Matrix4f::Inverse(parent->tryGetTransform()->getWorldMatrix()) * position;
 		}
 		transform.setLocalPosition(position);
 	}
 	void setWorldRotation(TransformComponent& transform, MATH::QuaternionF rotation) {
 		if (auto parent = transform.obj->getParent()) {
-			rotation = MATH::QuaternionF::Conjugate(parent->mTransform->getWorldRotation()) * rotation;
+			rotation = MATH::QuaternionF::Conjugate(parent->tryGetTransform()->getWorldRotation()) * rotation;
 		}
 		transform.setLocalRotation(rotation);
 	}
@@ -65,7 +65,7 @@ void CharacterSystem::fixedUpdate(SCENE_SYSTEM::Scene& scene, float dt) {
 					throw std::runtime_error("Character motor and rigid body cannot both drive a transform");
 				}
 				if (!m.initialized) {
-					m.spawn = object->mTransform->getWorldPosition();
+					m.spawn = object->tryGetTransform()->getWorldPosition();
 					m.motor.reset(m.spawn);
 					m.previous = m.rendered = m.spawn;
 					m.initialized = true;
@@ -141,7 +141,7 @@ void CharacterSystem::fixedUpdate(SCENE_SYSTEM::Scene& scene, float dt) {
 					m.turnRate *= std::exp(-10 * dt);
 				}
 
-				setWorldPosition(*m.obj->mTransform, m.motor.capsule.feet);
+				setWorldPosition(*m.obj->tryGetTransform(), m.motor.capsule.feet);
 			}
 		}
 	}
@@ -191,7 +191,7 @@ void CharacterSystem::update(SCENE_SYSTEM::Scene& scene, float dt) {
 				auto t = motor->obj->getComponent<TraversalComponent>();
 				const Vec3 pivot = (t && t->traversing			? t->visualFeet
 										   : motor->initialized ? motor->rendered
-																: motor->obj->mTransform->getWorldPosition())
+																: motor->obj->tryGetTransform()->getWorldPosition())
 					+ Vec3 { 0, c->settings.PivotHeight, 0 };
 				const Vec3 forward { std::sin(c->yaw * radians) * std::cos(c->pitch * radians), -std::sin(c->pitch * radians),
 					std::cos(c->yaw * radians) * std::cos(c->pitch * radians) };
@@ -202,8 +202,8 @@ void CharacterSystem::update(SCENE_SYSTEM::Scene& scene, float dt) {
 				const auto hit = sweep(scene.physics3d(), Capsule { pivot - Vec3 { 0, .18f, 0 }, .18f, .36f }, forward * (-desired));
 				const float safe = hit ? std::max(.15f, desired * hit.fraction - .06f) : desired;
 				c->arm = safe < c->arm ? safe : c->arm + (safe - c->arm) * (1 - std::exp(-8 * dt));
-				setWorldPosition(*camera->obj->mTransform, pivot - forward * c->arm);
-				setWorldRotation(*camera->obj->mTransform, MATH::QuaternionF(Vec3 { c->pitch, c->yaw, 0 }));
+				setWorldPosition(*camera->obj->tryGetTransform(), pivot - forward * c->arm);
+				setWorldRotation(*camera->obj->tryGetTransform(), MATH::QuaternionF(Vec3 { c->pitch, c->yaw, 0 }));
 			}
 		}
 	}

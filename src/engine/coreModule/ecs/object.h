@@ -119,7 +119,8 @@ public:
 				instance.onEnable();
 				instance.onStart();
 			}
-			getWorld().getComponentManager()->addComponent<T>(getID(), std::move(instance));
+			auto& components = *getWorld().getComponentManager();
+			components.addComponents<T>(getID(), std::move(instance));
 
 			auto component = getComponent<T>();
 			componentAddedEvent.run(component);
@@ -132,7 +133,10 @@ public:
 				}
 			}
 #endif
-			mComponents[std::type_index(typeid(T))] = component;
+			mComponents[std::type_index(typeid(T))] = components.getComponentBaseHandle<T>(getID());
+			if constexpr (std::is_same_v<T, TransformComponent>) {
+				mTransform = components.getComponentHandle<TransformComponent>(getID());
+			}
 			return component;
 		}
 		else {
@@ -146,13 +150,19 @@ public:
 			return false;
 		}
 		if (CommandBuffer* commands = activeCommandBuffer()) {
-			if (!getComponent<T>()) {
+			const auto& components = *getWorld().getComponentManager();
+			const Entity entity = mEntity;
+			const auto handle = components.getComponentHandle<T>(entity);
+			if (!components.resolveComponent(handle)) {
 				return false;
 			}
-			const Entity entity = mEntity;
 			const std::type_index type = typeid(T);
 			if (std::shared_ptr<Object> self = sharedFromThisOrNull()) {
-				commands->addCommand([self, entity, type]() { self->template removeComponentNow<T>(entity, type); });
+				commands->addCommand([self, entity, handle, type]() {
+					if (!self->mDisposed && std::as_const(*self->getWorld().getComponentManager()).resolveComponent(handle)) {
+						self->template removeComponentNow<T>(entity, type);
+					}
+				});
 				return true;
 			}
 		}
@@ -165,10 +175,7 @@ public:
 		}
 		static_assert(std::is_base_of_v<ComponentBase, T>, "T should derive from Component");
 
-		if (getWorld().getComponentManager()->checkComponent<T>(getID())) {
-			return getWorld().getComponentManager()->getComponent<T>(getID());
-		}
-		return nullptr;
+		return getWorld().getComponentManager()->getComponent<T>(getID());
 	}
 
 	template <typename T> inline UTILS::WeakPtr<ComponentBase> getComponentBase() const {
@@ -177,22 +184,18 @@ public:
 		}
 		static_assert(std::is_base_of_v<ComponentBase, T>, "T should derive from Component");
 
-		if (getWorld().getComponentManager()->checkComponent<T>(getID())) {
-			return getWorld().getComponentManager()->getComponentBase<T>(getID());
-		}
-
-		return nullptr;
+		return getWorld().getComponentManager()->getComponentBase<T>(getID());
 	}
 
-	auto getComponents() const {
-		return mComponents;
-	}
-
+	[[nodiscard]] std::map<std::type_index, UTILS::WeakPtr<ComponentBase>> getComponents() const;
 	[[nodiscard]] UTILS::WeakPtr<TransformComponent> getTransform() const;
+	// Borrowed until a structural change in the world.
+	[[nodiscard]] TransformComponent* tryGetTransform() const;
 
 	// ObjectData getObjectData();
 
 private:
+	ComponentBase* resolveStoredComponent(const ComponentHandle<Component>& handle) const;
 	void recursiveActiveUpdate();
 	void disposeImmediate(Entity entity);
 	std::shared_ptr<Object> sharedFromThisOrNull();
@@ -262,9 +265,9 @@ protected:
 
 	std::weak_ptr<Object> mParent;
 	std::vector<ObjPtr> mChildren;
-	std::map<std::type_index, UTILS::WeakPtr<ComponentBase>> mComponents;
 
-public:
-	UTILS::WeakPtr<TransformComponent> mTransform;
+private:
+	std::map<std::type_index, ComponentHandle<Component>> mComponents;
+	ComponentHandle<TransformComponent> mTransform;
 };
 };

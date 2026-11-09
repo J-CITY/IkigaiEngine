@@ -1,13 +1,22 @@
 #pragma once
 #include "access.h"
+#include "commandBuffer.h"
 #include "events.h"
 #include "relationManager.h"
 #include "signature.h"
+#include "systemAccessScope.h"
+#include <array>
+#include <atomic>
+#include <functional>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string>
 #include <unordered_set>
+#include <utility>
 
 #include "componentArray.h"
+#include "componentHandle.h"
 #include "entityManager.h"
 #include "utilsModule/idGenerator.h"
 #include "utilsModule/singleton.h"
@@ -22,7 +31,6 @@ namespace IKIGAI::ECS {
 
 class ComponentManager;
 
-using ComponentType = Id<ComponentManager>;
 using TagType = ComponentType;
 
 enum class StorageType { Archetype, Sparse };
@@ -57,6 +65,7 @@ public:
 struct Record {
 	std::unordered_map<ComponentType, std::unordered_map<TagType, std::any>> mTagsMap;
 	std::shared_ptr<Archetype> archetype;
+	std::uint64_t generation = 0;
 };
 
 class ComponentManager {
@@ -66,7 +75,33 @@ public:
 private:
 	std::unordered_map<Entity, Signature> mSignatures;
 
-	ComponentType mNextComponentType = IdGenerator<ComponentManager>::generateId();
+	const EntityHandle::OwnerId mOwner = IdGenerator<EntityHandle>::generateId();
+	std::uint64_t mNextEntityGeneration = 1;
+	std::atomic_size_t mActiveQueries { 0 };
+
+	class QueryScope {
+	public:
+		explicit QueryScope(std::atomic_size_t& activeQueries)
+			: mActiveQueries(activeQueries) {
+			mActiveQueries.fetch_add(1, std::memory_order_relaxed);
+		}
+
+		~QueryScope() {
+			mActiveQueries.fetch_sub(1, std::memory_order_relaxed);
+		}
+
+		QueryScope(const QueryScope&) = delete;
+		QueryScope& operator=(const QueryScope&) = delete;
+
+	private:
+		std::atomic_size_t& mActiveQueries;
+	};
+
+	void requireStructuralChangesAllowed() const {
+		if (!immediateStructuralChangesAllowed() || mActiveQueries.load(std::memory_order_relaxed) != 0) {
+			throw std::logic_error("ECS structural changes must be deferred during queries and shared system batches");
+		}
+	}
 
 	// Archetype structs
 	std::unordered_map<Entity, Record> mEntityRecords;
@@ -92,20 +127,11 @@ private:
 		}
 
 		// Default storage is Archetype. Sparse is opt-in via registerComponent.
-		mComponentStorageType[id] = StorageType::Archetype;
-		mDefaultArraysArchetype.insert({ id, std::make_shared<ComponentArray<T>>() });
-	}
-
-	// Called by getComponentType static initialization
-	template <typename T> ComponentType registerNewComponentId() {
-		ComponentType id = mNextComponentType;
-		mNextComponentType = IdGenerator<ComponentManager>::generateId();
-		return id;
+		registerComponent<T>(StorageType::Archetype);
 	}
 
 	template <typename T, typename... Args> void addComponentToArchetypeImpl(Entity entity, Archetype& to, T&& component) {
 		using C = std::decay_t<T>;
-		static_assert(std::is_base_of_v<Component, C>, "Must inherit from class Component");
 		const auto cname = getComponentType<C>();
 
 		// We assume this is only called for Archetype components
@@ -113,13 +139,12 @@ private:
 		// Ideally addComponents logic separates them.
 
 		if (to.mComponentArrays.contains(cname)) {
-			std::static_pointer_cast<ComponentArray<C>>(to.mComponentArrays.at(cname))->insert(entity, std::move(component));
+			std::static_pointer_cast<ComponentArray<C>>(to.mComponentArrays.at(cname))->insert(entity, std::forward<T>(component));
 		}
 	}
 
 	template <typename T> void addComponentToArchetypeMaskImpl(Signature& mask) {
 		using C = std::decay_t<T>;
-		static_assert(std::is_base_of_v<Component, C>, "Must inherit from class Component");
 		ComponentType id = getComponentType<C>();
 		ensureComponentRegistered<C>(id);
 		if (mComponentStorageType[id] == StorageType::Archetype) {
@@ -133,17 +158,15 @@ private:
 
 	template <typename T> void addComponentToSparseImpl(Entity entity, T&& component) {
 		using C = std::decay_t<T>;
-		static_assert(std::is_base_of_v<Component, C>, "Must inherit from class Component");
 		ComponentType id = getComponentType<C>();
 		ensureComponentRegistered<C>(id);
 		if (mComponentStorageType[id] == StorageType::Sparse) {
-			std::static_pointer_cast<ComponentArray<C>>(mSparseArrays[id])->insert(entity, std::move(component));
+			std::static_pointer_cast<ComponentArray<C>>(mSparseArrays[id])->insert(entity, std::forward<T>(component));
 		}
 	}
 
 	template <typename T> void removeComponentFromArchetypeMaskImpl(Signature& mask) {
 		using C = std::decay_t<T>;
-		static_assert(std::is_base_of_v<Component, C>, "Must inherit from class Component");
 		ComponentType id = getComponentType<C>();
 		if (mComponentStorageType.contains(id) && mComponentStorageType[id] == StorageType::Archetype) {
 			mask.set(static_cast<size_t>(id), false);
@@ -156,10 +179,9 @@ private:
 
 	template <typename T> void removeComponentFromSparseImpl(Entity entity) {
 		using C = std::decay_t<T>;
-		static_assert(std::is_base_of_v<Component, C>, "Must inherit from class Component");
 		ComponentType id = getComponentType<C>();
-		if (mComponentStorageType.contains(id) && mComponentStorageType[id] == StorageType::Sparse) {
-			std::static_pointer_cast<ComponentArray<C>>(mSparseArrays[id])->removeData(entity);
+		if (const auto pool = mSparseArrays.find(id); pool != mSparseArrays.end()) {
+			pool->second->entityDestroyed(entity);
 		}
 	}
 
@@ -197,7 +219,9 @@ private:
 
 		if (from.get() != to.get()) {
 			for (auto& [ctype, fromArr] : from->mComponentArrays) {
-				ASSERT_IF(!fromArr->contains(entity), "Entity ghosted in source archetype");
+				if (fromArr->contains(entity)) {
+					throw std::logic_error("Entity remained in source archetype");
+				}
 			}
 		}
 		record.archetype = to;
@@ -205,7 +229,6 @@ private:
 
 	template <typename T> void insertNewComponent(Entity entity, Record& record, T&& component) {
 		using C = std::decay_t<T>;
-		static_assert(std::is_base_of_v<Component, C>, "Must inherit from class Component");
 		const ComponentType id = getComponentType<C>();
 		ensureComponentRegistered<C>(id);
 		if (mComponentStorageType.at(id) == StorageType::Sparse) {
@@ -215,32 +238,33 @@ private:
 		addComponentToArchetypeImpl(entity, *record.archetype, std::forward<T>(component));
 	}
 
-	template <typename T> RawType<T>& forEachComponentsImpl(Archetype& archetype, size_t i, [[maybe_unused]] Entity entity) {
-		using U = RawType<T>;
-		static_assert(std::is_base_of_v<Component, U>, "Must inherit from class Component");
-		ComponentType id = getComponentType<U>();
-		const auto storage = mComponentStorageType.find(id);
-		if (storage != mComponentStorageType.end() && storage->second == StorageType::Archetype) {
-			return archetype.getComponents<U>(id)->at(i);
+	template <class... Components, class Func, std::size_t... Indices>
+	static void visitRows(const std::array<ComponentArrayInterface*, sizeof...(Components)>& arrays,
+		const std::array<bool, sizeof...(Components)>& rowAligned, ComponentArrayInterface& leading, Func& func, std::index_sequence<Indices...>) {
+		const auto count = static_cast<std::size_t>(leading.getSize());
+		for (std::size_t row = 0; row < count; ++row) {
+			const Entity entity = leading.getEntity(row);
+			auto pointers = std::tuple { ([&] {
+				auto& array = *static_cast<ComponentArray<RawType<Components>>*>(arrays[Indices]);
+				return rowAligned[Indices] || arrays[Indices] == &leading ? &array.at(row) : array.tryGetData(entity);
+			}())... };
+			if (((std::get<Indices>(pointers) != nullptr) && ...)) {
+				std::invoke(func, entity, static_cast<QueryReference<Components>>(*std::get<Indices>(pointers))...);
+			}
 		}
-		return std::static_pointer_cast<ComponentArray<U>>(mSparseArrays.at(id))->getData(entity);
-	}
-
-	template <class... Components, class F> void forEachComponents(Archetype& archetype, size_t i, Entity entity, F&& func) {
-		func(entity, forEachComponentsImpl<Components>(archetype, i, entity)...);
 	}
 
 	template <typename T> void emitOnAdd(Entity entity) {
-		auto c = getComponent<T>(entity);
-		if (c) {
-			mEventManager.emit(OnAdd<T> { entity, c.get() });
+		auto* array = findArray<T>(entity);
+		if (auto* component = array ? array->tryGetData(entity) : nullptr) {
+			mEventManager.emit(OnAdd<T> { entity, component });
 		}
 	}
 
 	template <typename T> void emitOnRemove(Entity entity) {
-		auto c = getComponent<T>(entity);
-		if (c) {
-			mEventManager.emit(OnRemove<T> { entity, c.get() });
+		auto* array = findArray<T>(entity);
+		if (auto* component = array ? array->tryGetData(entity) : nullptr) {
+			mEventManager.emit(OnRemove<T> { entity, component });
 		}
 	}
 
@@ -257,42 +281,41 @@ private:
 
 public:
 	template <class First, class Func> void forEachSparse(Func&& func) {
-		static_assert(std::is_base_of_v<Component, First>, "Must inherit from class Component");
-		ComponentType id = getComponentType<First>();
-
-		if (!mComponentStorageType.contains(id) || mComponentStorageType[id] != StorageType::Sparse) {
+		static_assert(!IsExclude<RawType<First>>, "Exclude is not supported by forEachSparse");
+		const QueryScope query(mActiveQueries);
+		const auto type = getComponentType<First>();
+		SystemAccessScope::requireComponent(*this, type, AccessTraits<First>::ReadOnly ? AccessMode::Read : AccessMode::Write);
+		const auto pool = mSparseArrays.find(type);
+		if (pool == mSparseArrays.end()) {
 			return;
 		}
 
-		auto& sparseArrInterface = mSparseArrays[id];
-		auto sparseArr = std::static_pointer_cast<ComponentArray<First>>(sparseArrInterface);
-
-		for (size_t i = 0; i < sparseArr->getSize(); ++i) {
-			Entity entity = sparseArr->getEntity(i);
-			First& firstComp = sparseArr->at(i);
-			func(entity, firstComp);
+		auto& array = static_cast<ComponentArray<RawType<First>>&>(*pool->second);
+		const auto count = static_cast<std::size_t>(array.getSize());
+		for (std::size_t i = 0; i < count; ++i) {
+			std::invoke(func, array.getEntity(i), static_cast<QueryReference<First>>(array.at(i)));
 		}
 	}
 
-	template <typename T> ComponentType getComponentTypeImpl() {
-		static ComponentType componentId = registerNewComponentId<T>();
+	template <typename T> ComponentType getComponentTypeImpl() const {
+		static const ComponentType componentId = IdGenerator<ComponentManager>::generateId();
 		// std::cout << typeid(T).name() << " - " << (int)componentId << "\n";
 		return componentId;
 	}
 
-	template <typename T> ComponentType getComponentType() {
+	template <typename T> ComponentType getComponentType() const {
 		return getComponentTypeImpl<RawType<T>>();
 	}
 
 	template <typename T> void registerComponent(StorageType type = StorageType::Archetype) {
-		static_assert(std::is_base_of_v<Component, T>, "Must inherit from class Component");
+		requireStructuralChangesAllowed();
+		static_assert(std::is_same_v<T, RawType<T>> && !IsExclude<T>, "Register an unqualified component type");
 		ComponentType id = getComponentType<T>();
 
-		if (mComponentStorageType.contains(id)) {
-			// Already registered. Check if consistent? or throw?
-			// For now allow re-registration if same type? Or ignore.
-			// If we want to change type runtime, that's complex (need data migration).
-			// Assume initialization time.
+		if (const auto existing = mComponentStorageType.find(id); existing != mComponentStorageType.end()) {
+			if (existing->second != type) {
+				throw std::logic_error("Conflicting component storage registration");
+			}
 			return;
 		}
 
@@ -328,29 +351,58 @@ public:
 	}
 
 	template <typename T> UTILS::WeakPtr<T> addSingletonComponent() {
+		requireStructuralChangesAllowed();
 		static_assert(std::is_base_of_v<Component, T>, "Must inherit from class Component");
 		const auto type = getComponentType<T>();
 		mSingletonComponent[type] = std::make_unique<T>();
 		return getSingletonComponent<T>();
 	}
 
-	template <typename T> UTILS::WeakPtr<T> addComponent(Entity entity) {
-		static_assert(std::is_base_of_v<Component, T>, "Must inherit from class Component");
-		addComponents<T>(entity, T());
-		return getComponent<T>(entity);
+	template <typename T> auto addComponent(Entity entity) {
+		return addComponent(entity, T {});
 	}
 
-	template <typename T> UTILS::WeakPtr<T> addComponent(Entity entity, T&& newComponent) {
-		static_assert(std::is_base_of_v<Component, T>, "Must inherit from class Component");
-		addComponents<T>(entity, std::move(newComponent));
-		return getComponent<T>(entity);
+	template <typename T> auto addComponent(Entity entity, T&& newComponent) {
+		using C = std::remove_cvref_t<T>;
+		addComponents(entity, std::forward<T>(newComponent));
+		if constexpr (std::is_base_of_v<Component, C>) {
+			return getComponent<C>(entity);
+		}
+		else {
+			return getComponentHandle<C>(entity);
+		}
 	}
 
 	template <class... Components> void addComponents(Entity entity) {
-		addComponents(entity, (Components(), ...));
+		addComponents(entity, Components()...);
 	}
 
-	template <class... Components> void addComponents(Entity entity, Components... newComponent) {
+	template <class... Components> void addComponents(Entity entity, Components&&... newComponent) {
+		addRvalueComponents(entity, copyLvalues(std::forward<Components>(newComponent))...);
+	}
+
+private:
+	template <class T> static decltype(auto) copyLvalues(T&& component) {
+		if constexpr (std::is_lvalue_reference_v<T> || std::is_const_v<std::remove_reference_t<T>>) {
+			return std::decay_t<T>(component);
+		}
+		else {
+			return std::forward<T>(component);
+		}
+	}
+
+	template <class... Components> void addRvalueComponents(Entity entity, Components&&... newComponent) {
+		requireStructuralChangesAllowed();
+		const std::array<ComponentType, sizeof...(Components)> types { getComponentType<Components>()... };
+		for (std::size_t i = 0; i < types.size(); ++i) {
+			const auto preceding = std::span(types).first(i);
+			if (std::ranges::find(preceding, types[i]) != preceding.end()) {
+				throw std::logic_error("Component occurs more than once in an ECS add operation");
+			}
+			if (const auto pool = mSparseArrays.find(types[i]); pool != mSparseArrays.end() && pool->second->contains(entity)) {
+				throw std::logic_error("Sparse component is already present");
+			}
+		}
 		Record& record = mEntityRecords.at(entity);
 		auto newMask = record.archetype->mMask;
 		// set all components to mask (Only Archetype ones)
@@ -359,8 +411,8 @@ public:
 
 		// Transfer existing archetype columns only. Each new value is inserted once below.
 		moveEntity<Components...>(entity, record.archetype, nextArchetype, record);
-		(insertNewComponent(entity, record, std::move(newComponent)), ...);
-		(emitOnAdd<Components>(entity), ...);
+		(insertNewComponent(entity, record, std::forward<Components>(newComponent)), ...);
+		(emitOnAdd<std::decay_t<Components>>(entity), ...);
 
 		// auto signature = getSignature(entity);
 		// signature.set(static_cast<int>(getComponentType<T>()), true);
@@ -368,10 +420,12 @@ public:
 		// systemManager->entitySignatureChanged(entity, newMask);
 	}
 
+public:
 	template <class... Components> void removeComponents(Entity entity) {
+		requireStructuralChangesAllowed();
 		// static_assert(sizeof...(Components) == 0, "Must contain non 0 components");
 		(emitOnRemove<Components>(entity), ...);
-		Record& record = mEntityRecords[entity];
+		Record& record = mEntityRecords.at(entity);
 		auto archetype = record.archetype;
 		auto newMask = archetype->mMask;
 		// set all components to mask (Only Archetype ones)
@@ -385,33 +439,22 @@ public:
 	}
 
 	template <typename T> UTILS::WeakPtr<T> getComponent(Entity entity) {
-		static_assert(std::is_base_of_v<Component, T>, "Must inherit from class Component");
-		ComponentType id = getComponentType<T>();
+		static_assert(std::is_base_of_v<Component, T>, "Use tryGetComponent or getComponentHandle for value components");
+		SystemAccessScope::requireComponent(*this, getComponentType<T>(), AccessMode::Write);
+		auto* array = findArray<T>(entity);
+		return array ? array->getDataPtr(entity) : nullptr;
+	}
 
-		// Check Archetype first
-		const auto recordIt = mEntityRecords.find(entity);
-		if (recordIt == mEntityRecords.end()) {
-			return nullptr;
-		}
-		const Record& record = recordIt->second;
-		const auto& archetype = record.archetype;
-
-		auto it = archetype->mComponentArrays.find(id);
-		if (it != archetype->mComponentArrays.end()) {
-			auto& componentArr = it->second;
-			return std::static_pointer_cast<ComponentArray<T>>(componentArr)->getDataPtr(entity);
-		}
-
-		// Check Sparse
-		if (mSparseArrays.contains(id)) {
-			return std::static_pointer_cast<ComponentArray<T>>(mSparseArrays[id])->getDataPtr(entity);
-		}
-
-		return nullptr;
+	// Borrowed until the next structural change. Use a handle for a retained reference.
+	template <class T> [[nodiscard]] const T* tryGetComponent(Entity entity) const {
+		SystemAccessScope::requireComponent(*this, getComponentType<T>(), AccessMode::Read);
+		const auto* array = findArray<T>(entity);
+		return array ? array->tryGetData(entity) : nullptr;
 	}
 
 	template <typename T> UTILS::WeakPtr<Component> getComponentBase(Entity entity) {
-		return getComponentBase<T>(entity);
+		auto component = getComponent<T>(entity);
+		return component ? UTILS::WeakPtr<Component>(component.get()) : nullptr;
 	}
 
 	template <class T = Component> std::vector<UTILS::WeakPtr<T>> getComponents(Entity entity) {
@@ -423,6 +466,7 @@ public:
 
 			for (auto& [id, componentArr] : archetype->mComponentArrays) {
 				if (componentArr->contains(entity)) {
+					SystemAccessScope::requireComponent(*this, id, AccessMode::Write);
 					auto basePtr = componentArr->getComponentBasePtr(entity);
 					if (basePtr) {
 						if constexpr (std::is_same_v<T, Component> || std::is_same_v<T, IKIGAI::ECS::Component>) {
@@ -441,6 +485,7 @@ public:
 
 		for (auto& [id, sparseArr] : mSparseArrays) {
 			if (sparseArr->contains(entity)) {
+				SystemAccessScope::requireComponent(*this, id, AccessMode::Write);
 				auto basePtr = sparseArr->getComponentBasePtr(entity);
 				if (basePtr) {
 					if constexpr (std::is_same_v<T, Component> || std::is_same_v<T, IKIGAI::ECS::Component>) {
@@ -459,50 +504,107 @@ public:
 		return res;
 	}
 
-	template <typename T> bool checkComponent(Entity entity) {
-		static_assert(std::is_base_of_v<Component, T>, "Must inherit from class Component");
-		ComponentType id = getComponentType<T>();
-
-		// Archetype check
-		const auto recordIt = mEntityRecords.find(entity);
-		if (recordIt == mEntityRecords.end()) {
-			return false;
-		}
-		const Record& record = recordIt->second;
-		const auto& archetype = record.archetype;
-		if (archetype) {
-			const auto column = archetype->mComponentArrays.find(id);
-			if (column != archetype->mComponentArrays.end()) {
-				return column->second->contains(entity);
-			}
-		}
-
-		if (mSparseArrays.contains(id)) {
-			return mSparseArrays.at(id)->contains(entity);
-		}
-		return false;
+	template <typename T> bool checkComponent(Entity entity) const {
+		SystemAccessScope::requireComponent(*this, getComponentType<T>(), AccessMode::Read);
+		const auto* array = findArray<T>(entity);
+		return array && array->contains(entity);
 	}
 
+private:
+	ComponentArrayInterface* findArray(Entity entity, ComponentType type, std::uint64_t entityGeneration = 0) const;
+
+	template <class T> ComponentArray<T>* findArray(Entity entity) const {
+		static_assert(std::is_same_v<T, RawType<T>>, "Look up the unqualified component type");
+		return static_cast<ComponentArray<T>*>(findArray(entity, getComponentType<T>()));
+	}
+
+public:
 	std::shared_ptr<Archetype> getArchetype(Signature mask) {
-		if (!mMaskToArchetype.contains(mask)) {
-			mMaskToArchetype[mask] = std::make_shared<Archetype>();
-			auto& newArchetype = mMaskToArchetype[mask];
-			newArchetype->mMask = mask;
-			for (int id = 0; id < static_cast<int>(mNextComponentType); ++id) {
-				if (mask[static_cast<size_t>(id)]) {
-					auto type = ComponentType(id);
-					newArchetype->mComponentArrays[type] = mDefaultArraysArchetype[type]->createEmptyFromThis();
-				}
+		if (const auto existing = mMaskToArchetype.find(mask); existing != mMaskToArchetype.end()) {
+			return existing->second;
+		}
+		requireStructuralChangesAllowed();
+		auto newArchetype = std::make_shared<Archetype>();
+		newArchetype->mMask = mask;
+		for (const auto& [type, prototype] : mDefaultArraysArchetype) {
+			if (mask[type.value()]) {
+				newArchetype->mComponentArrays.emplace(type, prototype->createEmptyFromThis());
 			}
 		}
-		return mMaskToArchetype[mask];
+		mMaskToArchetype.emplace(std::move(mask), newArchetype);
+		return newArchetype;
 	}
 
 	void registerEntity(Entity entity) {
-		mEntityRecords[entity] = Record { {}, getArchetype(Signature()) };
+		requireStructuralChangesAllowed();
+		if (mEntityRecords.contains(entity)) {
+			throw std::logic_error("Entity is already registered in this ECS world");
+		}
+		if (mNextEntityGeneration == 0) {
+			throw std::overflow_error("ECS entity generation exhausted");
+		}
+		mEntityRecords.emplace(entity, Record { {}, getArchetype(Signature()), mNextEntityGeneration++ });
+	}
+
+	[[nodiscard]] EntityHandle getEntityHandle(Entity entity) const {
+		const auto record = mEntityRecords.find(entity);
+		if (record == mEntityRecords.end()) {
+			return {};
+		}
+		return { entity.getUniqueId(), mOwner, record->second.generation };
+	}
+
+	[[nodiscard]] std::optional<Entity> resolveEntity(EntityHandle handle) const {
+		if (handle.owner != mOwner || !handle.id.valid() || handle.generation == 0) {
+			return std::nullopt;
+		}
+		const Entity entity(handle.id);
+		const auto record = mEntityRecords.find(entity);
+		if (record == mEntityRecords.end() || record->second.generation != handle.generation) {
+			return std::nullopt;
+		}
+		return entity;
+	}
+
+	template <class T> [[nodiscard]] ComponentHandle<T> getComponentHandle(Entity entity) const {
+		SystemAccessScope::requireComponent(*this, getComponentType<T>(), AccessMode::Read);
+		const auto* array = findArray<T>(entity);
+		const auto generation = array ? array->getGeneration(entity) : 0;
+		return generation == 0 ? ComponentHandle<T> {} : ComponentHandle<T> { getEntityHandle(entity), getComponentType<T>(), generation };
+	}
+
+	template <class T> [[nodiscard]] ComponentHandle<Component> getComponentBaseHandle(Entity entity) const {
+		static_assert(std::is_base_of_v<Component, T>);
+		const auto handle = getComponentHandle<T>(entity);
+		return { handle.mOwner, handle.mType, handle.mGeneration };
+	}
+
+	// Resolving gives a borrowed pointer. Resolve again after structural changes.
+	template <class T> [[nodiscard]] const T* resolveComponent(const ComponentHandle<T>& handle) const {
+		const auto& owner = handle.mOwner;
+		if (owner.owner != mOwner || !owner.id.valid() || owner.generation == 0) {
+			return nullptr;
+		}
+		SystemAccessScope::requireComponent(*this, handle.mType, AccessMode::Read);
+		const Entity entity(owner.id);
+		const auto* array = findArray(entity, handle.mType, owner.generation);
+		if constexpr (std::is_same_v<T, Component>) {
+			return array ? array->tryGetBaseData(entity, handle.mGeneration) : nullptr;
+		}
+		else {
+			return array ? static_cast<const ComponentArray<T>*>(array)->tryGetData(entity, handle.mGeneration) : nullptr;
+		}
+	}
+
+	template <class T> [[nodiscard]] T* resolveComponent(const ComponentHandle<T>& handle) {
+		if (handle.mGeneration != 0) {
+			SystemAccessScope::requireComponent(*this, handle.mType, AccessMode::Write);
+		}
+		return const_cast<T*>(std::as_const(*this).resolveComponent(handle));
 	}
 
 	void destroyEntity(Entity entity) {
+		requireStructuralChangesAllowed();
 		const auto it = mEntityRecords.find(entity);
 		if (it == mEntityRecords.end()) {
 			return;
@@ -517,8 +619,8 @@ public:
 				if (columnSize < 0) {
 					columnSize = array->getSize();
 				}
-				else {
-					ASSERT_IF(array->getSize() == columnSize, "Archetype column sizes diverged");
+				else if (array->getSize() != columnSize) {
+					throw std::logic_error("Archetype column sizes diverged");
 				}
 			}
 			for (auto& [type, array] : archetype->mComponentArrays) {
@@ -530,42 +632,63 @@ public:
 	}
 
 	template <class... Components, class Func> void forEach(Func&& func) {
+		const QueryScope query(mActiveQueries);
 		static_assert(sizeof...(Components) > 0, "forEach requires components");
+		static_assert((!IsExclude<RawType<Components>> && ...), "Exclude is not supported by forEach");
+		constexpr auto count = sizeof...(Components);
+		const std::array types { getComponentType<Components>()... };
+		(SystemAccessScope::requireComponent(
+			 *this, getComponentType<Components>(), AccessTraits<Components>::ReadOnly ? AccessMode::Read : AccessMode::Write),
+			...);
+		std::array<ComponentArrayInterface*, count> arrays {};
+		std::array<bool, count> rowAligned {};
 		Signature mask;
-		(addComponentToArchetypeMaskImpl<Components>(mask), ...);
-		using FirstComponent = std::tuple_element_t<0, std::tuple<std::decay_t<Components>...>>;
-		const ComponentType canonicalType = getComponentType<FirstComponent>();
-
-		for (auto& [m, a] : mMaskToArchetype) {
-			if ((mask & m) != mask) {
-				continue;
+		ComponentArrayInterface* smallestSparse = nullptr;
+		std::size_t firstArchetype = count;
+		for (std::size_t i = 0; i < count; ++i) {
+			const auto storage = mComponentStorageType.find(types[i]);
+			if (storage == mComponentStorageType.end()) {
+				return;
 			}
-			const auto columnIt = a->mComponentArrays.find(canonicalType);
-			if (columnIt == a->mComponentArrays.end()) {
-				continue;
-			}
-			auto& column = columnIt->second;
-			for (const auto& [ctype, arr] : a->mComponentArrays) {
-				ASSERT_IF(arr->getSize() == column->getSize(), "Archetype column sizes diverged");
-			}
-			for (size_t i = 0; i < static_cast<size_t>(column->getSize()); ++i) {
-				Entity entity = column->getEntity(i);
-				if ((checkComponent<Components>(entity) && ...)) {
-					forEachComponents<Components...>(*a, i, entity, func);
+			if (storage->second == StorageType::Archetype) {
+				mask.set(types[i].value());
+				rowAligned[i] = true;
+				if (firstArchetype == count) {
+					firstArchetype = i;
 				}
 			}
+			else {
+				arrays[i] = mSparseArrays.at(types[i]).get();
+				if (!smallestSparse || arrays[i]->getSize() < smallestSparse->getSize()) {
+					smallestSparse = arrays[i];
+				}
+			}
+		}
+		if (firstArchetype == count) {
+			visitRows<Components...>(arrays, rowAligned, *smallestSparse, func, std::index_sequence_for<Components...> {});
+			return;
+		}
+		for (const auto& [signature, archetype] : mMaskToArchetype) {
+			if (!signature.contains(mask)) {
+				continue;
+			}
+			for (std::size_t i = 0; i < count; ++i) {
+				if (rowAligned[i]) {
+					arrays[i] = archetype->mComponentArrays.at(types[i]).get();
+				}
+			}
+			visitRows<Components...>(arrays, rowAligned, *arrays[firstArchetype], func, std::index_sequence_for<Components...> {});
 		}
 	}
 
 	template <class T> ComponentArray<T>& getComponentsArray() {
+		static_assert(std::is_same_v<T, RawType<T>>, "Get the pool by its unqualified component type");
 		auto type = getComponentType<T>();
+		SystemAccessScope::requireComponent(*this, type, AccessMode::Write);
 		if (mSparseArrays.contains(type)) {
 			return *(std::static_pointer_cast<ComponentArray<T>>(mSparseArrays.at(type)));
 		}
-		ASSERT("Array is not exist");
-		// LOG_ERROR("Array does not exist");
-		static auto def = std::make_shared<ComponentArray<T>>();
-		return *def;
+		throw std::runtime_error("Requested component does not have a sparse pool");
 	}
 
 	Signature getSignature(Entity entity) {

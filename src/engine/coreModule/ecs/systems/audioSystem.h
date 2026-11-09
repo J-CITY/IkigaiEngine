@@ -1,16 +1,7 @@
 #pragma once
 
-#include "ecsModule/systemManager.h"
-
 namespace IKIGAI::ECS {
-class Object;
-}
+class SystemManager;
 
-namespace IKIGAI::ECS {
-class AudioSystem : public ECS::System {
-public:
-	AudioSystem();
-
-	void onLateUpdate(ECS::World& world, ECS::CommandBuffer& cb, std::chrono::duration<double> dt) override;
-};
+void registerAudioSystems(SystemManager& systems);
 }

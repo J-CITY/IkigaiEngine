@@ -14,19 +14,25 @@
 namespace IKIGAI::EDITOR {
 namespace {
 	template <class T> struct Draft {
-		UTILS::WeakPtr<T> Owner = {};
+		ECS::ComponentHandle<T> Owner {};
+		std::weak_ptr<ECS::ComponentManager> Components {};
 		typename T::Descriptor Value = {};
 		std::string Error = {};
 	};
 	template <class T> Draft<T>& draft(T& component) {
 		static std::vector<Draft<T>> drafts;
-		std::erase_if(drafts, [](const auto& value) { return !value.Owner; });
+		auto& world = component.obj->getWorld();
+		const auto owner = world.getComponentManager()->template getComponentHandle<T>(component.obj->getID());
+		std::erase_if(drafts, [](const auto& value) {
+			const auto manager = value.Components.lock();
+			return !manager || !manager->resolveComponent(value.Owner);
+		});
 		for (auto& value : drafts) {
-			if (value.Owner.get() == &component) {
+			if (value.Owner == owner) {
 				return value;
 			}
 		}
-		drafts.push_back({ UTILS::WeakPtr<T>(&component), component.getDescriptor() });
+		drafts.push_back({ owner, world.getComponentManagerWeak(), component.getDescriptor() });
 		return drafts.back();
 	}
 	void unsignedInput(const char* label, unsigned& value) {

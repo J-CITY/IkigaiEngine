@@ -1,7 +1,6 @@
 #if USE_LUA
 #pragma once
 
-#include <cstdint>
 #include <sol/sol.hpp>
 
 #include "component.h"
@@ -52,9 +51,6 @@ private:
 	sol::table object = sol::lua_nil;
 	sol::environment scriptEnvironment;
 	std::string loadedVfsPath;
-#if defined(USE_FILE_WATCHER)
-	std::uint64_t fileWatchHandle = 0;
-#endif
 
 public:
 	IKI_PROPERTY(

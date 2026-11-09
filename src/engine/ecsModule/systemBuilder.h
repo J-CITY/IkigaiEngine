@@ -7,8 +7,8 @@ namespace IKIGAI::ECS {
 template <typename... Components> class MultiPhaseSystem : public System {
 public:
 	// Function types for different phases
-	using InitFunc = std::function<void(Entity, RawType<Components>&...)>;
-	using UpdateFunc = std::function<void(Entity, RawType<Components>&..., std::chrono::duration<double>)>;
+	using InitFunc = std::function<void(Entity, QueryReference<Components>...)>;
+	using UpdateFunc = std::function<void(Entity, QueryReference<Components>..., std::chrono::duration<double>)>;
 
 private:
 	InitFunc mOnAwake;
@@ -63,19 +63,21 @@ public:
 	void onUpdate(World& world, CommandBuffer& cb, std::chrono::duration<double> dt) override {
 		if (mOnUpdate) {
 			// Wrap the user function to inject dt
-			world.getComponentManager()->forEach<Components...>([&](Entity e, RawType<Components>&... comps) { mOnUpdate(e, comps..., dt); });
+			world.getComponentManager()->forEach<Components...>([&](Entity e, QueryReference<Components>... comps) { mOnUpdate(e, comps..., dt); });
 		}
 	}
 
 	void onFixedUpdate(World& world, CommandBuffer& cb, std::chrono::duration<double> dt) override {
 		if (mOnFixedUpdate) {
-			world.getComponentManager()->forEach<Components...>([&](Entity e, RawType<Components>&... comps) { mOnFixedUpdate(e, comps..., dt); });
+			world.getComponentManager()->forEach<Components...>(
+				[&](Entity e, QueryReference<Components>... comps) { mOnFixedUpdate(e, comps..., dt); });
 		}
 	}
 
 	void onLateUpdate(World& world, CommandBuffer& cb, std::chrono::duration<double> dt) override {
 		if (mOnLateUpdate) {
-			world.getComponentManager()->forEach<Components...>([&](Entity e, RawType<Components>&... comps) { mOnLateUpdate(e, comps..., dt); });
+			world.getComponentManager()->forEach<Components...>(
+				[&](Entity e, QueryReference<Components>... comps) { mOnLateUpdate(e, comps..., dt); });
 		}
 	}
 

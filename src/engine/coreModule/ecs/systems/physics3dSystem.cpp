@@ -65,8 +65,8 @@ P::SoftBodyDef softDefinition(const SoftBody3DComponent::Descriptor& s, const Ob
 	d.volumeCompliance = s.VolumeCompliance;
 	d.damping = s.Damping;
 	d.selfCollision = s.SelfCollision;
-	auto transform = MATH::QuaternionF::ToMatrix3(o.mTransform->getLocalRotation());
-	auto origin = o.mTransform->getLocalPosition();
+	auto transform = MATH::QuaternionF::ToMatrix3(o.tryGetTransform()->getLocalRotation());
+	auto origin = o.tryGetTransform()->getLocalPosition();
 	auto point = [&](P::Vec3 p) { return origin + transform.transform(p); };
 	if (!s.Vertices.empty()) {
 		if (s.Tetrahedra.empty() || s.Tetrahedra.size() % 4) {
@@ -219,8 +219,8 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 			c.body->clearAccumulators();
 			c.ResetDirty();
 			if (b->type == P::BodyType::Static) {
-				auto p = o.mTransform->getLocalPosition();
-				auto q = o.mTransform->getLocalRotation();
+				auto p = o.tryGetTransform()->getLocalPosition();
+				auto q = o.tryGetTransform()->getLocalRotation();
 				if (p != b->getPosition() || q != b->getOrientation()) {
 					mSimulation->teleport(b->id, p, q);
 				}
@@ -233,7 +233,7 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 			throw std::invalid_argument("Only one 3D rigid/soft/cloth/fluid component is allowed per object");
 		}
 		if (rigid || soft || cloth || fluid) {
-			auto scale = o.mTransform->getLocalScale();
+			auto scale = o.tryGetTransform()->getLocalScale();
 			if (o.hasParent() || std::abs(scale.x - 1) > 1e-4f || std::abs(scale.y - 1) > 1e-4f || std::abs(scale.z - 1) > 1e-4f) {
 				throw std::invalid_argument("3D physics requires root objects with unit scale; size belongs to the descriptor");
 			}
@@ -245,7 +245,7 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 				P::ForceField f;
 				f.kind = static_cast<P::ForceField::Kind>(s.Kind);
 				f.vector = s.Vector;
-				f.center = o.mTransform->getWorldPosition();
+				f.center = o.tryGetTransform()->getWorldPosition();
 				f.radius = s.Radius;
 				f.linear = s.Linear;
 				f.quadratic = s.Quadratic;
@@ -260,7 +260,7 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 				f.targets = static_cast<unsigned>(s.Targets);
 				return mSimulation->forces.add(f);
 			});
-			mSimulation->forces.field(c.simulationId())->center = o.mTransform->getWorldPosition();
+			mSimulation->forces.field(c.simulationId())->center = o.tryGetTransform()->getWorldPosition();
 		}
 		if (rigid) {
 			auto& c = *rigid;
@@ -272,8 +272,8 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 				P::BodyDef d;
 				d.type = s.BodyMode ? P::BodyType::Dynamic : P::BodyType::Static;
 				d.shape = s.ShapeKind ? P::Shape::box(s.HalfSize) : P::Shape::sphere(s.Radius);
-				d.position = o.mTransform->getLocalPosition();
-				d.orientation = o.mTransform->getLocalRotation();
+				d.position = o.tryGetTransform()->getLocalPosition();
+				d.orientation = o.tryGetTransform()->getLocalRotation();
 				d.mass = s.Mass;
 				d.friction = s.Friction;
 				d.restitution = s.Restitution;
@@ -295,8 +295,8 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 			c.pendingForce = {};
 			c.pendingImpulse = {};
 			if (b->type == P::BodyType::Static) {
-				auto p = o.mTransform->getLocalPosition();
-				auto q = o.mTransform->getLocalRotation();
+				auto p = o.tryGetTransform()->getLocalPosition();
+				auto q = o.tryGetTransform()->getLocalRotation();
 				if (p != b->getPosition() || q != b->getOrientation()) {
 					mSimulation->teleport(b->id, p, q);
 				}
@@ -323,8 +323,8 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 				d.pinTop = s.PinTop;
 				d.selfCollision = s.SelfCollision;
 				d.impermeable = s.Impermeable;
-				d.position = o.mTransform->getLocalPosition();
-				auto r = MATH::QuaternionF::ToMatrix3(o.mTransform->getLocalRotation());
+				d.position = o.tryGetTransform()->getLocalPosition();
+				auto r = MATH::QuaternionF::ToMatrix3(o.tryGetTransform()->getLocalRotation());
 				d.axisU = r.transform({ 1, 0, 0 });
 				d.axisV = r.transform({ 0, -1, 0 });
 				return mSimulation->createCloth(d);
@@ -341,8 +341,8 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 				d.particleMass = s.ParticleMass;
 				d.restDensity = s.RestDensity;
 				d.viscosity = s.Viscosity;
-				auto origin = o.mTransform->getLocalPosition();
-				auto r = MATH::QuaternionF::ToMatrix3(o.mTransform->getLocalRotation());
+				auto origin = o.tryGetTransform()->getLocalPosition();
+				auto r = MATH::QuaternionF::ToMatrix3(o.tryGetTransform()->getLocalRotation());
 				for (int z = 0; z < s.Depth; ++z) {
 					for (int y = 0; y < s.Height; ++y) {
 						for (int x = 0; x < s.Width; ++x) {
@@ -372,8 +372,8 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 	for (auto& object : objects) {
 		if (auto c = object->getComponent<Physics3DComponent>(); c && c->runtime) {
 			if (auto* b = mSimulation->body(c->simulationId()); b && b->type == P::BodyType::Dynamic) {
-				object->mTransform->setLocalPosition(b->getPosition());
-				object->mTransform->setLocalRotation(b->getOrientation());
+				object->tryGetTransform()->setLocalPosition(b->getPosition());
+				object->tryGetTransform()->setLocalRotation(b->getOrientation());
 			}
 		}
 	}
@@ -384,8 +384,8 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 				c->collider->body = c->body.get();
 				c->collider->calculateInternals();
 				if (b->type == P::BodyType::Dynamic) {
-					object->mTransform->setLocalPosition(b->getPosition());
-					object->mTransform->setLocalRotation(b->getOrientation());
+					object->tryGetTransform()->setLocalPosition(b->getPosition());
+					object->tryGetTransform()->setLocalRotation(b->getOrientation());
 				}
 			}
 		}

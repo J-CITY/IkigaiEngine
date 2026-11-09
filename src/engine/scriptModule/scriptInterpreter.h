@@ -1,8 +1,10 @@
 #if USE_LUA
 #pragma once
 
+#include "ecsModule/componentHandle.h"
 #include "utilsModule/weakPtr.h"
 #include <coreModule/ecs/components/scriptComponent.h>
+#include <cstdint>
 #include <memory>
 #include <sol/sol.hpp>
 #include <string>
@@ -24,15 +26,27 @@ public:
 	[[nodiscard]] bool isOk() const;
 
 private:
-	bool registerScript(IKIGAI::ECS::ScriptComponent& component);
+	struct TrackedScript {
+		ECS::ComponentHandle<ECS::ScriptComponent> handle {};
+		std::weak_ptr<ECS::ComponentManager> components {};
+		std::uint64_t fileWatchHandle = 0;
+
+		[[nodiscard]] ECS::ScriptComponent* resolve() const;
+	};
+
+	static TrackedScript capture(ECS::ScriptComponent& component);
+	TrackedScript* findScript(const ECS::ComponentHandle<ECS::ScriptComponent>& handle);
+	void pruneScripts();
+	bool registerScript(TrackedScript& tracked, ECS::ScriptComponent& component);
 	void unregisterScript(IKIGAI::ECS::ScriptComponent& component);
-	void attachFileWatch(IKIGAI::ECS::ScriptComponent& component);
-	void detachFileWatch(IKIGAI::ECS::ScriptComponent& component);
+	bool reloadScript(TrackedScript& tracked, ECS::ScriptComponent& component);
+	void attachFileWatch(TrackedScript& tracked, const ECS::ScriptComponent& component);
+	static void detachFileWatch(TrackedScript& tracked);
 
 	std::unique_ptr<sol::state> luaState;
 	sol::table sharedBindings {};
 	std::string scriptRootFolder;
-	std::vector<UTILS::WeakPtr<IKIGAI::ECS::ScriptComponent>> scripts;
+	std::vector<TrackedScript> scripts;
 	EVENT::EventListener mCreatedListener {};
 	EVENT::EventListener mDestroyedListener {};
 	bool checkOk = false;

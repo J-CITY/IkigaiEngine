@@ -1,6 +1,7 @@
 #pragma once
 #if USE_IKIGAI_SCRIPT
 #include <Library/ikigaiScript.h>
+#include <ecsModule/world.h>
 #include <mathModule/math.h>
 #include <utilsModule/weakPtr.h>
 namespace IKIGAI::ECS {
@@ -23,6 +24,7 @@ class IkigaiScriptBinder {
 		std::type_index type;
 		std::any value;
 		V script;
+		std::weak_ptr<ECS::ComponentManager> components {};
 		std::function<bool()> alive = [] { return true; };
 	};
 	std::vector<Handle> handles;
@@ -149,43 +151,53 @@ public:
 		}
 	}
 	template <class T> T* pointer(C* c) {
-		if (!c || !c->variables.contains("__handle"))
+		if (!c || !c->variables.contains("__handle")) {
 			throw std::runtime_error("Invalid engine handle");
+		}
 		auto id = read<size_t>(c->variables.at("__handle"));
-		if (id >= handles.size() || handles[id].type != typeid(T))
+		if (id >= handles.size() || handles[id].type != typeid(T)) {
 			throw std::runtime_error("Wrong engine handle type");
-		if (!handles[id].alive())
+		}
+		if (!handles[id].alive()) {
 			throw std::runtime_error("Engine reference has expired");
+		}
 		auto& h = handles[id].value;
 		if constexpr (std::is_same_v<T, ECS::Object>) {
 			auto p = std::any_cast<std::weak_ptr<T>&>(h).lock();
-			if (!p || !p->isAlive())
+			if (!p || !p->isAlive()) {
 				throw std::runtime_error("Object has been destroyed");
+			}
 			return p.get();
 		}
 		else if constexpr (std::is_base_of_v<ECS::ComponentBase, T>) {
-			auto& p = std::any_cast<UTILS::WeakPtr<T>&>(h);
-			if (!p)
+			const auto manager = handles[id].components.lock();
+			auto* component = manager ? manager->resolveComponent(std::any_cast<const ECS::ComponentHandle<T>&>(h)) : nullptr;
+			if (!component) {
 				throw std::runtime_error("Component has been removed");
-			return p.get();
+			}
+			return component;
 		}
-		else
+		else {
 			return std::any_cast<std::shared_ptr<T>&>(h).get();
+		}
 	}
-	template <class T, class H> V handle(H ref) {
-		if (!ref)
+	template <class T, class H> V handle(H ref, std::weak_ptr<ECS::ComponentManager> components = {}) {
+		if (!ref) {
 			return vm.makeValue();
+		}
 		// Reuse wrappers, including components relocated by sparse ECS storage.
-		for (auto& h : handles)
+		for (auto& h : handles) {
 			if (h.type == typeid(T)) {
 				auto* existing = std::any_cast<H>(&h.value);
-				if (existing && *existing == ref)
+				if (existing && *existing == ref) {
 					return h.script;
+				}
 			}
+		}
 		auto c = std::make_shared<C>(vm.resolveScope(names.at(typeid(T))));
 		c->variables["__handle"] = value(handles.size());
 		auto result = classValue(c);
-		handles.push_back({ typeid(T), std::move(ref), result });
+		handles.push_back({ typeid(T), std::move(ref), result, std::move(components) });
 		return result;
 	}
 	template <class T> T* reference(const V& v) {
@@ -204,7 +216,17 @@ public:
 		return handle<T>(std::move(ref));
 	}
 	template <class T> V component(UTILS::WeakPtr<T> ref) {
-		return handle<T>(std::move(ref));
+		if (!ref) {
+			return vm.makeValue();
+		}
+		auto& owner = ref->obj.get();
+		auto& world = owner.getWorld();
+		auto* manager = world.getComponentManager();
+		const auto identity = manager->getComponentHandle<T>(owner.getID());
+		return manager->resolveComponent(identity) == ref.get() ? handle<T>(identity, world.getComponentManagerWeak()) : vm.makeValue();
+	}
+	template <class T> V component(ECS::World& world, ECS::Entity owner) {
+		return handle<T>(world.getComponentManager()->getComponentHandle<T>(owner), world.getComponentManagerWeak());
 	}
 	template <class T, class F> void method(const char* name, F fn) {
 		auto scope = vm.resolveScope(names.at(typeid(T)));

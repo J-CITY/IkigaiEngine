@@ -61,7 +61,7 @@ void PropertyAnimationComponent::rebuildRuntimeAnimation() {
 		return;
 	}
 
-	mAnimation = ANIMATION::Animation::createFromDescriptor(descriptor);
+	mAnimation = ANIMATION::Animation::createFromDescriptor(descriptor, obj->getWorld());
 	if (!mAnimation) {
 		return;
 	}

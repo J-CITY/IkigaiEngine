@@ -1,6 +1,5 @@
 #include "vegetationInteractorComponent.h"
 #include "coreModule/ecs/object.h"
-#include <algorithm>
 #include <cmath>
 
 namespace IKIGAI::ECS {
@@ -21,36 +20,14 @@ VegetationInteractorComponent::Descriptor VegetationInteractorComponent::getDesc
 	return settings;
 }
 void VegetationInteractorComponent::onUpdate(std::chrono::duration<double> elapsed) {
-	const float dt = std::clamp(float(elapsed.count()), 0.0f, .25f);
-	mPrevious = mSamples;
-	mTrailTime += dt;
-	const float interval = std::max(settings.RecoverySeconds / 3, .016f);
-	if (mTrailTime >= interval) {
-		for (int i = 3; i > 0; --i) {
-			mSamples[i] = mSamples[i - 1];
-		}
-		mTrailTime = std::fmod(mTrailTime, interval);
-	}
-	for (size_t i = 1; i < mSamples.size(); ++i) {
-		mSamples[i].EndStrength.w = std::max(0.0f, mSamples[i].EndStrength.w - dt * settings.Strength / std::max(settings.RecoverySeconds, .001f));
-	}
-	const auto matrix = obj->getTransform()->getWorldMatrix();
-	const auto start = matrix * settings.Offset;
-	const auto end = matrix * (settings.Offset + MATH::Vector3f { 0, settings.Height, 0 });
-	mSamples[0] = { { start.x, start.y, start.z, settings.Radius }, { end.x, end.y, end.z, settings.Strength } };
-	if (mPrevious[0].StartRadius.w == 0) {
-		mPrevious = mSamples;
-	}
+	ENVIRONMENT::advanceVegetationInteractionTrail(mTrail, settings, obj->getTransform()->getWorldMatrix(), float(elapsed.count()));
 }
 void VegetationInteractorComponent::onDisable() {
-	mSamples = {};
-	mPrevious = {};
+	mTrail.current = {};
+	mTrail.previous = {};
 }
-const std::array<VegetationInteractorComponent::Sample, 4>& VegetationInteractorComponent::samples() const {
-	return mSamples;
-}
-const std::array<VegetationInteractorComponent::Sample, 4>& VegetationInteractorComponent::previousSamples() const {
-	return mPrevious;
+const ENVIRONMENT::VegetationInteractionTrail& VegetationInteractorComponent::trail() const {
+	return mTrail;
 }
 }
 

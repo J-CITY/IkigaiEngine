@@ -20,6 +20,25 @@ public:
 		return getUniqueId() == rhs.getUniqueId();
 	}
 };
+
+// Runtime identity for a single registration. Serialized object IDs stay unchanged.
+class EntityHandle {
+public:
+	using OwnerId = Id<EntityHandle>;
+	constexpr EntityHandle() noexcept = default;
+	constexpr bool operator==(const EntityHandle&) const noexcept = default;
+
+private:
+	friend class ComponentManager;
+	constexpr EntityHandle(Entity::ID id, OwnerId owner, std::uint64_t generation) noexcept
+		: id(id)
+		, owner(owner)
+		, generation(generation) { }
+
+	Entity::ID id {};
+	OwnerId owner {};
+	std::uint64_t generation = 0;
+};
 }
 
 template <> struct std::hash<IKIGAI::ECS::Entity> {

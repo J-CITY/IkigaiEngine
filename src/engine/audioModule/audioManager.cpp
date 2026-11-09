@@ -118,7 +118,7 @@ void IKIGAI::AUDIO::AudioManagerAL::setListenerPos(MATH::Vector3f pos, MATH::Vec
 	audioEngine->update3dAudio();
 }
 
-void IKIGAI::AUDIO::AudioManagerAL::setSourcePos(SoundResource& source, MATH::Vector3f pos) {
+void IKIGAI::AUDIO::AudioManagerAL::setSourcePos(const SoundResource& source, MATH::Vector3f pos) {
 	if (!isReady() || !source.id) {
 		return;
 	}

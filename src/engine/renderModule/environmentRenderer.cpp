@@ -112,7 +112,8 @@ void GameRenderer::updateEnvironment(SCENE_SYSTEM::Scene& scene) {
 	mContext.render->updateUniformBuffer(mEnvironmentUbo, mEnvironmentState);
 	mInteractionState = {};
 	struct Source {
-		ECS::VegetationInteractorComponent* Component = nullptr;
+		const ENVIRONMENT::VegetationInteractionTrail* Trail = nullptr;
+		int Owner = 0;
 		float Distance = 0;
 	};
 	std::vector<Source> sources;
@@ -122,20 +123,21 @@ void GameRenderer::updateEnvironment(SCENE_SYSTEM::Scene& scene) {
 		}
 		if (auto source = object->getComponent<ECS::VegetationInteractorComponent>()) {
 			const auto delta = object->getTransform()->getWorldPosition() - uboData.ViewPos;
-			sources.push_back({ source.get(), delta.dot(delta) });
+			sources.push_back({ &source->trail(), static_cast<int>(object->getID().getUniqueId()), delta.dot(delta) });
 		}
 	}
 	std::stable_sort(sources.begin(), sources.end(), [](const Source& a, const Source& b) { return a.Distance < b.Distance; });
 	size_t count = 0;
 	for (const auto& source : sources) {
-		for (size_t sample = 0; sample < source.Component->samples().size() && count < quality.InteractionSamples; ++sample) {
-			const auto& current = source.Component->samples()[sample];
-			const auto& previous = source.Component->previousSamples()[sample];
+		const auto& trail = *source.Trail;
+		for (size_t sample = 0; sample < trail.current.size() && count < quality.InteractionSamples; ++sample) {
+			const auto& current = trail.current[sample];
+			const auto& previous = trail.previous[sample];
 			mInteractionState.StartRadius[count] = current.StartRadius;
 			mInteractionState.EndStrength[count] = current.EndStrength;
 			mInteractionState.PreviousStartRadius[count] = previous.StartRadius;
 			mInteractionState.PreviousEndStrength[count] = previous.EndStrength;
-			mInteractionState.Owners[count].x = float(static_cast<int>(source.Component->obj->getID().getUniqueId()));
+			mInteractionState.Owners[count].x = float(source.Owner);
 			++count;
 		}
 		if (count == quality.InteractionSamples) {

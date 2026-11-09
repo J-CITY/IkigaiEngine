@@ -140,6 +140,9 @@ public:
 
 	void setLocalRotation(MATH::QuaternionF p_newRotation);
 
+	// Publish position and rotation together, retaining the world matrix from before the pose change.
+	void setLocalPose(MATH::Vector3f position, MATH::QuaternionF rotation);
+
 	void setLocalScale(IKIGAI::MATH::Vector3f p_newScale);
 
 	void translateLocal(const IKIGAI::MATH::Vector3f& p_translation);

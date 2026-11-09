@@ -975,7 +975,8 @@ std::string normalizeTrackAnimPath(std::string path) {
 
 bool bindTrackProperty(const IKIGAI::ANIMATION::TimelineAnimationTrackDescriptor& track, const std::string& trackKey, Prop& outProp) {
 	if (track.componentName == "EVENT") {
-		outProp = Prop(track.objectName, IKIGAI::ECS::Object::Id(IKIGAI::ECS::Object::Id::ID(track.objectId)), "EVENT", "",
+		const auto objectId = IKIGAI::ECS::Entity(IKIGAI::ECS::Entity::ID(track.objectId < 0 ? 0 : track.objectId));
+		outProp = Prop(track.objectName, objectId, "EVENT", "",
 			IKIGAI::ANIMATION::AnimationProperty(
 				trackKey, [](IKIGAI::ANIMATION::PropType val) { std::cout << "SEND EVENT" << std::get<std::string>(val) << std::endl; },
 				[]() { return IKIGAI::ANIMATION::PropType { std::string {} }; }),
@@ -983,6 +984,9 @@ bool bindTrackProperty(const IKIGAI::ANIMATION::TimelineAnimationTrackDescriptor
 		return true;
 	}
 
+	if (track.objectId < 0) {
+		return false;
+	}
 	getProp(track.objectName, IKIGAI::ECS::Object::Id(IKIGAI::ECS::Object::Id::ID(track.objectId)), track.componentName, track.propertyName, outProp);
 	return !outProp.propertyName.empty() && !outProp.animProp.getName().empty();
 }
@@ -1047,8 +1051,8 @@ void getObjectProps() {
 	const auto objId = selectObject->getID();
 	const auto objName = selectObject->getName();
 
-	auto cm = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::ECS::World>().getComponentManager();
-	auto components = cm->getComponents<IKIGAI::ECS::ComponentBase>(selectObject->getID());
+	auto* manager = selectObject->getWorld().getComponentManager();
+	auto components = manager->getComponents<IKIGAI::ECS::ComponentBase>(objId);
 	for (auto& component : components) {
 		getProps(objName, objId, component);
 	}

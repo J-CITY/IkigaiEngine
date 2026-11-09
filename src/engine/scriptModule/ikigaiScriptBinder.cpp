@@ -82,22 +82,28 @@ void IkigaiScriptBinder::bindActor() {
 		o.setParent(reference<Object>(a.at(0))->shared_from_this());
 		return vm.makeValue();
 	});
-#define GET_COMPONENT(Name, T) method<Object>("Get" Name, [this](Object& o, const Args&) { return component(o.getComponent<T>()); });
-	GET_COMPONENT("Transform", TransformComponent)
-	GET_COMPONENT("Camera", CameraComponent)
-	GET_COMPONENT("PointLight", PointLight)
-	GET_COMPONENT("SpotLight", SpotLight) GET_COMPONENT("DirectionalLight", DirectionalLight) GET_COMPONENT("AmbientBoxLight", AmbientLight)
-		GET_COMPONENT("AmbientSphereLight", AmbientSphereLight) GET_COMPONENT("ModelRenderer", ModelRenderer)
-			GET_COMPONENT("MaterialRenderer", MaterialRenderer)
+#define GET_COMPONENT(Name, T) method<Object>("Get" Name, [this](Object& o, const Args&) { return component<T>(o.getWorld(), o.getID()); })
+	GET_COMPONENT("Transform", TransformComponent);
+	GET_COMPONENT("Camera", CameraComponent);
+	GET_COMPONENT("PointLight", PointLight);
+	GET_COMPONENT("SpotLight", SpotLight);
+	GET_COMPONENT("DirectionalLight", DirectionalLight);
+	GET_COMPONENT("AmbientBoxLight", AmbientLight);
+	GET_COMPONENT("AmbientSphereLight", AmbientSphereLight);
+	GET_COMPONENT("ModelRenderer", ModelRenderer);
+	GET_COMPONENT("MaterialRenderer", MaterialRenderer);
 #undef GET_COMPONENT
-#define REMOVE_COMPONENT(Name, T) method<Object>("Remove" Name, [this](Object& o, const Args&) { return value(o.removeComponent<T>()); });
-				REMOVE_COMPONENT("Camera", CameraComponent) REMOVE_COMPONENT("ModelRenderer", ModelRenderer)
-					REMOVE_COMPONENT("MaterialRenderer", MaterialRenderer) REMOVE_COMPONENT("PointLight", PointLight)
-						REMOVE_COMPONENT("SpotLight", SpotLight) REMOVE_COMPONENT("DirectionalLight", DirectionalLight)
-							REMOVE_COMPONENT("AmbientBoxLight", AmbientLight) REMOVE_COMPONENT("AmbientSphereLight", AmbientSphereLight)
+#define REMOVE_COMPONENT(Name, T) method<Object>("Remove" Name, [this](Object& o, const Args&) { return value(o.removeComponent<T>()); })
+	REMOVE_COMPONENT("Camera", CameraComponent);
+	REMOVE_COMPONENT("ModelRenderer", ModelRenderer);
+	REMOVE_COMPONENT("MaterialRenderer", MaterialRenderer);
+	REMOVE_COMPONENT("PointLight", PointLight);
+	REMOVE_COMPONENT("SpotLight", SpotLight);
+	REMOVE_COMPONENT("DirectionalLight", DirectionalLight);
+	REMOVE_COMPONENT("AmbientBoxLight", AmbientLight);
+	REMOVE_COMPONENT("AmbientSphereLight", AmbientSphereLight);
 #undef REMOVE_COMPONENT
-								method<Object>(
-									"AddTransform", [this](Object& o, const Args&) { return component(o.addComponent<TransformComponent>()); });
+	method<Object>("AddTransform", [this](Object& o, const Args&) { return component(o.addComponent<TransformComponent>()); });
 }
 void IkigaiScriptBinder::bindComponents() {
 	type<TransformComponent>("Transform");

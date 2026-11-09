@@ -6,6 +6,7 @@
 
 #include "coreModule/ecs/object.h"
 #include "coroutineModule/task.h"
+#include "utilsModule/animationTimelineBind.h"
 #include "utilsModule/jsonLoader.h"
 #include "utilsModule/reflection/reflection.h"
 #include "utilsModule/serialization/typedDescriptor.h"
@@ -15,6 +16,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <typeindex>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -42,8 +44,9 @@ public:
 	struct Record {
 		std::string name;
 		std::string typeName;
+		// Serialized discriminator key. Keep stable across C++ type renames.
 		std::string typeKey;
-		std::string typeIdName;
+		std::type_index type = typeid(void);
 		StorageType storage = StorageType::Sparse;
 		bool lightweight = false;
 		std::function<void(World&)> registerStorage;
@@ -53,7 +56,7 @@ public:
 		std::function<void(Object&)> remove;
 		std::function<UTILS::WeakPtr<ComponentBase>(Object&)> resolve;
 		PrepareFn prepare;
-		std::function<bool(Object::Id, std::string_view, std::string_view, ANIMATION::AnimationProperty&)> bindTimelineProperty;
+		std::function<bool(World&, Object::Id, std::string_view, std::string_view, ANIMATION::AnimationProperty&)> bindTimelineProperty;
 #ifdef USE_EDITOR
 		std::function<void(UTILS::WeakPtr<ComponentBase>)> inspect;
 		std::function<void(const std::string&, Object::Id, UTILS::WeakPtr<ComponentBase>)> collectTimeline;
@@ -68,16 +71,17 @@ public:
 	template <class T> static bool enroll(StorageType storage = StorageType::Sparse, bool lightweight = false);
 
 	void applyStorage(World& world) const;
-	void setPrepare(std::string_view name, PrepareFn prepare);
+	void setPrepare(std::type_index type, PrepareFn prepare);
 	const Record* findByName(std::string_view name) const;
+	const Record* findByType(std::type_index type) const;
 	const Record* findInJson(const nlohmann::json& component) const;
 	void read(Object& object, const nlohmann::json& component) const;
 	std::vector<std::string> typeNames() const;
 	void createOnObject(Object& object, std::string_view typeName) const;
-	void removeFromObject(Object& object, std::string_view key) const;
+	void removeFromObject(Object& object, std::type_index type) const;
 	UTILS::WeakPtr<ComponentBase> resolveOnObject(Object& object, std::string_view name) const;
-	bool tryBindTimelineProperty(
-		Object::Id id, std::string_view componentName, std::string_view propertyName, ANIMATION::AnimationProperty& out) const;
+	bool tryBindTimelineProperty(World& world, Object::Id id, std::string_view componentName, std::string_view propertyName,
+		std::string_view trackName, ANIMATION::AnimationProperty& out) const;
 #ifdef USE_EDITOR
 	void inspectComponent(UTILS::WeakPtr<ComponentBase> component) const;
 	void collectTimeline(const std::string& name, Object::Id id, UTILS::WeakPtr<ComponentBase> component) const;
@@ -92,7 +96,7 @@ private:
 	std::unordered_map<std::string, std::size_t> mByName;
 	std::unordered_map<std::string, std::size_t> mByTypeName;
 	std::unordered_map<std::string, std::size_t> mByTypeKey;
-	std::unordered_map<std::string, std::size_t> mByTypeId;
+	std::unordered_map<std::type_index, std::size_t> mByType;
 };
 
 #ifdef USE_EDITOR
@@ -104,15 +108,13 @@ template <class T> inline void BindComponentEditor(ComponentCatalog::Record&) { 
 #endif
 }
 
-#include "utilsModule/animationTimelineBind.h"
-
 namespace IKIGAI::ECS {
 template <class T> bool ComponentCatalog::enroll(StorageType storage, bool lightweight) {
 	Record record;
 	record.name = GetComponentName<T>();
 	record.typeName = GetType<T>();
 	record.typeKey = record.name + "Type";
-	record.typeIdName = typeid(T).name();
+	record.type = typeid(T);
 	record.storage = storage;
 	record.lightweight = lightweight;
 	if (record.name.empty() || record.typeName.empty()) {
@@ -159,12 +161,9 @@ template <class T> bool ComponentCatalog::enroll(StorageType storage, bool light
 	}
 	BindComponentEditor<T>(record);
 	record.bindTimelineProperty
-		= [](Object::Id id, std::string_view componentName, std::string_view propertyName, ANIMATION::AnimationProperty& out) -> bool {
-		if (componentName != GetComponentName<T>()) {
-			return false;
-		}
-		return ANIMATION::detail::bindTimelineFromMembers<T>(id, propertyName, out);
-	};
+		= [](World& world, Object::Id id, std::string_view propertyName, std::string_view trackName, ANIMATION::AnimationProperty& out) {
+			  return ANIMATION::detail::bindTimelineFromMembers<T>(world, id, propertyName, trackName, out);
+		  };
 	instance().add(std::move(record));
 	return true;
 }

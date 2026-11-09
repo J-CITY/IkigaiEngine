@@ -18,10 +18,10 @@ P::Vec2 vec(MATH::Vector2f v) {
 	return { v.x, v.y };
 }
 float angle(const Object& o) {
-	return MATH::QuaternionF::ToEulerAngles(o.mTransform->getLocalRotation()).z;
+	return MATH::QuaternionF::ToEulerAngles(o.tryGetTransform()->getLocalRotation()).z;
 }
 P::Vec2 position(const Object& o) {
-	auto p = o.mTransform->getLocalPosition();
+	auto p = o.tryGetTransform()->getLocalPosition();
 	return { p.x, p.y };
 }
 void gridDimensions(int w, int h, float spacing) {
@@ -101,7 +101,7 @@ void Physics2DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 				auto& s = c.settings;
 				P::ForceField f;
 				f.kind = static_cast<P::ForceField::Kind>(s.Kind);
-				auto center = o.mTransform->getWorldPosition();
+				auto center = o.tryGetTransform()->getWorldPosition();
 				f.vector = vec(s.Vector);
 				f.center = { center.x, center.y };
 				f.radius = s.Radius;
@@ -118,7 +118,7 @@ void Physics2DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 				f.targets = static_cast<unsigned>(s.Targets);
 				return mSimulation->forces.add(f);
 			});
-			auto center = o.mTransform->getWorldPosition();
+			auto center = o.tryGetTransform()->getWorldPosition();
 			mSimulation->forces.field(c.simulationId())->center = { center.x, center.y };
 		}
 		if ((bool(rigid) + bool(soft) + bool(fluid) + bool(cloth)) > 1) {
@@ -130,8 +130,8 @@ void Physics2DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 		// Parent transforms and non-unit scale are explicit errors rather than
 		// silently mismatching rendered and physical geometry. Collider sizes
 		// are world units and independent of sprite pixel/anchor dimensions.
-		auto scale = o.mTransform->getLocalScale();
-		auto rotation = o.mTransform->getLocalRotation();
+		auto scale = o.tryGetTransform()->getLocalScale();
+		auto rotation = o.tryGetTransform()->getLocalRotation();
 		if (o.hasParent() || std::abs(scale.x - 1) > 1e-4f || std::abs(scale.y - 1) > 1e-4f || std::abs(rotation.x) > 1e-4f
 			|| std::abs(rotation.y) > 1e-4f) {
 			throw std::invalid_argument("2D physics requires root objects, unit XY scale and rotation about Z only");
@@ -318,8 +318,8 @@ void Physics2DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 	for (auto& o : objects) {
 		if (auto c = o->getComponent<Physics2DComponent>(); c && c->runtime) {
 			if (auto b = mSimulation->body(c->simulationId()); b && b->type == P::BodyType::Dynamic) {
-				o->mTransform->setLocalPosition({ b->position.x, b->position.y, o->mTransform->getLocalPosition().z });
-				o->mTransform->setLocalRotation(MATH::QuaternionF(0, 0, std::sin(b->angle / 2), std::cos(b->angle / 2)));
+				o->tryGetTransform()->setLocalPosition({ b->position.x, b->position.y, o->tryGetTransform()->getLocalPosition().z });
+				o->tryGetTransform()->setLocalRotation(MATH::QuaternionF(0, 0, std::sin(b->angle / 2), std::cos(b->angle / 2)));
 			}
 		}
 	}

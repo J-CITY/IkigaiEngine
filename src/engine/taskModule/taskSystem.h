@@ -47,12 +47,13 @@ namespace TASK {
 			using ResultType = std::invoke_result_t<decltype(boundTask)>;
 			using PackagedTask = std::packaged_task<ResultType()>;
 
-			PackagedTask _task { std::move(boundTask) };
-			Future<ResultType> _future { _task.get_future() };
-			TaskHandle<ResultType> _handle;
-			_handle.mTask = addTask(std::make_unique<Task<PackagedTask>>(std::move(_task), name, upstreamTask), threadID);
-			_handle.mFuture = std::make_shared<Future<ResultType>>(std::move(_future));
-			return _handle;
+			PackagedTask packagedTask { std::move(boundTask) };
+			auto future = packagedTask.get_future();
+			TaskHandle<ResultType> handle;
+			auto task = std::make_unique<Task<PackagedTask>>(std::move(packagedTask), name, upstreamTask);
+			handle.mFuture = std::make_shared<Future<ResultType>>(std::move(future));
+			handle.mTask = addTask(std::move(task), threadID);
+			return handle;
 		}
 
 		template <typename Func, typename... Args>

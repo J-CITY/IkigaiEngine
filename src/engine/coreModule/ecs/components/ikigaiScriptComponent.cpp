@@ -43,14 +43,22 @@ bool IkigaiScriptComponent::isScriptOk() const {
 }
 void IkigaiScriptComponent::attachFileWatch() {
 #if defined(USE_FILE_WATCHER)
-	if (fileWatchHandle != 0 || path.empty()) {
+	if (fileWatchHandle || path.empty()) {
+		return;
+	}
+	auto& world = obj->getWorld();
+	auto* manager = world.getComponentManager();
+	const auto handle = manager->getComponentHandle<IkigaiScriptComponent>(obj->getID());
+	if (manager->resolveComponent(handle) != this) {
+		// OnAwake may run on the temporary component before insertion.
 		return;
 	}
 	const auto vfsPath = SCRIPTING::IkigaiScriptVfsPath(path);
-	const auto weak = getWeak<IkigaiScriptComponent>();
-	fileWatchHandle = SCRIPTING::ScriptFileWatcher::watch(vfsPath, [weak]() {
-		if (weak) {
-			weak->reloadScript();
+	fileWatchHandle = SCRIPTING::ScriptFileWatcher::watch(vfsPath, [components = world.getComponentManagerWeak(), handle]() {
+		if (const auto manager = components.lock()) {
+			if (auto* script = manager->resolveComponent(handle)) {
+				script->reloadScript();
+			}
 		}
 	});
 #endif
@@ -58,15 +66,19 @@ void IkigaiScriptComponent::attachFileWatch() {
 
 void IkigaiScriptComponent::detachFileWatch() {
 #if defined(USE_FILE_WATCHER)
-	if (fileWatchHandle != 0) {
-		SCRIPTING::ScriptFileWatcher::unwatch(fileWatchHandle);
-		fileWatchHandle = 0;
+	if (fileWatchHandle) {
+		SCRIPTING::ScriptFileWatcher::unwatch(*fileWatchHandle);
+		fileWatchHandle.reset();
 	}
 #endif
 }
 
 void IkigaiScriptComponent::ensureRuntime() {
-	if (!runtime && !path.empty() && !obj.get().weak_from_this().expired()) {
+	if (runtime) {
+		attachFileWatch();
+		return;
+	}
+	if (!path.empty() && !obj.get().weak_from_this().expired()) {
 		runtime = std::make_unique<SCRIPTING::IkigaiScriptRuntime>(obj.get(), path);
 		attachFileWatch();
 		if (awake) {

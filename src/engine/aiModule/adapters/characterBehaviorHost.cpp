@@ -37,7 +37,7 @@ void CharacterBehaviorHost::bind(SCENE_SYSTEM::Scene& scene, const ECS::Componen
 std::optional<MATH::Vector3f> CharacterBehaviorHost::position(const EntityRef& entity) const {
 	auto handle = entity.handle.lock();
 	auto object = handle ? std::static_pointer_cast<ECS::Object>(handle) : nullptr;
-	if (!object || !object->isAlive() || !object->getIsActive() || !object->mTransform) {
+	if (!object || !object->isAlive() || !object->getIsActive() || !object->tryGetTransform()) {
 		return std::nullopt;
 	}
 #if USE_PHYSICS_3D
@@ -45,7 +45,7 @@ std::optional<MATH::Vector3f> CharacterBehaviorHost::position(const EntityRef& e
 		return motor->motor.capsule.feet;
 	}
 #endif
-	return object->mTransform->getWorldPosition();
+	return object->tryGetTransform()->getWorldPosition();
 }
 std::optional<MATH::Vector3f> CharacterBehaviorHost::ownerPosition() const {
 	auto owner = mOwner.lock();

@@ -4,6 +4,7 @@
 #include "utilsModule/reflection/reflection_macros.h"
 #include <cstdint>
 #include <memory>
+#include <optional>
 namespace IKIGAI::SCRIPTING {
 class IkigaiScriptRuntime;
 }
@@ -51,7 +52,7 @@ private:
 	std::unique_ptr<SCRIPTING::IkigaiScriptRuntime> runtime;
 	bool awake = false, started = false, enabled = false;
 #if defined(USE_FILE_WATCHER)
-	std::uint64_t fileWatchHandle = 0;
+	std::optional<std::uint64_t> fileWatchHandle {};
 #endif
 	void ensureRuntime();
 	void attachFileWatch();

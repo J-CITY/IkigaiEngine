@@ -8,8 +8,10 @@ using namespace IKIGAI::ECS;
 PropertyAnimationSystem::PropertyAnimationSystem() {
 	mName = "PropertyAnimationSystem";
 	mPriority = 15;
+	// Animation bindings can invoke setters on arbitrary components.
+	mExclusiveBatch = true;
 	auto cm = RESOURCES::ServiceManager::Get<ECS::World>().getComponentManager();
-	mReads.insert(cm->getComponentType<PropertyAnimationComponent>());
+	mWrites.insert(cm->getComponentType<PropertyAnimationComponent>());
 }
 
 void PropertyAnimationSystem::onUpdate(ECS::World& world, ECS::CommandBuffer&, std::chrono::duration<double> dt) {

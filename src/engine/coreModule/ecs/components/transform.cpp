@@ -19,9 +19,11 @@ TransformNotifier::NotificationHandlerID TransformNotifier::addNotificationHandl
 }
 
 void TransformNotifier::notifyChildren(Notification p_notification) {
-	if (!notificationHandlers.empty())
-		for (auto const& [id, handler] : notificationHandlers)
+	if (!notificationHandlers.empty()) {
+		for (auto const& [id, handler] : notificationHandlers) {
 			handler(p_notification);
+		}
+	}
 }
 
 bool TransformNotifier::removeNotificationHandler(const NotificationHandlerID& p_notificationHandlerID) {
@@ -31,10 +33,9 @@ bool TransformNotifier::removeNotificationHandler(const NotificationHandlerID& p
 // Transform Component
 
 TransformComponent::TransformComponent(UTILS::Ref<ECS::Object> obj, Vector3f localPosition, QuaternionF localRotation, Vector3f localScale)
-	: ComponentBase(obj) {
+	: ComponentBase(obj)
+	, transform(std::make_shared<Transform>(localPosition, localRotation, localScale)) {
 	__NAME__ = "TransformComponent";
-	transform = std::make_shared<Transform>();
-	transform->generateMatrices(localPosition, localRotation, localScale);
 }
 
 TransformComponent::TransformComponent(UTILS::Ref<ECS::Object> obj, const Descriptor& descriptor)
@@ -68,6 +69,11 @@ void TransformComponent::setLocalPosition(Vector3f newPosition) {
 
 void TransformComponent::setLocalRotation(QuaternionF newRotation) {
 	transform->setLocalRotation(newRotation);
+	obj->componentChangedEvent.run(this);
+}
+
+void TransformComponent::setLocalPose(Vector3f position, QuaternionF rotation) {
+	transform->generateMatrices(position, rotation, transform->getLocalScale());
 	obj->componentChangedEvent.run(this);
 }
 
@@ -214,17 +220,23 @@ bool Transform::hasParent() const {
 
 void Transform::generateMatrices(Vector3f position, QuaternionF rotation, Vector3f scale) {
 	if (use2d) {
-		auto screenSz = RESOURCES::ServiceManager::Get<WINDOW::Window>().getSize();
-		auto parentSize = hasParent() ? parent->mSize : Vector2f(screenSz.x, screenSz.y);
+		Vector2f parentSize {};
+		if (parent) {
+			parentSize = parent->mSize;
+		}
+		else {
+			const auto screenSize = RESOURCES::ServiceManager::Get<WINDOW::Window>().getSize();
+			parentSize = Vector2f(static_cast<float>(screenSize.x), static_cast<float>(screenSize.y));
+		}
 
 		localMatrix = Matrix4f();
 		localMatrix *= Matrix4f::Translation(Vector3f(parentSize.x * mAnchor.x, parentSize.y * mAnchor.y, 0.0f));
-		localMatrix *= Matrix4f::Translation(Vector3f(mSize.x * -mPivot.x * localScale.x, mSize.y * -mPivot.y * localScale.y, 0.0f));
+		localMatrix *= Matrix4f::Translation(Vector3f(mSize.x * -mPivot.x * scale.x, mSize.y * -mPivot.y * scale.y, 0.0f));
 		localMatrix *= Matrix4f::Translation(position);
-		localMatrix *= Matrix4f::Translation({ mSize.x * mPivot.x * localScale.x, mSize.y * mPivot.y * localScale.y, 0.0f });
-		localMatrix *= QuaternionF::ToMatrix4(QuaternionF::Normalize(localRotation));
-		localMatrix *= Matrix4f::Translation({ mSize.x * -mPivot.x * localScale.x, mSize.y * -mPivot.y * localScale.y, 0.0f });
-		localMatrix *= Matrix4f::Scaling(localScale /* * Vector3f(mSize.x, mSize.y, 1.0f)*/);
+		localMatrix *= Matrix4f::Translation({ mSize.x * mPivot.x * scale.x, mSize.y * mPivot.y * scale.y, 0.0f });
+		localMatrix *= QuaternionF::ToMatrix4(QuaternionF::Normalize(rotation));
+		localMatrix *= Matrix4f::Translation({ mSize.x * -mPivot.x * scale.x, mSize.y * -mPivot.y * scale.y, 0.0f });
+		localMatrix *= Matrix4f::Scaling(scale /* * Vector3f(mSize.x, mSize.y, 1.0f)*/);
 	}
 	else {
 		localMatrix = Matrix4f::Translation(position) * QuaternionF::ToMatrix4(QuaternionF::Normalize(rotation)) * Matrix4f::Scaling(scale);

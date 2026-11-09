@@ -5,7 +5,7 @@
 
 namespace IKIGAI::ECS {
 World::World() {
-	mComponentsManager = std::make_unique<ComponentManager>();
+	mComponentsManager = std::make_shared<ComponentManager>();
 	mSystemsManager = std::make_unique<SystemManager>(*this);
 }
 
@@ -13,6 +13,10 @@ World::~World() = default;
 
 ComponentManager* World::getComponentManager() const noexcept {
 	return mComponentsManager.get();
+}
+
+std::weak_ptr<ComponentManager> World::getComponentManagerWeak() const noexcept {
+	return mComponentsManager;
 }
 
 Entity World::createEntity() const {
@@ -27,8 +31,14 @@ void World::registerEntity(Entity newEntity) const {
 
 void World::destroyEntity(Entity newEntity) const {
 	if (CommandBuffer* commands = activeCommandBuffer()) {
-		ComponentManager* components = mComponentsManager.get();
-		commands->addCommand([components, newEntity]() { components->destroyEntity(newEntity); });
+		const EntityHandle handle = mComponentsManager->getEntityHandle(newEntity);
+		commands->addCommand([manager = getComponentManagerWeak(), handle]() {
+			if (const auto components = manager.lock()) {
+				if (const auto entity = components->resolveEntity(handle)) {
+					components->destroyEntity(*entity);
+				}
+			}
+		});
 		return;
 	}
 	mComponentsManager->destroyEntity(newEntity);

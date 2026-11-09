@@ -12,7 +12,8 @@ namespace IKIGAI::EDITOR {
 namespace {
 	using Vec3 = MATH::Vector3f;
 	struct Draft {
-		UTILS::WeakPtr<ECS::DestructibleMeshComponent> owner {};
+		ECS::ComponentHandle<ECS::DestructibleMeshComponent> owner {};
+		std::weak_ptr<ECS::ComponentManager> components {};
 		Vec3 point {};
 		Vec3 normal { 1, 0, 0 };
 		std::uint64_t piece = 0;
@@ -23,15 +24,21 @@ namespace {
 	};
 	Draft& draft(ECS::DestructibleMeshComponent& component) {
 		static std::vector<Draft> drafts {};
-		std::erase_if(drafts, [](const auto& value) { return !value.owner; });
+		auto& world = component.obj->getWorld();
+		const auto owner = world.getComponentManager()->getComponentHandle<ECS::DestructibleMeshComponent>(component.obj->getID());
+		std::erase_if(drafts, [](const auto& value) {
+			const auto manager = value.components.lock();
+			return !manager || !manager->resolveComponent(value.owner);
+		});
 		for (auto& value : drafts) {
-			if (value.owner.get() == &component) {
+			if (value.owner == owner) {
 				return value;
 			}
 		}
 		Draft value {};
-		value.owner = &component;
-		value.point = component.obj->mTransform->getWorldPosition();
+		value.owner = owner;
+		value.components = world.getComponentManagerWeak();
+		value.point = component.obj->tryGetTransform()->getWorldPosition();
 		drafts.push_back(std::move(value));
 		return drafts.back();
 	}
@@ -43,7 +50,7 @@ namespace {
 		auto* draw = ImGui::GetWindowDrawList();
 		draw->PushClipRect(origin, { origin.x + size.x, origin.y + size.y }, true);
 		draw->AddRectFilled(origin, { origin.x + size.x, origin.y + size.y }, IM_COL32(18, 22, 28, 255));
-		const auto center = component.obj->mTransform->getWorldPosition();
+		const auto center = component.obj->tryGetTransform()->getWorldPosition();
 		float radius = 1;
 		for (const auto& piece : component.pieces()) {
 			if (auto* body = scene.physics3d().body(piece.body)) {
@@ -165,7 +172,7 @@ void DrawDestructionEditor(ECS::DestructibleMeshComponent& component) {
 	ImGui::DragFloat3("Plane point (world)", &state.point.x, .02f);
 	ImGui::DragFloat3("Plane normal (world)", &state.normal.x, .02f);
 	if (ImGui::Button("Point at root")) {
-		state.point = component.obj->mTransform->getWorldPosition();
+		state.point = component.obj->tryGetTransform()->getWorldPosition();
 	}
 	if (ImGui::BeginCombo("Piece", state.piece ? std::to_string(state.piece).c_str() : "Nearest intersected")) {
 		if (ImGui::Selectable("Nearest intersected", !state.piece)) {

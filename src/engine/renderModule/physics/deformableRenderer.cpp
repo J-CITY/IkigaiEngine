@@ -31,30 +31,37 @@ namespace {
 void DeformableRenderer::update(SCENE_SYSTEM::Scene& scene) {
 	++mFrame;
 	for (auto& object : scene.getObjects()) {
-		if (!object->isAlive() || !object->getIsActive())
+		if (!object->isAlive() || !object->getIsActive()) {
 			continue;
+		}
 		auto renderer = object->getComponent<ECS::ModelRenderer>();
-		if (!renderer)
+		if (!renderer) {
 			continue;
+		}
 		std::shared_ptr<ECS::Physics3DLease> lease;
-		if (auto c = object->getComponent<ECS::SoftBody3DComponent>())
+		if (auto c = object->getComponent<ECS::SoftBody3DComponent>()) {
 			lease = c->runtime;
-		if (auto c = object->getComponent<ECS::Cloth3DComponent>())
+		}
+		if (auto c = object->getComponent<ECS::Cloth3DComponent>()) {
 			lease = c->runtime;
+		}
 		auto world = lease ? lease->world.lock() : nullptr;
-		if (!world)
+		if (!world) {
 			continue;
+		}
 		auto* s = world->softBody(lease->id);
-		if (!s || s->triangles.empty())
+		if (!s || s->triangles.empty()) {
 			continue;
+		}
 		auto snapshot = PHYSICS_COMMON::surface<PHYSICS::Particle>(s->particles, s->triangles);
 		auto& entry = mEntries[lease.get()];
 		bool create = entry.lease.expired() || entry.lease.lock() != lease || entry.vertices != snapshot.positions.size()
 			|| entry.indices != snapshot.indices.size();
-		if (create)
+		if (create) {
 			entry.uv.resize(snapshot.positions.size());
-		auto rotation = MATH::QuaternionF::ToMatrix3(object->mTransform->getLocalRotation());
-		auto origin = object->mTransform->getLocalPosition();
+		}
+		auto rotation = MATH::QuaternionF::ToMatrix3(object->tryGetTransform()->getLocalRotation());
+		auto origin = object->tryGetTransform()->getLocalPosition();
 		std::vector<SurfaceVertex> vertices(snapshot.positions.size());
 		for (std::size_t i = 0; i < vertices.size(); ++i) {
 			auto& v = vertices[i];
@@ -64,8 +71,9 @@ void DeformableRenderer::update(SCENE_SYSTEM::Scene& scene) {
 			v.tangent = MATH::Vector3f::Normalize(axis.cross(v.normal));
 			v.bitangent = v.normal.cross(v.tangent);
 			// Planar UVs remain tied to the undeformed surface on creation.
-			if (create)
+			if (create) {
 				entry.uv[i] = { v.position.x, v.position.y };
+			}
 			v.texCoord = { entry.uv[i][0], entry.uv[i][1] };
 		}
 		BoundingSphere bounds { rotation.transformTranspose(snapshot.center - origin), snapshot.radius + s->radius };
@@ -78,22 +86,25 @@ void DeformableRenderer::update(SCENE_SYSTEM::Scene& scene) {
 			data.bounds = bounds;
 			entry.mesh = CreateMesh(data);
 			entry.model = CreateEmptyModel();
-			if (!entry.model)
+			if (!entry.model) {
 				throw std::runtime_error("Deformable surface requires a supported mesh backend");
+			}
 			entry.model->setMeshes({ entry.mesh });
 			entry.model->setMaterialNames({ "Physics surface" });
 			entry.vertices = vertices.size();
 			entry.indices = snapshot.indices.size();
 			entry.lease = lease;
 		}
-		else
+		else {
 			entry.mesh->updateVertexStream(0, std::as_bytes(std::span(vertices)), vertices.size());
+		}
 		entry.mesh->setBoundingSphere(bounds);
 		entry.model->computeBoundingSphere();
 		entry.frame = mFrame;
 		scene.removeFromBVH(renderer);
-		if (renderer->getModel() != entry.model)
+		if (renderer->getModel() != entry.model) {
 			renderer->setModel(entry.model);
+		}
 		// setModelEvent can insert the model; rebuild once with current bounds.
 		scene.removeFromBVH(renderer);
 		scene.addToBVH(renderer);

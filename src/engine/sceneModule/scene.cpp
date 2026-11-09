@@ -64,7 +64,7 @@ struct BVHData {
 		, mesh(mesh) { }
 
 	const ECS::Transform& getTransform() {
-		return obj->mTransform->getTransform();
+		return obj->tryGetTransform()->getTransform();
 	}
 };
 
@@ -223,6 +223,36 @@ void Scene::go() {
 
 bool Scene::getIsExecute() const {
 	return isExecute;
+}
+
+void Scene::beginSimulationFrame() {
+#if USE_PHYSICS_3D
+	ECS::DestructionSystem::beginFrame(*this);
+#endif
+}
+
+void Scene::simulateFixedStep(std::chrono::duration<double> dt) {
+	fixedUpdate(dt);
+	getWorld().getSystemManager()->runFixedUpdate(dt);
+#if USE_PHYSICS_3D
+	stepPhysics3D(dt, false);
+#endif
+#if USE_PHYSICS_2D
+	stepPhysics2D(dt);
+#endif
+	finishFixedUpdate(dt);
+}
+
+void Scene::simulateFrame(std::chrono::duration<double> dt, [[maybe_unused]] float interpolationAlpha) {
+	auto* systems = getWorld().getSystemManager();
+	systems->runUpdate(dt);
+	update(dt);
+#if USE_PHYSICS_3D
+	presentDestructibles(interpolationAlpha);
+#endif
+	// Object lifecycle dispatch owns component callbacks, including LogicComponent.
+	lateUpdate(dt);
+	systems->runLateUpdate(dt);
 }
 
 void Scene::update(std::chrono::duration<double> dt) {
@@ -391,9 +421,9 @@ void Scene::addToBVH(UTILS::WeakPtr<ECS::ComponentBase> component) {
 			: model->getBoundingSphere();
 		// TODO: add support RENDER::CullingOptions::FRUSTUM_PER_MESH
 		// TODO: add event for change CullingOptions
-		auto gbs = getGlobalBoundingSphere(modelBoundingSphere, modelRenderer->obj->mTransform->getTransform());
+		auto gbs = getGlobalBoundingSphere(modelBoundingSphere, modelRenderer->obj->tryGetTransform()->getTransform());
 		if (auto materials = modelRenderer->obj->getComponent<ECS::MaterialRenderer>()) {
-			const auto scale = modelRenderer->obj->mTransform->getWorldScale();
+			const auto scale = modelRenderer->obj->tryGetTransform()->getWorldScale();
 			gbs.radius += DeformationPadding(*materials) * std::max({ 1.0f, std::abs(scale.x), std::abs(scale.y), std::abs(scale.z) });
 		}
 #if USE_PHYSICS_3D
@@ -401,8 +431,8 @@ void Scene::addToBVH(UTILS::WeakPtr<ECS::ComponentBase> component) {
 			auto skeletal = modelRenderer->obj->getComponent<ECS::SkeletalComponent>();
 			auto* pose = skeletal ? dynamic_cast<SKELETON::RagdollInstance*>(skeletal->finalPlayable(nullptr)) : nullptr;
 			if (pose) {
-				gbs.radius += pose->boundsRadius() + (gbs.position - modelRenderer->obj->mTransform->getWorldPosition()).magnitude();
-				gbs.position = modelRenderer->obj->mTransform->getWorldPosition();
+				gbs.radius += pose->boundsRadius() + (gbs.position - modelRenderer->obj->tryGetTransform()->getWorldPosition()).magnitude();
+				gbs.position = modelRenderer->obj->tryGetTransform()->getWorldPosition();
 			}
 		}
 #endif
@@ -1065,7 +1095,7 @@ void AppendSurfaceDrawables(Scene& scene, ChunkContext& ctx, const MATH::Vector3
 
 			MATH::Vector3f localCameraPos = cameraPosition;
 			if (chunk.camera) {
-				localCameraPos = chunk.camera->obj->mTransform->getWorldPosition();
+				localCameraPos = chunk.camera->obj->tryGetTransform()->getWorldPosition();
 			}
 
 			float distanceToActor = MATH::Vector3f::Distance(modelRenderer.obj->getTransform()->getWorldPosition(), localCameraPos);
@@ -1193,7 +1223,7 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledBVHDrawa
 
 				MATH::Vector3f localCameraPos = cameraPosition;
 				if (chunk.camera) {
-					localCameraPos = chunk.camera->obj->mTransform->getWorldPosition();
+					localCameraPos = chunk.camera->obj->tryGetTransform()->getWorldPosition();
 				}
 
 				float distanceToActor = MATH::Vector3f::Distance(transform.getWorldPosition(), localCameraPos);
@@ -1288,7 +1318,7 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledDrawable
 
 						MATH::Vector3f localCameraPos = cameraPosition;
 						if (chunk.camera) {
-							localCameraPos = chunk.camera->obj->mTransform->getWorldPosition();
+							localCameraPos = chunk.camera->obj->tryGetTransform()->getWorldPosition();
 						}
 
 						float distanceToActor = MATH::Vector3f::Distance(transform.getWorldPosition(), localCameraPos);
@@ -1365,7 +1395,7 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(
 
 					MATH::Vector3f localCameraPos = cameraPosition;
 					if (chunk.camera) {
-						localCameraPos = chunk.camera->obj->mTransform->getWorldPosition();
+						localCameraPos = chunk.camera->obj->tryGetTransform()->getWorldPosition();
 					}
 
 					float distanceToActor = MATH::Vector3f::Distance(transform.getWorldPosition(), localCameraPos);

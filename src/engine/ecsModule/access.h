@@ -12,6 +12,9 @@ template <typename T> struct Exclude {
 	using Type = T;
 };
 
+template <typename T> inline constexpr bool IsExclude = false;
+template <typename T> inline constexpr bool IsExclude<Exclude<T>> = true;
+
 template <typename T> struct AccessTraits {
 	using Type = std::remove_cvref_t<T>;
 	static constexpr bool ReadOnly = false;
@@ -34,4 +37,6 @@ template <typename T> struct AccessTraits<Write<T>> {
 
 // Helper to get raw type
 template <typename T> using RawType = typename AccessTraits<T>::Type;
+
+template <typename T> using QueryReference = std::conditional_t<AccessTraits<T>::ReadOnly, const RawType<T>&, RawType<T>&>;
 }

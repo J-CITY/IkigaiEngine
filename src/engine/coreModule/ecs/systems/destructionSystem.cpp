@@ -137,7 +137,7 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 		}
 
 		if (c.mInstance
-			&& (object->hasParent() || (object->mTransform->getWorldScale() - MATH::Vector3f(1)).magnitude() > 1e-5f
+			&& (object->hasParent() || (object->tryGetTransform()->getWorldScale() - MATH::Vector3f(1)).magnitude() > 1e-5f
 				|| object->getComponent<SurfaceComponent>() || object->getComponent<ChunkModelRenderer>() || object->getComponent<ModelRenderer>()
 				|| object->getComponent<ModelLODRenderer>() || object->getComponent<SkeletalComponent>() || object->getComponent<Physics3DComponent>()
 				|| object->getComponent<PhysicsComponent>() || object->getComponent<RagdollComponent>() || object->getComponent<SoftBody3DComponent>()
@@ -166,7 +166,7 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 		try {
 			if (!c.mInstance) {
 				++runtime.operations;
-				if (object->hasParent() || (object->mTransform->getWorldScale() - MATH::Vector3f(1)).magnitude() > 1e-5f) {
+				if (object->hasParent() || (object->tryGetTransform()->getWorldScale() - MATH::Vector3f(1)).magnitude() > 1e-5f) {
 					throw std::runtime_error("Destructible requires a root with unit scale");
 				}
 				if (object->getComponent<Physics3DComponent>() || object->getComponent<PhysicsComponent>() || object->getComponent<RagdollComponent>()
@@ -216,7 +216,8 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 					}
 					render.object->getComponent<ModelRenderer>()->getModel()->computeBoundingSphere();
 					statistics.uploadMilliseconds += milliseconds(uploadStart);
-					instance->initialize(world, object->mTransform->getWorldPosition(), object->mTransform->getWorldRotation(), limits.MaximumBodies);
+					instance->initialize(
+						world, object->tryGetTransform()->getWorldPosition(), object->tryGetTransform()->getWorldRotation(), limits.MaximumBodies);
 					render.id = instance->pieces().front().id;
 				} catch (...) {
 					dispose(scene, render.object);
@@ -551,7 +552,7 @@ void DestructionSystem::present(SCENE_SYSTEM::Scene& scene, float alpha) {
 		}
 		for (auto& render : c->mRenderPieces) {
 
-			auto& transform = *render.object->mTransform;
+			auto& transform = *render.object->tryGetTransform();
 			const auto previous = transform.getWorldMatrix();
 			const auto position = render.previousPosition * (1 - alpha) + render.currentPosition * alpha;
 			const auto rotation = MATH::QuaternionF::Slerp(render.previousRotation, render.currentRotation, alpha);
@@ -559,8 +560,7 @@ void DestructionSystem::present(SCENE_SYSTEM::Scene& scene, float alpha) {
 			const auto oldRotation = transform.getWorldRotation();
 			if ((oldPosition - position).squareMagnitude() > 1e-16f || oldRotation.x != rotation.x || oldRotation.y != rotation.y
 				|| oldRotation.z != rotation.z || oldRotation.w != rotation.w) {
-				transform.setLocalPosition(position);
-				transform.setLocalRotation(rotation);
+				transform.setLocalPose(position, rotation);
 				scene.updateInBVH(render.object->getComponent<ModelRenderer>().get());
 			}
 			transform.getTransform().setPrevWorldMatrix(render.poseReady ? previous : transform.getWorldMatrix());

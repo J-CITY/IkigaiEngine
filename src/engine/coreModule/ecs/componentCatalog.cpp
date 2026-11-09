@@ -11,14 +11,15 @@ ComponentCatalog& ComponentCatalog::instance() {
 }
 
 void ComponentCatalog::add(Record record) {
-	if (mByName.contains(record.name) || mByTypeKey.contains(record.typeKey) || mByTypeName.contains(record.typeName)) {
+	if (mByName.contains(record.name) || mByTypeKey.contains(record.typeKey) || mByTypeName.contains(record.typeName)
+		|| mByType.contains(record.type)) {
 		throw std::logic_error("Duplicate component registration: " + record.name);
 	}
 	const auto index = mRecords.size();
 	mByName.emplace(record.name, index);
 	mByTypeName.emplace(record.typeName, index);
 	mByTypeKey.emplace(record.typeKey, index);
-	mByTypeId.emplace(record.typeIdName, index);
+	mByType.emplace(record.type, index);
 	mRecords.push_back(std::move(record));
 }
 
@@ -34,16 +35,21 @@ const ComponentCatalog::Record* ComponentCatalog::findByName(std::string_view na
 	return find(mByName, name);
 }
 
+const ComponentCatalog::Record* ComponentCatalog::findByType(std::type_index type) const {
+	const auto found = mByType.find(type);
+	return found != mByType.end() ? &mRecords[found->second] : nullptr;
+}
+
 void ComponentCatalog::applyStorage(World& world) const {
 	for (const auto& record : mRecords) {
 		record.registerStorage(world);
 	}
 }
 
-void ComponentCatalog::setPrepare(std::string_view name, PrepareFn prepare) {
-	const auto found = mByName.find(std::string(name));
-	if (found == mByName.end()) {
-		throw std::logic_error("Cannot prepare an unregistered component: " + std::string(name));
+void ComponentCatalog::setPrepare(std::type_index type, PrepareFn prepare) {
+	const auto found = mByType.find(type);
+	if (found == mByType.end()) {
+		throw std::logic_error("Cannot prepare an unregistered component: " + std::string(type.name()));
 	}
 	mRecords[found->second].prepare = std::move(prepare);
 }
@@ -94,15 +100,8 @@ void ComponentCatalog::createOnObject(Object& object, std::string_view typeName)
 	}
 }
 
-void ComponentCatalog::removeFromObject(Object& object, std::string_view key) const {
-	const auto* record = find(mByTypeId, key);
-	if (!record) {
-		record = find(mByName, key);
-	}
-	if (!record) {
-		record = find(mByTypeName, key);
-	}
-	if (record) {
+void ComponentCatalog::removeFromObject(Object& object, std::type_index type) const {
+	if (const auto* record = findByType(type)) {
 		record->remove(object);
 	}
 }
@@ -115,36 +114,30 @@ UTILS::WeakPtr<ComponentBase> ComponentCatalog::resolveOnObject(Object& object, 
 	return record->resolve(object);
 }
 
+bool ComponentCatalog::tryBindTimelineProperty(World& world, Object::Id id, std::string_view componentName, std::string_view propertyName,
+	std::string_view trackName, ANIMATION::AnimationProperty& out) const {
+	if (const auto* record = findByName(componentName); record && record->bindTimelineProperty) {
+		return record->bindTimelineProperty(world, id, propertyName, trackName, out);
+	}
+	return false;
+}
+
 #ifdef USE_EDITOR
 void ComponentCatalog::inspectComponent(UTILS::WeakPtr<ComponentBase> component) const {
 	if (!component) {
 		return;
 	}
-	if (const auto* record = findByName(component->getName())) {
-		if (record->inspect) {
-			record->inspect(component);
-		}
+	if (const auto* record = findByType(typeid(*component)); record && record->inspect) {
+		record->inspect(component);
 	}
-}
-
-bool ComponentCatalog::tryBindTimelineProperty(
-	Object::Id id, std::string_view componentName, std::string_view propertyName, ANIMATION::AnimationProperty& out) const {
-	if (const auto* record = findByName(componentName)) {
-		if (record->bindTimelineProperty) {
-			return record->bindTimelineProperty(id, componentName, propertyName, out);
-		}
-	}
-	return false;
 }
 
 void ComponentCatalog::collectTimeline(const std::string& name, Object::Id id, UTILS::WeakPtr<ComponentBase> component) const {
 	if (!component) {
 		return;
 	}
-	if (const auto* record = findByName(component->getName())) {
-		if (record->collectTimeline) {
-			record->collectTimeline(name, id, component);
-		}
+	if (const auto* record = findByType(typeid(*component)); record && record->collectTimeline) {
+		record->collectTimeline(name, id, component);
 	}
 }
 

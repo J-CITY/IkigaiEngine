@@ -16,6 +16,7 @@ public:
 	~World();
 
 	[[nodiscard]] ComponentManager* getComponentManager() const noexcept;
+	[[nodiscard]] std::weak_ptr<ComponentManager> getComponentManagerWeak() const noexcept;
 	[[nodiscard]] SystemManager* getSystemManager() const noexcept;
 
 	template <typename... T> SystemBuilder<T...> system(std::string name);
@@ -26,7 +27,7 @@ public:
 
 private:
 	std::unique_ptr<SystemManager> mSystemsManager;
-	std::unique_ptr<ComponentManager> mComponentsManager;
+	std::shared_ptr<ComponentManager> mComponentsManager;
 };
 }
 

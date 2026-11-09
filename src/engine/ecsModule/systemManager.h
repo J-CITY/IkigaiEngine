@@ -7,7 +7,9 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <typeindex>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace IKIGAI::ECS {
@@ -44,6 +46,28 @@ public:
 		mName = name;
 	}
 
+	// Set resource access and dependencies before registering the system.
+	template <typename T> void readsResource() {
+		mResourceReads.emplace(typeid(T));
+	}
+	template <typename T> void writesResource() {
+		mResourceWrites.emplace(typeid(T));
+	}
+	template <typename T> const T& readResource(const T& resource) const {
+		SystemAccessScope::requireResource(typeid(T), AccessMode::Read);
+		return resource;
+	}
+	template <typename T> T& writeResource(T& resource) const {
+		SystemAccessScope::requireResource(typeid(T), AccessMode::Write);
+		return resource;
+	}
+	void runBefore(std::string systemName) {
+		mRunBefore.push_back(std::move(systemName));
+	}
+	void runAfter(std::string systemName) {
+		mRunAfter.push_back(std::move(systemName));
+	}
+
 	// Metadata for Graph
 	std::string mName;
 	std::unordered_set<ComponentType> mReads;
@@ -52,6 +76,8 @@ public:
 	int mPriority = 0;
 	// Never shares a batch, including with systems whose components do not overlap.
 	bool mExclusiveBatch = false;
+	// Shared batches are always checked. Opt in to the same checks when alone.
+	bool mValidateAccess = false;
 
 	// Signature for matching (if Query based)
 	Signature mQueryHas;
@@ -60,6 +86,13 @@ public:
 	// State flags
 	bool mIsAwake = false;
 	bool mIsStarted = false;
+
+private:
+	friend class SystemManager;
+	std::unordered_set<std::type_index> mResourceReads;
+	std::unordered_set<std::type_index> mResourceWrites;
+	std::vector<std::string> mRunBefore;
+	std::vector<std::string> mRunAfter;
 };
 
 class SystemManager {
@@ -157,6 +190,7 @@ private:
 	bool mIsDirty = true;
 
 	void rebuildBatches();
+	template <class PhaseFunc> void runPhase(PhaseFunc&& phaseFunc);
 
 	// Dependency Graph
 	// std::vector<std::vector<int>> mGraph;

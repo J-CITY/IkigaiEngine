@@ -1,5 +1,6 @@
 #include "animation.h"
 
+#include "animationTimelineBind.h"
 #include "coreModule/ecs/components/transform.h"
 #include "resourceModule/serviceManager.h"
 #include "sceneModule/sceneManager.h"
@@ -11,6 +12,28 @@ using namespace IKIGAI::MATH;
 using namespace IKIGAI::MATH::CURVES;
 
 namespace {
+using namespace IKIGAI;
+
+template <class Setter, class Getter>
+bool bindTransformProperty(ECS::Entity id, std::string_view nodeName, std::string trackName, Setter set, Getter get, InterpolationType interpolation,
+	AnimationProperty& out) {
+	auto& scene = RESOURCES::ServiceManager::Get<SCENE_SYSTEM::SceneManager>().getCurrentScene();
+	const auto object = scene.findObjectByID(id);
+	if (!object) {
+		LOG_ERROR << nodeName << ": missing object id " << id.getUniqueId();
+		return false;
+	}
+	auto& world = object->getWorld();
+	const auto& components = *world.getComponentManager();
+	const auto handle = components.getComponentHandle<ECS::TransformComponent>(id);
+	if (!components.resolveComponent(handle)) {
+		LOG_ERROR << nodeName << ": object has no TransformComponent";
+		return false;
+	}
+	out = IKIGAI::ANIMATION::detail::makeComponentProperty<Vector3f>(
+		std::move(trackName), world.getComponentManagerWeak(), handle, set, get, interpolation);
+	return true;
+}
 
 float segmentProgress(const AnimationProperty& prop, const Curve& curve, float curTime, float duration) {
 	const float linearT = std::min(1.f, duration > 0.f ? curTime / duration : 1.f);
@@ -96,36 +119,12 @@ NodableAnimationNodePos::NodableAnimationNodePos(ECS::Object::Id id, Vector3f to
 	: id(id)
 	, toPos(toPos)
 	, time(time) {
-	auto& scene = RESOURCES::ServiceManager::Get<SCENE_SYSTEM::SceneManager>().getCurrentScene();
-	auto obj = scene.findObjectByID(id);
-	if (!obj) {
-		LOG_ERROR << "NodableAnimationNodePos: missing object id " << id.getUniqueId();
+	if (!bindTransformProperty(id, "NodableAnimationNodePos", "propPos", &ECS::TransformComponent::setLocalPosition,
+			&ECS::TransformComponent::getLocalPosition, interpolation, prop)) {
 		status = Status::FINISH;
 		return;
 	}
-	auto component = obj->getComponent<ECS::TransformComponent>();
-	if (!component) {
-		LOG_ERROR << "NodableAnimationNodePos: object has no TransformComponent";
-		status = Status::FINISH;
-		return;
-	}
-	fromPos = component->getLocalPosition();
-	prop = AnimationProperty(
-		"propPos",
-		[component](PropType value) {
-			if (auto* val = std::get_if<Vector3f>(&value)) {
-				if (component) {
-					component->setLocalPosition(*val);
-				}
-			}
-		},
-		[component]() -> PropType {
-			if (component) {
-				return component->getLocalPosition();
-			}
-			return Vector3f {};
-		},
-		interpolation);
+	fromPos = std::get<Vector3f>(prop.get());
 }
 
 void NodableAnimationNodePos::update(float dt) {
@@ -150,36 +149,12 @@ NodableAnimationNodeScale::NodableAnimationNodeScale(ECS::Object::Id id, Vector3
 	: id(id)
 	, to(to)
 	, time(time) {
-	auto& scene = RESOURCES::ServiceManager::Get<SCENE_SYSTEM::SceneManager>().getCurrentScene();
-	auto obj = scene.findObjectByID(id);
-	if (!obj) {
-		LOG_ERROR << "NodableAnimationNodeScale: missing object id " << id.getUniqueId();
+	if (!bindTransformProperty(id, "NodableAnimationNodeScale", "propScale", &ECS::TransformComponent::setLocalScale,
+			&ECS::TransformComponent::getLocalScale, interpolation, prop)) {
 		status = Status::FINISH;
 		return;
 	}
-	auto component = obj->getComponent<ECS::TransformComponent>();
-	if (!component) {
-		LOG_ERROR << "NodableAnimationNodeScale: object has no TransformComponent";
-		status = Status::FINISH;
-		return;
-	}
-	from = component->getLocalScale();
-	prop = AnimationProperty(
-		"propScale",
-		[component](PropType value) {
-			if (auto* val = std::get_if<Vector3f>(&value)) {
-				if (component) {
-					component->setLocalScale(*val);
-				}
-			}
-		},
-		[component]() -> PropType {
-			if (component) {
-				return component->getLocalScale();
-			}
-			return Vector3f {};
-		},
-		interpolation);
+	from = std::get<Vector3f>(prop.get());
 }
 
 void NodableAnimationNodeScale::update(float dt) {
@@ -203,36 +178,12 @@ NodableAnimationNodeRotate::NodableAnimationNodeRotate(ECS::Object::Id id, Vecto
 	: id(id)
 	, to(to)
 	, time(time) {
-	auto& scene = RESOURCES::ServiceManager::Get<SCENE_SYSTEM::SceneManager>().getCurrentScene();
-	auto obj = scene.findObjectByID(id);
-	if (!obj) {
-		LOG_ERROR << "NodableAnimationNodeRotate: missing object id " << id.getUniqueId();
+	if (!bindTransformProperty(id, "NodableAnimationNodeRotate", "propRotate", &ECS::TransformComponent::setLocalRotationDeg,
+			&ECS::TransformComponent::getLocalRotationDeg, interpolation, prop)) {
 		status = Status::FINISH;
 		return;
 	}
-	auto component = obj->getComponent<ECS::TransformComponent>();
-	if (!component) {
-		LOG_ERROR << "NodableAnimationNodeRotate: object has no TransformComponent";
-		status = Status::FINISH;
-		return;
-	}
-	from = component->getLocalRotationDeg();
-	prop = AnimationProperty(
-		"propRotate",
-		[component](PropType value) {
-			if (auto* val = std::get_if<Vector3f>(&value)) {
-				if (component) {
-					component->setLocalRotationDeg(*val);
-				}
-			}
-		},
-		[component]() -> PropType {
-			if (component) {
-				return component->getLocalRotationDeg();
-			}
-			return Vector3f {};
-		},
-		interpolation);
+	from = std::get<Vector3f>(prop.get());
 	prop.setEulerShortestPath(true);
 }
 

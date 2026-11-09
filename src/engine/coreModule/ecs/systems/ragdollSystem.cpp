@@ -14,14 +14,14 @@ namespace {
 	using Frame = SKELETON::RagdollFrame;
 	void setRoot(Object& object, Frame root) {
 		if (auto parent = object.getParent()) {
-			root.position = MATH::Matrix4f::Inverse(parent->mTransform->getWorldMatrix()) * root.position;
-			root.rotation = MATH::QuaternionF::Conjugate(parent->mTransform->getWorldRotation()) * root.rotation;
+			root.position = MATH::Matrix4f::Inverse(parent->tryGetTransform()->getWorldMatrix()) * root.position;
+			root.rotation = MATH::QuaternionF::Conjugate(parent->tryGetTransform()->getWorldRotation()) * root.rotation;
 		}
-		object.mTransform->setLocalPosition(root.position);
-		object.mTransform->setLocalRotation(root.rotation);
+		object.tryGetTransform()->setLocalPosition(root.position);
+		object.tryGetTransform()->setLocalRotation(root.rotation);
 	}
 	Frame frame(Object& object) {
-		return { object.mTransform->getWorldPosition(), object.mTransform->getWorldRotation() };
+		return { object.tryGetTransform()->getWorldPosition(), object.tryGetTransform()->getWorldRotation() };
 	}
 	void compatible(const SKELETON::Skeleton& a, const SKELETON::Skeleton& b) {
 		if (a.joints().size() != b.joints().size()) {
@@ -121,13 +121,13 @@ void RagdollSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float dt) {
 			if (object->getComponent<Physics3DComponent>()) {
 				throw std::runtime_error("Ragdoll and rigid body cannot drive the same transform");
 			}
-			const auto scale = object->mTransform->getWorldScale();
+			const auto scale = object->tryGetTransform()->getWorldScale();
 			const float units = c.mDefinition->unitsToMeters;
 			if ((scale - MATH::Vector3f { units, units, units }).magnitude() > .0001f) {
 				throw std::runtime_error("Ragdoll visual world scale must equal UnitsToMeters on every axis");
 			}
 			for (auto parent = object->getParent(); parent; parent = parent->getParent()) {
-				if ((parent->mTransform->getWorldScale() - MATH::Vector3f { 1, 1, 1 }).magnitude() > .0001f) {
+				if ((parent->tryGetTransform()->getWorldScale() - MATH::Vector3f { 1, 1, 1 }).magnitude() > .0001f) {
 					throw std::runtime_error("Ragdoll ancestors require unit scale");
 				}
 			}
@@ -160,11 +160,11 @@ void RagdollSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float dt) {
 			auto instance = std::make_shared<SKELETON::RagdollInstance>(c.mDefinition);
 			instance->activate(
 				scene.physics3dShared(), pose, root, c.mSamples > 1 ? &c.mPreviousPose : nullptr, c.mSamples > 1 ? &c.mPreviousRoot : nullptr, dt);
-			c.mSavedLocalPosition = object->mTransform->getLocalPosition();
-			c.mSavedLocalRotation = object->mTransform->getLocalRotation();
+			c.mSavedLocalPosition = object->tryGetTransform()->getLocalPosition();
+			c.mSavedLocalRotation = object->tryGetTransform()->getLocalRotation();
 			if (motor) {
 				c.mMotor = UTILS::WeakPtr<ComponentBase>(motor.get());
-				c.mSavedMotorPosition = motor->initialized ? motor->motor.capsule.feet : motor->obj->mTransform->getWorldPosition();
+				c.mSavedMotorPosition = motor->initialized ? motor->motor.capsule.feet : motor->obj->tryGetTransform()->getWorldPosition();
 			}
 			skeleton->setPoseOverride(instance);
 			c.mInstance = std::move(instance);

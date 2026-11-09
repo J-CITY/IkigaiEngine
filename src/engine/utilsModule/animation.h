@@ -184,7 +184,7 @@ public:
 	double getDurationSeconds() const;
 	double frameToTime(int frame) const;
 
-	static std::unique_ptr<Animation> createFromDescriptor(const TimelineAnimationDescriptor& desc);
+	static std::unique_ptr<Animation> createFromDescriptor(const TimelineAnimationDescriptor& desc, ECS::World& world);
 
 public:
 	void update(float dt) override;

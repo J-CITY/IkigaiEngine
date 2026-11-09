@@ -75,6 +75,11 @@ public:
 	void go();
 	[[nodiscard]] bool getIsExecute() const;
 
+	void beginSimulationFrame();
+	void simulateFixedStep(std::chrono::duration<double> dt);
+	void simulateFrame(std::chrono::duration<double> dt, float interpolationAlpha);
+
+	// The loading scene calls update and lateUpdate directly.
 	void update(std::chrono::duration<double> dt);
 	void fixedUpdate(std::chrono::duration<double> dt);
 	void finishFixedUpdate(std::chrono::duration<double> dt);

@@ -4,9 +4,10 @@
 using namespace IKIGAI;
 using namespace IKIGAI::ECS;
 Physics2DLease::~Physics2DLease() {
-	if (!id)
+	if (!id) {
 		return;
-	if (auto simulation = world.lock())
+	}
+	if (auto simulation = world.lock()) {
 		switch (kind) {
 		case Kind::Field:
 			simulation->forces.remove(id);
@@ -24,6 +25,7 @@ Physics2DLease::~Physics2DLease() {
 			simulation->destroyFluid(id);
 			break;
 		}
+	}
 }
 Physics2DComponent::Physics2DComponent(UTILS::Ref<Object> obj)
 	: ComponentBase(obj) {
@@ -78,42 +80,51 @@ Joint2DComponent::Descriptor Joint2DComponent::getDescriptor() const {
 	return settings;
 }
 PHYSICS2D::Body* Physics2DComponent::body() const {
-	if (runtime)
-		if (auto w = runtime->world.lock())
+	if (runtime) {
+		if (auto w = runtime->world.lock()) {
 			return w->body(runtime->id);
+		}
+	}
 	return nullptr;
 }
 void Physics2DComponent::applyForce(MATH::Vector2f f) {
-	if (runtime)
-		if (auto w = runtime->world.lock())
+	if (runtime) {
+		if (auto w = runtime->world.lock()) {
 			if (auto b = w->body(runtime->id)) {
 				w->applyForce(b->id, { f.x, f.y }, b->position);
 				return;
 			}
+		}
+	}
 	pendingForce += PHYSICS2D::Vec2 { f.x, f.y };
 }
 void Physics2DComponent::applyImpulse(MATH::Vector2f p) {
-	if (runtime)
-		if (auto w = runtime->world.lock())
+	if (runtime) {
+		if (auto w = runtime->world.lock()) {
 			if (auto b = w->body(runtime->id)) {
 				w->applyImpulse(b->id, { p.x, p.y }, b->position);
 				return;
 			}
+		}
+	}
 	pendingImpulse += PHYSICS2D::Vec2 { p.x, p.y };
 }
 void Physics2DComponent::teleport(MATH::Vector2f p, float angle) {
-	obj->mTransform->setLocalPosition({ p.x, p.y, obj->mTransform->getLocalPosition().z });
-	obj->mTransform->setLocalRotation(MATH::QuaternionF(0, 0, std::sin(angle / 2), std::cos(angle / 2)));
-	if (runtime)
-		if (auto w = runtime->world.lock())
+	obj->tryGetTransform()->setLocalPosition({ p.x, p.y, obj->tryGetTransform()->getLocalPosition().z });
+	obj->tryGetTransform()->setLocalRotation(MATH::QuaternionF(0, 0, std::sin(angle / 2), std::cos(angle / 2)));
+	if (runtime) {
+		if (auto w = runtime->world.lock()) {
 			w->teleport(runtime->id, { p.x, p.y }, angle);
+		}
+	}
 }
 void Physics2DComponent::setVelocity(MATH::Vector2f v, float angular) {
-	if (runtime)
+	if (runtime) {
 		if (auto w = runtime->world.lock()) {
 			w->setVelocity(runtime->id, { v.x, v.y }, angular);
 			return;
 		}
+	}
 	settings.Velocity = v;
 	settings.AngularVelocity = angular;
 }
