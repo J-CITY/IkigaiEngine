@@ -13,6 +13,7 @@
 #include "frameBufferInterface.h"
 #include "frameGenerationInterface.h"
 #include "gpuFeatures.h"
+#include "graphImageBarrier.h"
 #include "materialInterface.h"
 #include "meshInterface.h"
 #include "modelInterface.h"
@@ -158,6 +159,9 @@ public:
 		return true;
 	}
 
+	virtual bool isDeviceLost() const noexcept {
+		return false;
+	}
 	virtual void submit() = 0;
 	virtual void cleanup() = 0;
 
@@ -184,11 +188,11 @@ public:
 	}
 	void setVertexStreams(const VertexLayout& layout, const std::vector<std::pair<uint32_t, std::shared_ptr<VertexBufferInterface>>>& streams) {
 		layout.validate();
-		const auto oldKey = mVertexLayout ? mVertexLayout->key() : "legacy";
+		const bool layoutChanged = mVertexLayout != layout;
 		mVertexLayout = layout;
 		mVertexStreams = streams;
 		setDirty(Dirty::VERTEX_BUFFER);
-		if (oldKey != layout.key()) {
+		if (layoutChanged) {
 			setDirty(Dirty::PIPELINE);
 		}
 	}
@@ -225,12 +229,19 @@ public:
 	virtual void setClearColor(const MATH::Vector4f& color) = 0;
 	virtual void setClearColor(float r, float g, float b, float a) = 0;
 	virtual void dispatch(uint32_t x, uint32_t y, uint32_t z) = 0;
+	virtual void dispatchMipCompute(
+		uint32_t x, uint32_t y, uint32_t z, const std::shared_ptr<TextureInterface>& texture, uint32_t mip, uint32_t layer);
 	virtual void renderGraphBarrier(bool uav);
+	virtual void renderGraphImageBarrier(TextureInterface& texture, const GraphImageBarrier& barrier);
+	virtual void renderGraphIndirectBarrier(const std::shared_ptr<StorageBufferInterface>& arguments);
 	virtual AliasedRenderTargets createAliasedRenderTargets(std::span<const TextureResource>) {
 		return {};
 	}
 	virtual void activateAliasedRenderTarget(TextureInterface&) { }
 	[[nodiscard]] virtual bool hasGraphComputeQueue() const noexcept {
+		return false;
+	}
+	[[nodiscard]] virtual bool supportsGraphComputeImages() const noexcept {
 		return false;
 	}
 	virtual void dispatchGraphCompute(const RayTracingDispatch& dispatch) {
@@ -249,6 +260,7 @@ public:
 	std::map<uint32_t, BindlessResourceTable> mBindlessTables;
 	std::vector<BindlessResourceEntry> mBindlessFrameResources;
 	BindlessResourceHandle registerBindlessTexture(uint32_t binding, std::shared_ptr<TextureInterface> texture, uint32_t capacity = 64) {
+		prepareBindlessMutation();
 		const auto caps = bindlessCapabilities();
 		if (!caps.sampledTextures || capacity > caps.maxSampledTextures) {
 			throw std::runtime_error("Bindless texture table is unsupported or exceeds device limit");
@@ -256,6 +268,7 @@ public:
 		return mBindlessTables[binding].add(binding, { std::move(texture), {} }, capacity);
 	}
 	BindlessResourceHandle registerBindlessBuffer(uint32_t binding, std::shared_ptr<StorageBufferInterface> buffer, uint32_t capacity = 64) {
+		prepareBindlessMutation();
 		const auto caps = bindlessCapabilities();
 		if (!caps.storageBuffers || capacity > caps.maxStorageBuffers) {
 			throw std::runtime_error("Bindless buffer table is unsupported or exceeds device limit");
@@ -263,8 +276,22 @@ public:
 		return mBindlessTables[binding].add(binding, { {}, std::move(buffer) }, capacity);
 	}
 	void releaseBindlessResource(BindlessResourceHandle handle) {
+		prepareBindlessMutation();
 		mBindlessTables.at(handle.binding).release(handle);
+		onBindlessResourceReleased(handle);
 	}
+
+protected:
+	// Backends may synchronize queued CPU work before a table changes.
+	virtual void prepareBindlessMutation() { }
+	// The default leaves released slots as permanent tombstones.
+	virtual void onBindlessResourceReleased(BindlessResourceHandle) { }
+	// A backend must wait for CPU snapshots and GPU work using the old slot first.
+	void recycleBindlessResource(BindlessResourceHandle handle) {
+		mBindlessTables.at(handle.binding).recycle(handle);
+	}
+
+public:
 	const BindlessResourceTable& bindlessTable(const ShaderReflection::Uniform& uniform, uint32_t count) const {
 		const auto it = mBindlessTables.find(static_cast<uint32_t>(uniform.mBind));
 		if (it == mBindlessTables.end() || it->second.capacity != count) {
@@ -301,6 +328,9 @@ public:
 	}
 	void prepareFrameGeneration(bool pipelineEnabled, MATH::Vector2i render, MATH::Vector2i display);
 	void dispatchFrameGeneration(const FrameGenerationInputs&);
+	virtual FrameGenerationInputs stageFrameGenerationInputs(const FrameGenerationInputs& inputs) {
+		return inputs;
+	}
 	virtual void renderPresentationUI(std::shared_ptr<FrameBufferInterface>) { }
 	uint64_t mRealFrameId = UINT64_MAX;
 	virtual void setTemporalCamera(const FrameGenerationInputs&) { }

@@ -29,10 +29,11 @@ public:
   void unbind() override {};
   void recompile(const ShaderResource &res) override;
 
-  std::map<ShaderType, Microsoft::WRL::ComPtr<ID3DBlob>> mBlobs;
-  Microsoft::WRL::ComPtr<ID3D12RootSignature> mRootSignature;
-  int mPushConstantRootIndex = -1;
-  uint32_t mPushConstantDwords = 0;
+	std::map<ShaderType, Microsoft::WRL::ComPtr<ID3DBlob>> mBlobs;
+	Microsoft::WRL::ComPtr<ID3D12RootSignature> mRootSignature;
+	Microsoft::WRL::ComPtr<ID3DBlob> mSerializedRootSignature;
+	int mPushConstantRootIndex = -1;
+	uint32_t mPushConstantDwords = 0;
 
   void buildRootSignature();
 

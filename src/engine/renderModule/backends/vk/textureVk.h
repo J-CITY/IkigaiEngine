@@ -19,7 +19,6 @@ namespace IKIGAI::RENDER {
 		vk::Image mImagePtr;
 		vk::raii::ImageView mImageView = nullptr;
 		size_t mDepth = 0;
-		vk::ImageLayout mCurrentState = vk::ImageLayout::eUndefined;
 		bool mDiscardAliasContents = false;
 
 		vk::raii::Sampler mSampler = nullptr;
@@ -40,14 +39,33 @@ namespace IKIGAI::RENDER {
 		void setData(uint32_t width, uint32_t height, PixelFormat format, const std::vector<void*>& data, uint32_t mip_level,
 		             uint32_t offset_x, uint32_t offset_y);
 		void generateMips();
-        vk::ImageView attachmentView(unsigned mip,unsigned layer);
-        std::map<std::pair<unsigned,unsigned>,vk::raii::ImageView> mAttachmentViews;
+		vk::ImageView attachmentView(unsigned mip, unsigned layer);
+		std::map<std::pair<unsigned, unsigned>, vk::raii::ImageView> mAttachmentViews;
+		vk::ImageView baseMipStorageView();
 		void setState(const vk::raii::CommandBuffer& cmdbuf, vk::ImageLayout state);
+		void setState(const vk::raii::CommandBuffer& cmdbuf, vk::ImageLayout state, uint32_t mip, uint32_t layer);
+		void applyImageBarrier(const vk::raii::CommandBuffer& cmdbuf, vk::ImageMemoryBarrier2 barrier);
+		[[nodiscard]] bool isInState(vk::ImageLayout state) const;
+		[[nodiscard]] vk::ImageUsageFlags imageUsage() const {
+			return mImageUsage;
+		}
+		[[nodiscard]] vk::ImageLayout state(uint32_t mip, uint32_t layer) const;
+		[[nodiscard]] uint32_t arrayLayerCount() const;
+		[[nodiscard]] vk::ImageSubresourceRange subresourceRange(uint32_t mip, uint32_t layer) const;
+		void resetAliasedState(const vk::raii::CommandBuffer& cmdbuf);
 
 	protected:
 		void releaseResources();
 		// Загрузить данные и инициализировать VK-ресурсы (выделено из конструктора)
 		void init(const TextureResource& descriptor, const std::vector<void*>& data, std::shared_ptr<VmaImage>* backing = nullptr);
+
+	private:
+		[[nodiscard]] vk::ImageAspectFlags layoutAspects() const;
+		[[nodiscard]] size_t layoutIndex(uint32_t mip, uint32_t layer) const;
+		vk::ImageViewType mViewType = vk::ImageViewType::e2D;
+		vk::ImageUsageFlags mImageUsage {};
+		vk::raii::ImageView mBaseMipStorageView = nullptr;
+		std::vector<vk::ImageLayout> mLayouts { vk::ImageLayout::eUndefined };
 	};
 
 	class TextureAtlasVk : public TextureVk {

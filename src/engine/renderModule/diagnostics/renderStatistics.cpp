@@ -22,6 +22,7 @@ namespace {
 	void Accumulate(RenderDrawCounters& target, const RenderDrawCounters& source) {
 		target.DrawCalls += source.DrawCalls;
 		target.IndirectDraws += source.IndirectDraws;
+		target.IndirectSubmissions += source.IndirectSubmissions;
 		target.Instances += source.Instances;
 		target.Triangles += source.Triangles;
 		target.Dispatches += source.Dispatches;
@@ -192,6 +193,7 @@ void RenderStatistics::recordIndirectDraw(std::uint32_t maximumDrawCount) {
 	}
 	for (auto* counters : { &current(), &mCurrent.Total }) {
 		counters->IndirectDraws += maximumDrawCount;
+		++counters->IndirectSubmissions;
 	}
 }
 

@@ -256,6 +256,7 @@ void ShaderDx12::recompile(const ShaderResource& res) {
 	swapCompiledInterface(*replacement);
 	swap(mBlobs, replacement->mBlobs);
 	swap(mRootSignature, replacement->mRootSignature);
+	swap(mSerializedRootSignature, replacement->mSerializedRootSignature);
 	swap(mPushConstantRootIndex, replacement->mPushConstantRootIndex);
 	swap(mPushConstantDwords, replacement->mPushConstantDwords);
 	driver->mRayDeferred.push_back(std::move(replacement));
@@ -383,9 +384,12 @@ void ShaderDx12::buildRootSignature() {
 			uniform.mRootId = slotRootParameters.size();
 			rootKeys.push_back({RootKind::CBV, bind, set, visibility});
 			slotRootParameters.push_back(elem);
-		} else if (uniform.mType == ShaderReflection::UniformType::STORAGE_BUFFER || uniform.mType == ShaderReflection::UniformType::IMAGE_3D || uniform.mType == ShaderReflection::UniformType::IMAGE_2D) {
-			const bool readOnlyBuffer=bindingMode()==ShaderBindingMode::Bindless && uniform.mReadOnly && uniform.mType==ShaderReflection::UniformType::STORAGE_BUFFER;
-			const auto kind=readOnlyBuffer?RootKind::SRV:RootKind::UAV;
+		}
+		else if (uniform.mType == ShaderReflection::UniformType::STORAGE_BUFFER || uniform.mType == ShaderReflection::UniformType::IMAGE_3D
+			|| uniform.mType == ShaderReflection::UniformType::IMAGE_2D || uniform.mType == ShaderReflection::UniformType::IMAGE_2D_ARRAY) {
+			const bool readOnlyBuffer
+				= bindingMode() == ShaderBindingMode::Bindless && uniform.mReadOnly && uniform.mType == ShaderReflection::UniformType::STORAGE_BUFFER;
+			const auto kind = readOnlyBuffer ? RootKind::SRV : RootKind::UAV;
 			const int existing = findRoot(kind, bind, set, visibility);
 			if (existing >= 0) {
 				uniform.mRootId = static_cast<size_t>(existing);
@@ -522,10 +526,8 @@ void ShaderDx12::buildRootSignature() {
 	ThrowIfFailed(hr);
 
 	ThrowIfFailed(d3dUtil::GetDriver()->getDevice()->CreateRootSignature(
-		0,
-		serializedRootSig->GetBufferPointer(),
-		serializedRootSig->GetBufferSize(),
-		IID_PPV_ARGS(mRootSignature.GetAddressOf())));
+		0, serializedRootSig->GetBufferPointer(), serializedRootSig->GetBufferSize(), IID_PPV_ARGS(mRootSignature.GetAddressOf())));
+	mSerializedRootSignature = serializedRootSig;
 	TrackGpuObjectDx12(mRootSignature.Get(), d3dUtil::GetDriver()->getDevice().Get(), PROFILER::GpuResourceKind::Shader, mPath.c_str());
 }
 

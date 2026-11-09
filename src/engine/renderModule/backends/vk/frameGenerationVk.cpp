@@ -39,8 +39,12 @@ class FsrFrameGenerationVk final : public FrameGenerationInterface {
     void attach(bool commandOpen){
         if(!d.mPresentationQueues[0]||!d.mPresentationQueues[1]||!d.mPresentationQueues[2])
             throw UnsupportedFrameGeneration("FSR Vulkan FG needs four graphics-capable queues");
-        if(commandOpen){d.end();d.wait();d.mDevice.waitIdle();}
-        auto& ctx=d.getCurrentSwapchainContext();
+		if (commandOpen) {
+			d.end();
+			d.wait();
+			d.waitDeviceIdle();
+		}
+		auto& ctx=d.getCurrentSwapchainContext();
         auto info=static_cast<VkSwapchainCreateInfoKHR>(ctx.lastCreateInfo);
         if(vsync)info.presentMode=VK_PRESENT_MODE_FIFO_KHR;
         else{
@@ -92,13 +96,34 @@ public:
     }
     ~FsrFrameGenerationVk() override {
         try{
-            if(attached&&!d.mShuttingDown){d.end();d.wait();}
-            if(fg)suspend();if(swap)waitForPresents();releaseFG();
-            if(attached){
+			if (attached && !d.mShuttingDown && !d.isDeviceLost()) {
+				try {
+					d.end();
+					d.wait();
+				} catch (...) {
+					if (!d.isDeviceLost()) {
+						throw;
+					}
+				}
+			}
+			if (!d.isDeviceLost()) {
+				if (fg) {
+					suspend();
+				}
+				if (swap) {
+					waitForPresents();
+				}
+			}
+			releaseFG();
+			if(attached){
                 auto& ctx=d.getCurrentSwapchainContext();const auto w=ctx.width,h=ctx.height;
                 releaseSwap();
-                if(!d.mShuttingDown){d.createSwapchain(d.mCurrentWindowID,w,h);d.nextFrame();d.begin();}
-            }
+				if (!d.mShuttingDown && !d.isDeviceLost()) {
+					d.createSwapchain(d.mCurrentWindowID, w, h);
+					d.nextFrame();
+					d.begin();
+				}
+			}
         }catch(const std::exception& error){std::cerr<<"FSR Vulkan FG teardown: "<<error.what()<<'\n';}
     }
     void configure(const FrameGenerationSettings& settings,MATH::Vector2i render,MATH::Vector2i display) override {
@@ -176,8 +201,11 @@ public:
         gen.reset=f.Reset;gen.backbufferTransferFunction=FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SRGB;
         gen.minMaxLuminance[0]=0;gen.minMaxLuminance[1]=1;gen.frameID=f.RealFrameId;gen.generationRect=config.generationRect;
         check(dispatch(&fg,&gen.header),"FSR Vulkan FG generate");
-        d.mBoundPipelineName.clear();d.mDirty.set();state.Active=true;prepared=true;
-        if(state.RealFrames==0||f.Reset)std::cout<<"FRAMEGEN_PREPARE FSR frame="<<f.RealFrameId<<" reset="<<f.Reset<<'\n';
+		d.mBoundPipelineKey.reset();
+		d.mDirty.set();
+		state.Active = true;
+		prepared = true;
+		if(state.RealFrames==0||f.Reset)std::cout<<"FRAMEGEN_PREPARE FSR frame="<<f.RealFrameId<<" reset="<<f.Reset<<'\n';
     }
     void suspend() override {
         if(fg){ffxConfigureDescFrameGeneration config{};config.header.type=FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
@@ -216,6 +244,8 @@ std::unique_ptr<IKIGAI::RENDER::FrameGenerationInterface> IKIGAI::RENDER::Driver
 }
 void IKIGAI::RENDER::DriverVk::renderPresentationUI(std::shared_ptr<FrameBufferInterface> target){
     if(auto* imgui=IKIGAI::IMGUI::Get())imgui->renderDrawDataTo(std::move(target));
-    mPresentationUIRendered=true;mBoundPipelineName.clear();mDirty.set();
+	mPresentationUIRendered = true;
+	mBoundPipelineKey.reset();
+	mDirty.set();
 }
 #endif

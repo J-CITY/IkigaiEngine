@@ -44,7 +44,7 @@ void DriverVk::setStorageImage(size_t binding, std::shared_ptr<TextureInterface>
 	if (mip >= native->getMipCount()) {
 		throw std::out_of_range("setStorageImage: mip " + std::to_string(mip) + " >= mip count " + std::to_string(native->getMipCount()));
 	}
-	const size_t layers = type == TextureType::TEXTURE_CUBE ? 6 : type == TextureType::TEXTURE_2D_ARRAY ? std::max<size_t>(1, native->mDepth) : 1;
+	const auto layers = native->arrayLayerCount();
 	if (layer >= layers) {
 		throw std::out_of_range("setStorageImage: layer " + std::to_string(layer) + " >= layer count " + std::to_string(layers));
 	}
@@ -53,10 +53,8 @@ void DriverVk::setStorageImage(size_t binding, std::shared_ptr<TextureInterface>
 		&& !(mPhysicalDevice.getFormatProperties(optional).optimalTilingFeatures & vk::FormatFeatureFlagBits::eStorageImage)) {
 		throw UnsupportedGpuFeature("setStorageImage: device has no storage image support for " + vk::to_string(optional));
 	}
-	// The image stays in GENERAL as a whole (TextureVk tracks one layout), like setTexture-based storage images.
-	// The per-mip view is cached on the texture and released with it.
 	mTextures[binding] = native;
-	mStorageImageBindings[binding] = StorageImageBinding { native, mip, layer };
+	mStorageImageBindings[binding] = StorageImageBinding { mip, layer };
 	graphics_pipeline_ignore_bindings.erase(static_cast<uint32_t>(binding));
 }
 

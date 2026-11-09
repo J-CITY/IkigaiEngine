@@ -2,6 +2,7 @@
 #ifdef DX12_BACKEND
 #include "d3dUtil.h"
 #include "d3dx12/DirectXHelpers.h"
+#include "deviceHealthDx12.h"
 
 namespace IKIGAI::RENDER {
 namespace {
@@ -17,8 +18,9 @@ namespace {
 	};
 }
 
-ImmediateSubmitDx12::ImmediateSubmitDx12(ID3D12Device* device)
-	: mDevice(device) {
+ImmediateSubmitDx12::ImmediateSubmitDx12(ID3D12Device* device, std::shared_ptr<DeviceHealthDx12> health)
+	: mDevice(device)
+	, mHealth(std::move(health)) {
 	D3D12_COMMAND_QUEUE_DESC queueDesc {};
 	queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
 	queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
@@ -42,33 +44,28 @@ ImmediateSubmitDx12::~ImmediateSubmitDx12() {
 	}
 }
 
-void ImmediateSubmitDx12::waitForFence(ID3D12CommandQueue* queue, ID3D12Fence* fence, UINT64 value, HANDLE event) {
-	ThrowIfFailed(queue->Signal(fence, value));
-	if (fence->GetCompletedValue() < value) {
-		ThrowIfFailed(fence->SetEventOnCompletion(value, event));
-		WaitForSingleObject(event, INFINITE);
-	}
-}
-
 void ImmediateSubmitDx12::submit(const std::function<void(ID3D12GraphicsCommandList*)>& record) {
+	mHealth->requireHealthy();
 	if (tRecordingImmediate) {
 		submitTransient(record);
 		return;
 	}
 	std::lock_guard lock(mMutex);
 	RecordingScope recording;
-	ThrowIfFailed(mAllocator->Reset());
-	ThrowIfFailed(mCommandList->Reset(mAllocator.Get(), nullptr));
+	mHealth->check(mAllocator->Reset(), "Reset immediate command allocator");
+	mHealth->check(mCommandList->Reset(mAllocator.Get(), nullptr), "Reset immediate command list");
 	try {
 		record(mCommandList.Get());
 	} catch (...) {
 		mCommandList->Close();
 		throw;
 	}
-	ThrowIfFailed(mCommandList->Close());
+	mHealth->check(mCommandList->Close(), "Close immediate command list");
 	ID3D12CommandList* lists[] = { mCommandList.Get() };
 	mQueue->ExecuteCommandLists(1, lists);
-	waitForFence(mQueue.Get(), mFence.Get(), ++mFenceValue, mEvent);
+	const auto value = ++mFenceValue;
+	mHealth->check(mQueue->Signal(mFence.Get(), value), "Signal immediate submission fence");
+	mHealth->waitForFence(mFence.Get(), value, "Wait for immediate submission fence", mEvent);
 }
 
 void ImmediateSubmitDx12::submitTransient(const std::function<void(ID3D12GraphicsCommandList*)>& record) {
@@ -88,12 +85,8 @@ void ImmediateSubmitDx12::submitTransient(const std::function<void(ID3D12Graphic
 	queue->ExecuteCommandLists(1, lists);
 	Microsoft::WRL::ComPtr<ID3D12Fence> fence;
 	ThrowIfFailed(mDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(fence.GetAddressOf())));
-	const HANDLE event = CreateEventEx(nullptr, nullptr, 0, EVENT_MODIFY_STATE | SYNCHRONIZE);
-	if (!event) {
-		throw std::runtime_error("Cannot create DX12 immediate submit event");
-	}
-	waitForFence(queue.Get(), fence.Get(), 1, event);
-	CloseHandle(event);
+	mHealth->check(queue->Signal(fence.Get(), 1), "Signal transient submission fence");
+	mHealth->waitForFence(fence.Get(), 1, "Wait for transient submission fence");
 }
 }
 #endif

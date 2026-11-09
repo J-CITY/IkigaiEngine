@@ -132,6 +132,7 @@ namespace IKIGAI::RENDER {
 			uint32_t mSamplerRootId = UINT32_MAX;
 			bool mRuntimeArray = false;
 			bool mReadOnly = false;
+			bool mWriteOnly = false;
 			std::string mName;
 			UniformType mType = UniformType::NONE;
 			size_t mRootId = 0;

@@ -1,3 +1,4 @@
+#include "deviceHealthDx12.h"
 #include "driverDx12.h"
 #ifdef DX12_BACKEND
 #include "indexBufferDx12.h"
@@ -564,14 +565,15 @@ std::shared_ptr<RayTracingProgram> DriverDx12::createRayProgram(const RayTracing
 			throw std::runtime_error(errors ? std::string(static_cast<const char*>(errors->GetBufferPointer()), errors->GetBufferSize())
 											: "DXR root signature serialization failed");
 		check(mDevice->CreateRootSignature(0, binary->GetBufferPointer(), binary->GetBufferSize(), IID_PPV_ARGS(&root)), "DXR root signature");
+		return binary;
 	};
 	D3D12_ROOT_SIGNATURE_DESC root { UINT(roots.size()), roots.data(), UINT(samplers.size()), samplers.data(), D3D12_ROOT_SIGNATURE_FLAG_NONE };
-	makeRoot(root, data.Root);
+	const auto rootBinary = makeRoot(root, data.Root);
 	if (compute) {
-		D3D12_COMPUTE_PIPELINE_STATE_DESC desc { };
+		D3D12_COMPUTE_PIPELINE_STATE_DESC desc {};
 		desc.pRootSignature = data.Root.Get();
 		desc.CS = { data.Modules[0]->GetBufferPointer(), data.Modules[0]->GetBufferSize() };
-		check(mDevice->CreateComputePipelineState(&desc, IID_PPV_ARGS(&data.ComputeState)), "DXR compute pipeline");
+		data.ComputeState = createCachedComputePipeline(desc, rootBinary.Get());
 		TrackGpuObjectDx12(data.ComputeState.Get(), mDevice.Get(), PROFILER::GpuResourceKind::Pipeline, "Ray-query/compute pipeline");
 		mRayPrograms[key] = output;
 		return output;
@@ -784,10 +786,13 @@ void DriverDx12::dispatchGraphCompute(const RayTracingDispatch& dispatch) {
 	}
 	for (const auto& [binding, resources] : dispatch.Bindings) {
 		for (const auto& resource : resources) {
+			if (std::holds_alternative<std::shared_ptr<TextureInterface>>(resource)) {
+				continue;
+			}
 			const auto* storage = std::get_if<std::shared_ptr<StorageBufferInterface>>(&resource);
 			auto buffer = storage ? std::dynamic_pointer_cast<StorageBufferDx12>(*storage) : nullptr;
 			if (!buffer) {
-				throw std::invalid_argument("DX12 graph compute requires storage buffer bindings");
+				throw std::invalid_argument("DX12 graph compute requires storage buffer or image bindings");
 			}
 			buffer->transition(mCommandList.Get(), D3D12_RESOURCE_STATE_COMMON);
 		}
@@ -801,11 +806,11 @@ void DriverDx12::dispatchGraphCompute(const RayTracingDispatch& dispatch) {
 
 	const auto value = ++mGraphComputeValue;
 	splitGraphGraphics();
-	check(mCommandQueue->Signal(mGraphGraphicsFence.Get(), value), "Signal graph graphics fence");
-	check(mGraphComputeQueue->Wait(mGraphGraphicsFence.Get(), value), "Wait for graph graphics fence");
+	mDeviceHealth->check(mCommandQueue->Signal(mGraphGraphicsFence.Get(), value), "Signal graph graphics fence");
+	mDeviceHealth->check(mGraphComputeQueue->Wait(mGraphGraphicsFence.Get(), value), "Wait for graph graphics fence");
 	ID3D12CommandList* list = recording->List.Get();
 	mGraphComputeQueue->ExecuteCommandLists(1, &list);
-	check(mGraphComputeQueue->Signal(mGraphComputeFence.Get(), value), "Signal graph compute fence");
+	mDeviceHealth->check(mGraphComputeQueue->Signal(mGraphComputeFence.Get(), value), "Signal graph compute fence");
 	mGraphComputePending = value;
 	if (mGraphTiming) {
 		mCommandList->EndQuery(mGraphTiming->Queries.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 2);
@@ -870,7 +875,7 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 	const auto samplers = allocateRayDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, data.Samplers);
 	uav(list);
 	std::set<StorageBufferDx12*> computeBuffers;
-	std::set<const TextureDx12*> sampled, storage;
+	std::map<TextureDx12*, D3D12_RESOURCE_STATES> imageStates;
 	for (const auto& b : data.Bindings) {
 		const std::vector<RayTracingResource>* resources = nullptr;
 		const auto numeric = std::to_string(b.Space) + ":" + std::to_string(b.Register);
@@ -973,14 +978,28 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 					mDevice->CreateSampler(&desc, handle);
 					continue;
 				}
-				auto raw = texture->getResource().Get();
-				auto format = raw->GetDesc().Format;
+				auto* raw = texture->getResource().Get();
+				const auto resourceDesc = raw->GetDesc();
+				const auto format = resourceDesc.Format;
+				if (computeList
+					&& (texture->getResource().isAliased() || b.Dimension != D3D_SRV_DIMENSION_TEXTURE2D
+						|| texture->getType() != TextureType::TEXTURE_2D || resourceDesc.DepthOrArraySize != 1 || resourceDesc.SampleDesc.Count != 1
+						|| resourceDesc.MipLevels != 1)) {
+					throw std::invalid_argument("DX12 graph compute requires non-aliased, single-mip, single-sample 2D color images");
+				}
+				if (b.Uav && !(resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)) {
+					throw std::runtime_error("DXR output image lacks storage usage");
+				}
+				const auto state = b.Uav ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+				const auto [image, inserted] = imageStates.try_emplace(texture.get(), state);
+				if (!inserted && image->second != state) {
+					throw std::runtime_error("DXR image cannot be sampled and storage in one dispatch");
+				}
+				if (!computeList) {
+					texture->setState(list, state);
+				}
 				if (b.Uav) {
-					storage.insert(texture.get());
-					if (!(raw->GetDesc().Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS))
-						throw std::runtime_error("DXR output image lacks storage usage");
-					texture->setState(list, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-					D3D12_UNORDERED_ACCESS_VIEW_DESC desc { };
+					D3D12_UNORDERED_ACCESS_VIEW_DESC desc {};
 					desc.Format = format;
 					desc.ViewDimension = b.Dimension == D3D_SRV_DIMENSION_TEXTURE3D ? D3D12_UAV_DIMENSION_TEXTURE3D : D3D12_UAV_DIMENSION_TEXTURE2D;
 					if (desc.ViewDimension == D3D12_UAV_DIMENSION_TEXTURE3D)
@@ -988,32 +1007,36 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 					mDevice->CreateUnorderedAccessView(raw, nullptr, &desc, handle);
 				}
 				else {
-					sampled.insert(texture.get());
-					texture->setState(list, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 					D3D12_SHADER_RESOURCE_VIEW_DESC desc { };
 					desc.Format = format == DXGI_FORMAT_R32_TYPELESS ? DXGI_FORMAT_R32_FLOAT
 						: format == DXGI_FORMAT_R24G8_TYPELESS		 ? DXGI_FORMAT_R24_UNORM_X8_TYPELESS
 																	 : format;
 					desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 					desc.ViewDimension = static_cast<D3D12_SRV_DIMENSION>(b.Dimension);
-					if (b.Dimension == D3D_SRV_DIMENSION_TEXTURECUBE)
-						desc.TextureCube.MipLevels = raw->GetDesc().MipLevels;
-					else if (b.Dimension == D3D_SRV_DIMENSION_TEXTURE3D)
-						desc.Texture3D.MipLevels = raw->GetDesc().MipLevels;
-					else if (b.Dimension == D3D_SRV_DIMENSION_TEXTURE2DARRAY) {
-						desc.Texture2DArray.MipLevels = raw->GetDesc().MipLevels;
-						desc.Texture2DArray.ArraySize = raw->GetDesc().DepthOrArraySize;
+					if (b.Dimension == D3D_SRV_DIMENSION_TEXTURECUBE) {
+						desc.TextureCube.MipLevels = resourceDesc.MipLevels;
 					}
-					else
-						desc.Texture2D.MipLevels = raw->GetDesc().MipLevels;
+					else if (b.Dimension == D3D_SRV_DIMENSION_TEXTURE3D) {
+						desc.Texture3D.MipLevels = resourceDesc.MipLevels;
+					}
+					else if (b.Dimension == D3D_SRV_DIMENSION_TEXTURE2DARRAY) {
+						desc.Texture2DArray.MipLevels = resourceDesc.MipLevels;
+						desc.Texture2DArray.ArraySize = resourceDesc.DepthOrArraySize;
+					}
+					else {
+						desc.Texture2D.MipLevels = resourceDesc.MipLevels;
+					}
 					mDevice->CreateShaderResourceView(raw, &desc, handle);
 				}
 			}
 		}
 	}
-	for (auto* image : sampled)
-		if (storage.contains(image))
-			throw std::runtime_error("DXR image cannot be sampled and storage in one dispatch");
+	if (computeList) {
+		for (const auto& [texture, state] : imageStates) {
+			const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(texture->getResource().Get(), D3D12_RESOURCE_STATE_COMMON, state);
+			list->ResourceBarrier(1, &barrier);
+		}
+	}
 	std::array<ID3D12DescriptorHeap*, 2> heaps {};
 	UINT heapCount = 0;
 	if (views.Heap) {
@@ -1050,6 +1073,15 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 	uav(list);
 	for (auto* buffer : computeBuffers) {
 		buffer->transition(list, D3D12_RESOURCE_STATE_COMMON);
+	}
+	if (computeList) {
+		for (const auto& [texture, state] : imageStates) {
+			// The direct list releases graphics-only states before its fence signal. The compute list leaves
+			// the same COMMON state in the graphics tracker for its first use after the return fence.
+			texture->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_COMMON);
+			const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(texture->getResource().Get(), state, D3D12_RESOURCE_STATE_COMMON);
+			list->ResourceBarrier(1, &barrier);
+		}
 	}
 	mRayFrameResources.push_back(std::move(snapshot));
 	if (!computeList) {

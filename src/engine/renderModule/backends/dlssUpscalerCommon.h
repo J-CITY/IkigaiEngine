@@ -116,6 +116,10 @@ public:
 		ValidateUpscalerTextures(f);
 		if (!mContext || f.RenderSize != mRender || f.DisplaySize != mDisplay)
 			throw std::runtime_error("DLSS context dimensions mismatch");
+#ifdef IKIGAI_PIN_DX12_UPSCALER_CONTEXT
+		// NGX feature creation and evaluation both record work into this frame.
+		pinUpscalerContext(mDriver, mContext);
+#endif
 		beginUpscaler(mDriver);
 		if (!mContext->Feature) {
 			const auto result = createNgx(mDriver, &mContext->Feature, mContext->Parameters, &mContext->Description);

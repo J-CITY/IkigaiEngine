@@ -4,15 +4,16 @@
 #include "utilsModule/pathGetter.h"
 
 #ifdef DX12_BACKEND
-#include "d3dx12/d3d12generatemips.h"
-#include "d3dx12/DirectXHelpers.h"
-#include "renderModule/backends/interface/resourceStruct.h"
-#include "renderModule/backends/interface/atlasInterface.h"
-#include "utilsModule/stdLoader.h"
-#include "utilsModule/jsonLoader.h"
 #include "d3dUtil.h"
-#include <stdexcept>
+#include "d3dx12/DirectXHelpers.h"
+#include "d3dx12/d3d12generatemips.h"
+#include "renderModule/backends/interface/atlasInterface.h"
+#include "renderModule/backends/interface/resourceStruct.h"
+#include "utilsModule/jsonLoader.h"
+#include "utilsModule/stdLoader.h"
+#include <algorithm>
 #include <filesystem>
+#include <stdexcept>
 
 #include "driverDx12.h"
 #include <resourceModule/serviceManager.h>
@@ -145,6 +146,7 @@ TextureDx12::TextureDx12(size_t width, size_t height, PixelFormat format, Micros
 	mHeight = height;
 	mFormat = format;
 	mChannels = GetFormatChannelsCount(format);
+	initSubresourceStates();
 }
 
 TextureDx12::~TextureDx12() {
@@ -192,8 +194,8 @@ void TextureDx12::create(const TextureResource& descriptor, const std::vector<vo
         if(descriptor.storage) desc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 		allocFlags = D3D12MA::ALLOCATION_FLAG_COMMITTED;
 	}
-	
-	mCurrentState = D3D12_RESOURCE_STATE_COMMON;
+
+	constexpr auto initialState = D3D12_RESOURCE_STATE_COMMON;
 	if (backing) {
 		auto* driver = d3dUtil::GetDriver();
 		if (!*backing) {
@@ -218,12 +220,13 @@ void TextureDx12::create(const TextureResource& descriptor, const std::vector<vo
 		}
 		Microsoft::WRL::ComPtr<ID3D12Resource> resource;
 		ThrowIfFailed(
-			driver->getAllocator()->CreateAliasingResource((*backing)->Allocation.Get(), 0, &desc, mCurrentState, nullptr, IID_PPV_ARGS(&resource)));
+			driver->getAllocator()->CreateAliasingResource((*backing)->Allocation.Get(), 0, &desc, initialState, nullptr, IID_PPV_ARGS(&resource)));
 		mResource = Dx12Resource(std::move(resource), nullptr, *backing);
 	}
 	else {
-		mResource = d3dUtil::CreateResource(desc, D3D12_HEAP_TYPE_DEFAULT, mCurrentState, nullptr, allocFlags);
+		mResource = d3dUtil::CreateResource(desc, D3D12_HEAP_TYPE_DEFAULT, initialState, nullptr, allocFlags);
 	}
+	initSubresourceStates();
 	// SRV (and UAV for storage textures) take consecutive legacy slots; recreate() returns the previous run.
 	const uint32_t descriptorCount = descriptor.storage ? 2u : 1u;
 	const uint32_t descriptorIndex = d3dUtil::GetDriver()->allocateLegacyDescriptors(descriptorCount);
@@ -251,17 +254,28 @@ void TextureDx12::create(const TextureResource& descriptor, const std::vector<vo
 		});
 	}
 
-	if(descriptor.storage) {
-        auto* driver=d3dUtil::GetDriver();
-        // Reserve SRV below first, then its UAV slot.
+	mUavHandle.ptr = 0;
+	if (descriptor.storage) {
+		auto* driver = d3dUtil::GetDriver();
 		auto cpu = CD3DX12_CPU_DESCRIPTOR_HANDLE(driver->legacyDescriptorCpu(mDescriptorIndex + 1));
 		auto gpu = CD3DX12_GPU_DESCRIPTOR_HANDLE(driver->legacyDescriptorGpu(mDescriptorIndex + 1));
-		D3D12_UNORDERED_ACCESS_VIEW_DESC uav{}; uav.Format=FormatMap.at(mFormat);
-        if(mType==TextureType::TEXTURE_3D) {uav.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE3D;uav.Texture3D.WSize=mDepth;}
-        else uav.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
-        driver->getDevice()->CreateUnorderedAccessView(mResource.Get(),nullptr,&uav,cpu);
-        mUavHandle=gpu;
-    }
+		D3D12_UNORDERED_ACCESS_VIEW_DESC uav {};
+		uav.Format = FormatMap.at(mFormat);
+		if (mType == TextureType::TEXTURE_3D) {
+			uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
+			uav.Texture3D.WSize = mDepth;
+		}
+		else if (mArraySize > 1 || mType == TextureType::TEXTURE_2D_ARRAY) {
+			// A cube's faces can be addressed as a 2D array UAV.
+			uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+			uav.Texture2DArray.ArraySize = mArraySize;
+		}
+		else {
+			uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+		}
+		driver->getDevice()->CreateUnorderedAccessView(mResource.Get(), nullptr, &uav, cpu);
+		mUavHandle = gpu;
+	}
 	mGpuDescriptorHandle = d3dUtil::GetDriver()->legacyDescriptorGpu(mDescriptorIndex);
 
 	if (data.size()) {
@@ -314,7 +328,6 @@ void TextureDx12::generateMips(ID3D12GraphicsCommandList* cmdList) {
 	}
 	setState(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	D3D12GenerateMips(d3dUtil::GetDriver()->getDevice().Get(), cmdList, mResource.Get(), d3dUtil::GetDriver()->getDestroyDeferredObjects());
-	mCurrentState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 }
 
 void TextureDx12::generateMips() {
@@ -326,12 +339,114 @@ void TextureDx12::generateMips() {
 	});
 }
 
-void TextureDx12::setState(ID3D12GraphicsCommandList* cmdList, D3D12_RESOURCE_STATES state) {
-	if (mCurrentState == state) {
+void TextureDx12::initSubresourceStates() {
+	const CD3DX12_RESOURCE_DESC desc(mResource.Get()->GetDesc());
+	mMipCount = desc.MipLevels;
+	mArraySize = desc.ArraySize();
+	mPlaneCount = desc.PlaneCount(d3dUtil::GetDriver()->getDevice().Get());
+	if (mPlaneCount == 0) {
+		throw std::runtime_error("Unable to query DX12 texture plane count");
+	}
+	mUniformState = D3D12_RESOURCE_STATE_COMMON;
+	mSubresourceStates.clear();
+}
+
+UINT TextureDx12::subresourceIndex(UINT mip, UINT layer, UINT plane) const {
+	if (mip >= mMipCount || layer >= mArraySize || plane >= mPlaneCount) {
+		throw std::out_of_range("DX12 texture subresource is out of range");
+	}
+	return D3D12CalcSubresource(mip, layer, plane, mMipCount, mArraySize);
+}
+
+D3D12_RESOURCE_STATES TextureDx12::getSubresourceState(UINT subresource) const {
+	if (subresource >= mMipCount * mArraySize * mPlaneCount) {
+		throw std::out_of_range("DX12 texture subresource is out of range");
+	}
+	return mSubresourceStates.empty() ? mUniformState : mSubresourceStates[subresource];
+}
+
+void TextureDx12::setSubresourceState(ID3D12GraphicsCommandList* cmdList, UINT subresource, D3D12_RESOURCE_STATES state) {
+	const auto previous = getSubresourceState(subresource);
+	if (previous == state) {
 		return;
 	}
-	DirectX::TransitionResource(cmdList, mResource.Get(), mCurrentState, state);
-	mCurrentState = state;
+	const UINT count = mMipCount * mArraySize * mPlaneCount;
+	if (count == 1) {
+		setState(cmdList, state);
+		return;
+	}
+	if (mSubresourceStates.empty()) {
+		mSubresourceStates.resize(count, mUniformState);
+	}
+	const auto barrier = CD3DX12_RESOURCE_BARRIER::Transition(mResource.Get(), previous, state, subresource);
+	cmdList->ResourceBarrier(1, &barrier);
+	mSubresourceStates[subresource] = state;
+}
+
+void TextureDx12::setState(ID3D12GraphicsCommandList* cmdList, D3D12_RESOURCE_STATES state) {
+	const auto firstState = mSubresourceStates.empty() ? mUniformState : mSubresourceStates.front();
+	if (std::ranges::all_of(mSubresourceStates, [firstState](auto previous) { return previous == firstState; })) {
+		DirectX::TransitionResource(cmdList, mResource.Get(), firstState, state);
+	}
+	else {
+		// ALL_SUBRESOURCES requires a single matching before-state. Walk the tracked states when they can differ.
+		std::vector<D3D12_RESOURCE_BARRIER> barriers;
+		barriers.reserve(mSubresourceStates.size());
+		for (UINT subresource = 0; subresource < mSubresourceStates.size(); ++subresource) {
+			const auto previous = mSubresourceStates[subresource];
+			if (previous != state) {
+				barriers.push_back(CD3DX12_RESOURCE_BARRIER::Transition(mResource.Get(), previous, state, subresource));
+			}
+		}
+		if (!barriers.empty()) {
+			cmdList->ResourceBarrier(static_cast<UINT>(barriers.size()), barriers.data());
+		}
+	}
+	mSubresourceStates.clear();
+	mUniformState = state;
+}
+
+void TextureDx12::setSampledState(ID3D12GraphicsCommandList* cmdList, UINT depthMipCount) {
+	if (mType == TextureType::DEPTH) {
+		// Depth SRVs expose the first array slice and exclude the stencil plane.
+		setPlaneZeroState(cmdList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE, 0, depthMipCount, 0, 1, false);
+	}
+	else {
+		setState(cmdList, D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+	}
+}
+
+void TextureDx12::setPlaneZeroState(ID3D12GraphicsCommandList* cmdList, D3D12_RESOURCE_STATES state, UINT firstMip, UINT mipCount, UINT firstLayer,
+	UINT layerCount, bool orderUavWrites) {
+	if (firstMip >= mMipCount || firstLayer >= mArraySize || mipCount > mMipCount - firstMip || layerCount > mArraySize - firstLayer) {
+		throw std::out_of_range("DX12 graph image barrier range is out of bounds");
+	}
+	mipCount = mipCount ? mipCount : mMipCount - firstMip;
+	layerCount = layerCount ? layerCount : mArraySize - firstLayer;
+	const bool wholeResource = mPlaneCount == 1 && mipCount == mMipCount && layerCount == mArraySize;
+	bool needsUavBarrier = false;
+	if (wholeResource) {
+		if (orderUavWrites) {
+			needsUavBarrier = mSubresourceStates.empty()
+				? mUniformState == state
+				: std::ranges::any_of(mSubresourceStates, [state](auto previous) { return previous == state; });
+		}
+		setState(cmdList, state);
+	}
+	else {
+		for (UINT layer = firstLayer; layer < firstLayer + layerCount; ++layer) {
+			for (UINT mip = firstMip; mip < firstMip + mipCount; ++mip) {
+				const auto subresource = subresourceIndex(mip, layer);
+				needsUavBarrier |= orderUavWrites && getSubresourceState(subresource) == state;
+				setSubresourceState(cmdList, subresource, state);
+			}
+		}
+	}
+	if (needsUavBarrier) {
+		// A transition orders accesses for changed subresources. Legacy UAV barriers cover the resource.
+		const auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(mResource.Get());
+		cmdList->ResourceBarrier(1, &barrier);
+	}
 }
 
 void* TextureDx12::getImguiId() {

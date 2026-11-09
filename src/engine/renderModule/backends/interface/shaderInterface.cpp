@@ -23,7 +23,7 @@ void IKIGAI::RENDER::ShaderInterface::swapCompiledInterface(ShaderInterface& rep
 			}
 			const auto& other = next.mUniforms.at(next.mNameToUniforms.at(uniform.mName));
 			if (uniform.mType != other.mType || uniform.mSize != other.mSize || uniform.mDescriptorCount != other.mDescriptorCount
-				|| uniform.mRuntimeArray != other.mRuntimeArray || uniform.mReadOnly != other.mReadOnly
+				|| uniform.mRuntimeArray != other.mRuntimeArray || uniform.mReadOnly != other.mReadOnly || uniform.mWriteOnly != other.mWriteOnly
 				|| !std::ranges::equal(uniform.mMembers, other.mMembers, [](const auto& a, const auto& b) {
 					   return std::tie(a.mName, a.mType, a.mOffset, a.mSize, a.mArraySize)
 						   == std::tie(b.mName, b.mType, b.mOffset, b.mSize, b.mArraySize);
@@ -107,6 +107,7 @@ void IKIGAI::RENDER::ShaderInterface::GetReflection(ShaderReflection& reflection
 			uniform.mDescriptorCount = spvUniformInfo->count;
 			uniform.mRuntimeArray = spvUniformInfo->count == 0;
 			uniform.mReadOnly = (spvUniformInfo->decoration_flags & SPV_REFLECT_DECORATION_NON_WRITABLE) != 0;
+			uniform.mWriteOnly = (spvUniformInfo->decoration_flags & SPV_REFLECT_DECORATION_NON_READABLE) != 0;
 			if (spvUniformInfo->descriptor_type == SPV_REFLECT_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
 				uniform.mType = ShaderReflection::UniformType::UNIFORM_BUFFER;
 			}

@@ -2,6 +2,7 @@
 
 #ifdef DX12_BACKEND
 #include "d3dUtil.h"
+#include "deviceHealthDx12.h"
 #include <algorithm>
 #include <cstring>
 #include <iostream>
@@ -73,7 +74,7 @@ bool DriverDx12::resolveTimestampQueries() {
 }
 
 void DriverDx12::signalTimestampQueries() {
-	ThrowIfFailed(mCommandQueue->Signal(mTimestampFence.Get(), ++mTimestampSerial));
+	mDeviceHealth->check(mCommandQueue->Signal(mTimestampFence.Get(), ++mTimestampSerial), "Signal timestamp fence");
 }
 
 bool DriverDx12::readTimestamps(uint32_t first, uint32_t count, std::vector<uint64_t>& ticks) {
@@ -87,7 +88,7 @@ bool DriverDx12::readTimestamps(uint32_t first, uint32_t count, std::vector<uint
 		}
 		required = std::max(required, mTimestampResolveSerial[i]);
 	}
-	if (mTimestampFence->GetCompletedValue() < required) {
+	if (mDeviceHealth->completedValue(mTimestampFence.Get(), "Read timestamp fence") < required) {
 		return false;
 	}
 	const D3D12_RANGE range { SIZE_T { first } * sizeof(uint64_t), SIZE_T { first + count } * sizeof(uint64_t) };

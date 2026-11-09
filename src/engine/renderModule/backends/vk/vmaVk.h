@@ -75,6 +75,9 @@ namespace IKIGAI::RENDER {
 		VkImage handle() const { return mImage; }
 		VmaAllocation allocation() const { return mAllocation; }
 		VmaAllocator allocator() const { return mAllocator; }
+		bool isAliased() const {
+			return bool(mBacking);
+		}
 
 	private:
 		VmaAllocator mAllocator = nullptr;

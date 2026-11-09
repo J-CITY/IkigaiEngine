@@ -1,3 +1,4 @@
+#include "deviceHealthDx12.h"
 #include "driverDx12.h"
 #ifdef DX12_BACKEND
 #include "profilerModule/profiler.h"
@@ -273,7 +274,7 @@ uint64_t DriverDx12::requestBufferReadback(const std::shared_ptr<StorageBufferIn
 	}
 	CheckTransferSource(native, "requestBufferReadback");
 	CheckRange(native, offset, size, "requestBufferReadback");
-	const UINT64 completed = mFence ? mFence->GetCompletedValue() : 0;
+	const UINT64 completed = mFence ? mDeviceHealth->completedValue(mFence.Get(), "Read pending readback fence") : 0;
 	// Abandoned tickets must not accumulate readback memory: drop the oldest completed ones.
 	constexpr size_t MaxPendingReadbacks = 64;
 	while (mPendingReadbacks.size() >= MaxPendingReadbacks && mPendingReadbacks.front().FenceValue <= completed) {
@@ -306,7 +307,8 @@ uint64_t DriverDx12::requestBufferReadback(const std::shared_ptr<StorageBufferIn
 bool DriverDx12::collectBufferReadback(uint64_t ticket, std::vector<uint8_t>& bytes) {
 	const auto found = std::find_if(
 		mPendingReadbacks.begin(), mPendingReadbacks.end(), [ticket](const PendingReadbackDx12& pending) { return pending.Ticket == ticket; });
-	if (found == mPendingReadbacks.end() || !mFence || mFence->GetCompletedValue() < found->FenceValue) {
+	if (found == mPendingReadbacks.end() || !mFence
+		|| mDeviceHealth->completedValue(mFence.Get(), "Read buffer readback fence") < found->FenceValue) {
 		return false;
 	}
 	void* mapped = nullptr;
@@ -339,6 +341,13 @@ void DriverDx12::flushRecordedCommands() {
 		{ Dirty::VIEWPORT, Dirty::SCISSOR, Dirty::PRIMITIVE_MODE, Dirty::RASTERIZATION_MODE, Dirty::VERTEX_BUFFER, Dirty::INDEX_BUFFER }) {
 		setDirty(flag);
 	}
+}
+
+void DriverDx12::renderGraphIndirectBarrier(const std::shared_ptr<StorageBufferInterface>& arguments) {
+	constexpr auto operation = "renderGraphIndirectBarrier";
+	auto& native = NativeBuffer(arguments, operation);
+	CheckUsage(native, BufferUsage::INDIRECT, operation);
+	native.transition(mCommandList.Get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 }
 
 void DriverDx12::drawIndexedIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset, uint32_t drawCount, uint32_t stride) {

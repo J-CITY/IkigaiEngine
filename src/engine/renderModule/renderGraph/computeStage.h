@@ -11,6 +11,8 @@
 namespace IKIGAI::RENDER {
 class DriverInterface;
 class Renderer;
+class StorageBufferInterface;
+class TextureInterface;
 class UniformBufferInterface;
 struct PipelineStage;
 struct RenderGraphPipeline;
@@ -22,6 +24,12 @@ struct ResolvedBufferClear {
 	uint32_t Value = 0;
 	size_t Offset = 0;
 	size_t Size = 0;
+};
+
+struct ResolvedAsyncImageProgramBinding {
+	std::string Name;
+	const std::shared_ptr<TextureInterface>* Texture = nullptr;
+	std::shared_ptr<StorageBufferInterface> Buffer;
 };
 
 // Load-time resolution of a COMPUTE stage that uses the "Compute" descriptor block.
@@ -37,9 +45,11 @@ struct ComputeStageState {
 	std::string DispatchBuffer;
 	size_t DispatchOffset = 0;
 	std::vector<ResolvedBufferClear> Clears;
+	std::vector<ResolvedAsyncImageProgramBinding> AsyncImageProgramBindings;
 	std::string MipTexture;
 	size_t MipOutputBinding = 0;
 	bool MipHasInput = false;
+	bool MipScopedBarriers = false;
 	size_t MipInputBinding = 0;
 	std::string MipUniform;
 	uint32_t FirstMip = 0;

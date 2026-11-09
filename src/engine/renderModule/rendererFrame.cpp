@@ -255,8 +255,8 @@ void Renderer::waitOldestPresent() {
 		PeekMessageW(&message, nullptr, 0, 0, PM_NOREMOVE);
 	}
 #endif
-	ticket.get();
 	mPendingPresents.pop_front();
+	ticket.get();
 	if (!mGpuWaitThread) {
 		AccessGuard guard { mPreparingAccess };
 		mDriver->finishPresent();
@@ -293,37 +293,53 @@ void Renderer::shutdown() {
 	}
 	mRenderThread.reset();
 	mGpuWaitThread.reset();
-	if (mActiveFrame) {
-		mExecutor->cancel();
-		// A failed present may already have submitted work. Do not submit an ended native list twice.
-		if (mDriver->hasOpenRecording()) {
-			mDriver->requireOwnerThread();
-			mDriver->end();
+	try {
+		if (mDriver && !mDriver->isDeviceLost()) {
+			if (mActiveFrame) {
+				mExecutor->cancel();
+				// A failed present may already have submitted work. Do not submit an ended native list twice.
+				if (mDriver->hasOpenRecording()) {
+					mDriver->requireOwnerThread();
+					mDriver->end();
+				}
+				const auto token = mDriver->completion().lastSubmitted();
+				if (token.Value <= mFrameStartSubmission) {
+					throw std::logic_error("Cancelled frame has no native GPU submission");
+				}
+				mActiveFrame->cancelledSubmission(token);
+				mExecutor->endFrame();
+				mDriver->waitForCompletion(token);
+				if (mDriver->mFrameGeneration) {
+					mDriver->mFrameGeneration->waitForPresents();
+				}
+				if (!mActiveFrame->retire(mDriver->completion())) {
+					throw std::logic_error("Backend wait returned before GPU completion");
+				}
+				mActiveFrame.reset();
+			}
+			if (DriverInterface::settings.pipelined()) {
+				mDriver->waitForCompletion(mDriver->completion().lastSubmitted());
+			}
+			retireFrames(true);
 		}
-		const auto token = mDriver->completion().lastSubmitted();
-		if (token.Value <= mFrameStartSubmission) {
-			throw std::logic_error("Cancelled frame has no native GPU submission");
+	} catch (const std::exception& error) {
+		if (!mDriver || !mDriver->isDeviceLost()) {
+			throw;
 		}
-		mActiveFrame->cancelledSubmission(token);
-		mExecutor->endFrame();
-		mDriver->waitForCompletion(token);
-		if (mDriver->mFrameGeneration) {
-			mDriver->mFrameGeneration->waitForPresents();
-		}
-		if (!mActiveFrame->retire(mDriver->completion())) {
-			throw std::logic_error("Backend wait returned before GPU completion");
-		}
-		mActiveFrame.reset();
+		std::cerr << "GPU lost while draining renderer: " << error.what() << '\n';
 	}
-	if (mDriver) {
-		if (DriverInterface::settings.pipelined()) {
-			mDriver->waitForCompletion(mDriver->completion().lastSubmitted());
-		}
-		retireFrames(true);
-	}
-	mExecutor->cancel();
-	mFreeFrameCommands.clear();
 	mShutdown = true;
+	mExecutor->cancel();
+	if (mDriver && mDriver->isDeviceLost()) {
+		// Join presentation before releasing references held by discarded frames.
+		mDriver->stopPresentation();
+		if (mActiveFrame) {
+			mExecutor->endFrame();
+			mActiveFrame.reset();
+		}
+		mSubmittedFrames.clear();
+	}
+	mFreeFrameCommands.clear();
 }
 
 void Renderer::updateUniformBuffer(std::shared_ptr<UniformBufferInterface> buffer, const void* data, size_t bytes, size_t offset) {

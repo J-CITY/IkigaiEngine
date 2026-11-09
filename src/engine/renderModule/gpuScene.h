@@ -3,6 +3,7 @@
 #include "objects/boundingSphere.h"
 #include <array>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <span>
 #include <vector>
@@ -40,9 +41,14 @@ struct GpuSceneSnapshot {
 	std::vector<GpuSceneLod> Lods;
 };
 
+using GpuSceneMaterialIds = std::map<const MaterialInterface*, uint32_t>;
+
 struct GpuSceneDraw {
 	std::shared_ptr<StorageBufferInterface> Transforms;
 	std::shared_ptr<StorageBufferInterface> Arguments;
+	std::shared_ptr<StorageBufferInterface> MaterialIds;
+	uint32_t CommandCount = 1;
+	bool PooledGeometry = false;
 };
 
 struct GpuSceneOcclusion {
@@ -60,7 +66,7 @@ public:
 
 	bool available(Renderer& renderer);
 	void prepare(Renderer& renderer, const GpuSceneSnapshot& snapshot, const Frustum* frustum, const MATH::Vector3f& cameraPosition,
-		const GpuSceneOcclusion& occlusion);
+		const GpuSceneOcclusion& occlusion, const GpuSceneMaterialIds* materialIds = nullptr, bool poolGeometry = false);
 	bool recordOcclusionPost(Renderer& renderer, const std::shared_ptr<TextureInterface>& hzb);
 	bool recordShadow(Renderer& renderer, const Frustum& frustum);
 	bool contains(const Drawable& drawable) const;

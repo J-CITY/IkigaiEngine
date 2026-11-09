@@ -57,7 +57,7 @@ void DriverInterface::dispatchFrameGeneration(const FrameGenerationInputs& input
 		return;
 	try {
 		ValidateFrameGenerationInputs(inputs);
-		mFrameGeneration->prepare(inputs);
+		mFrameGeneration->prepare(stageFrameGenerationInputs(inputs));
 		mFrameGenerationStatus = mFrameGeneration->status();
 	} catch (const UnsupportedFrameGeneration& error) {
 		mFrameGeneration->suspend();

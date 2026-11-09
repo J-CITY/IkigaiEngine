@@ -3,6 +3,7 @@
 #include "captureModule/screenshot.h"
 #include "driverVk.h"
 #include "renderModule/backends/driverFactory.h"
+#include "renderModule/backends/interface/pipelineCacheStorage.h"
 #include "utilsModule/time/loadTimer.h"
 #include "vertexFormatsVk.h"
 #ifdef IKIGAI_USE_STREAMLINE
@@ -32,9 +33,12 @@
 #include <array>
 #include <assimp/Importer.hpp>
 #include <cstdlib>
+#include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 
 #include "frameBufferVk.h"
@@ -141,14 +145,9 @@ static const std::unordered_map<PixelFormat, vk::Format> FormatMap = {
 	{ PixelFormat::R11G11B10_FLOAT, vk::Format::eB10G11R11UfloatPack32 },
 };
 
-std::string DriverVk::State::getName(const FrameBufferInterface& attachments) const {
-	return "g:" + std::to_string(mShader->getId()) + ":" + std::to_string(mShader->generation()) + ":" + AttachmentSignatureKey(attachments, 1);
-}
-
 void DriverVk::retireShaderPipelines(size_t shaderId) {
-	const auto shaderKey = std::to_string(shaderId) + ":";
 	for (auto state = mStates.begin(); state != mStates.end();) {
-		if (std::string_view(state->first).substr(2).starts_with(shaderKey)) {
+		if (state->first.shaderId == shaderId) {
 #if IKIGAI_ENABLE_MEMORY_TRACKING
 			const auto handle = PROFILER::GpuHandleValue(static_cast<VkPipeline>(*state->second));
 			if (auto token = mGpuPipelines.extract(handle); !token.empty()) {
@@ -194,6 +193,75 @@ DriverVk::DriverVk() {
 #endif
 	UtilityVk::mDriver = this;
 	DriverVk::init();
+	initializePipelineCache();
+}
+
+void DriverVk::initializePipelineCache() noexcept {
+	try {
+		VkPhysicalDeviceProperties properties {};
+		vkGetPhysicalDeviceProperties(*mPhysicalDevice, &properties);
+		mPipelineCacheFeedback = std::getenv("IKIGAI_PROFILE_PIPELINE_CACHE") && mInstanceApiVersion >= VK_API_VERSION_1_3
+			&& properties.apiVersion >= VK_API_VERSION_1_3;
+		std::ostringstream key;
+		key << std::hex << properties.vendorID << '-' << properties.deviceID << '-' << properties.driverVersion << '-';
+		for (const auto byte : properties.pipelineCacheUUID) {
+			key << std::setw(2) << std::setfill('0') << static_cast<unsigned>(byte);
+		}
+		mPipelineCacheDeviceKey = key.str();
+		auto bytes = PIPELINE_CACHE::Read(PIPELINE_CACHE::Backend::Vulkan, mPipelineCacheDeviceKey);
+		VkPipelineCacheHeaderVersionOne header {};
+		bool valid = bytes.size() >= sizeof(header);
+		if (valid) {
+			std::memcpy(&header, bytes.data(), sizeof(header));
+			valid = header.headerSize >= sizeof(header) && header.headerSize <= bytes.size()
+				&& header.headerVersion == VK_PIPELINE_CACHE_HEADER_VERSION_ONE && header.vendorID == properties.vendorID
+				&& header.deviceID == properties.deviceID && std::memcmp(header.pipelineCacheUUID, properties.pipelineCacheUUID, VK_UUID_SIZE) == 0;
+		}
+		VkPipelineCacheCreateInfo info { VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO };
+		if (valid) {
+			info.initialDataSize = bytes.size();
+			info.pInitialData = bytes.data();
+		}
+		VkPipelineCache cache = VK_NULL_HANDLE;
+		auto result = vkCreatePipelineCache(*mDevice, &info, nullptr, &cache);
+		bool accepted = valid && result == VK_SUCCESS;
+		if (result != VK_SUCCESS && valid) {
+			info.initialDataSize = 0;
+			info.pInitialData = nullptr;
+			result = vkCreatePipelineCache(*mDevice, &info, nullptr, &cache);
+		}
+		if (result == VK_SUCCESS) {
+			mPipelineCache = vk::raii::PipelineCache(mDevice, cache);
+		}
+		if (std::getenv("IKIGAI_PROFILE_PIPELINE_CACHE")) {
+			std::cerr << "PSO_DISK_CACHE backend=vulkan load=" << (accepted ? "valid" : "empty-or-invalid") << " result=" << static_cast<int>(result)
+					  << '\n';
+		}
+	} catch (...) {
+		// The cache is optional; pipeline creation can proceed without it.
+	}
+}
+
+void DriverVk::savePipelineCache() noexcept {
+	if (!*mPipelineCache || mFrameFailure.load() != VK_SUCCESS) {
+		return;
+	}
+	try {
+		size_t size = 0;
+		auto result = vkGetPipelineCacheData(*mDevice, *mPipelineCache, &size, nullptr);
+		if (result != VK_SUCCESS || size == 0 || size > PIPELINE_CACHE::MaxBlobBytes) {
+			return;
+		}
+		std::vector<uint8_t> bytes(size);
+		result = vkGetPipelineCacheData(*mDevice, *mPipelineCache, &size, bytes.data());
+		const bool saved = result == VK_SUCCESS && size <= bytes.size()
+			&& PIPELINE_CACHE::Write(PIPELINE_CACHE::Backend::Vulkan, mPipelineCacheDeviceKey, std::span<const uint8_t>(bytes.data(), size));
+		if (std::getenv("IKIGAI_PROFILE_PIPELINE_CACHE")) {
+			std::cerr << "PSO_DISK_CACHE backend=vulkan save=" << (saved ? "ok" : "failed") << " bytes=" << size << '\n';
+		}
+	} catch (...) {
+		// Preserve any previous cache when serialization fails.
+	}
 }
 
 DriverVk::~DriverVk() {
@@ -202,13 +270,25 @@ DriverVk::~DriverVk() {
 		mMemorySampler->disable();
 	}
 #endif
-	if (working) {
-		DriverVk::end();
+	try {
+		if (working && mFrameFailure.load() == VK_SUCCESS) {
+			DriverVk::end();
+		}
+	} catch (const std::exception& error) {
+		std::cerr << "Vulkan final submission failed: " << error.what() << '\n';
 	}
-	if (*mDevice) {
-		mDevice.waitIdle();
+	if (*mDevice && mFrameFailure.load() != VK_ERROR_DEVICE_LOST) {
+		const auto result = mDevice.getDispatcher()->vkDeviceWaitIdle(*mDevice);
+		if (result != VK_SUCCESS) {
+			try {
+				checkFrameResult(result, "vkDeviceWaitIdle during shutdown");
+			} catch (const std::exception&) {
+				// Continue releasing native objects after a failed drain.
+			}
+		}
 	}
-	wait();
+	savePipelineCache();
+	mPipelineCache.clear();
 	// Readback staging buffers are VMA allocations: release them while the allocator exists.
 	mPendingReadbacks.clear();
 
@@ -410,6 +490,7 @@ void DriverVk::init() {
 				mInstance = mContext.createInstance(instanceInfo);
 			}
 			instanceCreated = true;
+			mInstanceApiVersion = apiVersion;
 			std::cout << "Vulkan instance API " << VK_API_VERSION_MAJOR(apiVersion) << "." << VK_API_VERSION_MINOR(apiVersion) << "\n";
 			break;
 		} catch (const vk::IncompatibleDriverError&) {
@@ -611,6 +692,22 @@ void DriverVk::init() {
 		|| mRTCoreFeatures.drawIndirectCount || mRTCoreFeatures.shaderBufferInt64Atomics || mRTCoreFeatures.samplerFilterMinmax) {
 		deviceFeatures.get<vk::PhysicalDeviceExtendedDynamicState3FeaturesEXT>().pNext = &mRTCoreFeatures;
 	}
+#ifdef VK_EXT_device_fault
+	VkPhysicalDeviceFaultFeaturesEXT faultFeatures { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT };
+	if (std::any_of(all_device_extensions.begin(), all_device_extensions.end(),
+			[](const auto& extension) { return std::string_view(extension.extensionName) == VK_EXT_DEVICE_FAULT_EXTENSION_NAME; })) {
+		VkPhysicalDeviceFeatures2 query { VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &faultFeatures };
+		vkGetPhysicalDeviceFeatures2(*mPhysicalDevice, &query);
+		if (faultFeatures.deviceFault) {
+			faultFeatures.deviceFaultVendorBinary = VK_FALSE;
+			device_extensions.push_back(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
+			auto& tail = deviceFeatures.get<vk::PhysicalDeviceExtendedDynamicState3FeaturesEXT>();
+			faultFeatures.pNext = tail.pNext;
+			tail.pNext = &faultFeatures;
+			mDeviceFaultEnabled = true;
+		}
+	}
+#endif
 
 	vk::DeviceCreateInfo deviceInfo {};
 	deviceInfo.setQueueCreateInfos(queueInfos);
@@ -845,6 +942,7 @@ bool DriverVk::checkInstanceExtensionSupport(const std::vector<const char*>& ext
 }
 
 void DriverVk::begin() {
+	requireUsableDevice();
 	working = true;
 	UniformBufferVk::BeginFrame(settings.framesInFlight);
 	mRayTracingFrameResources.clear();
@@ -856,7 +954,9 @@ void DriverVk::begin() {
 	invalidateCommandState();
 	vk::CommandBufferBeginInfo beginInfo;
 	beginInfo.setFlags(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
-	getCurrentFrame().mCommandBuffer.begin(beginInfo);
+	const auto& command = getCurrentFrame().mCommandBuffer;
+	checkFrameResult(command.getDispatcher()->vkBeginCommandBuffer(*command, &static_cast<const VkCommandBufferBeginInfo&>(beginInfo)),
+		"vkBeginCommandBuffer (frame)");
 	if (settings.pipelined()) {
 		// Pipeline attachments and persistent storage may be shared across submissions.
 		renderGraphBarrier(false);
@@ -864,15 +964,11 @@ void DriverVk::begin() {
 	resetTimestampPoolIfNeeded();
 
 	auto tex = std::static_pointer_cast<TextureVk>(getCurrentFrame().mFrameBuffer->getTextures()[0]);
-	// tex->setState(getCurrentFrame().mCommandBuffer, vk::ImageLayout::eColorAttachmentOptimal);
-	// TODO:
-	UtilityVk::SetImageMemoryBarrier(getCurrentFrame().mCommandBuffer, tex->mImagePtr, vk::ImageAspectFlagBits::eColor, tex->mCurrentState,
-		vk::ImageLayout::eColorAttachmentOptimal);
-	tex->mCurrentState = vk::ImageLayout::eColorAttachmentOptimal;
+	tex->setState(getCurrentFrame().mCommandBuffer, vk::ImageLayout::eColorAttachmentOptimal);
 }
 
 void DriverVk::invalidateCommandState() {
-	mBoundPipelineName.clear();
+	mBoundPipelineKey.reset();
 	graphics_pipeline_ignore_bindings.clear();
 	setDirty(Dirty::VERTEX_BUFFER);
 	setDirty(Dirty::INDEX_BUFFER);
@@ -892,6 +988,7 @@ void DriverVk::end() {
 	if (!working) {
 		return;
 	}
+	requireUsableDevice();
 
 	joinGraphCompute();
 	deactivateRenderPass();
@@ -905,10 +1002,8 @@ void DriverVk::end() {
 		: vk::ImageLayout::ePresentSrcKHR;
 	tex->setState(getCurrentFrame().mCommandBuffer, finalLayout);
 
-	// UtilityVk::SetImageMemoryBarrier(getCurrentFrame().mCommandBuffer, tex->mImagePtr, vk::ImageAspectFlagBits::eColor,
-	// vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::ePresentSrcKHR);
-
-	getCurrentFrame().mCommandBuffer.end();
+	const auto& command = getCurrentFrame().mCommandBuffer;
+	checkFrameResult(command.getDispatcher()->vkEndCommandBuffer(*command), "vkEndCommandBuffer (frame)");
 	working = false;
 
 	auto& frame = getCurrentFrame();
@@ -917,7 +1012,8 @@ void DriverVk::end() {
 	if (frame.fence.use_count() != 1) {
 		frame.fence = std::make_shared<vk::raii::Fence>(mDevice.createFence({}));
 	}
-	mDevice.resetFences({ **frame.fence });
+	const VkFence fence = **frame.fence;
+	checkFrameResult(mDevice.getDispatcher()->vkResetFences(*mDevice, 1, &fence), "vkResetFences (graphics)");
 
 	submitGraphics(*frame.mRenderCompleteSemaphore, 0, **frame.fence);
 	frame.Completion = completionSource()->submitted();
@@ -931,6 +1027,7 @@ void DriverVk::end() {
 }
 
 void DriverVk::submitGraphics(vk::Semaphore renderComplete, uint64_t graphSignal, vk::Fence fence) {
+	requireUsableDevice();
 	std::array<vk::Semaphore, 2> waits {};
 	std::array<uint64_t, 2> waitValues {};
 	const std::array<vk::PipelineStageFlags, 2> stages { vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands };
@@ -957,13 +1054,17 @@ void DriverVk::submitGraphics(vk::Semaphore renderComplete, uint64_t graphSignal
 	if (graphSignal || mGraphGraphicsWait) {
 		submit.setPNext(&timeline);
 	}
-	mQueue.submit(submit, fence);
+	checkFrameResult(mQueue.getDispatcher()->vkQueueSubmit(*mQueue, 1, &static_cast<const VkSubmitInfo&>(submit), fence), "vkQueueSubmit (graphics)");
 	mAcquireWaitPending = false;
 	mGraphGraphicsWait = 0;
 }
 
 bool DriverVk::hasGraphComputeQueue() const noexcept {
 	return bool(*mGraphComputeQueue);
+}
+
+bool DriverVk::supportsGraphComputeImages() const noexcept {
+	return hasGraphComputeQueue();
 }
 
 void DriverVk::splitGraphGraphics(uint64_t signal) {
@@ -988,32 +1089,56 @@ void DriverVk::joinGraphCompute() {
 		// Submit independent graphics before making subsequent submissions wait.
 		splitGraphGraphics(0);
 		mGraphGraphicsWait = std::exchange(mGraphComputePending, 0);
-		transferGraphBuffers(*getCurrentFrame().mCommandBuffer, mGraphComputeFamily, mQueueFamilyIndex, false);
+		transferGraphResources(*getCurrentFrame().mCommandBuffer, mGraphComputeFamily, mQueueFamilyIndex, false);
 		mGraphComputeBuffers.clear();
+		mGraphComputeImages.clear();
 	}
 }
 
-void DriverVk::transferGraphBuffers(VkCommandBuffer command, uint32_t source, uint32_t destination, bool release) {
-	if (source == destination) {
+void DriverVk::transferGraphResources(VkCommandBuffer command, uint32_t source, uint32_t destination, bool release) {
+	if (source == destination || (mGraphComputeBuffers.empty() && mGraphComputeImages.empty())) {
 		return;
 	}
-	std::vector<VkBufferMemoryBarrier2> barriers;
-	barriers.reserve(mGraphComputeBuffers.size());
+	const auto sourceStage = release ? VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT : VK_PIPELINE_STAGE_2_NONE;
+	const auto destinationStage = release ? VK_PIPELINE_STAGE_2_NONE : VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+	const auto sourceAccess = release ? VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT : 0;
+	const auto destinationAccess = release ? 0 : VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+	std::vector<VkBufferMemoryBarrier2> bufferBarriers;
+	bufferBarriers.reserve(mGraphComputeBuffers.size());
 	for (auto buffer : mGraphComputeBuffers) {
 		VkBufferMemoryBarrier2 barrier { VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2 };
 		barrier.srcQueueFamilyIndex = source;
 		barrier.dstQueueFamilyIndex = destination;
-		barrier.srcStageMask = release ? VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT : VK_PIPELINE_STAGE_2_NONE;
-		barrier.dstStageMask = release ? VK_PIPELINE_STAGE_2_NONE : VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-		barrier.srcAccessMask = release ? VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT : 0;
-		barrier.dstAccessMask = release ? 0 : VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+		barrier.srcStageMask = sourceStage;
+		barrier.dstStageMask = destinationStage;
+		barrier.srcAccessMask = sourceAccess;
+		barrier.dstAccessMask = destinationAccess;
 		barrier.buffer = buffer;
 		barrier.size = VK_WHOLE_SIZE;
-		barriers.push_back(barrier);
+		bufferBarriers.push_back(barrier);
+	}
+	std::vector<VkImageMemoryBarrier2> imageBarriers;
+	imageBarriers.reserve(mGraphComputeImages.size());
+	for (const auto& image : mGraphComputeImages) {
+		VkImageMemoryBarrier2 barrier { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
+		barrier.srcQueueFamilyIndex = source;
+		barrier.dstQueueFamilyIndex = destination;
+		barrier.srcStageMask = sourceStage;
+		barrier.dstStageMask = destinationStage;
+		barrier.srcAccessMask = sourceAccess;
+		barrier.dstAccessMask = destinationAccess;
+		// The graphics prefix prepares the layout. Both ownership barriers cover the same descriptor view.
+		barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+		barrier.image = image.Image;
+		barrier.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+		imageBarriers.push_back(barrier);
 	}
 	VkDependencyInfo dependency { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
-	dependency.bufferMemoryBarrierCount = static_cast<uint32_t>(barriers.size());
-	dependency.pBufferMemoryBarriers = barriers.data();
+	dependency.bufferMemoryBarrierCount = static_cast<uint32_t>(bufferBarriers.size());
+	dependency.pBufferMemoryBarriers = bufferBarriers.data();
+	dependency.imageMemoryBarrierCount = static_cast<uint32_t>(imageBarriers.size());
+	dependency.pImageMemoryBarriers = imageBarriers.data();
 	vkCmdPipelineBarrier2(command, &dependency);
 }
 
@@ -1139,8 +1264,11 @@ vk::raii::Pipeline DriverVk::createState(const State& pipeline_state) {
 	std::vector<vk::DynamicState> dynamic_states = { vk::DynamicState::eViewport, vk::DynamicState::eScissor, vk::DynamicState::ePrimitiveTopology,
 		vk::DynamicState::eLineWidth, vk::DynamicState::eCullMode, vk::DynamicState::eFrontFace, vk::DynamicState::eVertexInputBindingStride,
 		vk::DynamicState::eDepthTestEnable, vk::DynamicState::eDepthCompareOp, vk::DynamicState::eDepthWriteEnable,
-		vk::DynamicState::eColorWriteMaskEXT, vk::DynamicState::eColorBlendEquationEXT, vk::DynamicState::eColorBlendEnableEXT,
 		vk::DynamicState::eStencilTestEnable };
+	if (!blendAttachments.empty()) {
+		dynamic_states.insert(dynamic_states.end(),
+			{ vk::DynamicState::eColorWriteMaskEXT, vk::DynamicState::eColorBlendEquationEXT, vk::DynamicState::eColorBlendEnableEXT });
+	}
 	if (pipeline_state.mShader->vertexFetchMode() == VertexFetchMode::Pulling) {
 		std::erase(dynamic_states, vk::DynamicState::eVertexInputBindingStride);
 	}
@@ -1180,9 +1308,21 @@ vk::raii::Pipeline DriverVk::createState(const State& pipeline_state) {
 	if (topology == vk::PrimitiveTopology::ePatchList) {
 		graphics_pipeline_create_info.setPTessellationState(&pipeline_tessellation_state_create_info);
 	}
+	VkPipelineCreationFeedback feedback {};
+	VkPipelineCreationFeedbackCreateInfo feedbackInfo { VK_STRUCTURE_TYPE_PIPELINE_CREATION_FEEDBACK_CREATE_INFO };
+	if (mPipelineCacheFeedback) {
+		feedbackInfo.pNext = &pipeline_rendering_create_info;
+		feedbackInfo.pPipelineCreationFeedback = &feedback;
+		graphics_pipeline_create_info.setPNext(&feedbackInfo);
+	}
 
 	UTILS::LoadTimer timing("graphics-pipeline", pipeline_state.mShader->mPath);
-	auto pipeline = mDevice.createGraphicsPipeline(nullptr, graphics_pipeline_create_info);
+	auto pipeline = mDevice.createGraphicsPipeline(*mPipelineCache ? &mPipelineCache : nullptr, graphics_pipeline_create_info);
+	if (mPipelineCacheFeedback && (feedback.flags & VK_PIPELINE_CREATION_FEEDBACK_VALID_BIT)) {
+		std::cerr << "PSO_DISK_CACHE backend=vulkan pipeline=graphics application_hit="
+				  << !!(feedback.flags & VK_PIPELINE_CREATION_FEEDBACK_APPLICATION_PIPELINE_CACHE_HIT_BIT) << " duration_ns=" << feedback.duration
+				  << '\n';
+	}
 #if IKIGAI_ENABLE_MEMORY_TRACKING
 	const auto handle = PROFILER::GpuHandleValue(static_cast<VkPipeline>(*pipeline));
 	try {
@@ -1453,26 +1593,43 @@ void DriverVk::EnsureStencilMode(vk::raii::CommandBuffer& cmdlist) {
 	cmdlist.setStencilTestEnable(mStencilMode.has_value());
 }
 
+DriverVk::PipelineKey DriverVk::graphicsPipelineKey() {
+	PipelineKey key;
+	const auto& shader = *mCurrentState.mShader;
+	key.shaderId = shader.getId();
+	key.shaderGeneration = shader.generation();
+	key.layout = PROFILER::GpuHandleValue(static_cast<VkPipelineLayout>(*shader.mPipelineLayout));
+	key.topology = GraphicsTopology(shader, mPrimitiveMode);
+	const auto& framebuffer = mCurrentState.mFrameBuffer ? mCurrentState.mFrameBuffer : getCurrentFrame().mFrameBuffer;
+	for (const auto& texture : framebuffer->getTextures()) {
+		key.colorFormats.values.push_back(FormatMap.at(texture->getFormat()));
+	}
+	if (framebuffer->getDepth()) {
+		key.depthFormat = FormatMap.at(framebuffer->getDepth()->getFormat());
+		if (framebuffer->getDepth()->getFormat() != PixelFormat::DEPTH32_FLOAT) {
+			key.stencilFormat = key.depthFormat;
+		}
+	}
+	if (shader.vertexFetchMode() != VertexFetchMode::Pulling && mVertexLayout) {
+		key.vertexLayout.emplace(*mVertexLayout);
+	}
+	return key;
+}
+
 void DriverVk::EnsureGraphicsPipelineState(vk::raii::CommandBuffer& cmdlist) {
-	// The pipeline depends on the current shader and framebuffer, which can change between draws
-	// (setShader/setFrameBuffer do not raise the dirty flag), so compare by name as well.
-	const auto& attachments = mCurrentState.mFrameBuffer ? mCurrentState.mFrameBuffer : getCurrentFrame().mFrameBuffer;
-	const auto topology = GraphicsTopology(*mCurrentState.mShader, mPrimitiveMode);
-	const auto name = mCurrentState.getName(*attachments) + ":" + vertexLayoutKey() + ":" + std::to_string(static_cast<int>(topology));
-	if (!isDirty(Dirty::PIPELINE) && name == mBoundPipelineName) {
+	const auto key = graphicsPipelineKey();
+	if (!isDirty(Dirty::PIPELINE) && mBoundPipelineKey == key) {
 		return;
 	}
 	clearDirty(Dirty::PIPELINE);
 
-	if (!mStates.contains(name)) {
-		auto pipeline = createState(mCurrentState);
-		mStates.insert({ name, std::move(pipeline) });
+	auto state = mStates.find(key);
+	if (state == mStates.end()) {
+		state = mStates.emplace(key, createState(mCurrentState)).first;
 	}
-
-	const auto& pipeline = mStates.at(name);
-	cmdlist.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline);
+	cmdlist.bindPipeline(vk::PipelineBindPoint::eGraphics, *state->second);
 	setDirty(Dirty::VERTEX_BUFFER);
-	mBoundPipelineName = name;
+	mBoundPipelineKey = key;
 
 	graphics_pipeline_ignore_bindings.clear();
 }
@@ -1528,6 +1685,7 @@ void DriverVk::EnsureGraphicsState(bool draw_indexed) {
 }
 
 void DriverVk::wait() {
+	requireUsableDevice();
 	if (settings.pipelined()) {
 		waitForCompletion(completion().lastSubmitted());
 		return;
@@ -1545,10 +1703,86 @@ void DriverVk::waitForPresentedFrame() {
 }
 
 void DriverVk::waitFrameFence(const vk::raii::Fence& fence) {
-	auto wait_result = mDevice.waitForFences({ *fence }, true, UINT64_MAX);
-	if (wait_result != vk::Result::eSuccess) {
-		throw std::runtime_error("Vulkan frame fence wait failed");
+	requireUsableDevice();
+	const VkFence nativeFence = *fence;
+	checkFrameResult(mDevice.getDispatcher()->vkWaitForFences(*mDevice, 1, &nativeFence, VK_TRUE, UINT64_MAX), "vkWaitForFences");
+}
+
+void DriverVk::requireUsableDevice() const {
+	const auto result = mFrameFailure.load();
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error("Vulkan rendering stopped after " + vk::to_string(static_cast<vk::Result>(result)));
 	}
+}
+
+bool DriverVk::isDeviceLost() const noexcept {
+	return mFrameFailure.load() == VK_ERROR_DEVICE_LOST;
+}
+
+void DriverVk::reportDeviceFault() const {
+#ifdef VK_EXT_device_fault
+	if (!mDeviceFaultEnabled) {
+		return;
+	}
+	const auto getFault = mDevice.getDispatcher()->vkGetDeviceFaultInfoEXT;
+	if (!getFault) {
+		return;
+	}
+	VkDeviceFaultCountsEXT counts { VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT };
+	auto result = getFault(*mDevice, &counts, nullptr);
+	if (result != VK_SUCCESS) {
+		std::cerr << "Vulkan device fault count query failed (" << result << ")\n";
+		return;
+	}
+	// Cap diagnostic storage so reporting a device loss needs no allocation.
+	std::array<VkDeviceFaultAddressInfoEXT, 16> addresses {};
+	std::array<VkDeviceFaultVendorInfoEXT, 16> vendorFaults {};
+	counts.addressInfoCount = std::min(counts.addressInfoCount, static_cast<uint32_t>(addresses.size()));
+	counts.vendorInfoCount = std::min(counts.vendorInfoCount, static_cast<uint32_t>(vendorFaults.size()));
+	VkDeviceFaultInfoEXT info { VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT };
+	info.pAddressInfos = addresses.data();
+	info.pVendorInfos = vendorFaults.data();
+	result = getFault(*mDevice, &counts, &info);
+	if (result != VK_SUCCESS && result != VK_INCOMPLETE) {
+		std::cerr << "Vulkan device fault info query failed (" << result << ")\n";
+		return;
+	}
+	std::cerr << "Vulkan device fault: " << info.description << " (query status " << result << ")\n";
+	for (size_t i = 0; i < std::min<size_t>(counts.addressInfoCount, addresses.size()); ++i) {
+		const auto& address = addresses[i];
+		std::cerr << "  GPU address " << address.reportedAddress << ", type " << address.addressType << ", precision " << address.addressPrecision
+				  << '\n';
+	}
+	for (size_t i = 0; i < std::min<size_t>(counts.vendorInfoCount, vendorFaults.size()); ++i) {
+		const auto& fault = vendorFaults[i];
+		std::cerr << "  " << fault.description << ", code " << fault.vendorFaultCode << ", data " << fault.vendorFaultData << '\n';
+	}
+#endif
+}
+
+void DriverVk::checkFrameResult(VkResult result, const char* operation) {
+	if (result == VK_SUCCESS) {
+		return;
+	}
+	const auto message
+		= std::string("Vulkan ") + operation + " failed with " + vk::to_string(static_cast<vk::Result>(result)) + " (" + std::to_string(result) + ')';
+	VkResult previous = VK_SUCCESS;
+	const bool firstFailure
+		= result == VK_ERROR_DEVICE_LOST ? mFrameFailure.exchange(result) != result : mFrameFailure.compare_exchange_strong(previous, result);
+	if (firstFailure) {
+		const auto properties = mPhysicalDevice.getProperties();
+		std::cerr << message << " on " << properties.deviceName.data() << ", driver " << properties.driverVersion << ", last submission "
+				  << completion().lastSubmitted().Value << '\n';
+		if (result == VK_ERROR_DEVICE_LOST) {
+			reportDeviceFault();
+		}
+	}
+	throw std::runtime_error(message);
+}
+
+void DriverVk::waitDeviceIdle() {
+	requireUsableDevice();
+	checkFrameResult(mDevice.getDispatcher()->vkDeviceWaitIdle(*mDevice), "vkDeviceWaitIdle");
 }
 
 std::function<void()> DriverVk::presentedFrameWait(GpuCompletionToken token) {
@@ -1605,6 +1839,7 @@ void DriverVk::collectCompletedFrames() {
 
 void DriverVk::waitForCompletion(GpuCompletionToken token) {
 	requireOwnerThread();
+	requireUsableDevice();
 	completionSource()->validate(token);
 	if (!completionSource()->isComplete(token)) {
 		if (settings.pipelined()) {
@@ -1619,7 +1854,7 @@ void DriverVk::waitForCompletion(GpuCompletionToken token) {
 				}
 			}
 		}
-		mDevice.waitIdle();
+		waitDeviceIdle();
 		completionSource()->completed(completionSource()->lastSubmitted());
 	}
 	if (settings.pipelined()) {
@@ -1702,7 +1937,8 @@ void DriverVk::createSwapchain(unsigned int windowID, uint32_t width, uint32_t h
 							  .setOldSwapchain(*ctx.swapchain);
 
 	ctx.lastCreateInfo = swapchain_info;
-	ctx.swapchain = mDevice.createSwapchainKHR(swapchain_info);
+	auto replacement = mDevice.createSwapchainKHR(swapchain_info);
+	auto oldSwapchain = std::exchange(ctx.swapchain, std::move(replacement));
 
 	auto backbuffers = ctx.swapchain.getImages();
 	createSwapchainFrames(windowID, backbuffers);
@@ -1767,22 +2003,37 @@ void DriverVk::createSwapchainFrames(unsigned windowID, const std::vector<vk::Im
 }
 
 void DriverVk::nextFrame() {
+	requireUsableDevice();
 	auto& ctx = getCurrentSwapchainContext();
-	const auto& acquireSlot = ctx.frames.at(mSemaphoreIndex);
-	if (acquireSlot.AcquireConsumed.Value) {
-		waitForCompletion(acquireSlot.AcquireConsumed);
+	if (ctx.recreatePending) {
+		recreateSwapchain(ctx.width, ctx.height);
 	}
-	const auto& image_acquired_semaphore = acquireSlot.mImageAcquiredSemaphore;
-	if (ctx.sdkAcquire) {
-		auto result = ctx.sdkAcquire(*image_acquired_semaphore, &mFrameIndex);
-		if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-			throw std::runtime_error("SDK acquire image failed: " + std::to_string(result));
+	const auto acquireImage = [&]() {
+		const auto& slot = ctx.frames.at(mSemaphoreIndex);
+		if (slot.AcquireConsumed.Value) {
+			waitForCompletion(slot.AcquireConsumed);
 		}
+		if (ctx.sdkAcquire) {
+			return ctx.sdkAcquire(*slot.mImageAcquiredSemaphore, &mFrameIndex);
+		}
+		waitFrameFence(slot.AcquireFence);
+		const VkFence fence = *slot.AcquireFence;
+		checkFrameResult(mDevice.getDispatcher()->vkResetFences(*mDevice, 1, &fence), "vkResetFences (acquire)");
+		return mDevice.getDispatcher()->vkAcquireNextImageKHR(
+			*mDevice, *ctx.swapchain, UINT64_MAX, *slot.mImageAcquiredSemaphore, fence, &mFrameIndex);
+	};
+	auto result = acquireImage();
+	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+		// The rejected acquire did not signal its fence. Replace the frame slots
+		// with the swapchain before attempting a new acquire.
+		recreateSwapchain(ctx.width, ctx.height);
+		result = acquireImage();
+	}
+	if (result == VK_SUBOPTIMAL_KHR) {
+		ctx.recreatePending = true;
 	}
 	else {
-		waitFrameFence(acquireSlot.AcquireFence);
-		mDevice.resetFences({ *acquireSlot.AcquireFence });
-		mFrameIndex = ctx.swapchain.acquireNextImage(UINT64_MAX, *image_acquired_semaphore, *acquireSlot.AcquireFence).value;
+		checkFrameResult(result, ctx.sdkAcquire ? "SDK acquire image" : "vkAcquireNextImageKHR");
 	}
 	mAcquireWaitPending = true;
 	if (settings.pipelined() && getCurrentFrame().Completion.Value) {
@@ -1817,15 +2068,24 @@ void DriverVk::beginRenderPass() {
 
 	std::vector<vk::RenderingAttachmentInfo> color_attachments;
 	std::optional<vk::RenderingAttachmentInfo> depth_stencil_attachment;
+	const auto mip = targets->getMip();
+	const auto layer = targets->getLayer();
 
 	for (auto target : targets->getTextures()) {
 		auto* native = static_cast<TextureVk*>(target.get());
-		native->setState(getCurrentFrame().mCommandBuffer, vk::ImageLayout::eGeneral);
+		auto view = *native->mImageView;
+		if (target->getType() == TextureType::TEXTURE_3D) {
+			native->setState(getCurrentFrame().mCommandBuffer, vk::ImageLayout::eGeneral);
+		}
+		else {
+			native->setState(getCurrentFrame().mCommandBuffer, vk::ImageLayout::eGeneral, mip, layer);
+			if (native->getMipCount() > 1 || native->arrayLayerCount() > 1 || target->getType() == TextureType::TEXTURE_2D_ARRAY) {
+				view = native->attachmentView(mip, layer);
+			}
+		}
 		const auto load = std::exchange(native->mDiscardAliasContents, false) ? vk::AttachmentLoadOp::eDontCare : vk::AttachmentLoadOp::eLoad;
 		auto color_attachment = vk::RenderingAttachmentInfo()
-									.setImageView(target->getType() == TextureType::TEXTURE_CUBE
-											? static_cast<TextureVk*>(target.get())->attachmentView(targets->getMip(), targets->getLayer())
-											: *static_cast<TextureVk*>(target.get())->mImageView)
+									.setImageView(view)
 									.setImageLayout(vk::ImageLayout::eGeneral)
 									.setLoadOp(load)
 									.setStoreOp(vk::AttachmentStoreOp::eStore);
@@ -1833,12 +2093,14 @@ void DriverVk::beginRenderPass() {
 		color_attachments.push_back(color_attachment);
 	}
 	if (targets->getDepth()) {
-		static_cast<TextureVk*>(targets->getDepth().get())
-			->setState(getCurrentFrame().mCommandBuffer, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+		auto* native = static_cast<TextureVk*>(targets->getDepth().get());
+		native->setState(getCurrentFrame().mCommandBuffer, vk::ImageLayout::eDepthStencilAttachmentOptimal, 0, 0);
+		const auto view = native->getMipCount() > 1 ? native->attachmentView(0, 0) : *native->mImageView;
+		const auto load = std::exchange(native->mDiscardAliasContents, false) ? vk::AttachmentLoadOp::eDontCare : vk::AttachmentLoadOp::eLoad;
 		depth_stencil_attachment = vk::RenderingAttachmentInfo()
-									   .setImageView(*static_cast<TextureVk*>(targets->getDepth().get())->mImageView)
+									   .setImageView(view)
 									   .setImageLayout(vk::ImageLayout::eDepthStencilAttachmentOptimal)
-									   .setLoadOp(vk::AttachmentLoadOp::eLoad)
+									   .setLoadOp(load)
 									   .setStoreOp(vk::AttachmentStoreOp::eStore);
 	}
 
@@ -1932,7 +2194,7 @@ void DriverVk::PushDescriptorTexture(
 	// }
 
 	auto texture = mTextures.at(binding);
-	if (texture->mCurrentState != vk::ImageLayout::eGeneral) {
+	if (!texture->isInState(vk::ImageLayout::eGeneral)) {
 		// Image layout transitions (pipeline barriers) are not allowed inside a dynamic rendering scope.
 		// The render pass is reactivated at the end of EnsureGraphicsState().
 		deactivateRenderPass();
@@ -2007,6 +2269,12 @@ void DriverVk::PushDescriptors(vk::raii::CommandBuffer& cmdlist, vk::PipelineBin
 
 	// A new set starts empty, so every binding is written, not only the dirty ones.
 	// Image transitions are illegal inside a dynamic rendering pass.
+	const auto prepareSubresource = [&](TextureVk& texture, uint32_t mip, uint32_t layer) {
+		if (texture.state(mip, layer) != vk::ImageLayout::eGeneral) {
+			deactivateRenderPass();
+			texture.setState(cmdlist, vk::ImageLayout::eGeneral, mip, layer);
+		}
+	};
 	for (const auto& required : required_descriptor_bindings) {
 		if (required.descriptorType != vk::DescriptorType::eCombinedImageSampler && required.descriptorType != vk::DescriptorType::eStorageImage) {
 			continue;
@@ -2020,7 +2288,7 @@ void DriverVk::PushDescriptors(vk::raii::CommandBuffer& cmdlist, vk::PipelineBin
 				if (!texture) {
 					throw std::runtime_error("Bindless texture table contains buffer entries");
 				}
-				if (texture->mCurrentState != vk::ImageLayout::eGeneral) {
+				if (!texture->isInState(vk::ImageLayout::eGeneral)) {
 					deactivateRenderPass();
 				}
 				texture->setState(cmdlist, vk::ImageLayout::eGeneral);
@@ -2028,10 +2296,21 @@ void DriverVk::PushDescriptors(vk::raii::CommandBuffer& cmdlist, vk::PipelineBin
 			continue;
 		}
 		auto texture = mTextures.at(required.binding);
-		if (texture->mCurrentState != vk::ImageLayout::eGeneral) {
-			deactivateRenderPass();
+		if (required.descriptorType == vk::DescriptorType::eStorageImage) {
+			const auto storageImage = mStorageImageBindings.find(required.binding);
+			if (storageImage != mStorageImageBindings.end()) {
+				prepareSubresource(*texture, storageImage->second.Mip, storageImage->second.Layer);
+			}
+			else {
+				for (uint32_t layer = 0; layer < texture->arrayLayerCount(); ++layer) {
+					prepareSubresource(*texture, 0, layer);
+				}
+			}
 		}
-		texture->setState(cmdlist, vk::ImageLayout::eGeneral);
+		else if (!texture->isInState(vk::ImageLayout::eGeneral)) {
+			deactivateRenderPass();
+			texture->setState(cmdlist, vk::ImageLayout::eGeneral);
+		}
 	}
 
 	struct BufferWrite {
@@ -2080,9 +2359,10 @@ void DriverVk::PushDescriptors(vk::raii::CommandBuffer& cmdlist, vk::PipelineBin
 		if (required.descriptorType == vk::DescriptorType::eCombinedImageSampler || required.descriptorType == vk::DescriptorType::eStorageImage) {
 			auto texture = mTextures.at(binding);
 			vk::ImageView view = *texture->mImageView;
-			const auto storageImage = mStorageImageBindings.find(binding);
-			if (required.descriptorType == vk::DescriptorType::eStorageImage && storageImage != mStorageImageBindings.end()) {
-				view = storageImage->second.Texture->attachmentView(storageImage->second.Mip, storageImage->second.Layer);
+			if (required.descriptorType == vk::DescriptorType::eStorageImage) {
+				const auto storageImage = mStorageImageBindings.find(binding);
+				view = storageImage != mStorageImageBindings.end() ? texture->attachmentView(storageImage->second.Mip, storageImage->second.Layer)
+																   : texture->baseMipStorageView();
 			}
 			images.push_back(ImageWrite { binding, 0, required.descriptorType,
 				vk::DescriptorImageInfo().setSampler(*texture->mSampler).setImageView(view).setImageLayout(vk::ImageLayout::eGeneral) });
@@ -2150,6 +2430,7 @@ void DriverVk::PushDescriptors(vk::raii::CommandBuffer& cmdlist, vk::PipelineBin
 }
 
 void DriverVk::resize(size_t width, size_t height) {
+	requireUsableDevice();
 	auto found = mSwapchains.find(mCurrentWindowID);
 	if (found == mSwapchains.end() || (!*found->second.swapchain && !found->second.sdkSwapchain)) {
 		mWidth = static_cast<uint32_t>(width);
@@ -2164,22 +2445,27 @@ void DriverVk::resize(size_t width, size_t height) {
 		targetWidth = surface_capabilities.currentExtent.width;
 		targetHeight = surface_capabilities.currentExtent.height;
 	}
-	if (targetWidth == ctx.width && targetHeight == ctx.height) {
+	if (targetWidth == ctx.width && targetHeight == ctx.height && !ctx.recreatePending) {
 		mWidth = targetWidth;
 		mHeight = targetHeight;
 		return;
 	}
+	end();
+	recreateSwapchain(targetWidth, targetHeight);
+	nextFrame();
+	begin();
+}
+
+void DriverVk::recreateSwapchain(uint32_t width, uint32_t height) try {
+	auto& ctx = getCurrentSwapchainContext();
+	waitDeviceIdle();
 	if (mFrameGeneration) {
 		mFrameGeneration->suspend();
-	}
-	end();
-	wait();
-	if (mFrameGeneration) {
 		mFrameGeneration->waitForPresents();
 	}
-	mDevice.waitIdle();
-	mWidth = targetWidth;
-	mHeight = targetHeight;
+	completionSource()->completed(completionSource()->lastSubmitted());
+	mWidth = width;
+	mHeight = height;
 	if (ctx.sdkResize) {
 		auto resize = ctx.sdkResize;
 		resize(mWidth, mHeight);
@@ -2187,8 +2473,9 @@ void DriverVk::resize(size_t width, size_t height) {
 	else {
 		createSwapchain(mCurrentWindowID, mWidth, mHeight);
 	}
-	nextFrame();
-	begin();
+	ctx.recreatePending = false;
+} catch (const vk::DeviceLostError&) {
+	checkFrameResult(VK_ERROR_DEVICE_LOST, "swapchain recreation");
 }
 
 // void DriverVk::setVsync(bool value) {
@@ -2407,20 +2694,24 @@ VmaBuffer DriverVk::copyTextureToReadback(TextureVk& texture, unsigned mip, unsi
 	const bool depth = texture.getType() == TextureType::DEPTH;
 	const bool arrayed = texture.getType() == TextureType::TEXTURE_CUBE || texture.getType() == TextureType::TEXTURE_2D_ARRAY;
 	auto buffer = UtilityVk::CreateBuffer(bytes, vk::BufferUsageFlagBits::eTransferDst, UtilityVk::MemoryUsage::Staging);
-	const auto previousLayout = texture.mCurrentState;
+	const auto arrayLayer = arrayed ? layer : 0;
+	const auto previousLayout = texture.state(mip, arrayLayer);
+	if (previousLayout == vk::ImageLayout::eUndefined) {
+		throw std::invalid_argument("Vulkan texture readback requires initialized contents");
+	}
 	UtilityVk::OneTimeSubmit([&](const auto& commandBuffer) {
-		texture.setState(commandBuffer, vk::ImageLayout::eTransferSrcOptimal);
+		texture.setState(commandBuffer, vk::ImageLayout::eTransferSrcOptimal, mip, arrayLayer);
 		const auto layers = vk::ImageSubresourceLayers()
 								.setAspectMask(depth ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor)
 								.setMipLevel(mip)
-								.setBaseArrayLayer(arrayed ? layer : 0)
+								.setBaseArrayLayer(arrayLayer)
 								.setLayerCount(1);
 		const auto copy = vk::BufferImageCopy()
 							  .setImageSubresource(layers)
 							  .setImageOffset({ 0, 0, texture.getType() == TextureType::TEXTURE_3D ? static_cast<int>(layer) : 0 })
 							  .setImageExtent({ width, height, 1 });
 		commandBuffer.copyImageToBuffer(texture.mImagePtr, vk::ImageLayout::eTransferSrcOptimal, *buffer, copy);
-		texture.setState(commandBuffer, previousLayout);
+		texture.setState(commandBuffer, previousLayout, mip, arrayLayer);
 	});
 	return buffer;
 }
@@ -2430,9 +2721,6 @@ std::vector<int32_t> DriverVk::readIntTexture(std::shared_ptr<TextureInterface> 
 	const auto native = std::dynamic_pointer_cast<TextureVk>(texture);
 	if (!native || native->getFormat() != PixelFormat::RG32_INT || mip != 0 || layer != 0) {
 		throw std::invalid_argument("Vulkan integer readback requires an RG32_INT texture at mip and layer zero");
-	}
-	if (native->mCurrentState == vk::ImageLayout::eUndefined) {
-		throw std::invalid_argument("Integer texture readback requires initialized contents");
 	}
 	std::vector<int32_t> values(native->getWidth() * native->getHeight() * 2);
 	const auto bytes = values.size() * sizeof(int32_t);
@@ -2507,6 +2795,31 @@ void DriverVk::dispatch(uint32_t x, uint32_t y, uint32_t z) {
 	UtilityVk::SetMemoryBarrier(cmd, vk::PipelineStageFlagBits2::eComputeShader, vk::PipelineStageFlagBits2::eAllCommands);
 }
 
+void DriverVk::dispatchMipCompute(
+	uint32_t x, uint32_t y, uint32_t z, const std::shared_ptr<TextureInterface>& texture, uint32_t mip, uint32_t layer) {
+	auto& cmd = getCurrentFrame().mCommandBuffer;
+	EnsureComputeState(cmd);
+	const auto native = std::static_pointer_cast<TextureVk>(texture);
+	if (!native || native->state(mip, layer) != vk::ImageLayout::eGeneral) {
+		throw std::invalid_argument("Vulkan mip dispatch requires a bound storage image subresource");
+	}
+	cmd.dispatch(x, y, z);
+
+	// An unchanged layout still needs a memory dependency for the next mip's storage read.
+	const auto barrier = vk::ImageMemoryBarrier2()
+							 .setSrcStageMask(vk::PipelineStageFlagBits2::eComputeShader)
+							 .setSrcAccessMask(vk::AccessFlagBits2::eShaderStorageWrite)
+							 .setDstStageMask(vk::PipelineStageFlagBits2::eAllCommands)
+							 .setDstAccessMask(vk::AccessFlagBits2::eMemoryRead | vk::AccessFlagBits2::eMemoryWrite)
+							 .setOldLayout(vk::ImageLayout::eGeneral)
+							 .setNewLayout(vk::ImageLayout::eGeneral)
+							 .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+							 .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+							 .setImage(native->mImagePtr)
+							 .setSubresourceRange(native->subresourceRange(mip, layer));
+	cmd.pipelineBarrier2(vk::DependencyInfo().setImageMemoryBarriers(barrier));
+}
+
 void DriverVk::EnsureComputeState(vk::raii::CommandBuffer& cmd) {
 	// Orders earlier graphics/transfer work (including indirect-argument reads) before compute writes.
 	EnsureMemoryState(cmd, vk::PipelineStageFlagBits2::eComputeShader);
@@ -2515,15 +2828,30 @@ void DriverVk::EnsureComputeState(vk::raii::CommandBuffer& cmd) {
 	if (!*shader->mComputeShaderModule) {
 		throw std::runtime_error("Dispatch requires compute shader");
 	}
-	const std::string key = "c:" + std::to_string(shader->getId()) + ":" + std::to_string(shader->generation());
+	PipelineKey key;
+	key.compute = true;
+	key.shaderId = shader->getId();
+	key.shaderGeneration = shader->generation();
+	key.layout = PROFILER::GpuHandleValue(static_cast<VkPipelineLayout>(*shader->mPipelineLayout));
 	if (!mStates.contains(key)) {
 		auto stage = vk::PipelineShaderStageCreateInfo()
 						 .setStage(vk::ShaderStageFlagBits::eCompute)
 						 .setModule(*shader->mComputeShaderModule)
 						 .setPName("main");
 		auto info = vk::ComputePipelineCreateInfo().setStage(stage).setLayout(*shader->mPipelineLayout);
+		VkPipelineCreationFeedback feedback {};
+		VkPipelineCreationFeedbackCreateInfo feedbackInfo { VK_STRUCTURE_TYPE_PIPELINE_CREATION_FEEDBACK_CREATE_INFO };
+		if (mPipelineCacheFeedback) {
+			feedbackInfo.pPipelineCreationFeedback = &feedback;
+			info.setPNext(&feedbackInfo);
+		}
 		UTILS::LoadTimer timing("compute-pipeline", shader->mPath);
-		mStates.emplace(key, mDevice.createComputePipeline(nullptr, info));
+		mStates.emplace(key, mDevice.createComputePipeline(*mPipelineCache ? &mPipelineCache : nullptr, info));
+		if (mPipelineCacheFeedback && (feedback.flags & VK_PIPELINE_CREATION_FEEDBACK_VALID_BIT)) {
+			std::cerr << "PSO_DISK_CACHE backend=vulkan pipeline=compute application_hit="
+					  << !!(feedback.flags & VK_PIPELINE_CREATION_FEEDBACK_APPLICATION_PIPELINE_CACHE_HIT_BIT) << " duration_ns=" << feedback.duration
+					  << '\n';
+		}
 #if IKIGAI_ENABLE_MEMORY_TRACKING
 		const auto handle = PROFILER::GpuHandleValue(static_cast<VkPipeline>(*mStates.at(key)));
 		try {
@@ -2538,7 +2866,7 @@ void DriverVk::EnsureComputeState(vk::raii::CommandBuffer& cmd) {
 	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, *mStates.at(key));
 	std::unordered_set<uint32_t> ignored;
 	PushDescriptors(cmd, vk::PipelineBindPoint::eCompute, shader->mPipelineLayout, shader->mRequiredDescriptorBindings, ignored);
-	mBoundPipelineName.clear();
+	mBoundPipelineKey.reset();
 	graphics_pipeline_ignore_bindings.clear();
 	setDirty(Dirty::PIPELINE);
 }
@@ -2565,23 +2893,49 @@ void DriverVk::renderGraphBarrier(bool) {
 	UtilityVk::SetMemoryBarrier(getCurrentFrame().mCommandBuffer, vk::PipelineStageFlagBits2::eAllCommands, vk::PipelineStageFlagBits2::eAllCommands);
 }
 
+void DriverVk::renderGraphImageBarrier(TextureInterface& texture, const GraphImageBarrier& barrier) {
+	constexpr auto depthStages = vk::PipelineStageFlagBits2::eEarlyFragmentTests | vk::PipelineStageFlagBits2::eLateFragmentTests;
+	auto nativeBarrier = vk::ImageMemoryBarrier2().setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED).setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
+	switch (barrier.Before) {
+	case GraphImageAccess::DepthAttachmentWrite:
+		nativeBarrier.setSrcStageMask(depthStages).setSrcAccessMask(vk::AccessFlagBits2::eDepthStencilAttachmentWrite);
+		break;
+	case GraphImageAccess::StorageWrite:
+		nativeBarrier.setSrcStageMask(vk::PipelineStageFlagBits2::eComputeShader).setSrcAccessMask(vk::AccessFlagBits2::eShaderStorageWrite);
+		break;
+	default:
+		throw std::invalid_argument("Unsupported Vulkan graph image producer access");
+	}
+
+	// Vulkan descriptors in this driver use GENERAL for both sampled and storage images.
+	nativeBarrier.setNewLayout(vk::ImageLayout::eGeneral);
+	switch (barrier.After) {
+	case GraphImageAccess::StorageRead:
+		nativeBarrier.setDstStageMask(vk::PipelineStageFlagBits2::eComputeShader).setDstAccessMask(vk::AccessFlagBits2::eShaderStorageRead);
+		break;
+	case GraphImageAccess::ComputeSampledRead:
+		nativeBarrier.setDstStageMask(vk::PipelineStageFlagBits2::eComputeShader).setDstAccessMask(vk::AccessFlagBits2::eShaderSampledRead);
+		break;
+	case GraphImageAccess::GraphicsSampledRead:
+		nativeBarrier.setDstStageMask(vk::PipelineStageFlagBits2::eAllGraphics).setDstAccessMask(vk::AccessFlagBits2::eShaderSampledRead);
+		break;
+	default:
+		throw std::invalid_argument("Unsupported Vulkan graph image consumer access");
+	}
+
+	const auto aspect = barrier.Aspect == GraphImageAspect::Depth ? vk::ImageAspectFlagBits::eDepth : vk::ImageAspectFlagBits::eColor;
+	nativeBarrier.setSubresourceRange(
+		vk::ImageSubresourceRange(aspect, barrier.FirstMip, barrier.MipCount ? barrier.MipCount : VK_REMAINING_MIP_LEVELS, barrier.FirstLayer,
+			barrier.LayerCount ? barrier.LayerCount : VK_REMAINING_ARRAY_LAYERS));
+	deactivateRenderPass();
+	static_cast<TextureVk&>(texture).applyImageBarrier(getCurrentFrame().mCommandBuffer, nativeBarrier);
+}
+
 void DriverVk::activateAliasedRenderTarget(TextureInterface& texture) {
 	// A global barrier covers accesses through the previous image sharing this allocation.
 	renderGraphBarrier(false);
 	auto& native = static_cast<TextureVk&>(texture);
-	const auto transition = vk::ImageMemoryBarrier2()
-								.setSrcStageMask(vk::PipelineStageFlagBits2::eAllCommands)
-								.setDstStageMask(vk::PipelineStageFlagBits2::eAllCommands)
-								.setDstAccessMask(vk::AccessFlagBits2::eMemoryRead | vk::AccessFlagBits2::eMemoryWrite)
-								.setOldLayout(vk::ImageLayout::eUndefined)
-								.setNewLayout(vk::ImageLayout::eGeneral)
-								.setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-								.setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-								.setImage(native.mImagePtr)
-								.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1));
-	getCurrentFrame().mCommandBuffer.pipelineBarrier2(vk::DependencyInfo().setImageMemoryBarriers(transition));
-	native.mCurrentState = vk::ImageLayout::eGeneral;
-	native.mDiscardAliasContents = true;
+	native.resetAliasedState(getCurrentFrame().mCommandBuffer);
 }
 
 void DriverVk::submit() {
@@ -2591,6 +2945,7 @@ void DriverVk::submit() {
 }
 
 void DriverVk::presentFrame() {
+	requireUsableDevice();
 	if (!mPresentationUIRendered) {
 		if (auto* imgui = IKIGAI::IMGUI::Get()) {
 			imgui->renderDrawData();
@@ -2617,20 +2972,23 @@ void DriverVk::presentFrame() {
 	}
 #endif
 
+	VkResult result;
 	if (ctx.sdkPresent) {
 #ifdef IKIGAI_USE_STREAMLINE
 		if (mDlssRuntime) {
 			std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->marker(sl::PCLMarker::ePresentStart);
 		}
 #endif
-		const auto result = ctx.sdkPresent(reinterpret_cast<const VkPresentInfoKHR*>(&presentInfo));
-		if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-			throw std::runtime_error("SDK present failed: " + std::to_string(result));
-		}
+		result = ctx.sdkPresent(&static_cast<const VkPresentInfoKHR&>(presentInfo));
 	}
 	else {
-		auto present_result = mQueue.presentKHR(presentInfo);
-		(void)present_result;
+		result = mQueue.getDispatcher()->vkQueuePresentKHR(*mQueue, &static_cast<const VkPresentInfoKHR&>(presentInfo));
+	}
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+		ctx.recreatePending = true;
+	}
+	else {
+		checkFrameResult(result, ctx.sdkPresent ? "SDK present" : "vkQueuePresentKHR");
 	}
 #ifdef IKIGAI_USE_STREAMLINE
 	if (mDlssRuntime && !ctx.streamline) {
@@ -2648,6 +3006,7 @@ void DriverVk::presentFrame() {
 }
 
 void DriverVk::finishPresent() {
+	requireUsableDevice();
 	if (settings.pipelined()) {
 		collectCompletedFrames();
 		nextFrame();
@@ -2780,6 +3139,9 @@ std::shared_ptr<StorageBufferInterface> DriverVk::createStorageBuffer(const void
 void DriverVk::setFrameBuffer(std::shared_ptr<FrameBufferInterface> frameBuffer) {
 	deactivateRenderPass();
 	UtilityVk::SetMemoryBarrier(getCurrentFrame().mCommandBuffer, vk::PipelineStageFlagBits2::eAllGraphics, vk::PipelineStageFlagBits2::eAllGraphics);
+	if (mCurrentState.mFrameBuffer != frameBuffer) {
+		setDirty(Dirty::BLENDING);
+	}
 	mCurrentState.mFrameBuffer = std::static_pointer_cast<FrameBufferVk>(frameBuffer);
 }
 

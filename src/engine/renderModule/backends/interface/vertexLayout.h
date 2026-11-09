@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -33,20 +34,23 @@ inline VertexFormatInfo GetVertexFormatInfo(VertexFormat format) {
     throw std::invalid_argument("Invalid vertex format");
 }
 struct VertexStreamLayout {
-    uint32_t binding = 0;
-    uint32_t stride = 0;
-    VertexInputRate rate = VertexInputRate::PerVertex;
-    uint32_t stepRate = 1;
+	uint32_t binding = 0;
+	uint32_t stride = 0;
+	VertexInputRate rate = VertexInputRate::PerVertex;
+	uint32_t stepRate = 1;
+	auto operator<=>(const VertexStreamLayout&) const = default;
 };
 struct VertexInputAttribute {
-    uint32_t location = 0;
-    uint32_t binding = 0;
-    VertexFormat format = VertexFormat::Float3;
-    uint32_t offset = 0;
+	uint32_t location = 0;
+	uint32_t binding = 0;
+	VertexFormat format = VertexFormat::Float3;
+	uint32_t offset = 0;
+	auto operator<=>(const VertexInputAttribute&) const = default;
 };
 struct VertexLayout {
-    std::vector<VertexStreamLayout> streams;
-    std::vector<VertexInputAttribute> attributes;
+	std::vector<VertexStreamLayout> streams;
+	std::vector<VertexInputAttribute> attributes;
+	bool operator==(const VertexLayout&) const = default;
     const VertexStreamLayout& stream(uint32_t binding) const {
         for (const auto& s : streams) if (s.binding == binding) return s;
         throw std::invalid_argument("Vertex attribute references a missing stream");

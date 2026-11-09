@@ -41,6 +41,8 @@ void DriverDx12::setStorageImage(size_t binding, std::shared_ptr<TextureInterfac
 
 D3D12_GPU_DESCRIPTOR_HANDLE DriverDx12::storageImageUav(const StorageImageBinding& binding) {
 	auto* resource = binding.Texture->getResource().Get();
+	const auto subresource = binding.Texture->subresourceIndex(binding.Mip, binding.Layer);
+	binding.Texture->setSubresourceState(mCommandList.Get(), subresource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	// Cached per frame next to the bindless snapshots, which share the transient descriptor range.
 	const std::string key = "storage-image:" + std::to_string(reinterpret_cast<uintptr_t>(resource)) + ":" + std::to_string(binding.Mip) + ":"
 		+ std::to_string(binding.Layer);
@@ -59,7 +61,7 @@ D3D12_GPU_DESCRIPTOR_HANDLE DriverDx12::storageImageUav(const StorageImageBindin
 	const auto desc = resource->GetDesc();
 	D3D12_UNORDERED_ACCESS_VIEW_DESC view {};
 	view.Format = desc.Format;
-	if (desc.DepthOrArraySize > 1) {
+	if (desc.DepthOrArraySize > 1 || binding.Texture->getType() == TextureType::TEXTURE_2D_ARRAY) {
 		view.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
 		view.Texture2DArray.MipSlice = binding.Mip;
 		view.Texture2DArray.FirstArraySlice = binding.Layer;

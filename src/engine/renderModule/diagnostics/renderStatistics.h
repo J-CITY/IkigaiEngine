@@ -14,6 +14,7 @@ struct RenderDrawCounters {
 	std::uint64_t Instances = 0;
 	std::uint64_t Triangles = 0;
 	std::uint64_t Dispatches = 0;
+	std::uint64_t IndirectSubmissions = 0;
 };
 
 struct RenderStageStatistics {

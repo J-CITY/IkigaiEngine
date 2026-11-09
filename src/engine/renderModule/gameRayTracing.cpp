@@ -4,6 +4,7 @@
 #include "gameRenderer.h"
 #include "instanceBatch.h"
 #include "render.h"
+#include "renderGraph/computeStage.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
 #include "resourceModule/shaderManager.h"
@@ -508,6 +509,17 @@ RayTracingDispatch GameRenderer::buildProgramDispatch(PipelineStage& stage) {
 			throw std::runtime_error("RT PushConstants must contain bytes");
 		}
 		dispatch.PushConstants.push_back(static_cast<uint8_t>(b));
+	}
+	if (stage.mCompute && !stage.mCompute->AsyncImageProgramBindings.empty()) {
+		for (const auto& binding : stage.mCompute->AsyncImageProgramBindings) {
+			if (binding.Texture) {
+				dispatch.Bindings[binding.Name].push_back(*binding.Texture);
+			}
+			else {
+				dispatch.Bindings[binding.Name].push_back(binding.Buffer);
+			}
+		}
+		return dispatch;
 	}
 	auto& renderer = *mContext.render;
 	auto rayFrame = renderer.createUniformBuffer<RayFrameData>(rayFrameData());

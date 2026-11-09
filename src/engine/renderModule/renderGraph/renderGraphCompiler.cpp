@@ -164,7 +164,11 @@ Plan Compile(std::span<const Resource> resources, std::span<const Pass> passes) 
 	}
 
 	Plan result;
-	std::vector<const Use*> last(resources.size());
+	result.ResourceNames.reserve(resources.size());
+	for (const auto& resource : resources) {
+		result.ResourceNames.push_back(resource.Name);
+	}
+	std::vector<std::optional<Barrier::SourceAccess>> last(resources.size());
 	for (auto id : order) {
 		if (!live[id]) {
 			result.Culled.push_back(id);
@@ -173,11 +177,12 @@ Plan Compile(std::span<const Resource> resources, std::span<const Pass> passes) 
 		ScheduledPass scheduled { id, {} };
 		for (const auto& [resource, pair] : accesses[id]) {
 			const auto* current = pair.Write ? pair.Write : pair.Read;
-			const auto* previous = last[resource];
+			const auto previous = last[resource];
 			if ((previous && (IsWrite(previous->Mode) || pair.Write)) || (!previous && resources[resource].Imported)) {
-				scheduled.Barriers.push_back({ resource, IsStorage(current->Mode) || (previous && IsStorage(previous->Mode)) });
+				scheduled.Barriers.push_back(
+					{ resource, IsStorage(current->Mode) || (previous && IsStorage(previous->Mode)), previous, current->Mode });
 			}
-			last[resource] = current;
+			last[resource] = Barrier::SourceAccess { id, current->Mode };
 		}
 		result.Schedule.push_back(std::move(scheduled));
 	}
@@ -186,7 +191,7 @@ Plan Compile(std::span<const Resource> resources, std::span<const Pass> passes) 
 		if (edges[compute].contains(graphics)) {
 			return true;
 		}
-		// Even concurrent reads may use different native buffer states.
+		// Even read/read requires a join when native states or queue-family ownership differ.
 		for (const auto& [resource, use] : accesses[compute]) {
 			if (accesses[graphics].contains(resource)) {
 				return true;

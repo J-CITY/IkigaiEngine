@@ -76,17 +76,58 @@ namespace {
 		return uniform;
 	}
 
-	std::array<uint32_t, 3> ReflectProgramLocalSize(const std::string& path) {
-		const auto resource = RESOURCES::ShaderLoader::LoadProgramResource(path);
+	ShaderReflection ReflectComputeProgram(const RayTracingProgramResource& resource, const std::string& path) {
 		if (resource.Shaders.size() != 1 || resource.Shaders[0].Stage != ShaderType::COMPUTE) {
 			throw std::runtime_error("Compute program needs exactly one compute shader: " + path);
 		}
 		if (resource.Shaders[0].Language != "GLSL") {
-			throw std::runtime_error("Compute Groups need a GLSL program to reflect its local size: " + path);
+			throw std::runtime_error("Compute reflection needs a GLSL program: " + path);
 		}
 		ShaderReflection reflection;
 		ShaderInterface::GetReflection(reflection, CompileGlslToSpirv(ShaderType::COMPUTE, resource.Shaders[0].Source, {}), ShaderType::COMPUTE);
-		return { reflection.mLocalSize[0], reflection.mLocalSize[1], reflection.mLocalSize[2] };
+		return reflection;
+	}
+
+	void ResolveAsyncImageProgramBindings(
+		const RenderGraphPipeline& pipeline, const PipelineStage::Descriptor& desc, const ShaderReflection& reflection, ComputeStageState& state) {
+		using UniformType = ShaderReflection::UniformType;
+		using Access = GRAPH::Access;
+		std::set<std::string> usedBindings;
+		for (const auto& uniform : reflection.mUniforms) {
+			auto binding = desc.Bindings.find(std::to_string(uniform.mSet) + ":" + std::to_string(uniform.mBind));
+			if (binding == desc.Bindings.end()) {
+				binding = desc.Bindings.find(uniform.mName);
+			}
+			if (binding == desc.Bindings.end() || uniform.mDescriptorCount != 1 || uniform.mRuntimeArray
+				|| !usedBindings.insert(binding->first).second) {
+				throw std::runtime_error(desc.Name + ": async image program needs one binding for " + uniform.mName);
+			}
+			const auto& source = binding->second;
+			const auto uses = [&](Access access) {
+				return std::ranges::any_of(desc.ResourceUses, [&](const auto& use) { return use.Resource == source && use.Mode == access; });
+			};
+			const auto texture = pipeline.mTextures.find(source);
+			const auto buffer = pipeline.mStorageBuffers.find(source);
+			const bool sampled = uses(Access::SAMPLED);
+			const bool storageRead = uses(Access::STORAGE_READ);
+			const bool storageWrite = uses(Access::STORAGE_WRITE);
+			if (texture != pipeline.mTextures.end()
+				&& ((uniform.mType == UniformType::SAMPLER_2D && sampled && !storageRead && !storageWrite)
+					|| (uniform.mType == UniformType::IMAGE_2D && !sampled && storageRead == !uniform.mWriteOnly
+						&& storageWrite == !uniform.mReadOnly))) {
+				state.AsyncImageProgramBindings.push_back({ binding->first, &texture->second, {} });
+			}
+			else if (uniform.mType == UniformType::STORAGE_BUFFER && buffer != pipeline.mStorageBuffers.end()
+				&& (uniform.mReadOnly ? storageRead : storageWrite)) {
+				state.AsyncImageProgramBindings.push_back({ binding->first, nullptr, buffer->second });
+			}
+			else {
+				throw std::runtime_error(desc.Name + ": graph access does not match async image program binding " + uniform.mName);
+			}
+		}
+		if (usedBindings.size() != desc.Bindings.size()) {
+			throw std::runtime_error(desc.Name + ": async image program has bindings absent from shader reflection");
+		}
 	}
 
 	bool HasPipelineGpuFeature(const GpuFeatures& features, PipelineGpuFeature feature) {
@@ -387,11 +428,27 @@ void LoadComputeStage(RenderGraphPipeline& pipeline, PipelineStage& stage) {
 		}
 		const auto& reflection = stage.mMaterial->getShader()->getReflection();
 		state->MipTexture = chain.Texture;
-		state->MipOutputBinding = FindStorageImage(reflection, chain.Output, name).mBind;
-		if (!chain.Input.empty()) {
-			state->MipHasInput = true;
-			state->MipInputBinding = FindStorageImage(reflection, chain.Input, name).mBind;
+		const auto& output = FindStorageImage(reflection, chain.Output, name);
+		if (output.mReadOnly) {
+			throw std::runtime_error(name + ": MipChain Output must be writable");
 		}
+		state->MipOutputBinding = output.mBind;
+		const ShaderReflection::Uniform* input = nullptr;
+		if (!chain.Input.empty()) {
+			input = &FindStorageImage(reflection, chain.Input, name);
+			if (input->mBind == output.mBind) {
+				throw std::runtime_error(name + ": MipChain Input and Output need distinct bindings");
+			}
+			state->MipHasInput = true;
+			state->MipInputBinding = input->mBind;
+		}
+		// The scoped dispatch only publishes the output mip. Other shader resources
+		// keep the generic dispatch path, which synchronizes all writes.
+		state->MipScopedBarriers = output.mDescriptorCount == 1 && !output.mRuntimeArray
+			&& (!input || (input->mReadOnly && input->mDescriptorCount == 1 && !input->mRuntimeArray))
+			&& std::ranges::all_of(reflection.mUniforms, [&](const auto& uniform) {
+				   return &uniform == &output || &uniform == input || uniform.mType == ShaderReflection::UniformType::UNIFORM_BUFFER;
+			   });
 		if (!chain.Uniform.empty()) {
 			if (!reflection.mNameToUniforms.contains(chain.Uniform)
 				|| reflection.mUniforms.at(reflection.mNameToUniforms.at(chain.Uniform)).mType != ShaderReflection::UniformType::UNIFORM_BUFFER) {
@@ -470,12 +527,23 @@ void LoadComputeStage(RenderGraphPipeline& pipeline, PipelineStage& stage) {
 			throw UnsupportedGpuFeature("per-mip storage images (MipChain) are unavailable on this backend/GPU");
 		}
 		if (state->UsesProgram) {
-			stage.mRayTracingProgram = driver.createComputeProgram(RESOURCES::ShaderLoader::LoadProgramResource(desc.Program));
+			const auto resource = RESOURCES::ShaderLoader::LoadProgramResource(desc.Program);
+			const bool asyncImages = pipeline.mDescriptor.Graph.Enabled && desc.Queue == GRAPH::Queue::ASYNC_COMPUTE
+				&& std::ranges::any_of(desc.Bindings, [&](const auto& binding) { return pipeline.mTextures.contains(binding.second); });
+			if (groups || asyncImages) {
+				const auto reflection = ReflectComputeProgram(resource, desc.Program);
+				state->LocalSize = { reflection.mLocalSize[0], reflection.mLocalSize[1], reflection.mLocalSize[2] };
+				if (asyncImages) {
+					if (!resource.Shaders.front().BackendPaths.empty() || resource.Shaders.front().EntryPoint != "main"
+						|| resource.RequiresDescriptorIndexing) {
+						throw std::runtime_error(name + ": async image programs require a common GLSL entry point and fixed bindings");
+					}
+					ResolveAsyncImageProgramBindings(pipeline, desc, reflection, *state);
+				}
+			}
+			stage.mRayTracingProgram = driver.createComputeProgram(resource);
 			if (!stage.mRayTracingProgram || !stage.mRayTracingProgram->isCompute()) {
 				throw std::runtime_error("Program is not a reflected compute program: " + desc.Program);
-			}
-			if (groups) {
-				state->LocalSize = ReflectProgramLocalSize(desc.Program);
 			}
 		}
 		else {
@@ -565,7 +633,8 @@ void GameRenderer::runComputeStage(PipelineStage& stage, bool async) {
 		else if (state.Mode == ComputeDispatchMode::MIP_CHAIN) {
 			auto texture = mRenderPipeline->mTextures.at(state.MipTexture);
 			const uint32_t mipCount = texture->getMipCount();
-			const uint32_t last = state.MipCount ? std::min(mipCount, state.FirstMip + state.MipCount) : mipCount;
+			const uint32_t first = std::min(mipCount, state.FirstMip);
+			const uint32_t last = state.MipCount ? first + std::min(mipCount - first, state.MipCount) : mipCount;
 			const std::array<size_t, 3> extent { texture->getWidth(), texture->getHeight(), mipCount };
 			if (!state.MipUniform.empty() && (state.MipUniforms.size() != mipCount || state.MipUniformExtent != extent)) {
 				state.MipUniforms.clear();
@@ -576,7 +645,7 @@ void GameRenderer::runComputeStage(PipelineStage& stage, bool async) {
 				}
 				state.MipUniformExtent = extent;
 			}
-			for (uint32_t mip = state.FirstMip; mip < last; ++mip) {
+			for (uint32_t mip = first; mip < last; ++mip) {
 				if (!state.MipUniform.empty()) {
 					renderer.setUniformBuffer(state.MipUniform, state.MipUniforms[mip]);
 				}
@@ -586,8 +655,17 @@ void GameRenderer::runComputeStage(PipelineStage& stage, bool async) {
 					const auto input = state.MipInputBinding;
 					renderer.execute([driver, texture, input, mip]() { driver->setStorageImage(input, texture, mip - 1, 0); });
 				}
-				renderer.dispatch(CeilDiv(std::max<size_t>(1, extent[0] >> mip), state.LocalSize[0]),
-					CeilDiv(std::max<size_t>(1, extent[1] >> mip), state.LocalSize[1]), 1);
+				const auto groupsX = CeilDiv(std::max<size_t>(1, extent[0] >> mip), state.LocalSize[0]);
+				const auto groupsY = CeilDiv(std::max<size_t>(1, extent[1] >> mip), state.LocalSize[1]);
+				if (state.MipScopedBarriers) {
+					renderer.execute([driver, texture, mip, groupsX, groupsY] {
+						RenderStatistics::Get().recordDispatch();
+						driver->dispatchMipCompute(groupsX, groupsY, 1, texture, mip, 0);
+					});
+				}
+				else {
+					renderer.dispatch(groupsX, groupsY, 1);
+				}
 			}
 		}
 	}
@@ -596,8 +674,16 @@ void GameRenderer::runComputeStage(PipelineStage& stage, bool async) {
 		std::cout << "GI5_SURFACE_RELIGHT frame=" << mFrameCount << " cards=" << mRenderPipeline->mDescriptor.SurfaceCache->Gpu.State[0] << "\n";
 	}
 	if (!state.Logged) {
-		std::cout << "Pipeline generic compute: " << stage.mName << (state.UsesProgram ? " program" : " material") << " mode=" << int(state.Mode)
-				  << std::endl;
+		if (async && !state.AsyncImageProgramBindings.empty()) {
+			std::cout << "GRAPH_ASYNC_DISPATCH pass=" << stage.mName << " images="
+					  << std::ranges::count_if(state.AsyncImageProgramBindings, [](const auto& binding) { return binding.Texture != nullptr; })
+					  << '\n';
+		}
+		std::cout << "Pipeline generic compute: " << stage.mName << (state.UsesProgram ? " program" : " material") << " mode=" << int(state.Mode);
+		if (state.Mode == ComputeDispatchMode::MIP_CHAIN) {
+			std::cout << " mip_barriers=" << (state.MipScopedBarriers ? "scoped" : "generic");
+		}
+		std::cout << std::endl;
 		state.Logged = true;
 	}
 }

@@ -21,32 +21,19 @@ void ConfigureBehaviorTree(IKIGAI::ECS::Object& npc, int candidateObjectId, bool
 
 // Archetype component. Register explicitly with StorageType::Archetype.
 // Good for components that most entities have and are accessed frequently together.
-struct Position : public IKIGAI::ECS::Component {
-	float x = 0.0f, y = 0.0f;
-	Position() = default;
-	Position(float _x, float _y)
-		: Component()
-		, x(_x)
-		, y(_y) { }
+struct Position {
+	float x = 0.0f;
+	float y = 0.0f;
 };
 
-struct Velocity : public IKIGAI::ECS::Component {
-	float dx = 0.0f, dy = 0.0f;
-	Velocity() = default;
-	Velocity(float _dx, float _dy)
-		: Component()
-		, dx(_dx)
-		, dy(_dy) { }
+struct Velocity {
+	float dx = 0.0f;
+	float dy = 0.0f;
 };
 
-// Sparse Component
-// Good for components that few entities have (saves memory compared to archetype gaps)
-// or are added/removed frequently.
-struct Health : public IKIGAI::ECS::Component {
+// Sparse component for entities that can take damage.
+struct Health {
 	int hp = 100;
-	Health(int i)
-		: Component()
-		, hp(i) { };
 };
 
 // Singleton Component
@@ -73,11 +60,12 @@ public:
 
 	void onUpdate(IKIGAI::ECS::World& world, IKIGAI::ECS::CommandBuffer&, std::chrono::duration<double> dt) override {
 		// Iterate over all entities with Position and Velocity
-		world.getComponentManager()->forEach<Position, Velocity>([&](IKIGAI::ECS::Entity e, Position& pos, Velocity& vel) {
-			pos.x += vel.dx * static_cast<float>(dt.count());
-			pos.y += vel.dy * static_cast<float>(dt.count());
-			// std::cout << "Entity " << e.getUniqueId() << " moved to " << pos.x << ", " << pos.y << "\n";
-		});
+		world.getComponentManager()->forEach<IKIGAI::ECS::Write<Position>, IKIGAI::ECS::Read<Velocity>>(
+			[&](IKIGAI::ECS::Entity e, Position& pos, const Velocity& vel) {
+				pos.x += vel.dx * static_cast<float>(dt.count());
+				pos.y += vel.dy * static_cast<float>(dt.count());
+				// std::cout << "Entity " << e.getUniqueId() << " moved to " << pos.x << ", " << pos.y << "\n";
+			});
 	}
 };
 
@@ -92,7 +80,7 @@ public:
 		auto sysMgr = world.getSystemManager();
 
 		// B. Register Components
-		// Unregistered components default to Sparse. Position and Velocity stay archetype columns.
+		// Position and Velocity share archetype columns. Health uses a sparse pool.
 		compMgr->registerComponent<Position>(IKIGAI::ECS::StorageType::Archetype);
 		compMgr->registerComponent<Velocity>(IKIGAI::ECS::StorageType::Archetype);
 		compMgr->registerComponent<Health>(IKIGAI::ECS::StorageType::Sparse);
@@ -107,7 +95,7 @@ public:
 		// D. Entity Creation
 		using namespace IKIGAI::ECS;
 		Entity e1 = world.createEntity();
-		compMgr->addComponent(e1, Position { 0, 0 });
+		const auto position = compMgr->addComponent(e1, Position { 0, 0 });
 		compMgr->addComponent(e1, Velocity { 1.0f, 0.5f });
 
 		Entity e2 = world.createEntity();
@@ -151,22 +139,23 @@ public:
 		// Note: Current simple forEach doesn't directly iterate relations.
 		// We can iterate entities and check relations manually or use special queries if supported.
 		// Here is a manual example:
-		world.system<Position, Velocity>("FollowerSystem").onUpdate([&](Entity e, Position& pos, Velocity& vel, std::chrono::duration<double> dt) {
-			auto& relMgr = world.getComponentManager()->getRelationManager();
-			// Get targets for 'Follows' relation
-			auto targets = relMgr.getTargets(e, world.getComponentManager()->getComponentType<Follows>());
-			for (auto target : targets) {
-				auto targetPos = world.getComponentManager()->getComponent<Position>(target);
-				if (targetPos) {
-					// Simple follow logic: move towards target
-					float dx = targetPos->x - pos.x;
-					float dy = targetPos->y - pos.y;
-					// Normalize and set velocity (simplified)
-					vel.dx = dx * 0.1f;
-					vel.dy = dy * 0.1f;
+		world.system<Read<Position>, Write<Velocity>>("FollowerSystem")
+			.onUpdate([&](Entity e, const Position& pos, Velocity& vel, std::chrono::duration<double> dt) {
+				auto& relMgr = world.getComponentManager()->getRelationManager();
+				// Get targets for 'Follows' relation
+				auto targets = relMgr.getTargets(e, world.getComponentManager()->getComponentType<Follows>());
+				for (auto target : targets) {
+					auto targetPos = world.getComponentManager()->tryGetComponent<Position>(target);
+					if (targetPos) {
+						// Simple follow logic: move towards target
+						float dx = targetPos->x - pos.x;
+						float dy = targetPos->y - pos.y;
+						// Normalize and set velocity (simplified)
+						vel.dx = dx * 0.1f;
+						vel.dy = dy * 0.1f;
+					}
 				}
-			}
-		});
+			});
 
 		// G. Simulation Loop
 		std::chrono::duration<double> dt = std::chrono::duration<double>(16); // 60 FPS
@@ -174,6 +163,10 @@ public:
 			std::cout << "--- Frame " << i << " ---\n";
 			sysMgr->runUpdate(dt);
 			sysMgr->runLateUpdate(dt);
+		}
+
+		if (const auto* finalPosition = compMgr->resolveComponent(position)) {
+			std::cout << "Entity 1 position: " << finalPosition->x << ", " << finalPosition->y << "\n";
 		}
 
 		std::cout << "=== ECS Demo Finished ===\n";

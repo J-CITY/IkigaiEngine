@@ -62,6 +62,9 @@ namespace IKIGAI::RENDER
 		ID3D12Resource* Get() const { return mResource.Get(); }
 		ID3D12Resource* operator->() const { return mResource.Get(); }
 		explicit operator bool() const { return mResource != nullptr; }
+		bool isAliased() const noexcept {
+			return bool(mBacking);
+		}
 
 		void Reset() {
 			mResource.Reset();

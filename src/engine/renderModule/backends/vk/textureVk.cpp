@@ -147,29 +147,28 @@ void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const st
 		{TextureType::DEPTH, vk::ImageViewType::e2D},
 	};
 
-	const auto aspectFlag = desc.texType == TextureType::DEPTH
-		? (desc.pixelType == PixelFormat::DEPTH32_FLOAT ? vk::ImageAspectFlags(vk::ImageAspectFlagBits::eDepth) : vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil)
-		: vk::ImageAspectFlags(vk::ImageAspectFlagBits::eColor);
-
-	std::tie(mImage, mImageView) = UtilityVk::CreateImage(desc.width, desc.height, FormatMap.at(desc.pixelType), usage, aspectFlag, desc.depth,
-		ToTextureType.at(desc.texType), desc.mipMapCount, backing);
+	mFormat = desc.pixelType;
+	mDepth = std::max(1, desc.depth);
+	TextureInterface::mDepth = mDepth;
+	mViewType = ToTextureType.at(desc.texType);
+	std::tie(mImage, mImageView) = UtilityVk::CreateImage(
+		desc.width, desc.height, FormatMap.at(desc.pixelType), usage, layoutAspects(), desc.depth, mViewType, desc.mipMapCount, backing);
+	mImageUsage = usage;
 
 	mImagePtr = *mImage;
 	mPath = !desc.path.empty() ? desc.path : (!desc.pathTexture.empty() ? desc.pathTexture.front() : std::string());
 #if IKIGAI_ENABLE_MEMORY_TRACKING
-    mImage.setMemoryName(mPath.c_str());
+	mImage.setMemoryName(mPath.c_str());
 #endif
 	mWidth = desc.width;
 	mHeight = desc.height;
 	mMipCount = desc.mipMapCount > 0 ? static_cast<uint32_t>(desc.mipMapCount) : 1u;
+	mLayouts.assign(static_cast<size_t>(mMipCount) * arrayLayerCount(), vk::ImageLayout::eUndefined);
+	mDiscardAliasContents = false;
 
-	//depth
-	if (descriptor.texType == TextureType::DEPTH) {
-		UtilityVk::OneTimeSubmit([&](auto& cmdbuf) {
-			UtilityVk::SetImageMemoryBarrier(cmdbuf, *mImage, FormatMap.at(descriptor.pixelType), vk::ImageLayout::eUndefined,
-			vk::ImageLayout::eDepthStencilAttachmentOptimal);
-			mCurrentState = vk::ImageLayout::eDepthStencilAttachmentOptimal;
-		});
+	// depth
+	if (desc.texType == TextureType::DEPTH && !backing) {
+		UtilityVk::OneTimeSubmit([&](auto& cmdbuf) { setState(cmdbuf, vk::ImageLayout::eDepthStencilAttachmentOptimal); });
 	}
 
 	///////////////////
@@ -220,10 +219,6 @@ void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const st
 		sampler_create_info.setBorderColor(vk::BorderColor::eIntTransparentBlack);
 	}
 	mSampler = UtilityVk::GetDriver()->mDevice.createSampler(sampler_create_info);
-
-	mDepth = std::max(1,descriptor.depth);
-	TextureInterface::mDepth = mDepth;
-	mFormat = descriptor.pixelType;
 
 	if (!data.empty()) {
 		setData(descriptor.width, descriptor.height, descriptor.pixelType, data, 0, 0, 0);
@@ -311,6 +306,7 @@ IKIGAI::RENDER::TextureVk::TextureVk(uint32_t width, uint32_t height, vk::Format
 	mWidth = (width);
 	mHeight = (height);
 	mFormat = FormatMap2.at(format);
+	mMipCount = 1;
 	mImagePtr = (image);
 	mImageView = UtilityVk::CreateImageView(image, format, vk::ImageAspectFlagBits::eColor, 1, vk::ImageViewType::e2D);
 }
@@ -334,6 +330,9 @@ void IKIGAI::RENDER::TextureVk::releaseResources() {
 		driver->destroyDeferred(std::move(descriptor));
 	}
 	mDescriptorSet = nullptr;
+	if (*mBaseMipStorageView) {
+		driver->destroyDeferred(std::move(mBaseMipStorageView));
+	}
 	if (*mImageView) driver->destroyDeferred(std::move(mImageView));
 	if (*mSampler) driver->destroyDeferred(std::move(mSampler));
 	if (mImage) driver->destroyDeferred(std::move(mImage));
@@ -393,8 +392,10 @@ void* IKIGAI::RENDER::TextureVk::getImguiId() {
 			imgui->registerGpuTexture(*this);
 		}
 	}
-	auto* driver=UtilityVk::GetDriver();
-	if(mCurrentState!=vk::ImageLayout::eGeneral) driver->deactivateRenderPass();
+	auto* driver = UtilityVk::GetDriver();
+	if (!isInState(vk::ImageLayout::eGeneral)) {
+		driver->deactivateRenderPass();
+	}
 	setState(driver->getCurrentFrame().mCommandBuffer, vk::ImageLayout::eGeneral);
 	return (void*)mDescriptorSet;
 }
@@ -672,7 +673,7 @@ void IKIGAI::RENDER::TextureVk::setData(uint32_t width, uint32_t height, PixelFo
 
 	auto upload_buffer = UtilityVk::CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc, UtilityVk::MemoryUsage::Staging);
 
-	setState(UtilityVk::GetDriver()->getCurrentFrame().mCommandBuffer, vk::ImageLayout::eTransferDstOptimal);
+	setState(UtilityVk::GetDriver()->getCurrentFrame().mCommandBuffer, vk::ImageLayout::eTransferDstOptimal, mip_level, 0);
 
 	int i = 0;
 	//std::vector<vk::BufferImageCopy> regions;
@@ -705,58 +706,175 @@ void IKIGAI::RENDER::TextureVk::generateMips() {
 	if (mFormat == PixelFormat::RG32_INT) {
 		throw std::invalid_argument("RG32_INT does not support automatic mip generation");
 	}
-	setState(UtilityVk::GetDriver()->getCurrentFrame().mCommandBuffer, vk::ImageLayout::eTransferSrcOptimal);
-	//for (uint32_t face = 1; face <= mDepth; face++) {
-		for (uint32_t i = 1; i < mMipCount; i++) {
-			UtilityVk::SetImageMemoryBarrier(UtilityVk::GetDriver()->getCurrentFrame().mCommandBuffer, mImagePtr, vk::ImageAspectFlagBits::eColor,
-				vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, i, 1);
-			//TODO: add support 3d
-			auto src_subresource = vk::ImageSubresourceLayers()
-				.setAspectMask(vk::ImageAspectFlagBits::eColor)
-				.setMipLevel(i - 1)
-				.setLayerCount(1);
-
-			auto dst_subresource = vk::ImageSubresourceLayers()
-				.setAspectMask(vk::ImageAspectFlagBits::eColor)
-				.setMipLevel(i)
-				.setLayerCount(1);
-
-			auto mip_region = vk::ImageBlit()
-				.setSrcSubresource(src_subresource)
-				.setDstSubresource(dst_subresource)
-				.setSrcOffsets({vk::Offset3D{0, 0, 0}, vk::Offset3D{int32_t(mWidth >> (i - 1)), int32_t(mHeight >> (i - 1)), 1}})
-				.setDstOffsets({vk::Offset3D{0, 0, 0}, vk::Offset3D{int32_t(mWidth >> i), int32_t(mHeight >> i), 1}});
-
-			UtilityVk::GetDriver()->getCurrentFrame().mCommandBuffer.blitImage(mImagePtr, vk::ImageLayout::eTransferSrcOptimal,
-				mImagePtr, vk::ImageLayout::eTransferDstOptimal, {mip_region}, vk::Filter::eLinear);
-
-			UtilityVk::SetImageMemoryBarrier(UtilityVk::GetDriver()->getCurrentFrame().mCommandBuffer, mImagePtr, vk::ImageAspectFlagBits::eColor,
-				vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eTransferSrcOptimal, i, 1);
-			//mCurrentState = vk::ImageLayout::eTransferSrcOptimal;
-		}
-	//}
+	auto* driver = UtilityVk::GetDriver();
+	driver->deactivateRenderPass();
+	const auto& commands = driver->getCurrentFrame().mCommandBuffer;
+	setState(commands, vk::ImageLayout::eTransferSrcOptimal, 0, 0);
+	for (uint32_t mip = 1; mip < mMipCount; ++mip) {
+		setState(commands, vk::ImageLayout::eTransferDstOptimal, mip, 0);
+		const auto src = vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, mip - 1, 0, 1);
+		const auto dst = vk::ImageSubresourceLayers(vk::ImageAspectFlagBits::eColor, mip, 0, 1);
+		const auto extent = [&](uint32_t level) {
+			return vk::Offset3D {
+				static_cast<int32_t>(std::max<size_t>(1, mWidth >> level)),
+				static_cast<int32_t>(std::max<size_t>(1, mHeight >> level)),
+				1,
+			};
+		};
+		const auto region = vk::ImageBlit()
+								.setSrcSubresource(src)
+								.setDstSubresource(dst)
+								.setSrcOffsets({ vk::Offset3D {}, extent(mip - 1) })
+								.setDstOffsets({ vk::Offset3D {}, extent(mip) });
+		commands.blitImage(
+			mImagePtr, vk::ImageLayout::eTransferSrcOptimal, mImagePtr, vk::ImageLayout::eTransferDstOptimal, region, vk::Filter::eLinear);
+		setState(commands, vk::ImageLayout::eTransferSrcOptimal, mip, 0);
+	}
 }
 
-vk::ImageView IKIGAI::RENDER::TextureVk::attachmentView(unsigned mip,unsigned layer) {
-    auto key=std::make_pair(mip,layer);
-    if(!mAttachmentViews.contains(key)) {
-        auto range=vk::ImageSubresourceRange().setAspectMask(vk::ImageAspectFlagBits::eColor).setBaseMipLevel(mip).setLevelCount(1).setBaseArrayLayer(layer).setLayerCount(1);
-        auto info=vk::ImageViewCreateInfo().setImage(mImagePtr).setFormat(FormatMap.at(mFormat)).setViewType(vk::ImageViewType::e2D).setSubresourceRange(range);
-        mAttachmentViews.emplace(key,UtilityVk::GetDriver()->mDevice.createImageView(info));
-    }
-    return *mAttachmentViews.at(key);
+vk::ImageView IKIGAI::RENDER::TextureVk::attachmentView(unsigned mip, unsigned layer) {
+	const auto key = std::make_pair(mip, layer);
+	if (!mAttachmentViews.contains(key)) {
+		const auto info = vk::ImageViewCreateInfo()
+							  .setImage(mImagePtr)
+							  .setFormat(FormatMap.at(mFormat))
+							  .setViewType(vk::ImageViewType::e2D)
+							  .setSubresourceRange(subresourceRange(mip, layer));
+		mAttachmentViews.emplace(key, UtilityVk::GetDriver()->mDevice.createImageView(info));
+	}
+	return *mAttachmentViews.at(key);
+}
+
+vk::ImageView IKIGAI::RENDER::TextureVk::baseMipStorageView() {
+	if (mMipCount == 1) {
+		return *mImageView;
+	}
+	if (mViewType == vk::ImageViewType::e2D) {
+		return attachmentView(0, 0);
+	}
+	if (!*mBaseMipStorageView) {
+		mBaseMipStorageView = UtilityVk::CreateImageView(mImagePtr, FormatMap.at(mFormat), layoutAspects(), mDepth, mViewType);
+	}
+	return *mBaseMipStorageView;
+}
+
+vk::ImageAspectFlags IKIGAI::RENDER::TextureVk::layoutAspects() const {
+	if (mType != TextureType::DEPTH) {
+		return vk::ImageAspectFlagBits::eColor;
+	}
+	if (mFormat == PixelFormat::DEPTH32_FLOAT) {
+		return vk::ImageAspectFlagBits::eDepth;
+	}
+	// Packed depth/stencil aspects share a layout without separateDepthStencilLayouts.
+	return vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil;
+}
+
+uint32_t IKIGAI::RENDER::TextureVk::arrayLayerCount() const {
+	switch (mType) {
+	case TextureType::TEXTURE_CUBE:
+		return 6;
+	case TextureType::TEXTURE_2D_ARRAY:
+		return static_cast<uint32_t>(mDepth);
+	default:
+		return 1;
+	}
+}
+
+size_t IKIGAI::RENDER::TextureVk::layoutIndex(uint32_t mip, uint32_t layer) const {
+	const auto layerCount = arrayLayerCount();
+	if (mip >= mMipCount || layer >= layerCount) {
+		throw std::out_of_range("Vulkan texture subresource out of range");
+	}
+	return static_cast<size_t>(mip) * layerCount + layer;
+}
+
+vk::ImageLayout IKIGAI::RENDER::TextureVk::state(uint32_t mip, uint32_t layer) const {
+	return mLayouts[layoutIndex(mip, layer)];
+}
+
+bool IKIGAI::RENDER::TextureVk::isInState(vk::ImageLayout state) const {
+	return std::ranges::all_of(mLayouts, [state](vk::ImageLayout layout) { return layout == state; });
+}
+
+vk::ImageSubresourceRange IKIGAI::RENDER::TextureVk::subresourceRange(uint32_t mip, uint32_t layer) const {
+	return vk::ImageSubresourceRange(layoutAspects(), mip, 1, layer, 1);
+}
+
+void IKIGAI::RENDER::TextureVk::resetAliasedState(const vk::raii::CommandBuffer& cmdbuf) {
+	const auto barrier = vk::ImageMemoryBarrier2()
+							 .setSrcStageMask(vk::PipelineStageFlagBits2::eAllCommands)
+							 .setDstStageMask(vk::PipelineStageFlagBits2::eAllCommands)
+							 .setDstAccessMask(vk::AccessFlagBits2::eMemoryRead | vk::AccessFlagBits2::eMemoryWrite)
+							 .setOldLayout(vk::ImageLayout::eUndefined)
+							 .setNewLayout(vk::ImageLayout::eGeneral)
+							 .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+							 .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+							 .setImage(mImagePtr)
+							 .setSubresourceRange(vk::ImageSubresourceRange(layoutAspects(), 0, mMipCount, 0, arrayLayerCount()));
+	cmdbuf.pipelineBarrier2(vk::DependencyInfo().setImageMemoryBarriers(barrier));
+	std::ranges::fill(mLayouts, vk::ImageLayout::eGeneral);
+	mDiscardAliasContents = true;
+}
+
+void IKIGAI::RENDER::TextureVk::setState(const vk::raii::CommandBuffer& cmdbuf, vk::ImageLayout state, uint32_t mip, uint32_t layer) {
+	auto& oldState = mLayouts[layoutIndex(mip, layer)];
+	if (oldState != state) {
+		UtilityVk::SetImageMemoryBarrier(cmdbuf, mImagePtr, layoutAspects(), oldState, state, mip, 1, layer, 1);
+		oldState = state;
+	}
+}
+
+void IKIGAI::RENDER::TextureVk::applyImageBarrier(const vk::raii::CommandBuffer& cmdbuf, vk::ImageMemoryBarrier2 barrier) {
+	const auto aspects = layoutAspects();
+	const auto range = barrier.subresourceRange;
+	if (!(aspects & range.aspectMask)) {
+		throw std::invalid_argument("Vulkan graph image barrier aspect does not match the texture");
+	}
+	const auto layers = arrayLayerCount();
+	if (range.baseMipLevel >= mMipCount || range.baseArrayLayer >= layers) {
+		throw std::out_of_range("Vulkan graph image barrier starts outside the texture");
+	}
+	const auto remainingMips = mMipCount - range.baseMipLevel;
+	const auto remainingLayers = layers - range.baseArrayLayer;
+	const auto mipCount = range.levelCount == VK_REMAINING_MIP_LEVELS ? remainingMips : range.levelCount;
+	const auto layerCount = range.layerCount == VK_REMAINING_ARRAY_LAYERS ? remainingLayers : range.layerCount;
+	if (mipCount > remainingMips || layerCount > remainingLayers) {
+		throw std::out_of_range("Vulkan graph image barrier extends outside the texture");
+	}
+
+	const auto mipEnd = range.baseMipLevel + mipCount;
+	const auto layerEnd = range.baseArrayLayer + layerCount;
+	std::vector<vk::ImageMemoryBarrier2> barriers;
+	barriers.reserve(static_cast<size_t>(mipCount) * layerCount);
+	barrier.setImage(mImagePtr);
+	for (auto mip = range.baseMipLevel; mip < mipEnd; ++mip) {
+		for (auto layer = range.baseArrayLayer; layer < layerEnd; ++layer) {
+			// Equal layouts still need the dependency. Packed depth/stencil uses the native aspect mask.
+			barriers.push_back(barrier.setOldLayout(state(mip, layer)).setSubresourceRange(vk::ImageSubresourceRange(aspects, mip, 1, layer, 1)));
+		}
+	}
+	cmdbuf.pipelineBarrier2(vk::DependencyInfo().setImageMemoryBarriers(barriers));
+	for (auto mip = range.baseMipLevel; mip < mipEnd; ++mip) {
+		for (auto layer = range.baseArrayLayer; layer < layerEnd; ++layer) {
+			mLayouts[layoutIndex(mip, layer)] = barrier.newLayout;
+		}
+	}
 }
 
 void IKIGAI::RENDER::TextureVk::setState(const vk::raii::CommandBuffer& cmdbuf, vk::ImageLayout state) {
-	if (mCurrentState == state)
+	const auto oldState = mLayouts.front();
+	if (isInState(oldState)) {
+		if (oldState != state) {
+			UtilityVk::SetImageMemoryBarrier(cmdbuf, mImagePtr, layoutAspects(), oldState, state, 0, mMipCount, 0, arrayLayerCount());
+			std::ranges::fill(mLayouts, state);
+		}
 		return;
-
-	const auto aspect = mType == TextureType::DEPTH
-		? (getFormat() == PixelFormat::DEPTH32_FLOAT ? vk::ImageAspectFlags(vk::ImageAspectFlagBits::eDepth) : vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil)
-		: vk::ImageAspectFlags(vk::ImageAspectFlagBits::eColor);
-	UtilityVk::SetImageMemoryBarrier(cmdbuf, mImagePtr, aspect, mCurrentState, state, 0, std::max(1u,mMipCount), 0, mType==TextureType::TEXTURE_CUBE ? 6 : mType==TextureType::TEXTURE_2D_ARRAY ? std::max<size_t>(1,mDepth) : 1);
-	mCurrentState = state;
+	}
+	for (uint32_t mip = 0; mip < mMipCount; ++mip) {
+		for (uint32_t layer = 0; layer < arrayLayerCount(); ++layer) {
+			setState(cmdbuf, state, mip, layer);
+		}
+	}
 }
-
 
 #endif

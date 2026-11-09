@@ -1,5 +1,6 @@
 #pragma once
 #include "backends/interface/gpuFeatures.h"
+#include "backends/interface/graphImageBarrier.h"
 #include "backends/interface/materialInterface.h"
 #include "backends/interface/rayTracingInterface.h"
 #include "backends/interface/resourceStruct.h"
@@ -44,6 +45,7 @@ class VectorRenderer;
 namespace IKIGAI::RENDER {
 class ParticleRenderer;
 class GpuScene;
+class GpuSceneMaterials;
 struct GpuSceneDraw;
 }
 namespace IKIGAI::VG {
@@ -415,6 +417,18 @@ struct RenderGraphPipeline {
 	const std::shared_ptr<TextureInterface>* mVgVisibilityIds = nullptr;
 	std::vector<PipelineStage*> mStageIndex;
 	GRAPH::Plan mGraphPlan;
+	struct ResolvedGraphImageBarrier {
+		const std::shared_ptr<TextureInterface>* Slot = nullptr;
+		GraphImageBarrier Transition {};
+	};
+	struct ResolvedGraphBarriers {
+		std::vector<ResolvedGraphImageBarrier> Images;
+		std::vector<std::shared_ptr<StorageBufferInterface>> IndirectBuffers;
+		bool Conservative = false;
+		bool Uav = false;
+	};
+	std::vector<ResolvedGraphBarriers> mGraphBarriers;
+	std::vector<ResolvedGraphBarriers> resolveGraphBarriers(const Descriptor& descriptor, const GRAPH::Plan& plan) const;
 	std::map<GRAPH::PassId, std::vector<std::shared_ptr<TextureInterface>>> mAliasActivations;
 	std::set<std::string> mAliasedTextures;
 	uint64_t mAliasAllocationBytes = 0;
@@ -575,6 +589,7 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	VG::VirtualGeometryShadows mVirtualGeometryShadows;
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 	std::unique_ptr<GpuScene> mGpuScene;
+	std::unique_ptr<GpuSceneMaterials> mGpuSceneMaterials;
 	PipelineStage* mGpuSceneStage = nullptr;
 #endif
 #if USE_PHYSICS_3D

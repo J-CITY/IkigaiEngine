@@ -308,6 +308,7 @@ bool DriverVk::collectBufferReadback(uint64_t ticket, std::vector<uint8_t>& byte
 }
 
 void DriverVk::flushRecordedCommands() {
+	requireUsableDevice();
 	// Submits everything recorded so far in this frame and waits for it, then reopens the
 	// frame command buffer. Consume the WSI acquire wait only on the first
 	// submission that can touch this image.
@@ -317,7 +318,7 @@ void DriverVk::flushRecordedCommands() {
 	frame.mCommandBuffer.end();
 	working = false;
 	submitGraphics({}, 0, {});
-	mQueue.waitIdle();
+	checkFrameResult(mQueue.getDispatcher()->vkQueueWaitIdle(*mQueue), "vkQueueWaitIdle (readback)");
 	// Everything recorded so far (including asynchronous readback copies) has completed.
 	mCompletedEpoch = mSubmissionEpoch++;
 
@@ -326,6 +327,24 @@ void DriverVk::flushRecordedCommands() {
 	frame.mCommandBuffer.begin(beginInfo);
 	working = true;
 	invalidateCommandState();
+}
+
+void DriverVk::renderGraphIndirectBarrier(const std::shared_ptr<StorageBufferInterface>& arguments) {
+	const auto& native = NativeBuffer(arguments, "renderGraphIndirectBarrier");
+	CheckUsage(native, BufferUsage::INDIRECT, "renderGraphIndirectBarrier");
+	deactivateRenderPass();
+
+	const auto barrier = vk::BufferMemoryBarrier2()
+							 .setSrcStageMask(vk::PipelineStageFlagBits2::eComputeShader | vk::PipelineStageFlagBits2::eTransfer)
+							 .setSrcAccessMask(vk::AccessFlagBits2::eShaderStorageWrite | vk::AccessFlagBits2::eTransferWrite)
+							 .setDstStageMask(vk::PipelineStageFlagBits2::eDrawIndirect)
+							 .setDstAccessMask(vk::AccessFlagBits2::eIndirectCommandRead)
+							 .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+							 .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+							 .setBuffer(*native.getBuffer())
+							 .setOffset(0)
+							 .setSize(VK_WHOLE_SIZE);
+	getCurrentFrame().mCommandBuffer.pipelineBarrier2(vk::DependencyInfo().setBufferMemoryBarriers(barrier));
 }
 
 void DriverVk::drawIndexedIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset, uint32_t drawCount, uint32_t stride) {

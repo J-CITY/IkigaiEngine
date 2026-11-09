@@ -144,6 +144,10 @@ public:
 		d.cameraFar = f.Far;
 		d.cameraFovAngleVertical = f.VerticalFov;
 		d.viewSpaceToMetersFactor = 1;
+#ifdef IKIGAI_PIN_DX12_UPSCALER_CONTEXT
+		// The command list can outlive a later reconfiguration of the upscaler.
+		pinUpscalerContext(mDriver, mContext);
+#endif
 		const auto code = mApi->Dispatch(&mContext->Context, &d.header);
 		endUpscaler(mDriver);
 		fsrCheck(code, "FSR dispatch");

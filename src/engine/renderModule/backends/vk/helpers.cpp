@@ -307,6 +307,7 @@ void UtilityVk::SetImageMemoryBarrier(const vk::raii::CommandBuffer& cmdbuf, vk:
 }
 
 void UtilityVk::OneTimeSubmit(std::function<void(const vk::raii::CommandBuffer&)> func) {
+	mDriver->requireUsableDevice();
 	auto command_buffer_allocate_info = vk::CommandBufferAllocateInfo()
 	                                    .setCommandBufferCount(1)
 	                                    .setCommandPool(*mDriver->mCommandPool)
@@ -325,8 +326,10 @@ void UtilityVk::OneTimeSubmit(std::function<void(const vk::raii::CommandBuffer&)
 	auto submit_info = vk::SubmitInfo()
 		.setCommandBuffers(*cmdbuf);
 
-	mDriver->mQueue.submit(submit_info);
-	mDriver->mQueue.waitIdle();
+	const auto& queue = mDriver->mQueue;
+	mDriver->checkFrameResult(
+		queue.getDispatcher()->vkQueueSubmit(*queue, 1, &static_cast<const VkSubmitInfo&>(submit_info), VK_NULL_HANDLE), "vkQueueSubmit (one-time)");
+	mDriver->checkFrameResult(queue.getDispatcher()->vkQueueWaitIdle(*queue), "vkQueueWaitIdle (one-time)");
 }
 
 

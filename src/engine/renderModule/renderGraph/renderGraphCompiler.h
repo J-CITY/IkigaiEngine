@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <optional>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -35,8 +36,15 @@ struct Pass {
 };
 
 struct Barrier {
+	struct SourceAccess {
+		PassId Pass = 0;
+		Access Mode = Access::SAMPLED;
+	};
+
 	ResourceId Resource = 0;
 	bool Uav = false;
+	std::optional<SourceAccess> Before;
+	Access After = Access::SAMPLED;
 };
 
 struct ScheduledPass {
@@ -47,6 +55,7 @@ struct ScheduledPass {
 };
 
 struct Plan {
+	std::vector<std::string> ResourceNames;
 	std::vector<ScheduledPass> Schedule;
 	std::vector<PassId> Culled;
 	struct TransientLifetime {

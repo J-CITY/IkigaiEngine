@@ -275,9 +275,12 @@ void ResolveRenderBackend(RenderSettings& settings) {
 		}
 	}
 	settings.framesInFlight = frames ? static_cast<unsigned>(*frames) : (settings.pipelined() ? 2u : 1u);
-	if (settings.pipelined()
-		&& (settings.frameGeneration.technology != FrameGenerationType::OFF || settings.upscaler.technology != UpscalerType::OFF)) {
-		throw std::invalid_argument("Pipelined rendering requires frame generation and upscaling disabled");
+	if (settings.pipelined() && settings.backend != RenderSettings::Backend::DIRECTX12
+		&& settings.frameGeneration.technology != FrameGenerationType::OFF) {
+		throw std::invalid_argument("Pipelined frame generation requires DirectX 12");
+	}
+	if (settings.pipelined() && settings.backend != RenderSettings::Backend::DIRECTX12 && settings.upscaler.technology != UpscalerType::OFF) {
+		throw std::invalid_argument("Pipelined upscaling requires DirectX 12");
 	}
 	if (settings.execution != RenderSettings::Execution::IMMEDIATE && settings.backend != RenderSettings::Backend::VULKAN
 		&& settings.backend != RenderSettings::Backend::DIRECTX12) {

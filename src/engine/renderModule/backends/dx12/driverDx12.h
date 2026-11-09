@@ -1,9 +1,12 @@
 #pragma once
 #ifdef DX12_BACKEND
 #include <bitset>
+#include <compare>
 #include <deque>
 #include <dxgi1_6.h>
 #include <map>
+#include <set>
+#include <tuple>
 
 #include "../interface/driverInterface.h"
 #include "d3dx12/d3dx12.h"
@@ -41,6 +44,7 @@ class VertexBufferDx12;
 class ShaderDx12;
 class UploadRingDx12;
 class ImmediateSubmitDx12;
+class DeviceHealthDx12;
 
 class DriverDx12 : public IKIGAI::RENDER::DriverInterface {
 	friend class FsrFrameGenerationDx12;
@@ -54,8 +58,6 @@ class DriverDx12 : public IKIGAI::RENDER::DriverInterface {
 		std::optional<Stencil> mStencil;
 		RasterizationMode mRasterization = RasterizationMode::FILL;
 		std::shared_ptr<FrameBufferDx12> mFrameBuffer;
-
-		[[nodiscard]] std::string getId() const;
 	};
 
 public:
@@ -75,6 +77,7 @@ public:
 	std::shared_ptr<void> mDlssRuntime;
 	std::unique_ptr<UpscalerInterface> createUpscaler(UpscalerType) override;
 	std::unique_ptr<FrameGenerationInterface> createFrameGeneration(FrameGenerationType) override;
+	FrameGenerationInputs stageFrameGenerationInputs(const FrameGenerationInputs& inputs) override;
 	void renderPresentationUI(std::shared_ptr<FrameBufferInterface>) override;
 	void initializeStreamline();
 	void bindStreamlineDevice();
@@ -110,6 +113,7 @@ public:
 	void dispatchRayQueries(const RayTracingDispatch&) override;
 	void dispatchComputeProgram(const RayTracingDispatch&) override;
 	bool hasGraphComputeQueue() const noexcept override;
+	bool supportsGraphComputeImages() const noexcept override;
 	void retireShaderPipelines(size_t shaderId);
 	void dispatchGraphCompute(const RayTracingDispatch&) override;
 	void joinGraphCompute() override;
@@ -145,7 +149,11 @@ public:
 	std::vector<float> readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
 	std::vector<int32_t> readIntTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) override;
+	void dispatchMipCompute(
+		uint32_t x, uint32_t y, uint32_t z, const std::shared_ptr<TextureInterface>& texture, uint32_t mip, uint32_t layer) override;
 	void renderGraphBarrier(bool uav) override;
+	void renderGraphImageBarrier(TextureInterface& texture, const GraphImageBarrier& barrier) override;
+	void renderGraphIndirectBarrier(const std::shared_ptr<StorageBufferInterface>& arguments) override;
 	AliasedRenderTargets createAliasedRenderTargets(std::span<const TextureResource> descriptors) override;
 	void activateAliasedRenderTarget(TextureInterface& texture) override;
 	// Texture infrastructure for GI/HZB (M1-4, M1-8); implemented in textureFeaturesDx12.cpp.
@@ -321,6 +329,30 @@ private:
 	std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> bindlessSnapshot(
 		const ShaderReflection::Uniform&, uint32_t, const BindlessResourceTable* localTable = nullptr);
 	std::map<std::string, std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE>> mBindlessSnapshots;
+	struct BindlessViewStamp {
+		std::weak_ptr<void> Owner;
+		ID3D12Resource* Resource = nullptr;
+		uint64_t Revision = 0;
+		size_t Size = 0;
+	};
+	using BindlessSamplerStamp = std::array<int, 5>;
+	using BindlessTableKey = std::tuple<uint32_t, uint32_t, bool, bool>;
+	struct BindlessDescriptorRange {
+		uint32_t ViewStart = 0;
+		uint32_t SamplerStart = 0;
+		bool Used = false;
+		std::vector<BindlessViewStamp> Views;
+		std::vector<BindlessSamplerStamp> Samplers;
+	};
+	struct BindlessDescriptorSlot {
+		uint32_t ViewEnd = 0;
+		uint32_t SamplerEnd = BindlessSamplerCapacity;
+		std::map<BindlessTableKey, std::vector<BindlessDescriptorRange>> Tables;
+	};
+	std::vector<BindlessDescriptorSlot> mBindlessDescriptorSlots;
+	std::map<ID3D12Resource*, Dx12Resource> mBindlessNativeResources;
+	uint32_t mBindlessSamplerEnd = BindlessSamplerCapacity;
+
 	struct StorageImageBinding {
 		std::shared_ptr<TextureDx12> Texture;
 		uint32_t Mip = 0;
@@ -364,10 +396,13 @@ private:
 		Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Samplers;
 		GpuCompletionToken Completion {};
 		UINT64 FenceValue = 0;
+		std::optional<uint64_t> FrameGenerationId;
+		std::array<std::shared_ptr<TextureDx12>, 4> FrameGenerationTextures;
 		std::vector<std::shared_ptr<void>> RayResources;
 		std::vector<std::shared_ptr<void>> RayDeferred;
 		RayDescriptorArena RayDescriptors;
 		std::vector<BindlessResourceEntry> BindlessResources;
+		std::map<ID3D12Resource*, Dx12Resource> BindlessNativeResources;
 		std::vector<Microsoft::WRL::ComPtr<ID3D12DeviceChild>> Objects;
 		std::vector<Dx12Resource> Resources;
 		std::vector<std::pair<uint32_t, uint32_t>> LegacyDescriptors;
@@ -407,6 +442,7 @@ private:
 	void flushPushConstants(bool compute);
 
 	Microsoft::WRL::ComPtr<ID3D12Device> mDevice;
+	std::shared_ptr<DeviceHealthDx12> mDeviceHealth;
 	Microsoft::WRL::ComPtr<D3D12MA::Allocator> mAllocator;
 #if IKIGAI_ENABLE_MEMORY_TRACKING
 	std::shared_ptr<PROFILER::GpuMemorySampler> mMemorySampler;
@@ -449,8 +485,58 @@ private:
 	bool resolveTimestampQueries();
 	void signalTimestampQueries();
 
+	struct PipelineVertexElement {
+		UINT location = 0;
+		DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
+		UINT binding = 0;
+		UINT offset = 0;
+		D3D12_INPUT_CLASSIFICATION classification = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+		UINT stepRate = 0;
+		auto operator<=>(const PipelineVertexElement&) const = default;
+	};
+	struct PipelineKey {
+		bool compute = false;
+		size_t shaderId = 0;
+		uint64_t shaderGeneration = 0;
+		std::array<DXGI_FORMAT, D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT> colorFormats {};
+		UINT colorCount = 0;
+		DXGI_FORMAT depthFormat = DXGI_FORMAT_UNKNOWN;
+		UINT sampleCount = 0;
+		std::array<PipelineVertexElement, 16> vertexElements {};
+		UINT vertexElementCount = 0;
+		bool legacyVertexLayout = false;
+		D3D12_CULL_MODE cullMode = D3D12_CULL_MODE_NONE;
+		bool frontCounterClockwise = false;
+		D3D12_PRIMITIVE_TOPOLOGY_TYPE topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED;
+		bool depthEnable = false;
+		bool depthWrite = false;
+		D3D12_COMPARISON_FUNC depthFunction = D3D12_COMPARISON_FUNC_NEVER;
+		bool stencilEnable = false;
+		UINT stencilReadMask = 0;
+		UINT stencilWriteMask = 0;
+		D3D12_STENCIL_OP stencilFail = {};
+		D3D12_STENCIL_OP stencilDepthFail = {};
+		D3D12_STENCIL_OP stencilPass = {};
+		D3D12_COMPARISON_FUNC stencilFunction = {};
+		bool blendEnable = false;
+		D3D12_BLEND colorSource = {};
+		D3D12_BLEND colorDestination = {};
+		D3D12_BLEND_OP colorOperation = {};
+		D3D12_BLEND alphaSource = {};
+		D3D12_BLEND alphaDestination = {};
+		D3D12_BLEND_OP alphaOperation = {};
+		auto operator<=>(const PipelineKey&) const = default;
+	};
+	PipelineKey pipelineKey(const State& state, bool compute);
 	State mCurrentState;
-	std::map<std::string, Microsoft::WRL::ComPtr<ID3D12PipelineState>> mStates {};
+	std::map<PipelineKey, Microsoft::WRL::ComPtr<ID3D12PipelineState>> mStates {};
+	// CreatePipelineLibrary keeps the input memory until the COM object is released.
+	std::vector<uint8_t> mPipelineLibraryBytes;
+	Microsoft::WRL::ComPtr<ID3D12PipelineLibrary> mPipelineLibrary;
+	std::string mPipelineLibraryDeviceKey;
+	bool mPipelineLibraryDirty = false;
+	void initializePipelineLibrary(IDXGIAdapter* adapter) noexcept;
+	void savePipelineLibrary() noexcept;
 
 	PrimitiveMode mPrimitiveMode = PrimitiveMode::TRIANGLES;
 	std::optional<Viewport> mViewport;
@@ -470,14 +556,32 @@ private:
 	void logAdapters();
 	void logOutputDisplayModes(IDXGIOutput* output, DXGI_FORMAT format);
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> createNewState(const State& state);
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> createCachedComputePipeline(const D3D12_COMPUTE_PIPELINE_STATE_DESC& descriptor, ID3DBlob* root);
 	void applyState();
 	void createDefaultFrameBuffer(unsigned int windowID, unsigned width, unsigned height);
 	void logAdapterOutputs(IDXGIAdapter* adapter);
 	void clearForDestroy();
 	void wait();
+	void prepareBindlessMutation() override;
+	void onBindlessResourceReleased(BindlessResourceHandle handle) override;
+	void markBindlessTableUsed(uint32_t binding);
+	void submitBindlessUses(GpuCompletionToken token) noexcept;
+
+	struct BindlessTableUse {
+		GpuCompletionToken LastSubmission {};
+		bool Recorded = false;
+	};
+	struct RetiredBindlessSlot {
+		BindlessResourceHandle Handle {};
+		GpuCompletionToken LastUse {};
+		bool AwaitingSubmission = false;
+	};
+	std::map<uint32_t, BindlessTableUse> mBindlessTableUses;
+	std::vector<RetiredBindlessSlot> mRetiredBindlessSlots;
 	void presentFrame() override;
 	void waitForPresentedFrame() override;
 	std::function<void()> presentedFrameWait(GpuCompletionToken token) override;
+	bool isDeviceLost() const noexcept override;
 	void finishPresent() override;
 	void releaseCompletedFrame();
 	void collectCompletedFrames();

@@ -51,36 +51,59 @@ void DriverVk::bindStreamlineDevice(){
     sl::AdapterInfo adapter{};adapter.vkPhysicalDevice=reinterpret_cast<void*>(VkPhysicalDevice(*mPhysicalDevice));runtime->deviceReady(adapter);
 }
 StreamlineCallbacks DriverVk::streamlineCallbacks(){
-    return {
-        [this](const std::shared_ptr<TextureInterface>& texture,bool write){
-            deactivateRenderPass();auto t=std::dynamic_pointer_cast<TextureVk>(texture);
-            if(!t)throw UnsupportedFrameGeneration("Streamline requires Vulkan textures");
-            const auto layout=vk::ImageLayout::eGeneral;
-            t->setState(getCurrentFrame().mCommandBuffer,layout);mRayTracingFrameResources.push_back(t);
-            sl::Resource r{sl::ResourceType::eTex2d,reinterpret_cast<void*>(VkImage(t->mImagePtr)),nullptr,reinterpret_cast<void*>(VkImageView(*t->mImageView)),uint32_t(layout)};
-            r.width=texture->getWidth();r.height=texture->getHeight();r.mipLevels=texture->getMipCount();r.arrayLayers=1;r.flags=0;
-            switch(texture->getFormat()){
-            case PixelFormat::RGBA_FLOAT:r.nativeFormat=VK_FORMAT_R32G32B32A32_SFLOAT;break;
-            case PixelFormat::RGBA_INT:r.nativeFormat=VK_FORMAT_R8G8B8A8_UNORM;break;
-            case PixelFormat::RG_FLOAT:r.nativeFormat=VK_FORMAT_R32G32_SFLOAT;break;
-            case PixelFormat::DEPTH32_FLOAT:r.nativeFormat=VK_FORMAT_D32_SFLOAT;break;
-            default:throw UnsupportedFrameGeneration("Unsupported Streamline Vulkan resource format");}
-            // Match TextureVk::init: SDK cloning/barriers need the complete
-            // native description, including copy and attachment usage.
-            r.usage=VK_IMAGE_USAGE_SAMPLED_BIT|VK_IMAGE_USAGE_TRANSFER_SRC_BIT|VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-            r.usage|=texture->getType()==TextureType::DEPTH?VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT:VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT|VK_IMAGE_USAGE_STORAGE_BIT;
-            return r;
-        },
-        [this](){return reinterpret_cast<void*>(VkCommandBuffer(*getCurrentFrame().mCommandBuffer));},
-        [this](){mBoundPipelineName.clear();mDirty.set();},
-        [this](bool enabled){streamlinePresenter(enabled);},
-        [this](void* semaphore,uint64_t value){
-            if(!semaphore||!value)return;
+	return { [this](const std::shared_ptr<TextureInterface>& texture, bool write) {
+				deactivateRenderPass();
+				auto t = std::dynamic_pointer_cast<TextureVk>(texture);
+				if (!t)
+					throw UnsupportedFrameGeneration("Streamline requires Vulkan textures");
+				const auto layout = vk::ImageLayout::eGeneral;
+				t->setState(getCurrentFrame().mCommandBuffer, layout);
+				mRayTracingFrameResources.push_back(t);
+				sl::Resource r { sl::ResourceType::eTex2d, reinterpret_cast<void*>(VkImage(t->mImagePtr)), nullptr,
+					reinterpret_cast<void*>(VkImageView(*t->mImageView)), uint32_t(layout) };
+				r.width = texture->getWidth();
+				r.height = texture->getHeight();
+				r.mipLevels = texture->getMipCount();
+				r.arrayLayers = 1;
+				r.flags = 0;
+				switch (texture->getFormat()) {
+				case PixelFormat::RGBA_FLOAT:
+					r.nativeFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+					break;
+				case PixelFormat::RGBA_INT:
+					r.nativeFormat = VK_FORMAT_R8G8B8A8_UNORM;
+					break;
+				case PixelFormat::RG_FLOAT:
+					r.nativeFormat = VK_FORMAT_R32G32_SFLOAT;
+					break;
+				case PixelFormat::DEPTH32_FLOAT:
+					r.nativeFormat = VK_FORMAT_D32_SFLOAT;
+					break;
+				default:throw UnsupportedFrameGeneration("Unsupported Streamline Vulkan resource format");
+				}
+				// Match TextureVk::init: SDK cloning/barriers need the complete
+				// native description, including copy and attachment usage.
+				r.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+				r.usage |= texture->getType() == TextureType::DEPTH ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+																	: VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+				return r;
+			},
+		[this]() { return reinterpret_cast<void*>(VkCommandBuffer(*getCurrentFrame().mCommandBuffer)); },
+		[this]() {
+			mBoundPipelineKey.reset();
+			mDirty.set();
+		},
+		[this](bool enabled) { streamlinePresenter(enabled); },
+		[this](void* semaphore, uint64_t value) {
+            if(!semaphore||!value)
+				return;
             const VkSemaphore waitSemaphore=reinterpret_cast<VkSemaphore>(semaphore);
-            VkSemaphoreWaitInfo info{VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO};info.semaphoreCount=1;info.pSemaphores=&waitSemaphore;info.pValues=&value;
-            if(vkWaitSemaphores(*mDevice,&info,UINT64_MAX)!=VK_SUCCESS)throw UnsupportedFrameGeneration("Streamline input completion wait failed");
-        }
-    };
+            VkSemaphoreWaitInfo info{VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO};
+			info.semaphoreCount = 1;
+			info.pSemaphores = &waitSemaphore;
+			info.pValues = &value;
+			checkFrameResult(vkWaitSemaphores(*mDevice, &info, UINT64_MAX), "vkWaitSemaphores (Streamline)");
+		} };
 }
 void DriverVk::streamlinePresenter(bool enable,bool commandOpen){
     auto runtime=std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime);
@@ -88,8 +111,13 @@ void DriverVk::streamlinePresenter(bool enable,bool commandOpen){
     auto& ctx=getCurrentSwapchainContext();
     if(enable&&ctx.streamline&&ctx.sdkSwapchain)return;
     if(mShuttingDown)return;
-    if(commandOpen){end();wait();}mDevice.waitIdle();runtime->clearTags();
-    mCurrentState.mFrameBuffer.reset();
+	if (commandOpen) {
+		end();
+		wait();
+	}
+	waitDeviceIdle();
+	runtime->clearTags();
+	mCurrentState.mFrameBuffer.reset();
     for(auto& f:ctx.frames)f.mFrameBuffer.reset();for(auto& f:ctx.frames)f.destroyDeferred.clear();ctx.frames.clear();
     if(ctx.sdkSwapchain){
         auto get=runtime->symbol<PFN_vkGetDeviceProcAddr>("vkGetDeviceProcAddr");

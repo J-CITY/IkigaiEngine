@@ -35,8 +35,16 @@ namespace IKIGAI::RENDER {
 		const Dx12Resource& getResource() const;
 		CD3DX12_GPU_DESCRIPTOR_HANDLE getGpuDescriptorHandle() const;
         CD3DX12_GPU_DESCRIPTOR_HANDLE getUavHandle() const { return mUavHandle; }
-		void setState(ID3D12GraphicsCommandList* cmdlist, D3D12_RESOURCE_STATES state);
-        D3D12_RESOURCE_STATES getState() const { return mCurrentState; }
+		void setState(ID3D12GraphicsCommandList* cmdList, D3D12_RESOURCE_STATES state);
+		void setSampledState(ID3D12GraphicsCommandList* cmdList, UINT depthMipCount = 1);
+		void setPlaneZeroState(ID3D12GraphicsCommandList* cmdList, D3D12_RESOURCE_STATES state, UINT firstMip, UINT mipCount, UINT firstLayer,
+			UINT layerCount, bool orderUavWrites);
+		void setSubresourceState(ID3D12GraphicsCommandList* cmdList, UINT subresource, D3D12_RESOURCE_STATES state);
+		D3D12_RESOURCE_STATES getSubresourceState(UINT subresource) const;
+		UINT subresourceIndex(UINT mip, UINT layer, UINT plane = 0) const;
+		UINT arrayLayerCount() const {
+			return mArraySize;
+		}
 
 		static std::shared_ptr<TextureDx12> Create(const std::string& path, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr);
 		static std::shared_ptr<TextureDx12> Create(const TextureResource& descriptor, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr);
@@ -45,13 +53,17 @@ namespace IKIGAI::RENDER {
 	private:
 		void generateMips(ID3D12GraphicsCommandList* cmdlist);
 		void create(const TextureResource& descriptor, const std::vector<void*>& data, std::shared_ptr<AliasHeapDx12>* backing = nullptr);
+		void initSubresourceStates();
 
 		Dx12Resource mResource;
 		uint32_t mDescriptorIndex = UINT32_MAX;
 		uint32_t mDescriptorCount = 0;
 		CD3DX12_GPU_DESCRIPTOR_HANDLE mGpuDescriptorHandle;
         CD3DX12_GPU_DESCRIPTOR_HANDLE mUavHandle{};
-		D3D12_RESOURCE_STATES mCurrentState = D3D12_RESOURCE_STATE_COMMON;
+		UINT mArraySize = 1;
+		UINT mPlaneCount = 1;
+		D3D12_RESOURCE_STATES mUniformState = D3D12_RESOURCE_STATE_COMMON;
+		std::vector<D3D12_RESOURCE_STATES> mSubresourceStates;
 	};
 
 	class TextureAtlasDx12 : public TextureDx12 {

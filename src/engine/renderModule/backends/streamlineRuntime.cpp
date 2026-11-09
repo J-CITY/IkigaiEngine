@@ -1,6 +1,7 @@
 #include "streamlineRuntime.h"
 #ifdef IKIGAI_USE_STREAMLINE
 #include "interface/driverInterface.h"
+#include <deque>
 #include <iostream>
 #include <mutex>
 #include <sl_security.h>
@@ -19,10 +20,11 @@ namespace {
 		apiError.store(error.hres ? error.hres : error.vkRes, std::memory_order_relaxed);
 	}
 	sl::float4x4 sdkMatrix(MATH::Matrix4f m) {
-		sl::float4x4 result { };
+		sl::float4x4 result {};
 		// Engine uses column vectors; Streamline uses row-vector matrices.
-		for (unsigned r = 0; r < 4; ++r)
+		for (unsigned r = 0; r < 4; ++r) {
 			result[r] = { m(0, r), m(1, r), m(2, r), m(3, r) };
+		}
 		return result;
 	}
 	sl::DLSSMode sdkQuality(UpscalerQuality q) {
@@ -40,8 +42,9 @@ namespace {
 StreamlineRuntime::StreamlineRuntime(sl::RenderAPI api)
 	: Api(api) {
 	const auto path = UpscalerExecutableDirectory() / L"sl.interposer.dll";
-	if (!sl::security::verifyEmbeddedSignature(path.c_str()))
+	if (!sl::security::verifyEmbeddedSignature(path.c_str())) {
 		throw UnsupportedFrameGeneration("Streamline interposer signature validation failed");
+	}
 	module = std::make_shared<UpscalerModule>(L"sl.interposer.dll");
 	auto init = symbol<PFun_slInit*>("slInit");
 	shutdown = symbol<PFun_slShutdown*>("slShutdown");
@@ -64,7 +67,7 @@ StreamlineRuntime::StreamlineRuntime(sl::RenderAPI api)
 #ifdef IKIGAI_USE_DLSS_FRAME_GENERATION
 	features.insert(features.end(), { sl::kFeatureDLSS_G, sl::kFeatureReflex, sl::kFeaturePCL });
 #endif
-	sl::Preferences prefs { };
+	sl::Preferences prefs {};
 	prefs.renderAPI = api;
 	prefs.projectId = IKIGAI_DLSS_PROJECT_ID;
 	prefs.engine = sl::EngineType::eCustom;
@@ -95,8 +98,9 @@ void StreamlineRuntime::close() {
 
 std::shared_ptr<StreamlineRuntime> AcquireStreamline(sl::RenderAPI api) {
 	if (auto existing = sharedRuntime.lock()) {
-		if (existing->Api != api)
+		if (existing->Api != api) {
 			throw UnsupportedFrameGeneration("Streamline runtime is attached to another graphics API");
+		}
 		return existing;
 	}
 	auto result = std::make_shared<StreamlineRuntime>(api);
@@ -107,19 +111,21 @@ std::shared_ptr<StreamlineRuntime> AcquireStreamline(sl::RenderAPI api) {
 void StreamlineRuntime::deviceReady(const sl::AdapterInfo& adapter) {
 	auto sr = supported(sl::kFeatureDLSS, adapter);
 	DLSSAvailable = sr == sl::Result::eOk;
-	if (!DLSSAvailable)
+	if (!DLSSAvailable) {
 		SRReason = "Streamline DLSS SR unsupported: " + std::to_string(static_cast<int>(sr));
+	}
 	auto fg = supported(sl::kFeatureDLSS_G, adapter);
 	FGAvailable = fg == sl::Result::eOk;
-	if (!FGAvailable)
+	if (!FGAvailable) {
 		FGReason = "Streamline DLSS FG unsupported: " + std::to_string(static_cast<int>(fg));
+	}
 	ReflexAvailable = supported(sl::kFeatureReflex, adapter) == sl::Result::eOk;
 	if (FGAvailable && !ReflexAvailable) {
 		FGAvailable = false;
 		FGReason = "DLSS FG requires Streamline Reflex";
 	}
 	if (ReflexAvailable) {
-		sl::ReflexOptions options { };
+		sl::ReflexOptions options {};
 		options.mode = sl::ReflexMode::eLowLatency;
 		check(feature<PFun_slReflexSetOptions*>(sl::kFeatureReflex, "slReflexSetOptions")(options), "slReflexSetOptions");
 	}
@@ -131,22 +137,28 @@ void StreamlineRuntime::beginFrame(uint32_t frame) {
 	check(getToken(Token, &frame), "slGetNewFrameToken");
 	if (ReflexAvailable) {
 		if (DriverInterface::settings.frameGeneration.technology == FrameGenerationType::DLSS
-			|| DriverInterface::settings.frameGeneration.technology == FrameGenerationType::AUTO)
+			|| DriverInterface::settings.frameGeneration.technology == FrameGenerationType::AUTO) {
 			check(feature<PFun_slReflexSleep*>(sl::kFeatureReflex, "slReflexSleep")(*Token), "slReflexSleep");
+		}
 		marker(sl::PCLMarker::eSimulationStart);
 	}
 }
 
 void StreamlineRuntime::marker(sl::PCLMarker marker) {
-	if (ReflexAvailable && Token)
+	if (ReflexAvailable && Token) {
 		check(feature<PFun_slPCLSetMarker*>(sl::kFeaturePCL, "slPCLSetMarker")(marker, *Token), "slPCLSetMarker");
+	}
 }
 
 void StreamlineRuntime::camera(const FrameGenerationInputs& f) {
-	Camera = f;
-	if (!Token)
+	if (!Token) {
 		beginFrame(static_cast<uint32_t>(f.RealFrameId));
-	sl::Constants c { };
+	}
+	if (Api == sl::RenderAPI::eD3D12 && DriverInterface::settings.pipelined() && Frame != static_cast<uint32_t>(f.RealFrameId)) {
+		throw UnsupportedFrameGeneration("Streamline camera frame does not match the current frame token");
+	}
+	Camera = f;
+	sl::Constants c {};
 	const auto vp = f.Projection * f.View;
 	c.cameraViewToClip = sdkMatrix(f.Projection);
 	c.clipToCameraView = sdkMatrix(MATH::Matrix4f::Inverse(f.Projection));
@@ -177,8 +189,9 @@ void StreamlineRuntime::camera(const FrameGenerationInputs& f) {
 }
 
 void StreamlineRuntime::clearTags() {
-	if (!Token)
+	if (!Token) {
 		return;
+	}
 	const sl::BufferType kinds[] = { sl::kBufferTypeDepth, sl::kBufferTypeMotionVectors, sl::kBufferTypeHUDLessColor, sl::kBufferTypeUIColorAndAlpha,
 		sl::kBufferTypeBackbuffer };
 	for (auto type : kinds) {
@@ -188,8 +201,9 @@ void StreamlineRuntime::clearTags() {
 }
 
 void StreamlineRuntime::commonPresentBefore() {
-	if (!Initialized)
+	if (!Initialized) {
 		return;
+	}
 	bool skip = false;
 	if (Api == sl::RenderAPI::eD3D12) {
 		using Hook = int32_t (*)(void*, uint32_t, uint32_t, bool&);
@@ -202,8 +216,9 @@ void StreamlineRuntime::commonPresentBefore() {
 }
 
 void StreamlineRuntime::commonPresentAfter() {
-	if (!Initialized)
+	if (!Initialized) {
 		return;
+	}
 	if (Api == sl::RenderAPI::eD3D12) {
 		using Hook = int32_t (*)(uint32_t);
 		reinterpret_cast<Hook>(commonFunction("slHookAfterPresent"))(0);
@@ -218,28 +233,39 @@ class StreamlineUpscaler final : public UpscalerInterface {
 	std::shared_ptr<StreamlineRuntime> runtime;
 	StreamlineCallbacks native;
 	sl::DLSSOptions options;
-	MATH::Vector2i render { }, display { };
+	MATH::Vector2i render {}, display {};
+	UpscalerQuality quality = UpscalerQuality::QUALITY;
+	bool configured = false;
 
 public:
 	StreamlineUpscaler(std::shared_ptr<StreamlineRuntime> r, StreamlineCallbacks callbacks)
 		: runtime(std::move(r))
 		, native(std::move(callbacks)) {
-		if (!runtime || !runtime->DLSSAvailable)
+		if (!runtime || !runtime->DLSSAvailable) {
 			throw UnsupportedUpscaler(runtime ? runtime->SRReason : "Streamline runtime unavailable");
+		}
 	}
 	~StreamlineUpscaler() override {
-		if (runtime->Initialized)
-			runtime->freeResources(sl::kFeatureDLSS, runtime->Viewport);
+		try {
+			if (runtime->Initialized) {
+				if (native.WaitSubmitted) {
+					native.WaitSubmitted();
+				}
+				runtime->freeResources(sl::kFeatureDLSS, runtime->Viewport);
+			}
+		} catch (const std::exception& e) {
+			std::cerr << "DLSS SR teardown: " << e.what() << '\n';
+		}
 	}
 	UpscalerCapabilities capabilities() const override {
-		return { true, false, UpscalerType::DLSS, "DLSS Super Resolution (Streamline)", { } };
+		return { true, false, UpscalerType::DLSS, "DLSS Super Resolution (Streamline)", {} };
 	}
 	MATH::Vector2i renderSize(MATH::Vector2i d, UpscalerQuality quality) override {
-		sl::DLSSOptions opt { };
+		sl::DLSSOptions opt {};
 		opt.mode = sdkQuality(quality);
 		opt.outputWidth = d.x;
 		opt.outputHeight = d.y;
-		sl::DLSSOptimalSettings result { };
+		sl::DLSSOptimalSettings result {};
 		try {
 			StreamlineRuntime::check(
 				runtime->feature<PFun_slDLSSGetOptimalSettings*>(sl::kFeatureDLSS, "slDLSSGetOptimalSettings")(opt, result), "DLSS optimal settings");
@@ -249,6 +275,12 @@ public:
 		return { int(result.optimalRenderWidth), int(result.optimalRenderHeight) };
 	}
 	void configure(MATH::Vector2i r, MATH::Vector2i d, UpscalerQuality quality) override {
+		if (configured && render == r && display == d && this->quality == quality) {
+			return;
+		}
+		if (configured && native.WaitSubmitted) {
+			native.WaitSubmitted();
+		}
 		options.mode = sdkQuality(quality);
 		options.outputWidth = d.x;
 		options.outputHeight = d.y;
@@ -262,17 +294,20 @@ public:
 		} catch (const UnsupportedFrameGeneration& e) {
 			throw UnsupportedUpscaler(e.what());
 		}
+		this->quality = quality;
+		configured = true;
 	}
 	MATH::Vector2f jitter(uint64_t frame, MATH::Vector2i r, MATH::Vector2i d) override {
 		return UpscalerHaltonJitter(frame, std::max(8u, unsigned(8.0 * d.x * d.y / (r.x * r.y))));
 	}
 	void dispatch(const UpscaleFrameInputs& f) override {
 		ValidateUpscalerTextures(f);
-		if (!runtime->CameraReady)
+		if (!runtime->CameraReady) {
 			throw UnsupportedUpscaler("Streamline camera constants missing for this real frame");
+		}
 		auto color = native.Resource(f.Color, false), depth = native.Resource(f.Depth, false), motion = native.Resource(f.MotionVectors, false),
 			 output = native.Resource(f.Output, true);
-		sl::Extent ri { }, di { };
+		sl::Extent ri {}, di {};
 		ri.width = f.RenderSize.x;
 		ri.height = f.RenderSize.y;
 		di.width = f.DisplaySize.x;
@@ -300,18 +335,43 @@ class StreamlineFrameGeneration final : public FrameGenerationInterface {
 	StreamlineCallbacks native;
 	FrameGenerationStatus state;
 	FrameGenerationInputs last;
-	MATH::Vector2i render { }, display { };
+	MATH::Vector2i render {}, display {};
 	unsigned multiplier = 0;
 	bool attached = false, prepared = false, enabledOptions = false;
-	sl::DLSSGState presentResult { };
-	bool resultReady = false;
+	struct PresentReceipt {
+		FrameGenerationInputs Inputs;
+		void* Fence = nullptr;
+		uint64_t FenceValue = 0;
+		std::shared_ptr<void> FenceOwner;
+	};
+	std::deque<PresentReceipt> receipts;
+	bool receiptCaptured = false;
+
+	void capturePresent() {
+		if (!prepared || receiptCaptured) {
+			return;
+		}
+		sl::DLSSGState result {};
+		StreamlineRuntime::check(runtime->feature<PFun_slDLSSGGetState*>(sl::kFeatureDLSS_G, "slDLSSGGetState")(runtime->Viewport, result, nullptr),
+			"DLSS FG completion state");
+		auto* fence = result.inputsProcessingCompletionFence;
+		receipts.push_back({ last, fence, result.lastPresentInputsProcessingCompletionFenceValue,
+			native.RetainInputsFence && fence ? native.RetainInputsFence(fence) : nullptr });
+		receiptCaptured = true;
+		++state.RealFrames;
+		state.PresentedFrames += result.numFramesActuallyPresented;
+		state.GeneratedFrames = state.PresentedFrames > state.RealFrames ? state.PresentedFrames - state.RealFrames : 0;
+		std::cout << "FRAMEGEN_PRESENT DLSS real=" << state.RealFrames << " generated=" << state.GeneratedFrames
+				  << " presented=" << state.PresentedFrames << '\n';
+	}
 
 public:
 	StreamlineFrameGeneration(std::shared_ptr<StreamlineRuntime> r, StreamlineCallbacks callbacks)
 		: runtime(std::move(r))
 		, native(std::move(callbacks)) {
-		if (!runtime || !runtime->FGAvailable)
+		if (!runtime || !runtime->FGAvailable) {
 			throw UnsupportedFrameGeneration(runtime ? runtime->FGReason : "Streamline runtime unavailable");
+		}
 		state.Technology = FrameGenerationType::DLSS;
 		state.Implementation = "DLSS Frame Generation (Streamline 2.14.1)";
 	}
@@ -320,29 +380,35 @@ public:
 		try {
 			suspend();
 			runtime->clearTags();
-			if (runtime->Initialized)
+			if (runtime->Initialized) {
 				runtime->freeResources(sl::kFeatureDLSS_G, runtime->Viewport);
-			if (attached)
+			}
+			if (attached) {
 				native.Presenter(false);
+			}
 		} catch (const std::exception& e) {
 			std::cerr << "DLSS FG teardown: " << e.what() << '\n';
 		}
 	}
 
 	void configure(const FrameGenerationSettings& settings, MATH::Vector2i r, MATH::Vector2i d) override {
-		if (enabledOptions && multiplier == settings.multiplier && render == r && display == d)
+		if (enabledOptions && multiplier == settings.multiplier && render == r && display == d) {
 			return;
-		sl::DLSSGState caps { };
+		}
+		sl::DLSSGState caps {};
 		StreamlineRuntime::check(
 			runtime->feature<PFun_slDLSSGGetState*>(sl::kFeatureDLSS_G, "slDLSSGGetState")(runtime->Viewport, caps, nullptr), "DLSS FG capabilities");
 		state.MaxMultiplier = caps.numFramesToGenerateMax + 1;
-		if (settings.multiplier > state.MaxMultiplier)
+		if (settings.multiplier > state.MaxMultiplier) {
 			throw UnsupportedFrameGeneration("Requested DLSS MFG multiplier is unsupported");
-		if (d.x < static_cast<int>(caps.minWidthOrHeight) || d.y < static_cast<int>(caps.minWidthOrHeight))
+		}
+		if (d.x < static_cast<int>(caps.minWidthOrHeight) || d.y < static_cast<int>(caps.minWidthOrHeight)) {
 			throw UnsupportedFrameGeneration("Display size is below the DLSS FG minimum supported dimension");
-		if (settings.vsync && (runtime->Api == sl::RenderAPI::eVulkan || caps.bIsVsyncSupportAvailable != sl::Boolean::eTrue))
+		}
+		if (settings.vsync && (runtime->Api == sl::RenderAPI::eVulkan || caps.bIsVsyncSupportAvailable != sl::Boolean::eTrue)) {
 			throw UnsupportedFrameGeneration("DLSS FG VSync is unavailable for this backend/runtime");
-		sl::DLSSGOptions options { };
+		}
+		sl::DLSSGOptions options {};
 		options.mode = sl::DLSSGMode::eOn;
 		options.numFramesToGenerate = settings.multiplier - 1;
 		options.flags = sl::DLSSGFlags::eRetainResourcesWhenOff;
@@ -365,14 +431,16 @@ public:
 	}
 
 	void prepare(const FrameGenerationInputs& f) override {
-		if (!runtime->CameraReady)
+		if (!runtime->CameraReady) {
 			throw UnsupportedFrameGeneration("DLSS FG camera constants missing");
-		if (const auto e = apiError.exchange(0))
+		}
+		if (const auto e = apiError.exchange(0)) {
 			throw UnsupportedFrameGeneration("DLSS FG asynchronous presentation error: " + std::to_string(e));
+		}
 		last = f;
 		auto color = native.Resource(f.Color, false), depth = native.Resource(f.Depth, false), motion = native.Resource(f.MotionVectors, false),
 			 ui = native.Resource(f.UI, false);
-		sl::Extent ri { }, di { };
+		sl::Extent ri {}, di {};
 		ri.width = f.RenderSize.x;
 		ri.height = f.RenderSize.y;
 		di.width = f.DisplaySize.x;
@@ -387,23 +455,25 @@ public:
 		native.Invalidate();
 		prepared = true;
 		state.Active = true;
-		if (state.RealFrames == 0 || f.Reset)
+		if (state.RealFrames == 0 || f.Reset) {
 			std::cout << "FRAMEGEN_PREPARE DLSS frame=" << f.RealFrameId << " reset=" << f.Reset << '\n';
+		}
 	}
 
 	void suspend() override {
 		if (runtime->Initialized) {
 			waitForPresents();
-			sl::DLSSGOptions options { };
+			sl::DLSSGOptions options {};
 			options.mode = sl::DLSSGMode::eOff;
 			options.flags = sl::DLSSGFlags::eRetainResourcesWhenOff;
 			runtime->feature<PFun_slDLSSGSetOptions*>(sl::kFeatureDLSS_G, "slDLSSGSetOptions")(runtime->Viewport, options);
 			runtime->clearTags();
 			// SetOptions is deferred until Present. Drain it before changing
 			// the HWND or releasing the swapchain used by the SDK pacer.
-			if (enabledOptions && attached && native.ApplyOff)
+			if (enabledOptions && attached && native.ApplyOff) {
 				native.ApplyOff();
-			resultReady = false;
+			}
+			receiptCaptured = false;
 		}
 		state.Active = false;
 		prepared = false;
@@ -411,30 +481,37 @@ public:
 	}
 
 	void waitForPresents() override {
-		if (!runtime->Initialized || !attached)
+		if (!runtime->Initialized || !attached) {
 			return;
-		if (!resultReady) {
-			StreamlineRuntime::check(
-				runtime->feature<PFun_slDLSSGGetState*>(sl::kFeatureDLSS_G, "slDLSSGGetState")(runtime->Viewport, presentResult, nullptr),
-				"DLSS FG completion state");
-			resultReady = true;
 		}
-		native.WaitInputs(presentResult.inputsProcessingCompletionFence, presentResult.lastPresentInputsProcessingCompletionFenceValue);
+		// Vulkan's serial present path waits before afterPresent(). D3D12
+		// captures immediately after Present, so a drain must not mistake a
+		// prepared but unpresented frame for a completed present.
+		if (runtime->Api == sl::RenderAPI::eVulkan) {
+			capturePresent();
+		}
+		while (!receipts.empty()) {
+			const auto& receipt = receipts.front();
+			native.WaitInputs(receipt.Fence, receipt.FenceValue);
+			receipts.pop_front();
+		}
+	}
+
+	void waitForFrame(uint64_t realFrameId) override {
+		for (auto receipt = receipts.begin(); receipt != receipts.end(); ++receipt) {
+			if (receipt->Inputs.RealFrameId == realFrameId) {
+				native.WaitInputs(receipt->Fence, receipt->FenceValue);
+				receipts.erase(receipt);
+				return;
+			}
+		}
 	}
 
 	void afterPresent() override {
-		if (prepared) {
-			waitForPresents();
-			const auto& result = presentResult;
-			++state.RealFrames;
-			state.PresentedFrames += result.numFramesActuallyPresented;
-			state.GeneratedFrames = state.PresentedFrames > state.RealFrames ? state.PresentedFrames - state.RealFrames : 0;
-			std::cout << "FRAMEGEN_PRESENT DLSS real=" << state.RealFrames << " generated=" << state.GeneratedFrames
-					  << " presented=" << state.PresentedFrames << '\n';
-		}
+		capturePresent();
 		prepared = false;
-		last = { };
-		resultReady = false;
+		last = {};
+		receiptCaptured = false;
 	}
 
 	FrameGenerationStatus status() const override {

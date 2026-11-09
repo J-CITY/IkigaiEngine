@@ -15,6 +15,8 @@ struct PipelineExecution {
 	std::optional<SubmissionMode> DrivenMode;
 	bool AsyncCompute = false;
 	bool GpuShadowViews = false;
+	bool GpuMaterialTable = false;
+	bool GpuGeometryPool = false;
 
 	template <class Context> static constexpr auto serde(Context& context, PipelineExecution& value) {
 		if constexpr (std::is_same_v<typename Context::Adaptor, nlohmann::json>) {
@@ -37,7 +39,9 @@ struct PipelineExecution {
 			.field(&PipelineExecution::FramesInFlight, "FramesInFlight")
 			.field(&PipelineExecution::DrivenMode, "DrivenMode")
 			.field(&PipelineExecution::AsyncCompute, "AsyncCompute", serde::attribute::default_ { false })
-			.field(&PipelineExecution::GpuShadowViews, "GpuShadowViews", serde::attribute::default_ { false });
+			.field(&PipelineExecution::GpuShadowViews, "GpuShadowViews", serde::attribute::default_ { false })
+			.field(&PipelineExecution::GpuMaterialTable, "GpuMaterialTable", serde::attribute::default_ { false })
+			.field(&PipelineExecution::GpuGeometryPool, "GpuGeometryPool", serde::attribute::default_ { false });
 	}
 };
 }

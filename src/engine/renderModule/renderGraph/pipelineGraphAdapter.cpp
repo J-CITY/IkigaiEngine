@@ -1,6 +1,8 @@
+#include "computeStage.h"
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/gameRenderer.h"
 #include <algorithm>
+#include <iostream>
 #include <optional>
 #include <stdexcept>
 #include <unordered_map>
@@ -14,6 +16,7 @@ namespace {
 	struct ResourceInfo {
 		ResourceKind Kind;
 		bool ReadOnly = false;
+		bool QueueImage = false;
 	};
 
 	bool SupportsAccess(ResourceKind kind, Access access) {
@@ -47,14 +50,99 @@ namespace {
 		}
 	}
 
-	bool IsTransientColor(const RenderGraphPipeline::TextureDesc& texture) {
+	bool IsImplicitEngineTexture(std::string_view name) {
 		// These pipeline names are also accessed through implicit engine bindings.
 		constexpr std::string_view engineTextures[] = { "ShapeNoise", "DetailNoise", "CurlNoise", "CloudShadowMap", "AtmosphereTransmittance",
 			"AtmosphereSkyView", "AtmosphereAerial", "CloudDepth", "Display" };
+		return std::find(std::begin(engineTextures), std::end(engineTextures), name) != std::end(engineTextures);
+	}
+
+	bool IsTransientColor(const RenderGraphPipeline::TextureDesc& texture) {
 		return texture.Transient && !texture.Persistent && !texture.History && texture.Path.empty() && !texture.FullMipChain
 			&& texture.Resource.texType == TextureType::TEXTURE_2D && !texture.Resource.storage && !texture.Resource.useMipmap
 			&& texture.Resource.mipMapCount <= 1 && texture.Resource.colorData.empty() && texture.Resource.pathTexture.empty()
-			&& std::find(std::begin(engineTextures), std::end(engineTextures), texture.Name) == std::end(engineTextures);
+			&& !IsImplicitEngineTexture(texture.Name);
+	}
+
+	bool BindsTexture(const PipelineStage::Descriptor& pass, const std::string& resource) {
+		return std::ranges::any_of(pass.Uniforms, [&](const auto& uniform) {
+			const auto* name = std::get_if<std::string>(&uniform.second);
+			return name && *name == resource;
+		});
+	}
+
+	bool HasSoleReader(
+		const RenderGraphPipeline::Descriptor& descriptor, const GRAPH::Barrier& barrier, GRAPH::PassId reader, const std::string& resource) {
+		const auto& writer = descriptor.Stages[barrier.Before->Pass];
+		const auto write = std::ranges::find_if(
+			writer.ResourceUses, [&](const auto& use) { return use.Resource == resource && use.Mode == barrier.Before->Mode; });
+		if (write == writer.ResourceUses.end()) {
+			return false;
+		}
+		std::optional<GRAPH::PassId> found;
+		for (GRAPH::PassId id = 0; id < descriptor.Stages.size(); ++id) {
+			if (std::ranges::any_of(descriptor.Stages[id].ResourceUses,
+					[&](const auto& use) { return use.Resource == resource && use.Version == write->Version && !GRAPH::IsWrite(use.Mode); })) {
+				if (found) {
+					return false;
+				}
+				found = id;
+			}
+		}
+		return found == reader;
+	}
+
+	std::optional<GraphImageBarrier> ResolveImageTransition(const RenderGraphPipeline::Descriptor& descriptor, const GRAPH::Barrier& barrier,
+		GRAPH::PassId consumerId, const PipelineStage& loadedConsumer, const std::string& resource) {
+		if (!barrier.Before) {
+			return {};
+		}
+		const auto texture = std::ranges::find(descriptor.Textures, resource, &RenderGraphPipeline::TextureDesc::Name);
+		if (texture == descriptor.Textures.end() || texture->History || !texture->Path.empty()) {
+			return {};
+		}
+		const auto& producer = descriptor.Stages[barrier.Before->Pass];
+		const auto& consumer = descriptor.Stages[consumerId];
+		const auto sampledAccess = [&]() -> std::optional<GraphImageAccess> {
+			if (barrier.After != Access::SAMPLED || !BindsTexture(consumer, resource) || consumer.Material.empty()) {
+				return {};
+			}
+			if (consumer.Draw == DrawContent::COMPUTE && consumer.Program.empty()) {
+				return GraphImageAccess::ComputeSampledRead;
+			}
+			if (consumer.Draw == DrawContent::QUAD) {
+				return GraphImageAccess::GraphicsSampledRead;
+			}
+			return {};
+		}();
+		if (!HasSoleReader(descriptor, barrier, consumerId, resource)) {
+			// A later reader can use another shader stage or a different layout.
+			// The compiler does not yet track visibility separately for each reader.
+			return {};
+		}
+		if (barrier.Before->Mode == Access::ATTACHMENT_WRITE && sampledAccess && texture->Resource.texType == TextureType::DEPTH) {
+			const auto framebuffer = std::ranges::find(descriptor.FrameBuffers, producer.FrameBuffer, &RenderGraphPipeline::FrameDesc::Name);
+			if (framebuffer != descriptor.FrameBuffers.end() && framebuffer->Depth == resource) {
+				return GraphImageBarrier { GraphImageAccess::DepthAttachmentWrite, *sampledAccess, GraphImageAspect::Depth, 0, 1, 0, 1 };
+			}
+		}
+		if (barrier.Before->Mode != Access::STORAGE_WRITE || !texture->Resource.storage || texture->Resource.texType != TextureType::TEXTURE_2D
+			|| producer.Draw != DrawContent::COMPUTE || !producer.Program.empty()) {
+			return {};
+		}
+		const auto& inputChain = consumer.Compute.MipChain;
+		if (barrier.After == Access::STORAGE_WRITE && producer.Compute.MipChain.Texture.empty() && BindsTexture(producer, resource)
+			&& inputChain.Texture == resource && inputChain.FirstMip == 1 && !inputChain.Input.empty() && loadedConsumer.mCompute
+			&& loadedConsumer.mCompute->MipScopedBarriers) {
+			// The default storage view writes mip 0. The in-place chain reads it and writes mip 1 onward.
+			return GraphImageBarrier { GraphImageAccess::StorageWrite, GraphImageAccess::StorageRead, GraphImageAspect::Color, 0, 1, 0, 1 };
+		}
+		const auto& outputChain = producer.Compute.MipChain;
+		if (sampledAccess && outputChain.Texture == resource && outputChain.FirstMip == 1 && !outputChain.Input.empty() && !outputChain.MipCount) {
+			// The sampled view can fetch any mip, including the retained mip 0.
+			return GraphImageBarrier { GraphImageAccess::StorageWrite, *sampledAccess, GraphImageAspect::Color };
+		}
+		return {};
 	}
 }
 
@@ -102,6 +190,9 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 	for (const auto& texture : descriptor.Textures) {
 		const auto kind = texture.Resource.storage ? ResourceKind::StorageTexture : ResourceKind::Texture;
 		add(texture.Name, kind, !texture.Path.empty(), texture.History, !texture.Path.empty());
+		resourceInfo.back().QueueImage = texture.Resource.texType == TextureType::TEXTURE_2D && !texture.FullMipChain && !texture.History
+			&& !texture.Resource.useMipmap && texture.Resource.mipMapCount <= 1 && texture.Resource.pathTexture.empty()
+			&& texture.Resource.colorData.empty() && !IsImplicitEngineTexture(texture.Name);
 		resources.back().Transient = descriptor.StartStages.empty() && descriptor.LightPasses.empty() && IsTransientColor(texture);
 		if (texture.History) {
 			add(texture.Name + "Previous", kind, true, false, true);
@@ -125,6 +216,15 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 	}
 	if (std::any_of(descriptor.StartStages.begin(), descriptor.StartStages.end(), HasGraphContract)) {
 		throw std::invalid_argument("Graph resource uses belong to per-frame stages");
+	}
+	std::vector<bool> asyncImages(resources.size());
+	for (const auto& stage : descriptor.Stages) {
+		if (stage.Queue == GRAPH::Queue::ASYNC_COMPUTE) {
+			for (const auto& use : stage.ResourceUses) {
+				const auto id = resolve(use.Resource);
+				asyncImages[id] = resourceInfo[id].QueueImage;
+			}
+		}
 	}
 
 	std::optional<GRAPH::PassId> lastBackbufferPass;
@@ -251,9 +351,23 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 				RequireUse(stage, clear.Buffer, Access::STORAGE_READ);
 			}
 		}
-		bool bufferProgram
+		const bool requestedAsync = stage.Queue == GRAPH::Queue::ASYNC_COMPUTE;
+		bool asyncProgram
 			= compute && !stage.Program.empty() && stage.Compute.ClearBuffers.empty() && !stage.SideEffect && !stage.ResourceUses.empty();
+		bool hasImage = false;
+		bool hasArray = false;
+		std::vector<bool> bound(requestedAsync ? resources.size() : 0);
+		const auto queueImage = [&](GRAPH::ResourceId id) { return resourceInfo[id].QueueImage && !resources[id].Imported; };
+		const auto queueAccess = [&](const GRAPH::Use& use) {
+			const auto& info = resourceInfo[use.Resource];
+			if (use.Mode == Access::SAMPLED) {
+				return queueImage(use.Resource);
+			}
+			return (use.Mode == Access::STORAGE_READ || use.Mode == Access::STORAGE_WRITE)
+				&& (info.Kind == ResourceKind::StorageBuffer || (info.Kind == ResourceKind::StorageTexture && queueImage(use.Resource)));
+		};
 		for (const auto& [binding, sources] : stage.Bindings) {
+			hasArray |= sources.find(',') != std::string::npos;
 			size_t begin = 0;
 			do {
 				const auto end = sources.find(',', begin);
@@ -262,14 +376,25 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 				if (found != resourceIds.end()) {
 					// Program bindings can perform native accesses outside raster attachment/sampler reflection.
 					resources[found->second].Transient = false;
+					if (asyncImages[found->second] && !std::ranges::any_of(pass.Uses, [&](const auto& use) {
+							return use.Resource == found->second
+								&& (use.Mode == Access::SAMPLED || use.Mode == Access::STORAGE_READ || use.Mode == Access::STORAGE_WRITE);
+						})) {
+						throw std::invalid_argument("Missing declared access to queue image " + source + " in " + stage.Name);
+					}
 				}
-				if (found == resourceIds.end() || resourceInfo[found->second].Kind != ResourceKind::StorageBuffer) {
-					bufferProgram = false;
-				}
-				else if (descriptor.Execution.AsyncCompute && std::none_of(pass.Uses.begin(), pass.Uses.end(), [&](const auto& use) {
-							 return use.Resource == found->second && (use.Mode == Access::STORAGE_READ || use.Mode == Access::STORAGE_WRITE);
-						 })) {
-					throw std::invalid_argument("Missing declared program buffer access to " + source + " in " + stage.Name);
+				if (requestedAsync) {
+					if (found == resourceIds.end()) {
+						asyncProgram = false;
+					}
+					else {
+						const auto id = found->second;
+						const bool image = queueImage(id);
+						hasImage |= image;
+						asyncProgram &= !(image && bound[id])
+							&& std::ranges::any_of(pass.Uses, [&](const auto& use) { return use.Resource == id && queueAccess(use); });
+						bound[id] = true;
+					}
 				}
 				if (end == std::string::npos) {
 					break;
@@ -277,14 +402,11 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 				begin = end + 1;
 			} while (true);
 		}
-		bufferProgram = bufferProgram && !stage.Bindings.empty() && std::all_of(pass.Uses.begin(), pass.Uses.end(), [&](const auto& use) {
-			return resourceInfo[use.Resource].Kind == ResourceKind::StorageBuffer
-				&& (use.Mode == Access::STORAGE_READ || use.Mode == Access::STORAGE_WRITE);
-		});
-		if (stage.Queue == GRAPH::Queue::ASYNC_COMPUTE) {
-			if (!bufferProgram) {
+		if (requestedAsync) {
+			if (!asyncProgram || stage.Bindings.empty() || (hasImage && hasArray)
+				|| !std::ranges::all_of(pass.Uses, [&](const auto& use) { return bound[use.Resource] && queueAccess(use); })) {
 				throw std::invalid_argument(
-					"Async compute requires a reflected compute program with declared storage buffer accesses: " + stage.Name);
+					"Async compute requires a reflected compute program with declared storage buffers or local single-mip 2D images: " + stage.Name);
 			}
 			if (descriptor.Execution.AsyncCompute) {
 				pass.PreferredQueue = stage.Queue;
@@ -293,5 +415,47 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 		passes.push_back(std::move(pass));
 	}
 	return GRAPH::Compile(resources, passes);
+}
+
+std::vector<RenderGraphPipeline::ResolvedGraphBarriers> RenderGraphPipeline::resolveGraphBarriers(
+	const Descriptor& descriptor, const GRAPH::Plan& plan) const {
+	std::vector<ResolvedGraphBarriers> result(descriptor.Stages.size());
+	std::vector<GRAPH::Queue> queues(descriptor.Stages.size(), GRAPH::Queue::GRAPHICS);
+	for (const auto& pass : plan.Schedule) {
+		queues[pass.Id] = pass.ExecutionQueue;
+		auto& resolved = result[pass.Id];
+		for (const auto& barrier : pass.Barriers) {
+			const auto& name = plan.ResourceNames[barrier.Resource];
+			const auto image = mTextures.find(name);
+			if (image != mTextures.end() && barrier.Before && queues[barrier.Before->Pass] == GRAPH::Queue::GRAPHICS
+				&& pass.ExecutionQueue == GRAPH::Queue::GRAPHICS) {
+				if (auto transition = ResolveImageTransition(descriptor, barrier, pass.Id, *mStageIndex[pass.Id], name)) {
+					resolved.Images.push_back({ &image->second, *transition });
+					continue;
+				}
+			}
+			// Cross-queue and undeclared native uses still follow the conservative path.
+			if (barrier.Before && barrier.Before->Mode == Access::STORAGE_WRITE && barrier.After == Access::INDIRECT
+				&& descriptor.Stages[barrier.Before->Pass].Draw == DrawContent::COMPUTE && queues[barrier.Before->Pass] == GRAPH::Queue::GRAPHICS
+				&& pass.ExecutionQueue == GRAPH::Queue::GRAPHICS) {
+				const auto usage = mBufferUsages.find(name);
+				const bool onlyIndirectReaders = std::ranges::none_of(descriptor.Stages, [&](const auto& stage) {
+					return std::ranges::any_of(stage.ResourceUses,
+						[&](const auto& use) { return use.Resource == name && use.Mode != Access::STORAGE_WRITE && use.Mode != Access::INDIRECT; });
+				});
+				if (onlyIndirectReaders && usage != mBufferUsages.end() && HasBufferUsage(usage->second, BufferUsage::INDIRECT)) {
+					resolved.IndirectBuffers.push_back(mStorageBuffers.at(name));
+					continue;
+				}
+			}
+			resolved.Conservative = true;
+			resolved.Uav |= barrier.Uav;
+		}
+		if (!resolved.Images.empty()) {
+			std::cout << "GRAPH_IMAGE_BARRIERS pass=" << descriptor.Stages[pass.Id].Name << " count=" << resolved.Images.size()
+					  << " conservative=" << resolved.Conservative << '\n';
+		}
+	}
+	return result;
 }
 }

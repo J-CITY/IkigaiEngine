@@ -26,6 +26,10 @@ void* upscalerCommand(DriverDx12& driver) {return driver.getCommandList().Get();
 void deferUpscaler(DriverDx12& driver,std::shared_ptr<void> context) {
     if(!driver.mShuttingDown)driver.mRayDeferred.push_back(std::move(context));
 }
+#define IKIGAI_PIN_DX12_UPSCALER_CONTEXT
+void pinUpscalerContext(DriverDx12& driver, const std::shared_ptr<void>& context) {
+	driver.mRayFrameResources.push_back(context);
+}
 std::shared_ptr<TextureDx12> upscaleTexture(DriverDx12& driver,const std::shared_ptr<TextureInterface>& texture,bool write) {
     auto t=std::dynamic_pointer_cast<TextureDx12>(texture);
     if(!t)throw std::runtime_error("UPSCALE requires DX12 textures");
@@ -71,6 +75,7 @@ NVSDK_NGX_Result evaluateNgx(DriverDx12& d,NVSDK_NGX_Handle* handle,NVSDK_NGX_Pa
 #include "../dlssUpscalerCommon.h"
 #undef NGX_CALL
 #endif
+#undef IKIGAI_PIN_DX12_UPSCALER_CONTEXT
 }
 #endif
 std::unique_ptr<IKIGAI::RENDER::UpscalerInterface> IKIGAI::RENDER::DriverDx12::createUpscaler(UpscalerType type) {

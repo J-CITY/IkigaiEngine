@@ -5,6 +5,7 @@
 #include "environmentModule/surfaceWeather.h"
 #include "frustum.h"
 #include "gpuScene.h"
+#include "gpuSceneMaterials.h"
 #include "indirectLighting/temporalDenoiseStage.h"
 #include "instanceBatch.h"
 #include "particles/particleRenderer.h"
@@ -56,6 +57,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <exception>
 #include <functional>
 #include <iostream>
 #include <set>
@@ -201,6 +203,9 @@ void GameRenderer::renderScene() {
 
 	if (mContext.sceneManager->isTransitioning() || !mContext.sceneManager->hasCurrentScene()) {
 #if defined(IKIGAI_USE_GPU_DRIVEN)
+		if (mGpuSceneMaterials) {
+			mGpuSceneMaterials->clear(*mContext.render);
+		}
 		mGpuScene.reset();
 #endif
 		renderLoadingScene(mContext.sceneManager->getPresentedScene());
@@ -362,6 +367,12 @@ void GameRenderer::drawGpuScene(bool shadow) {
 
 void GameRenderer::drawDrawable(const Drawable& drawable, const GpuSceneDraw* indirect) {
 	auto material = mOverrideMaterial ? mOverrideMaterial : drawable.material;
+	const bool gpuMaterialDraw = indirect && bool(indirect->MaterialIds);
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+	if (gpuMaterialDraw) {
+		material = mGpuSceneMaterials->pass(indirect->PooledGeometry);
+	}
+#endif
 	if (!material || !drawable.mesh) {
 		return;
 	}
@@ -381,7 +392,7 @@ void GameRenderer::drawDrawable(const Drawable& drawable, const GpuSceneDraw* in
 		}
 		material = variant;
 	}
-	if (mOverrideMaterial && drawable.material) {
+	if (!gpuMaterialDraw && mOverrideMaterial && drawable.material) {
 		for (const auto& [key, value] : mOverrideDefaults) {
 			material->set(key, value);
 		}
@@ -457,7 +468,12 @@ void GameRenderer::drawDrawable(const Drawable& drawable, const GpuSceneDraw* in
 
 		render->setShader(material->getShader());
 		material->bind(mEmptyTexture, true);
-		if (mOverrideMaterial && mActiveStage) {
+#if defined(IKIGAI_USE_GPU_DRIVEN)
+		if (gpuMaterialDraw) {
+			mGpuSceneMaterials->bind(*render, indirect->MaterialIds);
+		}
+#endif
+		if (!gpuMaterialDraw && mOverrideMaterial && mActiveStage) {
 			const auto shader = material->getShader();
 			if (mActiveStage->mResolved.Shader == shader) {
 				for (const auto& texture : mActiveStage->mResolved.Textures) {
@@ -584,7 +600,7 @@ void GameRenderer::drawDrawable(const Drawable& drawable, const GpuSceneDraw* in
 		if (indirect) {
 			render->setPrimitiveMode(PrimitiveMode::TRIANGLES);
 			render->execute([mesh = drawable.mesh] { mesh->bind(); });
-			render->drawIndexedIndirect(indirect->Arguments, 0, 1, sizeof(DrawIndexedIndirectCommand));
+			render->drawIndexedIndirect(indirect->Arguments, 0, indirect->CommandCount, sizeof(DrawIndexedIndirectCommand));
 			render->execute([mesh = drawable.mesh] { mesh->unbind(); });
 		}
 		else {
@@ -755,8 +771,31 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		auto profile = mGpuProfiler.measure("Ordinary GPU cull");
 		const auto& camera = cameraComponent.getCamera();
 		const bool culling = ordinary.UseBvhBounds || camera.isFrustumGeometryCulling();
+		GpuSceneMaterialIds materialIds;
+		if (mGpuSceneMaterials) {
+			if (mGpuSceneStage->mDescriptor.Uniforms.empty() && mGpuSceneStage->mMaterial->getShader()->mPath == OrdinaryGeometryShader) {
+				try {
+					materialIds = mGpuSceneMaterials->update(*mContext.render, ordinary, mGpuSceneStage->mDefaults, mEmptyTexture);
+				} catch (const std::exception& error) {
+					std::cerr << "GPU_SCENE_MATERIAL_FALLBACK " << error.what() << '\n';
+					mGpuSceneMaterials->clear(*mContext.render);
+					mGpuSceneMaterials.reset();
+				}
+			}
+			else {
+				mGpuSceneMaterials->clear(*mContext.render);
+			}
+		}
 		mGpuScene->prepare(*mContext.render, ordinary, culling ? &camera.getFrustum() : nullptr, cameraPosition,
-			{ ordinaryHzb, mEmptyTexture, viewProjection, mPreviousViewProjection, temporalValid });
+			{ ordinaryHzb, mEmptyTexture, viewProjection, mPreviousViewProjection, temporalValid }, &materialIds,
+			mGpuSceneMaterials && bool(mGpuSceneMaterials->pass(true)));
+		if (Config::PROFILE_LOADING && mGpuSceneMaterials) {
+			const auto draws = std::ranges::count_if(mGpuScene->draws(), [](const auto& draw) { return bool(draw.Buffers.MaterialIds); });
+			std::cout << "GPU_SCENE_MATERIAL_TABLE draws=" << draws << " materials=" << materialIds.size() << '\n';
+		}
+	}
+	else if (mGpuSceneMaterials) {
+		mGpuSceneMaterials->clear(*mContext.render);
 	}
 #endif
 	{
@@ -871,12 +910,13 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		}
 		UpdateTemporalDenoiseBuffers(*mContext.render, *mRenderPipeline, mFrameData.FrameState.x > .5f);
 	}
+	const auto lightingFrameState = mFrameData.FrameState;
 	FrameGenerationInputs temporalCamera;
 	temporalCamera.RenderSize = renderSize;
 	temporalCamera.DisplaySize = displaySize;
 	temporalCamera.View = cameraComponent.getCamera().getViewMatrix();
 	temporalCamera.Projection = unjitteredProjection;
-	temporalCamera.PreviousViewProjection = mPreviousUnjitteredViewProjection;
+	temporalCamera.PreviousViewProjection = temporalValid ? mPreviousUnjitteredViewProjection : unjitteredViewProjection;
 	temporalCamera.Position = uboData.ViewPos;
 	temporalCamera.Right = { temporalCamera.View(0, 0), temporalCamera.View(0, 1), temporalCamera.View(0, 2) };
 	temporalCamera.Up = { temporalCamera.View(1, 0), temporalCamera.View(1, 1), temporalCamera.View(1, 2) };
@@ -888,8 +928,15 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	temporalCamera.VerticalFov = cameraComponent.getFov() * 3.14159265358979323846f / 180.f;
 	temporalCamera.DeltaMilliseconds = mFrameData.FrameState.y * 1000.f;
 	temporalCamera.RealFrameId = presentationDriver->mRealFrameId == UINT64_MAX ? mFrameCount : presentationDriver->mRealFrameId;
-	temporalCamera.Reset = cameraFrameState.x < .5f || (presentationDriver->mFrameGeneration && !presentationDriver->mFrameGenerationStatus.Active);
-	presentationDriver->setTemporalCamera(temporalCamera);
+	const bool frameGenerationStarting = presentationDriver->mFrameGeneration && !presentationDriver->mFrameGenerationStatus.Active;
+	const bool upscaleReset = !mRenderPipeline->mHistory.isValid(HistoryEffect::Upscaler);
+	temporalCamera.Reset = !temporalValid || (upscaleEnabled ? upscaleReset : frameGenerationStarting);
+	if (upscaleEnabled && DriverInterface::settings.pipelined()) {
+		mContext.render->execute([presentationDriver, temporalCamera] { presentationDriver->setTemporalCamera(temporalCamera); });
+	}
+	else {
+		presentationDriver->setTemporalCamera(temporalCamera);
+	}
 	RenderViewSnapshot viewSnapshot;
 	viewSnapshot.ViewId = cameraComponent.obj->getID().getUniqueId().value();
 	std::copy_n(temporalCamera.View.getData(), 16, viewSnapshot.View.begin());
@@ -934,6 +981,12 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	for (const auto& [name, texture] : mRenderPipeline->mAllocatedTextures) {
 		mRenderPipeline->mTextures.at(name) = texture;
 	}
+	const auto setFrameState = [&](const MATH::Vector4f& frameState) {
+		if (mFrameData.FrameState.x != frameState.x) {
+			mFrameData.FrameState = frameState;
+			mContext.render->updateUniformBuffer(mFrameUbo, mFrameData);
+		}
+	};
 	std::function<void(PipelineStage*)> runStage;
 	runStage = [&](PipelineStage* stage) {
 		if (!stage->mDescriptor.Enabled || (upscaleEnabled && (stage->mName == "TAA" || stage->mName == "fxaa"))) {
@@ -970,6 +1023,12 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		if (mFrameCount % stage->mDescriptor.UpdateInterval != 0 && !cloudShadowUpdate) {
 			return;
 		}
+		// Geometric reprojection stays valid when only lighting history was invalidated.
+		const auto content = stage->mDrawContent;
+		const bool writesMotion = content == DrawContent::DEFERRED || content == DrawContent::GPU_SCENE_OCCLUSION_POST
+			|| content == DrawContent::VIRTUAL_GEOMETRY_POST || content == DrawContent::VIRTUAL_GEOMETRY_RESOLVE
+			|| stage->mName == "PrepareUpscaleVelocity" || stage->mName == "PrepareFrameGenMotion";
+		setFrameState(writesMotion ? cameraFrameState : lightingFrameState);
 		auto stageProfile = mGpuProfiler.measure(stage->mName);
 		auto stageStatistics = RenderStatistics::Get().measureStage(stage->mName);
 		auto stageCpuProfile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("Stage::" + stage->mName) : nullptr;
@@ -1186,7 +1245,6 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			f.PreviousJitter = mPreviousJitter;
 			f.View = cameraComponent.getCamera().getViewMatrix();
 			f.Projection = unjitteredProjection;
-			f.PreviousViewProjection = mPreviousUnjitteredViewProjection;
 			f.Position = uboData.ViewPos;
 			f.Right = { f.View(0, 0), f.View(0, 1), f.View(0, 2) };
 			f.Up = { f.View(1, 0), f.View(1, 1), f.View(1, 2) };
@@ -1196,7 +1254,9 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			f.VerticalFov = cameraComponent.getFov() * 3.14159265358979323846f / 180.f;
 			f.DeltaMilliseconds = mFrameData.FrameState.y * 1000.f;
 			f.RealFrameId = temporalCamera.RealFrameId;
-			f.Reset = temporalCamera.Reset;
+			f.Reset = temporalCamera.Reset || frameGenerationStarting;
+			// SDK tagging and interpolation commands must follow the graph's producers.
+			mContext.render->flush();
 			presentationDriver->dispatchFrameGeneration(f);
 			auto& screenshot = CAPTURE::ScreenshotService::Get();
 			if (screenshot.pending() && screenshot.textureName().empty() && presentationDriver->mFrameGeneration
@@ -1236,10 +1296,23 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			f.Far = cameraComponent.getFar();
 			f.VerticalFov = cameraComponent.getFov() * 3.14159265358979323846f / 180.f;
 			f.DeltaMilliseconds = mFrameData.FrameState.y * 1000.f;
-			f.Reset = !mRenderPipeline->mHistory.isValid(HistoryEffect::Upscaler);
+			f.Reset = temporalCamera.Reset;
 			f.Sharpness = mRenderPipeline->mUpscalerSettings.sharpness;
 			try {
-				mRenderPipeline->mUpscaler->dispatch(f);
+				// Keep native SDK commands in replay order with the graph barriers and input producers.
+				auto failure = std::make_shared<std::exception_ptr>();
+				auto* upscaler = mRenderPipeline->mUpscaler.get();
+				mContext.render->execute([upscaler, f, failure] {
+					try {
+						upscaler->dispatch(f);
+					} catch (...) {
+						*failure = std::current_exception();
+					}
+				});
+				mContext.render->flush();
+				if (*failure) {
+					std::rethrow_exception(*failure);
+				}
 				if (!stage->mExecuted || f.Reset) {
 					std::cout << "UPSCALE_DISPATCH " << mRenderPipeline->mUpscalerStatus.Implementation << " reset=" << f.Reset << '\n';
 				}
@@ -1273,10 +1346,6 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			// TAA and upscalers. Frame generation uses that same motion.
 			stage->mDefaults["data_UBOJitterDelta"] = MATH::Vector2f {};
 		}
-		if (stage->mName == "PrepareFrameGenMotion" || stage->mName == "PrepareUpscaleVelocity") {
-			mFrameData.FrameState = cameraFrameState;
-			mContext.render->updateUniformBuffer(mFrameUbo, mFrameData);
-		}
 		if (stage->mDescriptor.PresentationSink && stage->mDrawContent == DrawContent::QUAD) {
 			stage->mDefaults["data_UBOCompositeUI"]
 				= int(!(presentationDriver->mFrameGeneration && presentationDriver->mFrameGeneration->composesUI()));
@@ -1303,6 +1372,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		else if (stage->mDrawContent == DrawContent::GUI) {
 			renderGui(scene);
 			if (stage->mDescriptor.IncludeEditorUI) {
+				render.flush();
 				presentationDriver->renderPresentationUI(stage->mFrameBuffer);
 			}
 		}
@@ -1403,12 +1473,28 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 				}
 			});
 		}
-		if (!pass.Barriers.empty()) {
-			const bool uav = std::any_of(pass.Barriers.begin(), pass.Barriers.end(), [](const auto& barrier) { return barrier.Uav; });
-			mContext.render->execute([presentationDriver, uav] { presentationDriver->renderGraphBarrier(uav); });
+		const auto& barriers = mRenderPipeline->mGraphBarriers[pass.Id];
+		if (barriers.Conservative || !barriers.IndirectBuffers.empty()) {
+			mContext.render->execute(
+				[presentationDriver, conservative = barriers.Conservative, uav = barriers.Uav, buffers = barriers.IndirectBuffers] {
+					if (conservative) {
+						presentationDriver->renderGraphBarrier(uav);
+					}
+					for (const auto& buffer : buffers) {
+						presentationDriver->renderGraphIndirectBarrier(buffer);
+					}
+				});
+		}
+		for (const auto& image : barriers.Images) {
+			// Resolve the current allocation when recording, so resize and delayed replay use the right texture.
+			mContext.render->execute([presentationDriver, texture = *image.Slot, transition = image.Transition] {
+				presentationDriver->renderGraphImageBarrier(*texture, transition);
+			});
 		}
 		auto* stage = mRenderPipeline->mStageIndex[pass.Id];
-		if (asyncCompute && pass.ExecutionQueue == GRAPH::Queue::ASYNC_COMPUTE) {
+		if (asyncCompute && pass.ExecutionQueue == GRAPH::Queue::ASYNC_COMPUTE
+			&& (stage->mCompute->AsyncImageProgramBindings.empty() || presentationDriver->supportsGraphComputeImages())) {
+			setFrameState(lightingFrameState);
 			runComputeStage(*stage, true);
 			computePending = true;
 		}
@@ -1682,6 +1768,10 @@ void GameRenderer::setPipeline(std::unique_ptr<RenderGraphPipeline>&& renderPipe
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 	mGpuSceneStage = nullptr;
 	mGpuScene.reset();
+	if (mGpuSceneMaterials) {
+		mGpuSceneMaterials->clear(*mContext.render);
+		mGpuSceneMaterials.reset();
+	}
 	if (mRenderPipeline->mDescriptor.Execution.DrivenMode.value_or(SubmissionMode::CPU) != SubmissionMode::CPU) {
 		const auto geometry = std::ranges::find_if(mRenderPipeline->mStages, [](const auto& stage) {
 			return stage->mDrawContent == DrawContent::DEFERRED && stage->mName == "Geometry" && stage->mDescriptor.OverrideMaterial
@@ -1692,6 +1782,26 @@ void GameRenderer::setPipeline(std::unique_ptr<RenderGraphPipeline>&& renderPipe
 		}
 		else {
 			std::cout << "GPU_SCENE_FALLBACK requires the portable Geometry pass\n";
+		}
+	}
+	if (mGpuSceneStage && mRenderPipeline->mDescriptor.Execution.GpuMaterialTable
+		&& DriverInterface::settings.backend == RenderSettings::Backend::DIRECTX12
+		&& mGpuSceneStage->mMaterial->getShader()->mPath == OrdinaryGeometryShader) {
+		const auto capabilities = mContext.render->getDriver()->bindlessCapabilities();
+		if (capabilities.sampledTextures && capabilities.storageBuffers && capabilities.nonUniformIndexing
+			&& capabilities.maxSampledTextures >= 128) {
+			try {
+				mGpuSceneMaterials = std::make_unique<GpuSceneMaterials>(*mContext.render, *mGpuSceneStage->mMaterial);
+			} catch (const std::exception& error) {
+				std::cerr << "GPU_SCENE_MATERIAL_FALLBACK " << error.what() << '\n';
+			}
+			if (mGpuSceneMaterials && mRenderPipeline->mDescriptor.Execution.GpuGeometryPool) {
+				try {
+					mGpuSceneMaterials->loadGeometryPass(*mContext.render, *mGpuSceneStage->mMaterial);
+				} catch (const std::exception& error) {
+					std::cerr << "GPU_SCENE_GEOMETRY_FALLBACK " << error.what() << '\n';
+				}
+			}
 		}
 	}
 #else
@@ -2400,6 +2510,7 @@ RenderGraphPipeline::RenderGraphPipeline(const Descriptor& descriptor, Renderer&
 		}
 		mStageIndex.push_back(stage.get());
 	}
+	mGraphBarriers = resolveGraphBarriers(mDescriptor, mGraphPlan);
 }
 
 void GameRenderer::reloadPipelineSettings(const std::string& asset) {
@@ -2473,6 +2584,7 @@ void RenderGraphPipeline::reloadSettings(Renderer& renderer, const std::string& 
 	ConfigureVgVisibility(candidate, backend == RenderSettings::Backend::VULKAN || backend == RenderSettings::Backend::DIRECTX12);
 	auto graphPlan = compileGraph(candidate);
 	ValidateVgVisibilitySchedule(candidate, graphPlan);
+	auto graphBarriers = resolveGraphBarriers(candidate, graphPlan);
 	if (candidate.Graph.Enabled) {
 		for (size_t i = 0; i < candidate.Stages.size(); ++i) {
 			ValidateGraphMaterial(*mStageIndex[i], candidate.Stages[i]);
@@ -2549,6 +2661,7 @@ void RenderGraphPipeline::reloadSettings(Renderer& renderer, const std::string& 
 	}
 	mDescriptor = std::move(candidate);
 	mGraphPlan = std::move(graphPlan);
+	mGraphBarriers = std::move(graphBarriers);
 	mSourceDescriptor = std::move(source);
 	mSettingsOverrideAsset = overrideAsset;
 	if (changed) {
@@ -2632,6 +2745,10 @@ void RenderGraphPipeline::prepareUpscaler(Renderer& renderer, int width, int hei
 		return;
 	}
 	const auto settings = DriverInterface::settings.upscaler;
+	if (DriverInterface::settings.pipelined() && DriverInterface::settings.backend != RenderSettings::Backend::DIRECTX12
+		&& settings.technology != UpscalerType::OFF) {
+		throw std::invalid_argument("Pipelined upscaling requires DirectX 12");
+	}
 	if (!std::isfinite(settings.sharpness) || settings.sharpness < 0 || settings.sharpness > 1) {
 		throw std::runtime_error("Upscaler sharpness must be in [0,1]");
 	}

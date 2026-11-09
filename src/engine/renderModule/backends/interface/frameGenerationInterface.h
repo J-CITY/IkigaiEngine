@@ -41,14 +41,17 @@ public: using std::runtime_error::runtime_error;
 };
 class FrameGenerationInterface {
 public:
-    virtual ~FrameGenerationInterface() = default;
-    virtual void configure(const FrameGenerationSettings&, MATH::Vector2i render, MATH::Vector2i display)=0;
-    virtual void prepare(const FrameGenerationInputs&)=0;
-    virtual void suspend()=0;
-    // Called after the rendering fence and before input textures can be reused.
-    virtual void waitForPresents()=0;
-    virtual void afterPresent()=0;
-    virtual FrameGenerationStatus status() const=0;
+	virtual ~FrameGenerationInterface() = default;
+	virtual void configure(const FrameGenerationSettings&, MATH::Vector2i render, MATH::Vector2i display) = 0;
+	virtual void prepare(const FrameGenerationInputs&) = 0;
+	virtual void suspend() = 0;
+	// Called after the rendering fence and before input textures can be reused.
+	virtual void waitForPresents() = 0;
+	virtual void waitForFrame(uint64_t) {
+		waitForPresents();
+	}
+	virtual void afterPresent() = 0;
+	virtual FrameGenerationStatus status() const=0;
     virtual bool composesUI() const {return false;}
 };
 inline void ValidateFrameGenerationInputs(const FrameGenerationInputs& f) {

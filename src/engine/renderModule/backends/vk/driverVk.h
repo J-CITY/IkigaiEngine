@@ -1,5 +1,7 @@
 #pragma once
+#include <atomic>
 #include <bitset>
+#include <compare>
 #include <deque>
 #include <memory>
 #include <unordered_set>
@@ -8,9 +10,11 @@
 
 #include "indexBufferVk.h"
 #include "mathModule/math.h"
+#include "renderModule/backends/interface/pipelineStateKey.h"
 #include "renderModule/backends/interface/storageBufferInterface.h"
 #include "renderModule/backends/interface/textureInterface.h"
 #include "shaderVk.h"
+#include "utilsModule/containers/smallVector.h"
 #include "vertexBufferVk.h"
 
 #ifdef VULKAN_BACKEND
@@ -39,6 +43,7 @@ class DriverVk : public DriverInterface {
 
 public:
 	void waitForCompletion(GpuCompletionToken token) override;
+	bool isDeviceLost() const noexcept override;
 	bool hasOpenRecording() const noexcept override {
 		return working;
 	}
@@ -52,6 +57,12 @@ public:
 	vk::raii::PhysicalDevice mPhysicalDevice = nullptr;
 	vk::raii::Queue mQueue = nullptr;
 	vk::raii::Device mDevice = nullptr;
+	vk::raii::PipelineCache mPipelineCache = nullptr;
+	std::string mPipelineCacheDeviceKey;
+	uint32_t mInstanceApiVersion = VK_API_VERSION_1_0;
+	bool mPipelineCacheFeedback = false;
+	void initializePipelineCache() noexcept;
+	void savePipelineCache() noexcept;
 	VmaAllocator mAllocator = nullptr;
 #if IKIGAI_ENABLE_MEMORY_TRACKING
 	std::shared_ptr<PROFILER::GpuMemorySampler> mMemorySampler;
@@ -92,6 +103,7 @@ public:
 	std::shared_ptr<RayTracingProgram> createComputeProgram(const RayTracingProgramResource&) override;
 	void dispatchComputeProgram(const RayTracingDispatch&) override;
 	bool hasGraphComputeQueue() const noexcept override;
+	bool supportsGraphComputeImages() const noexcept override;
 	void dispatchGraphCompute(const RayTracingDispatch&) override;
 	void joinGraphCompute() override;
 	std::shared_ptr<RayTracingProgram> createRayTracingProgramImpl(const RayTracingProgramResource&, bool requireRayQuery);
@@ -105,13 +117,18 @@ public:
 	void splitGraphGraphics(uint64_t signal);
 	void submitGraphics(vk::Semaphore renderComplete, uint64_t graphSignal, vk::Fence fence);
 	void invalidateCommandState();
-	void transferGraphBuffers(VkCommandBuffer command, uint32_t source, uint32_t destination, bool release);
+	void transferGraphResources(VkCommandBuffer command, uint32_t source, uint32_t destination, bool release);
+	struct GraphComputeImage {
+		TextureVk* Texture = nullptr;
+		VkImage Image = VK_NULL_HANDLE;
+	};
 	uint32_t mGraphComputeFamily = UINT32_MAX;
 	vk::raii::Queue mGraphComputeQueue = nullptr;
 	vk::raii::CommandPool mGraphComputePool = nullptr;
 	vk::raii::Semaphore mGraphGraphicsTimeline = nullptr;
 	vk::raii::Semaphore mGraphComputeTimeline = nullptr;
 	std::vector<VkBuffer> mGraphComputeBuffers;
+	std::vector<GraphComputeImage> mGraphComputeImages;
 	uint64_t mGraphComputeValue = 0;
 	uint64_t mGraphComputePending = 0;
 	uint64_t mGraphGraphicsWait = 0;
@@ -143,6 +160,12 @@ public:
 
 	bool working = false;
 	bool mShuttingDown = false;
+	std::atomic<VkResult> mFrameFailure { VK_SUCCESS };
+	bool mDeviceFaultEnabled = false;
+	void requireUsableDevice() const;
+	void reportDeviceFault() const;
+	void checkFrameResult(VkResult result, const char* operation);
+	void waitDeviceIdle();
 
 	bool render_pass_active = false;
 
@@ -178,6 +201,7 @@ public:
 		std::function<void()> sdkDestroy;
 		std::function<void(VkSurfaceKHR)> sdkDestroySurface;
 		bool streamline = false;
+		bool recreatePending = false;
 		vk::SwapchainCreateInfoKHR lastCreateInfo {};
 		std::vector<Frame> frames;
 		uint32_t width = 0;
@@ -185,6 +209,7 @@ public:
 	};
 
 	std::unordered_map<unsigned int, SwapchainContextVk> mSwapchains;
+	void recreateSwapchain(uint32_t width, uint32_t height);
 	unsigned int mCurrentWindowID = 0;
 
 	uint32_t mSemaphoreIndex = 0;
@@ -201,11 +226,35 @@ public:
 		// std::optional<vk::Format> depth_stencil_format;
 		// std::vector<InputLayout> input_layouts;
 
-		std::string getName(const FrameBufferInterface& attachments) const;
+	};
+
+	struct PipelineFormats {
+		UTILS::SmallVector<vk::Format, 8> values;
+		bool operator==(const PipelineFormats& other) const {
+			return std::equal(values.begin(), values.end(), other.values.begin(), other.values.end());
+		}
+		auto operator<=>(const PipelineFormats& other) const {
+			return std::lexicographical_compare_three_way(values.begin(), values.end(), other.values.begin(), other.values.end());
+		}
+	};
+
+	struct PipelineKey {
+		bool compute = false;
+		size_t shaderId = 0;
+		uint64_t shaderGeneration = 0;
+		uint64_t layout = 0;
+		vk::PrimitiveTopology topology = vk::PrimitiveTopology::ePointList;
+		vk::SampleCountFlagBits samples = vk::SampleCountFlagBits::e1;
+		PipelineFormats colorFormats;
+		vk::Format depthFormat = vk::Format::eUndefined;
+		vk::Format stencilFormat = vk::Format::eUndefined;
+		std::optional<VertexPipelineLayoutKey> vertexLayout;
+		auto operator<=>(const PipelineKey&) const = default;
 	};
 
 	State mCurrentState;
-	std::map<std::string, vk::raii::Pipeline> mStates;
+	std::map<PipelineKey, vk::raii::Pipeline> mStates;
+	PipelineKey graphicsPipelineKey();
 #if IKIGAI_ENABLE_MEMORY_TRACKING
 	std::map<std::uint64_t, PROFILER::GpuAllocationToken> mGpuPipelines;
 #endif
@@ -256,7 +305,7 @@ public:
 	std::unordered_set<uint32_t> graphics_pipeline_ignore_bindings;
 	// Name of the pipeline bound in the current command buffer (shader id + framebuffer id).
 	// Used to rebind the pipeline when shader/framebuffer changed between draws.
-	std::string mBoundPipelineName;
+	std::optional<PipelineKey> mBoundPipelineKey;
 	//
 	// uint32_t getBackbufferWidth();
 	// uint32_t getBackbufferHeight();
@@ -373,7 +422,11 @@ public:
 	std::vector<float> readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
 	std::vector<int32_t> readIntTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) override;
+	void dispatchMipCompute(
+		uint32_t x, uint32_t y, uint32_t z, const std::shared_ptr<TextureInterface>& texture, uint32_t mip, uint32_t layer) override;
 	void renderGraphBarrier(bool uav) override;
+	void renderGraphImageBarrier(TextureInterface& texture, const GraphImageBarrier& barrier) override;
+	void renderGraphIndirectBarrier(const std::shared_ptr<StorageBufferInterface>& arguments) override;
 	AliasedRenderTargets createAliasedRenderTargets(std::span<const TextureResource> descriptors) override;
 	void activateAliasedRenderTarget(TextureInterface& texture) override;
 	// Texture infrastructure for GI/HZB (M1-4, M1-8); implemented in textureFeaturesVk.cpp.
@@ -381,7 +434,6 @@ public:
 	// Sets StorageImageMipViews, HalfFloatTextures and SamplerMinMaxReduction.
 	void fillTextureGpuFeatures(GpuFeatures& features) const;
 	struct StorageImageBinding {
-		std::shared_ptr<TextureVk> Texture;
 		uint32_t Mip = 0;
 		uint32_t Layer = 0;
 	};
