@@ -28,10 +28,11 @@ std::string readShaderSource(const std::string& input, std::set<std::string>& st
 		throw std::runtime_error("Shader include cycle: " + path);
 	}
 	auto& fs = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RESOURCES::FileSystem>();
-	if (!fs.isFileExist(path)) {
+	auto file = fs.getFile(path);
+	if (!file || !file->isValid()) {
 		throw std::runtime_error("Missing shader source: " + path);
 	}
-	std::string source = fs.getFile(path)->readStr();
+	std::string source = file->readStr();
 	uint32_t magic = 0;
 	if (source.size() >= sizeof(magic)) {
 		std::memcpy(&magic, source.data(), sizeof(magic));
@@ -129,7 +130,7 @@ std::unordered_set<std::string> ShaderLoader::ResolveSources(RENDER::ShaderResou
 void ShaderLoader::addFileWatchSubscribe(
 	const std::string& path, const std::unordered_set<std::string>& previous, std::weak_ptr<RENDER::ShaderInterface> shader) {
 	const auto current = shader.lock();
-	ResourceManager::addFileWatchSubscribe(path, current ? current->mSourceDependencies : previous, shader);
+	watchResourceFiles(path, current ? current->mSourceDependencies : previous, shader, current ? current->mPath : path);
 }
 
 ResourcePtr<RENDER::ShaderInterface> ShaderLoader::loadMaterialShader(const std::string& path, unsigned additionalLayers) {
@@ -138,7 +139,8 @@ ResourcePtr<RENDER::ShaderInterface> ShaderLoader::loadMaterialShader(const std:
 	if (auto shader = getResource(key)) {
 		return shader;
 	}
-	auto resource = HasConfig(normalizedPath) ? *GetConfig(normalizedPath) : LoadConfig(normalizedPath);
+	const auto candidate = ReadConfigCandidate(normalizedPath);
+	auto resource = *candidate.descriptor;
 	if (!resource.supportsPbrLayers) {
 		if (additionalLayers != 0) {
 			throw std::invalid_argument("Shader does not support PbrLayers: " + normalizedPath);
@@ -148,6 +150,9 @@ ResourcePtr<RENDER::ShaderInterface> ShaderLoader::loadMaterialShader(const std:
 	resource.path = normalizedPath;
 	resource.compiledPbrLayerCount = additionalLayers;
 	auto shader = CreateFromResource(resource, nullptr, createCacheDeleter(key));
+	if (!shader || !PublishConfig(normalizedPath, candidate)) {
+		return nullptr;
+	}
 	addFileWatchSubscribe(key, shader->mSourceDependencies, shader);
 	return registerResource(key, shader);
 }
@@ -158,32 +163,21 @@ COROUTINE::Task<ResourcePtr<RENDER::ShaderInterface>> ShaderLoader::createResour
 	if (auto ready = getResource(path)) {
 		co_return ready;
 	}
-	auto file = ServiceManager::Get<FileSystem>().getFile(path, FileMode::READ);
-	if (!file || !file->isValid()) {
-		throw std::runtime_error("Missing shader: " + path);
+	auto candidate = BeginConfigLoad(path);
+	if (!candidate.descriptor) {
+		auto file = ServiceManager::Get<FileSystem>().getFile(path, FileMode::READ);
+		if (!file || !file->isValid()) {
+			throw std::runtime_error("Missing shader: " + path);
+		}
+		auto bytes = co_await file->readAllTask(control);
+		ParseConfigCandidate(candidate, std::string(bytes.begin(), bytes.end()), path);
 	}
-	auto bytes = co_await file->readAllTask(control);
-	auto parsed = UTILS::FromJsonStr<RENDER::ShaderResource>(std::string(bytes.begin(), bytes.end()));
-	if (parsed.isErr()) {
-		throw std::runtime_error("Invalid shader: " + path);
-	}
-	auto descriptor = parsed.unwrap();
-	descriptor.path = path;
-	AddConfigToCache(path, descriptor);
 	co_await COROUTINE::NextFrame();
 	control->check();
-	co_return loadResource(path, type);
+	co_return loadResourceChecked(path, type, std::move(candidate), control.get());
 }
 RENDER::RayTracingProgramResource ShaderLoader::LoadProgramResource(const std::string& path) {
-	auto& fs = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>();
-	if (!fs.isFileExist(path)) {
-		throw std::runtime_error("Missing shader program: " + path);
-	}
-	auto parsed = UTILS::FromJsonStr<RENDER::ShaderResource>(fs.getFile(path)->readStr());
-	if (parsed.isErr()) {
-		throw std::runtime_error("Invalid shader program " + path + ": " + parsed.unwrapErr().text);
-	}
-	auto resource = parsed.unwrap().getProgramResource();
+	auto resource = LoadConfig(path).getProgramResource();
 	for (auto& shader : resource.Shaders) {
 		if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::DIRECTX12 && shader.BackendPaths.contains("DIRECTX12")) {
 			shader.Path = shader.BackendPaths.at("DIRECTX12");
@@ -208,44 +202,41 @@ std::shared_ptr<RENDER::ShaderInterface> ShaderLoader::createResource(const std:
 }
 
 ResourcePtr<RENDER::ShaderInterface> ShaderLoader::createResource(const std::string& path, ELoadingType type, std::any data) {
-	RENDER::ShaderResource config;
-	if (HasConfig(path)) {
-		config = *GetConfig(path);
+	if (type != ELoadingType::RESOURCE) {
+		return nullptr;
 	}
-	else {
-		config = LoadConfig(path);
-		AddConfigToCache(path, config);
-	}
-
-	ResourcePtr<RENDER::ShaderInterface> res;
-	if (type == ELoadingType::RESOURCE) {
-		res = CreateFromResource(config, nullptr, createCacheDeleter(path));
-	}
-	else if (type == ELoadingType::FILE || type == ELoadingType::MEMORY) {
-		// NOT SUPPORT
-	}
-	if (res) {
+	const auto* prepared = std::any_cast<ConfigCandidate>(&data);
+	const auto candidate = prepared && IsCurrentConfig(path, *prepared) ? *prepared : ReadConfigCandidate(path);
+	auto res = CreateFromResource(*candidate.descriptor, nullptr, createCacheDeleter(path));
+	if (res && PublishConfig(path, candidate)) {
 		addFileWatchSubscribe(path, res->mSourceDependencies, res);
+		return res;
 	}
-
-	return res;
+	return nullptr;
 }
 
-bool ShaderLoader::reloadResource(std::weak_ptr<RENDER::ShaderInterface> weakRes, const std::string&) {
+bool ShaderLoader::reloadResource(std::weak_ptr<RENDER::ShaderInterface> weakRes, const std::string& key) {
 	if (auto shader = weakRes.lock()) {
 		const auto sourcePath = shader->mPath;
-		try {
-			auto config = LoadConfig(sourcePath);
-			config.compiledPbrLayerCount = shader->compiledPbrLayerCount();
-			if (shader->supportsPbrLayers() && !config.supportsPbrLayers) {
-				throw std::runtime_error("Cannot remove layered PBR contract during shader reload: " + sourcePath);
-			}
-			Recompile(*shader, config);
-			AddConfigToCache(sourcePath, config);
-			return true;
-		} catch (const std::exception& error) {
-			std::cerr << "Shader reload " << sourcePath << ": " << error.what() << '\n';
+		const auto candidate = ReadConfigCandidate(sourcePath, true);
+		auto config = *candidate.descriptor;
+		config.compiledPbrLayerCount = shader->compiledPbrLayerCount();
+		if (shader->supportsPbrLayers() && !config.supportsPbrLayers) {
+			throw std::runtime_error("Cannot remove layered PBR contract during shader reload: " + sourcePath);
 		}
+		auto replacement = CreateFromResource(config);
+		shader->prepareReloadedShader(replacement);
+		if (!commitResourceReload(key, shader, sourcePath, candidate, [&]() noexcept {
+				if (!shader->adoptReloadedShader(*replacement)) {
+					return false;
+				}
+				shader->mSourceDependencies.swap(replacement->mSourceDependencies);
+				return true;
+			})) {
+			return false;
+		}
+		addFileWatchSubscribe(key, shader->mSourceDependencies, shader);
+		return true;
 	}
 	return false;
 }
@@ -266,11 +257,7 @@ ResourcePtr<RENDER::ShaderInterface> ShaderLoader::CreateFromResource(
 
 	auto shader = render.createShader(resCopy, allocator, deleter);
 	if (!shader) {
-		if (res.supportsPbrLayers) {
-			throw std::runtime_error("Failed to compile layered PBR shader: " + res.path);
-		}
-		ASSERT("Failed to compile shader from resource");
-		return GetDefaultPinkShader();
+		throw std::runtime_error("Failed to compile shader resource: " + res.path);
 	}
 	shader->mSourceDependencies = std::move(dependencies);
 	return shader;

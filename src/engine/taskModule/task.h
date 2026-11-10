@@ -12,6 +12,7 @@
 #include <thread>
 #include <vector>
 
+#include "jobBatch.h"
 #include "safeQueue.h"
 
 namespace IKIGAI {
@@ -23,10 +24,12 @@ namespace TASK {
 
 	// True while executing on a Thread::worker (pool threads and dedicated new-thread tasks).
 	bool isPoolWorkerThread();
+	bool isTaskExecutorCallback();
 
 	struct PoolState;
 
 	class ThreadPoolExecutor;
+	class TaskSystem;
 
 	// Counts tasks that were scheduled (including ones waiting on upstream) but have not finished executing.
 	class InflightCounter {
@@ -61,9 +64,11 @@ namespace TASK {
 
 	private:
 		friend class ThreadPoolExecutor;
+		friend struct PoolState;
 
 		void start();
 		void requestStop();
+		void cancelPendingTasks();
 		void join();
 		void signalWork();
 		bool hasPendingWork();
@@ -75,7 +80,7 @@ namespace TASK {
 
 		void worker(uint32_t ThreadIndex);
 
-		void executeTask(std::shared_ptr<ITask>&& task);
+		void executeTask(const std::shared_ptr<ITask>& task);
 
 		std::shared_ptr<InflightCounter> mInflightCounter;
 		std::shared_ptr<PoolState> mPoolState;
@@ -104,18 +109,24 @@ namespace TASK {
 		virtual const std::shared_ptr<ITask>& getUpstreamTask() = 0;
 
 		bool isFinished();
+		bool isCancelled();
 		void wait();
 		// Runs continuation once this task is finished (immediately if already finished). Never runs under the task mutex.
 		void continueWith(std::function<void()> continuation);
 
 	protected:
 		// Idempotent. Marks finished, wakes waiters and runs continuations outside the lock.
-		void markFinished();
+		void markFinished(bool cancelled = false);
 
 	private:
+		friend class Thread;
+		friend struct PoolState;
+		virtual void cancel();
+
 		std::mutex mMutex;
 		std::condition_variable mCondition;
 		bool mIsFinished = false;
+		bool mIsCancelled = false;
 		std::vector<std::function<void()>> mContinuations;
 	};
 
@@ -137,7 +148,7 @@ namespace TASK {
 				}
 			};
 			FinishGuard guard { this };
-			mFunctor();
+			(*mFunctor)();
 		}
 
 		const std::string getName() override {
@@ -149,7 +160,12 @@ namespace TASK {
 		}
 
 	private:
-		Functor mFunctor;
+		void cancel() override {
+			mFunctor.reset();
+			markFinished(true);
+		}
+
+		std::optional<Functor> mFunctor;
 		std::string mName;
 		std::shared_ptr<ITask> mUpstreamTask;
 	};
@@ -187,37 +203,50 @@ namespace TASK {
 	};
 
 	class ThreadPoolExecutor {
-		std::atomic_size_t mNumThreads = 0;
 		std::shared_ptr<InflightCounter> mInflightCounter = std::make_shared<InflightCounter>();
 		std::vector<std::unique_ptr<Thread>> mThreads;
-		std::shared_ptr<PoolState> mPoolState;
-		std::atomic<size_t> mScheduleCursor { 0 };
+		std::atomic<std::shared_ptr<PoolState>> mPoolState;
+		std::mutex mLifecycleMutex;
+		std::condition_variable mLifecycleCondition;
+		std::thread::id mStoppingThread = {};
 
 	public:
-		ThreadPoolExecutor() {
-			setup(std::nullopt);
-		};
-		ThreadPoolExecutor(int threadCount) {
-			setup(threadCount);
-		};
+		ThreadPoolExecutor() = default;
+		// Existing stand-alone pools use the constructor that starts a fixed number of workers.
+		explicit ThreadPoolExecutor(int threadCount);
 		~ThreadPoolExecutor();
 		bool setup(std::optional<unsigned> threadCount = std::nullopt);
 		bool initialize();
 		bool update();
 		bool terminate();
+		[[nodiscard]] bool isReady() const;
+		[[nodiscard]] bool isExecutingOnThisThread() const;
 
 		// Blocks until every scheduled task (including ones waiting on upstream) has finished executing.
 		void waitSync();
 
+		[[nodiscard]] JobBatch createJobBatch();
+		// Each prerequisite must be a closed batch from this pool generation.
+		// If any prerequisite fails or is cancelled, this job is cancelled.
+		// Returns false for rejected submissions. No work was admitted in that case.
+		[[nodiscard]] bool submit(
+			JobBatch& batch, JobDescriptor job, std::size_t begin, std::size_t end, std::span<const JobBatch* const> prerequisites = {});
+		void close(JobBatch& batch);
+		// Discards queued work and lets running callbacks return. Call wait before releasing payloads.
+		void cancel(JobBatch& batch);
+		// Seals the batch and helps eligible jobs in it and its prerequisites.
+		// Throws std::logic_error if this thread is executing a callback the batch needs to complete.
+		[[nodiscard]] JobBatchResult wait(JobBatch& batch);
+
 		std::shared_ptr<ITask> addTask(std::unique_ptr<ITask>&& task, int threadID);
 		std::shared_ptr<ITask> addTaskFront(std::unique_ptr<ITask>&& task, int threadID);
-		size_t getThreadCounts();
+		size_t getThreadCounts() const;
 
 	private:
-		// Single schedule path. threadID < 0 assigns a thread by atomic round-robin and the task is stealable.
-		// An explicit threadID is bound to that thread. Returns nullptr when the pool has no threads.
-		std::shared_ptr<ITask> schedule(std::shared_ptr<ITask> task, int threadID, bool front);
-		void enqueue(const std::shared_ptr<ITask>& task, size_t threadIndex, bool front, bool stealable);
+		friend class TaskSystem;
+		void closeAdmission();
+		void cancelWaitingTasks();
+		size_t getUnfinishedWorkCount() const;
 	};
 
 	class NewThreadExecutor {

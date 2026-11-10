@@ -1,6 +1,7 @@
 #pragma once
 #include "renderResourceOwner.h"
 
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -38,7 +39,8 @@ protected:
 	bool mSupportsPbrLayers = false;
 	unsigned mCompiledPbrLayerCount = 0;
 	std::string mPbrLayerVariant;
-	void swapCompiledInterface(ShaderInterface& replacement);
+	void swapCompiledInterface(ShaderInterface& replacement) noexcept;
+	virtual void prepareRetirement(const std::shared_ptr<ShaderInterface>&) { }
 
 public:
 	// Path to resource
@@ -91,6 +93,11 @@ public:
 	virtual void unbind() = 0;
 
 	virtual void recompile(const ShaderResource& res) = 0;
+	// Validate and retain the owner-side replacement before touching live shader state.
+	void prepareReloadedShader(const std::shared_ptr<ShaderInterface>& replacement);
+	virtual bool adoptReloadedShader(ShaderInterface&) noexcept {
+		return false;
+	}
 
 	static void GetReflection(ShaderReflection& reflection, const std::vector<uint32_t>& shaderCode, ShaderType type);
 };

@@ -7,6 +7,11 @@
 namespace IKIGAI::RENDER {
 class RenderExecutorInterface {
 public:
+	struct SealedReplay {
+		std::shared_ptr<RenderCommandBuffer> Commands;
+		CommandDispatch Dispatch = nullptr;
+	};
+
 	virtual ~RenderExecutorInterface() = default;
 	virtual void flush(DriverInterface* driver) = 0;
 	void cancel() noexcept;
@@ -14,6 +19,7 @@ public:
 	[[nodiscard]] size_t reservedBytes() const noexcept;
 	void beginFrame(std::shared_ptr<RenderCommandBuffer> commands);
 	void endFrame();
+	[[nodiscard]] SealedReplay detachSealedFrame(const std::shared_ptr<RenderCommandBuffer>& frame);
 	[[nodiscard]] bool isExecuting() const noexcept;
 
 	template <typename T, typename... Args> void submit(DriverInterface* driver, OpCode op, Args&&... args) {

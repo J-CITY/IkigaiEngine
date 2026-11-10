@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <tuple>
 #include <unordered_map>
 
@@ -27,6 +28,7 @@ public:
 	Terrain(const Terrain&) = delete;
 	Terrain& operator=(const Terrain&) = delete;
 	const Settings& settings() const;
+	const std::string& buildError() const;
 	std::shared_ptr<RENDER::ModelInterface> model(unsigned x, unsigned z, unsigned lod, unsigned& budget);
 	std::shared_ptr<RENDER::ModelInterface> water(unsigned x, unsigned z, unsigned& budget);
 	void clearCache();
@@ -37,10 +39,13 @@ public:
 	bool canUpload();
 
 private:
+	bool recordFailedBuild(const Key& key, BackgroundJob& job);
 	Settings mSettings = {};
 	std::map<std::tuple<unsigned, unsigned, unsigned>, CachedModel> mModels = {};
 	uint64_t mClock = 0;
 	std::map<Key, std::shared_ptr<BackgroundJob>> mPending = {};
+	std::set<Key> mFailedBuilds = {};
+	std::string mBuildError = {};
 	std::chrono::steady_clock::time_point mUploadEnd = {};
 };
 

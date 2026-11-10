@@ -82,12 +82,16 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 			return;
 		}
 		scene.destructionSettings.validate();
-		scene.destructionRuntime = std::make_shared<DESTRUCTION::DestructionRuntime>([](std::function<void()> work) {
-			auto& tasks = RESOURCES::ServiceManager::Get<TASK::TaskSystem>();
-			if (!tasks.isReady()) {
-				throw std::runtime_error("Background executor is not initialized");
+		scene.destructionRuntime = std::make_shared<DESTRUCTION::DestructionRuntime>([](auto work, auto complete) {
+			if (!RESOURCES::ServiceManager::Check<TASK::TaskSystem>()) {
+				complete({ TASK::BackgroundOutcome::Rejected, TASK::BackgroundRejection::Unavailable });
+				return;
 			}
-			tasks.dispatch("Destruction::Prepare", std::move(work));
+			auto& tasks = RESOURCES::ServiceManager::Get<TASK::TaskSystem>();
+			auto ticket = tasks.dispatch("Destruction::Prepare", std::move(work), complete);
+			if (!ticket.accepted()) {
+				complete(ticket.get());
+			}
 		});
 	}
 	auto& runtime = *scene.destructionRuntime;
@@ -302,10 +306,16 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 								if (!job) {
 									continue;
 								}
-								c.mActive = pending;
-								c.mJob = std::move(job);
-								c.mUploadPiece = 0;
-								c.mUploadBatch = 0;
+								if (job->done.load(std::memory_order_acquire) && job->completion.Outcome == TASK::BackgroundOutcome::Rejected) {
+									c.complete(pending, job->result.status, job->errorMessage());
+									++statistics.rejected;
+								}
+								else {
+									c.mActive = pending;
+									c.mJob = std::move(job);
+									c.mUploadPiece = 0;
+									c.mUploadBatch = 0;
+								}
 							} catch (const std::exception& error) {
 								c.complete(pending, DESTRUCTION::SliceStatus::UnsupportedMesh, error.what());
 								++statistics.rejected;
@@ -321,7 +331,7 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 			}
 			auto& prepared = c.mJob->result;
 			if (prepared.status != DESTRUCTION::SliceStatus::Split) {
-				c.complete(*c.mActive, prepared.status, prepared.error);
+				c.complete(*c.mActive, prepared.status, c.mJob->errorMessage());
 				++statistics.rejected;
 				c.mActive.reset();
 				c.mJob.reset();

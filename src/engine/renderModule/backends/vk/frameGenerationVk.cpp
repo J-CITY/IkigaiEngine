@@ -186,7 +186,8 @@ public:
         prep.motionVectorScale={-float(f.RenderSize.x),-float(f.RenderSize.y)};
         prep.frameTimeDelta=f.DeltaMilliseconds;prep.cameraNear=f.Near;prep.cameraFar=f.Far;prep.cameraFovAngleVertical=f.VerticalFov;prep.viewSpaceToMetersFactor=1;
         prep.depth=resource(f.Depth);prep.motionVectors=resource(f.MotionVectors);
-        check(dispatch(&fg,&prep.header),"FSR Vulkan FG prepare");
+		d.invalidateCommandState();
+		check(dispatch(&fg,&prep.header),"FSR Vulkan FG prepare");
         void* commands=nullptr;FfxApiResource output{};
         ffxQueryDescFrameGenerationSwapChainInterpolationCommandListVK cmd{};
         cmd.header.type=FFX_API_QUERY_DESC_TYPE_FGSWAPCHAIN_INTERPOLATIONCOMMANDLIST_VK;cmd.pOutCommandList=&commands;
@@ -207,8 +208,6 @@ public:
         gen.reset=f.Reset;gen.backbufferTransferFunction=FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SRGB;
         gen.minMaxLuminance[0]=0;gen.minMaxLuminance[1]=1;gen.frameID=f.RealFrameId;gen.generationRect=config.generationRect;
         check(dispatch(&fg,&gen.header),"FSR Vulkan FG generate");
-		d.mBoundPipelineKey.reset();
-		d.mDirty.set();
 		state.Active = true;
 		prepared = true;
 		if(state.RealFrames==0||f.Reset)std::cout<<"FRAMEGEN_PREPARE FSR frame="<<f.RealFrameId<<" reset="<<f.Reset<<'\n';
@@ -255,7 +254,5 @@ std::unique_ptr<IKIGAI::RENDER::FrameGenerationInterface> IKIGAI::RENDER::Driver
 void IKIGAI::RENDER::DriverVk::renderPresentationUI(std::shared_ptr<FrameBufferInterface> target){
     if(auto* imgui=IKIGAI::IMGUI::Get())imgui->renderDrawDataTo(std::move(target));
 	mPresentationUIRendered = true;
-	mBoundPipelineKey.reset();
-	mDirty.set();
 }
 #endif

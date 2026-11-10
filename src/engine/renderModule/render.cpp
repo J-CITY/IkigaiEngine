@@ -291,6 +291,9 @@ void Renderer::setPushConstant(ShaderType stage, uint32_t offset, uint32_t dataS
 
 void Renderer::cancel() {
 	mOwner.requireCurrentThread();
+	if (mPreparingCpuReplay) {
+		throw std::logic_error("Cannot cancel a sealed frame during CPU replay preparation");
+	}
 	if (mExecutor) {
 		mExecutor->cancel();
 	}

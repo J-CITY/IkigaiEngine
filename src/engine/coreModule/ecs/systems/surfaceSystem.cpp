@@ -126,10 +126,17 @@ void SurfaceSystem::beginFrame(SCENE_SYSTEM::Scene& scene) {
 		foliage.bind(scene);
 	}
 	for (auto& surface : manager->getComponentsArray<SurfaceComponent>()) {
+		if (!surface.updatePending()) {
+			continue;
+		}
 		bool ready = true;
 		for (auto& foliage : manager->getComponentsArray<FoliageComponent>()) {
 			if (foliage.surface().get() == &surface && !foliage.preparedFor(surface.requestedRevision())) {
 				ready = false;
+				if (!foliage.updateError().empty()) {
+					surface.failUpdate("Foliage: " + foliage.updateError());
+					break;
+				}
 			}
 		}
 		surface.publishUpdate(ready);

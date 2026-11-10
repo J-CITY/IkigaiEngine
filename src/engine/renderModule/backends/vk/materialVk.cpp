@@ -27,6 +27,20 @@ void MaterialVk::create(const MaterialResource& res) {
 	applyMaterialState(res);
 }
 
+bool MaterialVk::adoptReloadedMaterial(MaterialInterface& prepared) noexcept {
+	auto* replacement = dynamic_cast<MaterialVk*>(&prepared);
+	if (!replacement) {
+		return false;
+	}
+	swapMaterialState(*replacement);
+	mShader.swap(replacement->mShader);
+	mUniforms.swap(replacement->mUniforms);
+	mExternalBuffers.swap(replacement->mExternalBuffers);
+	mUniformBuffers.swap(replacement->mUniformBuffers);
+	mStorageBuffers.swap(replacement->mStorageBuffers);
+	return true;
+}
+
 void MaterialVk::setShader(std::shared_ptr<ShaderInterface> shader) {
 	mShader = std::static_pointer_cast<ShaderVk>(shader);
 	generateUniformsData();

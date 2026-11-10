@@ -1,7 +1,6 @@
 #include "uniformBufferVk.h"
 
-
-#include "driverVk.h"
+#ifdef VULKAN_BACKEND
 #include "helpers.h"
 #include <algorithm>
 #include <cstring>
@@ -9,60 +8,76 @@
 #include <limits>
 #include <stdexcept>
 
-#ifdef VULKAN_BACKEND
-
-IKIGAI::RENDER::UniformBufferVk::UniformBufferVk(void* data, size_t size) : UniformBufferInterface(size) {
-    mBytes.resize(size);
-    if (data && size) std::memcpy(mBytes.data(), data, size);
-    if (size) snapshot();
+namespace IKIGAI::RENDER {
+UniformBufferVk::UniformBufferVk(void* data, size_t size)
+	: UniformBufferInterface(size)
+	, mDriver(*UtilityVk::GetDriver())
+	, mBytes(size) {
+	if (data && size) {
+		std::memcpy(mBytes.data(), data, size);
+	}
+	if (size) {
+		snapshot();
+	}
 }
 
-IKIGAI::RENDER::UniformBufferVk::~UniformBufferVk() {
-    for (auto& value : mSnapshots)
-        if (value.buffer) UtilityVk::GetDriver()->destroyDeferred(std::move(value.buffer));
+UniformBufferVk::~UniformBufferVk() {
+#if IKIGAI_ENABLE_MEMORY_TRACKING
+	for (const auto& snapshot : mSnapshots) {
+		if (snapshot.Native.use_count() > 1) {
+			snapshot.Native->Buffer.markPendingRelease();
+		}
+	}
+#endif
 }
 
-void IKIGAI::RENDER::UniformBufferVk::setData(const void* data, size_t sz, size_t offset) {
+const VmaBuffer& UniformBufferVk::getBuffer() const {
+	if (mSnapshots.empty()) {
+		return mEmpty;
+	}
+	const auto& snapshot = mSnapshots[mSnapshot].Native;
+	mDriver.retainUniformSnapshot(snapshot);
+	return snapshot->Buffer;
+}
+
+void UniformBufferVk::setData(const void* data, size_t size, size_t offset) {
 	requireOwnerThread();
-	if (!sz) {
+	if (!size) {
 		return;
 	}
-	if (!data || offset > std::numeric_limits<size_t>::max() - sz) {
+	if (!data || offset > std::numeric_limits<size_t>::max() - size) {
 		throw std::invalid_argument("Invalid uniform buffer update");
 	}
-	mSizeByte = std::max(mSizeByte, offset + sz);
+	mSizeByte = std::max(mSizeByte, offset + size);
 	mBytes.resize(mSizeByte);
-	std::memcpy(mBytes.data() + offset, data, sz);
+	std::memcpy(mBytes.data() + offset, data, size);
 	snapshot();
 }
 
-void IKIGAI::RENDER::UniformBufferVk::snapshot() {
-    // Host writes are flushed by VMA and made visible by queue submission.
-    // Distinct buffers preserve per-draw values without vkCmdUpdateBuffer,
-    // transfer barriers, or ending dynamic rendering for each material bind.
-    for (size_t i = 0; i < mSnapshots.size(); ++i) {
-        if (mSnapshots[i].bytes == mBytes) {
-            mSnapshot = i;
-            mSnapshots[i].usedFrame = sFrame;
-            return;
-        }
-    }
-	auto slot = std::find_if(mSnapshots.begin(), mSnapshots.end(), [](const Snapshot& value) { return sFrame - value.usedFrame >= sInFlight; });
+void UniformBufferVk::snapshot() {
+	// Identical bytes can share a snapshot even while the GPU is reading it.
+	const auto identical = std::find_if(mSnapshots.begin(), mSnapshots.end(), [&](const Snapshot& value) { return value.Bytes == mBytes; });
+	if (identical != mSnapshots.end()) {
+		mSnapshot = static_cast<size_t>(identical - mSnapshots.begin());
+		return;
+	}
+	// A recording or submitted frame retains the native snapshot until retirement.
+	auto slot = std::find_if(mSnapshots.begin(), mSnapshots.end(), [](const Snapshot& value) { return value.Native.use_count() == 1; });
 	if (slot == mSnapshots.end()) {
-		mSnapshots.emplace_back();
+		mSnapshots.push_back({ std::make_shared<UniformSnapshotVk>(), {} });
 		slot = std::prev(mSnapshots.end());
 	}
-	if (!slot->buffer || slot->bytes.size() != mBytes.size()) {
-		if (slot->buffer) {
-			UtilityVk::GetDriver()->destroyDeferred(std::move(slot->buffer));
-		}
-		slot->buffer = UtilityVk::CreateBuffer(mBytes.size(), vk::BufferUsageFlagBits::eUniformBuffer,
-            UtilityVk::MemoryUsage::Staging);
+	auto& buffer = slot->Native->Buffer;
+	if (!buffer || slot->Bytes.size() != mBytes.size()) {
+		auto replacement = UtilityVk::CreateBuffer(mBytes.size(), vk::BufferUsageFlagBits::eUniformBuffer, UtilityVk::MemoryUsage::Staging);
+		replacement.upload(mBytes.data(), mBytes.size());
+		buffer = std::move(replacement);
 	}
-	slot->buffer.upload(mBytes.data(), mBytes.size());
-	slot->bytes = mBytes;
-    slot->usedFrame = sFrame;
-    mSnapshot = static_cast<size_t>(slot - mSnapshots.begin());
+	else {
+		buffer.upload(mBytes.data(), mBytes.size());
+	}
+	slot->Bytes = mBytes;
+	mSnapshot = static_cast<size_t>(slot - mSnapshots.begin());
 }
-
+}
 #endif

@@ -275,7 +275,8 @@ Core::Core(const PlatformStartup& platform)
 	world = std::make_unique<ECS::World>();
 
 #ifndef __EMSCRIPTEN__
-	taskManger->setup();
+	IKIGAI_VERIFY(taskManger->setup(), "Core startup failed to start task executors");
+	IKIGAI_VERIFY(taskManger->initialize(), "Core startup failed to initialize task executors");
 #endif
 
 	RESOURCES::ServiceManager::Set<ECS::World>(world.get());
@@ -384,6 +385,12 @@ Core::~Core() {
 	if (coroutineScheduler) {
 		coroutineScheduler->shutdown();
 	}
+	// Workers may still own loader callbacks and scene preparation data. Join
+	// them before render shutdown or destruction of the services they access.
+	if (taskManger) {
+		taskManger->terminate();
+	}
+	RESOURCES::ServiceManager::Remove<TASK::TaskSystem>();
 	RESOURCES::ServiceManager::Remove<COROUTINE::Scheduler>();
 	CAPTURE::ScreenshotService::Get().wait();
 	if (render) {

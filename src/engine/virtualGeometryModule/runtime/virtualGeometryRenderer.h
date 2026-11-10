@@ -67,6 +67,7 @@ struct VirtualGeometrySettings {
 	VirtualGeometrySelectionPath SelectionPath = VirtualGeometrySelectionPath::AUTO;
 	// Opt-in until traversal has demonstrated a full-frame benefit on the target scene.
 	bool HierarchyTraversal = false;
+	bool BatchedFlatSelection = false;
 	// Experimental Vulkan resident visibility suffix. Unsupported or ambiguous triangles stay on HW.
 	bool SoftwareRaster = false;
 	uint32_t HierarchyQueueCapacity = 65535;
@@ -88,6 +89,7 @@ struct VirtualGeometrySettings {
 			.field(&VirtualGeometrySettings::ThresholdScale, "ThresholdScale", default_ { 1.0f })
 			.field(&VirtualGeometrySettings::SelectionPath, "SelectionPath", default_ { VirtualGeometrySelectionPath::AUTO })
 			.field(&VirtualGeometrySettings::HierarchyTraversal, "HierarchyTraversal", default_ { false })
+			.field(&VirtualGeometrySettings::BatchedFlatSelection, "BatchedFlatSelection", default_ { false })
 			.field(&VirtualGeometrySettings::SoftwareRaster, "SoftwareRaster", default_ { false })
 			.field(&VirtualGeometrySettings::HierarchyQueueCapacity, "HierarchyQueueCapacity", default_ { uint32_t { 65535 } })
 			.field(&VirtualGeometrySettings::HierarchyVisitBudget, "HierarchyVisitBudget", default_ { UINT32_MAX })
@@ -123,6 +125,8 @@ struct VirtualGeometryFrameStatistics {
 	uint32_t LodHistogram[8] = {};
 	double SelectionMilliseconds = 0.0;
 	bool GpuSelection = false;
+	bool BatchedFlatSelection = false;
+	uint32_t SelectionDispatches = 0;
 	bool VisibilityActive = false;
 	// A GPU classification/merge was recorded, not a count of accepted SW triangles.
 	bool SoftwareRasterScheduled = false;

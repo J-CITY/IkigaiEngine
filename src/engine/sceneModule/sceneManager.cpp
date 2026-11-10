@@ -10,6 +10,7 @@
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
 #include "utilsModule/log/loggerDefine.h"
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -164,43 +165,51 @@ void SceneManager::createPrefab(int rootId, const std::string& path) {
 		if (!members.insert(object->getIDInt()).second) {
 			throw std::runtime_error("Scene hierarchy cycle");
 		}
-		if (scene.prefabFor(object->getIDInt())) {
-			throw std::runtime_error("Unpack existing prefab before exporting this subtree");
-		}
 		for (auto child : object->getChildren()) {
 			stack.push_back(child);
 		}
 	}
+	std::vector<DOCUMENT::Instance> nested;
+	std::vector<DOCUMENT::Instance> replacement;
+	replacement.reserve(scene.prefabInstances.size() + 1);
+	for (const auto& instance : scene.prefabInstances) {
+		const auto owned = DOCUMENT::OwnedIds(instance.entry);
+		if (!std::any_of(owned.begin(), owned.end(), [&](int id) { return members.contains(id); })) {
+			replacement.push_back(instance);
+			continue;
+		}
+		if (!std::all_of(owned.begin(), owned.end(), [&](int id) { return members.contains(id); })) {
+			throw std::runtime_error("Select the whole prefab instance before exporting");
+		}
+		nested.push_back(instance);
+	}
+	const auto sceneObjects = scene.serializeObjects();
+	auto compact = DOCUMENT::Compact(sceneObjects, nested);
 	auto objects = nlohmann::json::array();
-	for (auto value : scene.serializeObjects()) {
+	for (auto& value : compact.at("Objects")) {
 		if (members.contains(DOCUMENT::Id(value.at("Id")))) {
 			objects.push_back(std::move(value));
 		}
 	}
 	DOCUMENT::IdMap ids;
 	auto asset = DOCUMENT::MakePrefab(objects, rootId, ids);
-	DOCUMENT::ValidatePrefab(asset);
 	nlohmann::json entry { { "Id", rootId }, { "ParentId", root->getParentId() }, { "Prefab", normalized }, { "IdMap", DOCUMENT::WriteMap(ids) } };
-	std::map<std::string, nlohmann::json> prefabCache;
-	prefabCache[normalized] = asset;
-	std::vector<std::string> prefabStack;
 	const auto readPrefab = [&](const std::string& path) -> nlohmann::json {
-		if (path != normalized) {
-			throw std::runtime_error("Unexpected prefab path: " + path);
+		if (path == normalized) {
+			return asset;
 		}
-		return asset;
+		auto file = fs.getFile(path);
+		if (!file || !file->isValid()) {
+			throw std::runtime_error("Prefab not found: " + path);
+		}
+		return nlohmann::json::parse(file->readStr());
 	};
 	DOCUMENT::Resolver resolver(nlohmann::json::array({ entry }));
-	auto expanded = resolver.Expand(entry, asset, readPrefab, prefabCache, prefabStack);
-	DOCUMENT::Instance instance = std::move(expanded.instances.front());
-	nlohmann::json overrides = nlohmann::json::object();
-	overrides["1"] = DOCUMENT::RootValues(objects.front());
-	instance.entry["Overrides"] = overrides;
-	instance.entry.erase("RootOverrides");
-	// Allocate metadata before writing; failure never leaves the scene linked.
-	scene.prefabInstances.reserve(scene.prefabInstances.size() + 1);
-	fs.writeTextAtomic(normalized, asset.dump(2));
-	scene.prefabInstances.push_back(std::move(instance));
+	auto expanded = resolver.Expand(std::move(entry), readPrefab);
+	DOCUMENT::Compact(sceneObjects, expanded.instances);
+	replacement.push_back(std::move(expanded.instances.front()));
+	fs.writeTextAtomic(normalized, asset.dump(2)).get();
+	scene.prefabInstances.swap(replacement);
 }
 
 void SceneManager::unloadCurrentScene() {

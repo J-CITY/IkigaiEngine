@@ -44,11 +44,13 @@ StreamlineCallbacks DriverDx12::streamlineCallbacks() {
 				r.arrayLayers = 1;
 				return r;
 			},
-		[this]() { return static_cast<void*>(mCommandList.Get()); },
+		[this]() {
+			invalidateCommandState();
+			return static_cast<void*>(mCommandList.Get());
+		},
 		[this]() {
 			auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(nullptr);
 			mCommandList->ResourceBarrier(1, &barrier);
-			invalidateUpscalerState();
 		},
 		[this](bool enable) { streamlinePresenter(enable); },
 		[this](void* nativeFence, uint64_t value) {

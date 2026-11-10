@@ -45,6 +45,7 @@ namespace IKIGAI::RENDER {
 		}
 
 		void create(const MaterialResource& res) override;
+		bool adoptReloadedMaterial(MaterialInterface& replacement) noexcept override;
 
 		void setExternalBuffer(const std::string& name, std::shared_ptr<UniformBufferInterface> buffer);
 		void setExternalBuffer(const std::string& name, std::shared_ptr<StorageBufferInterface> buffer);

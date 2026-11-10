@@ -233,6 +233,10 @@ void RenderCommandBuffer::seal() {
 	mImpl->sealed = true;
 }
 
+bool RenderCommandBuffer::isSealed() const noexcept {
+	return mImpl->sealed;
+}
+
 bool RenderCommandBuffer::isExecuting() const noexcept {
 	return mImpl->busy;
 }

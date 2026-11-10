@@ -158,6 +158,8 @@ void TextureDx12::create(const TextureResource& descriptor, const std::vector<vo
 	if (descriptor.pixelType == PixelFormat::RG32_INT) {
 		ValidateRg32IntAttachment(descriptor, !data.empty());
 	}
+	mPath = !descriptor.path.empty() ? descriptor.path : (!descriptor.pathTexture.empty() ? descriptor.pathTexture.front() : std::string());
+	mUseMipMap = descriptor.useMipmap;
 	mType = descriptor.texType;
 	mFormat = descriptor.pixelType;
 	mWidth = descriptor.width;
@@ -454,6 +456,25 @@ void* TextureDx12::getImguiId() {
     // objects alive until ImGui records its draw and the GPU completes it.
     if(auto texture=weak_from_this().lock())d3dUtil::GetDriver()->mImGuiTextures.push_back(std::move(texture));
 	return (void*)mGpuDescriptorHandle.ptr;
+}
+
+bool TextureDx12::adoptReloadedTexture(TextureInterface& texture) noexcept {
+	auto* replacement = dynamic_cast<TextureDx12*>(&texture);
+	if (!replacement || !replacement->mResource.Get()) {
+		return false;
+	}
+	swapTextureDescription(*replacement);
+	using std::swap;
+	swap(mResource, replacement->mResource);
+	swap(mDescriptorIndex, replacement->mDescriptorIndex);
+	swap(mDescriptorCount, replacement->mDescriptorCount);
+	swap(mGpuDescriptorHandle, replacement->mGpuDescriptorHandle);
+	swap(mUavHandle, replacement->mUavHandle);
+	swap(mArraySize, replacement->mArraySize);
+	swap(mPlaneCount, replacement->mPlaneCount);
+	swap(mUniformState, replacement->mUniformState);
+	swap(mSubresourceStates, replacement->mSubresourceStates);
+	return true;
 }
 
 void TextureDx12::recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) {

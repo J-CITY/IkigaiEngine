@@ -27,6 +27,20 @@ void IKIGAI::RENDER::MaterialGl::create(const MaterialResource& res) {
 	applyMaterialState(res);
 }
 
+bool IKIGAI::RENDER::MaterialGl::adoptReloadedMaterial(MaterialInterface& prepared) noexcept {
+	auto* replacement = dynamic_cast<MaterialGl*>(&prepared);
+	if (!replacement) {
+		return false;
+	}
+	swapMaterialState(*replacement);
+	mShader.swap(replacement->mShader);
+	mUniforms.swap(replacement->mUniforms);
+	mExternalBuffers.swap(replacement->mExternalBuffers);
+	mUniformBuffers.swap(replacement->mUniformBuffers);
+	mStorageBuffers.swap(replacement->mStorageBuffers);
+	return true;
+}
+
 IKIGAI::RENDER::MaterialGl::~MaterialGl() = default;
 
 void IKIGAI::RENDER::MaterialGl::setShader(std::shared_ptr<ShaderInterface> shader) {

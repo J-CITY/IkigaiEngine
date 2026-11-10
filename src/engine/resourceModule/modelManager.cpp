@@ -6,6 +6,7 @@
 
 #include "fileWatcher.h"
 #include "renderModule/render.h"
+#include "taskModule/taskSystem.h"
 #include "utilsModule/pathGetter.h"
 
 #include "coreModule/ecs/components/transform.h"
@@ -25,17 +26,18 @@ COROUTINE::Task<ResourcePtr<RENDER::ModelInterface>> ModelLoader::createResource
 	auto source = path;
 	auto flags = getDefaultFlag();
 	auto& fs = ServiceManager::Get<FileSystem>();
+	ConfigCandidate candidate;
 	if (path.ends_with(".model") && type == ELoadingType::RESOURCE) {
-		auto file = fs.getFile(path, FileMode::READ);
-		if (!file || !file->isValid()) {
-			throw std::runtime_error("Missing model descriptor: " + path);
+		candidate = BeginConfigLoad(path);
+		if (!candidate.descriptor) {
+			auto file = fs.getFile(path, FileMode::READ);
+			if (!file || !file->isValid()) {
+				throw std::runtime_error("Missing model descriptor: " + path);
+			}
+			auto bytes = co_await file->readAllTask(control);
+			ParseConfigCandidate(candidate, std::string(bytes.begin(), bytes.end()), path);
 		}
-		auto bytes = co_await file->readAllTask(control);
-		auto parsed = UTILS::FromJsonStr<RENDER::ModelResource>(std::string(bytes.begin(), bytes.end()));
-		if (parsed.isErr()) {
-			throw std::runtime_error("Invalid model descriptor: " + path + ": " + parsed.unwrapErr().text);
-		}
-		const auto config = parsed.unwrap();
+		const auto& config = *candidate.descriptor;
 		source = config.pathModel;
 		flags = ModelParserFlags::NONE;
 		for (auto flag : config.flags) {
@@ -48,32 +50,69 @@ COROUTINE::Task<ResourcePtr<RENDER::ModelInterface>> ModelLoader::createResource
 	}
 	auto bytes = co_await file->readAllTask(control);
 	control->check();
+	auto imported = std::make_shared<ImportedModel>();
+	auto prepare = [imported, source, flags, bytes = std::move(bytes)] {
+		if (!AssimpParser::ImportModel(source, bytes, flags, *imported)) {
+			throw std::runtime_error("Cannot import model: " + source);
+		}
+	};
+#ifdef __EMSCRIPTEN__
+	// Core uses owner-side resource loading on WebAssembly.
 	co_await COROUTINE::NextFrame();
 	control->check();
-	auto model = ServiceManager::Get<RENDER::Renderer>().createModel(path, nullptr, createCacheDeleter(path));
-	AssimpParser parser;
-	if (!model || !parser.LoadModel(source, bytes, model, flags)) {
-		throw std::runtime_error("Cannot import model: " + source);
+	prepare();
+#else
+	auto& tasks = ServiceManager::Get<TASK::TaskSystem>();
+	// Assimp completes the import before returning. The worker owns all inputs and the CPU result.
+	const auto ticket = tasks.dispatch("Import model", std::move(prepare));
+	while (!ticket.ready()) {
+		control->check();
+		co_await COROUTINE::NextFrame();
 	}
+	control->check();
+	const auto result = ticket.get();
+	if (result.Exception) {
+		std::rethrow_exception(result.Exception);
+	}
+	if (result.Outcome == TASK::BackgroundOutcome::Cancelled) {
+		throw ResourceLoadCancelled();
+	}
+	if (!ticket.accepted()) {
+		throw std::runtime_error("Cannot schedule model import for " + source + ": " + TASK::backgroundRejectionMessage(result.Rejection));
+	}
+#endif
+	if (auto ready = getResource(path)) {
+		co_return ready;
+	}
+	control->check();
+	auto model = ServiceManager::Get<RENDER::Renderer>().createModel(path, nullptr, createCacheDeleter(path));
+	if (!model) {
+		throw std::runtime_error("Cannot create model: " + path);
+	}
+	AssimpParser::CreateModelResources(std::move(*imported), *model);
 	model->computeBoundingSphere();
 	model->setPath(path);
-	addFileWatchSubscribe(path, { path, source }, model);
-	co_return registerResource(path, model);
+	if (candidate.descriptor && !PublishConfig(path, candidate)) {
+		throw ResourceLoadCancelled();
+	}
+	auto published = registerResource(path, std::move(model), control.get());
+	addFileWatchSubscribe(path, { path, source }, published);
+	co_return published;
+}
+
+namespace {
+	ResourcePtr<RENDER::ModelInterface> prepareModelReload(const RENDER::ModelResource& config) {
+		auto usedFlags = config.path == config.pathModel ? ModelLoader::getDefaultFlag() : ModelParserFlags::NONE;
+		for (auto flag : config.flags) {
+			usedFlags |= flag;
+		}
+		return ModelLoader::Create(config.pathModel, usedFlags);
+	}
 }
 
 void ModelLoader::Reload(RENDER::ModelInterface& model, const RENDER::ModelResource& config) {
-	auto usedFlags = config.path == config.pathModel ? getDefaultFlag() : ModelParserFlags::NONE;
-	for (auto e : config.flags) {
-		usedFlags |= e;
-	}
-	std::shared_ptr<RENDER::ModelInterface> newModel = Create(config.pathModel, usedFlags);
-
-	if (newModel) {
-		model.setMeshes(newModel->getMeshes());
-		model.setMorphAnimations(newModel->morphAnimations());
-		model.setMaterialNames(newModel->getMaterialsNames());
-		model.computeBoundingSphere();
-		newModel->clearMeshes();
+	if (auto replacement = prepareModelReload(config)) {
+		model.swapImportedState(*replacement);
 	}
 }
 
@@ -116,12 +155,11 @@ ResourcePtr<RENDER::ModelInterface> ModelLoader::Create(
 
 	auto& fs = ServiceManager::Get<FileSystem>();
 	auto file = fs.getFile(filepath);
-	auto data = file->read();
+	auto data = file && file->isValid() ? file->read() : std::vector<uint8_t> {};
 	if (data.empty()) {
-		IKIGAI_COUT("Model file is missing or empty: '" << filepath << "'; opened: " << file->isValid()
+		IKIGAI_COUT("Model file is missing or empty: '" << filepath << "'; opened: " << (file && file->isValid())
 														<< "; native path: " << fs.getAbsolutePath(filepath).value_or("<not found>")
 														<< "; content root: " << Config::ROOT);
-		ASSERT("Can`t create model");
 		return nullptr;
 	}
 
@@ -130,7 +168,6 @@ ResourcePtr<RENDER::ModelInterface> ModelLoader::Create(
 		result->computeBoundingSphere();
 		return result;
 	}
-	ASSERT("Can`t create model");
 	return nullptr;
 }
 
@@ -195,16 +232,13 @@ ResourcePtr<RENDER::ModelInterface> ModelLoader::createResource(const std::strin
 		res = CreateFromFile(path, ModelParserFlags::NONE, nullptr, createCacheDeleter(path));
 	}
 	else if (type == ELoadingType::RESOURCE) {
-		RENDER::ModelResource config;
-		if (HasConfig(path)) {
-			config = *GetConfig(path);
-		}
-		else {
-			config = LoadConfig(path);
-			AddConfigToCache(path, config);
-		}
+		const auto candidate = ReadConfigCandidate(path);
+		const auto& config = *candidate.descriptor;
 		paths.insert(config.pathModel);
 		res = CreateFromResource(config, nullptr, createCacheDeleter(path));
+		if (res && !PublishConfig(path, candidate)) {
+			return nullptr;
+		}
 	}
 	else {
 		// TODO: MEMORY/DESCRIPTOR if needed
@@ -220,9 +254,10 @@ bool ModelLoader::reloadResource(std::weak_ptr<RENDER::ModelInterface> weakRes, 
 	if (auto res = weakRes.lock()) {
 		std::unordered_set<std::string> paths = { path };
 		RENDER::ModelResource config;
+		ConfigCandidate candidate;
 		if (path.ends_with(".model")) {
-			config = LoadConfig(path);
-			AddConfigToCache(path, config);
+			candidate = ReadConfigCandidate(path, true);
+			config = *candidate.descriptor;
 			paths.insert(config.pathModel);
 		}
 		else {
@@ -230,7 +265,19 @@ bool ModelLoader::reloadResource(std::weak_ptr<RENDER::ModelInterface> weakRes, 
 			config.pathModel = path;
 		}
 
-		Reload(*res, config);
+		auto replacement = prepareModelReload(config);
+		if (!replacement) {
+			return false;
+		}
+		const auto swap = [&]() noexcept { res->swapImportedState(*replacement); };
+		if (candidate.descriptor) {
+			if (!CommitReload(path, candidate, swap)) {
+				return false;
+			}
+		}
+		else {
+			swap();
+		}
 		addFileWatchSubscribe(path, paths, weakRes);
 		return true;
 	}

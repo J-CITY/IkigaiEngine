@@ -1367,19 +1367,24 @@ namespace IKIGAI::RENDER {
 
 	std::shared_ptr<ModelInterface> DriverMetal::createModel(const std::string& path, UTILS::IAllocator* allocator, ModelDeleter deleter) {
 		ModelDeleter finalDeleter = [deleter](ModelInterface* model) {
-			RESOURCES::ServiceManager::Get<RESOURCES::ModelLoader>().unloadResource(model->getPath());
 			if (deleter) {
 				deleter(model);
+			}
+			else {
+				RESOURCES::ServiceManager::Get<RESOURCES::ModelLoader>().unloadResource(model->getPath());
 			}
 		};
 		return AllocateModel<ModelMetal>(allocator, std::move(finalDeleter), path);
 	}
 
-	std::shared_ptr<MaterialInterface> DriverMetal::createMaterial(const MaterialResource& res, UTILS::IAllocator* allocator, MaterialDeleter deleter) {
+	std::shared_ptr<MaterialInterface> DriverMetal::createMaterial(
+		const MaterialResource& res, UTILS::IAllocator* allocator, MaterialDeleter deleter) {
 		MaterialDeleter finalDeleter = [deleter](MaterialInterface* material) {
-			RESOURCES::ServiceManager::Get<RESOURCES::MaterialLoader>().unloadResource(material->getPath());
 			if (deleter) {
 				deleter(material);
+			}
+			else {
+				RESOURCES::ServiceManager::Get<RESOURCES::MaterialLoader>().unloadResource(material->getPath());
 			}
 		};
 		return AllocateMaterial<MaterialMetal>(allocator, std::move(finalDeleter), res);

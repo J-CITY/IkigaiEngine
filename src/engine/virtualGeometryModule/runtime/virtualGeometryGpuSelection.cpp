@@ -10,6 +10,7 @@
 #include "virtualMeshAsset.h"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <iostream>
 #include <numeric>
@@ -24,6 +25,9 @@ namespace {
 	constexpr const char* HierarchyTraverseShaderPath = "/shaders/virtualGeometry/vgHierarchyTraverse.shader";
 	constexpr const char* HierarchyFinalizeShaderPath = "/shaders/virtualGeometry/vgHierarchyFinalize.shader";
 	constexpr const char* HierarchyClusterCullShaderPath = "/shaders/virtualGeometry/vgHierarchyClusterCull.shader";
+	constexpr const char* FlatScheduleShaderPath = "/shaders/virtualGeometry/vgFlatSchedule.shader";
+	constexpr const char* FlatCullShaderPath = "/shaders/virtualGeometry/vgClusterCullBatched.shader";
+	constexpr const char* FlatCullPostShaderPath = "/shaders/virtualGeometry/vgClusterCullPostBatched.shader";
 	constexpr const char* ViewUniformName = "VgCullView";
 	constexpr const char* HzbName = "VgHzb";
 	constexpr const char* CullInstancesName = "engine_VgCullInstances";
@@ -48,6 +52,9 @@ namespace {
 	constexpr const char* HierarchyCandidatesName = "engine_VgHierarchyCandidates";
 	constexpr const char* HierarchyStateName = "engine_VgHierarchyState";
 	constexpr const char* HierarchyDispatchName = "engine_VgHierarchyDispatch";
+	constexpr const char* FlatAssetsName = "engine_VgFlatAssets";
+	constexpr const char* FlatPrefixName = "engine_VgFlatPrefix";
+	constexpr const char* FlatDispatchName = "engine_VgFlatDispatch";
 	constexpr uint32_t GroupSize = 64;
 	// Words per asset in the dispatch buffers: DispatchIndirectCommand padded to 16 bytes.
 	constexpr uint32_t AssetDispatchWords = 4;
@@ -64,6 +71,18 @@ namespace {
 	constexpr uint32_t MinimumCapacity = 256;
 	// Upload granularity: keeps DX12 upload-ring allocations inside its 4 MiB pages.
 	constexpr size_t UploadChunkBytes = 2u * 1024u * 1024u;
+	constexpr size_t FlatClusterBudget = 64u * 1024u * 1024u;
+	constexpr uint32_t FlatMaxDispatchWidth = 32768;
+
+	struct FlatAssetGpu {
+		uint32_t ClusterBase = 0;
+		uint32_t ClusterCount = 0;
+		uint32_t VisibleBase = 0;
+		uint32_t OccludedBase = 0;
+		uint32_t OccludedCapacity = 0;
+		std::array<uint32_t, 3> Padding = {};
+	};
+	static_assert(sizeof(FlatAssetGpu) == 32);
 
 	uint32_t GrowCapacity(uint32_t current, size_t required) {
 		uint64_t capacity = std::max<uint64_t>(current, MinimumCapacity);
@@ -76,10 +95,11 @@ namespace {
 		return static_cast<uint32_t>(capacity);
 	}
 
-	void UploadChunked(RENDER::Renderer& renderer, const std::shared_ptr<RENDER::StorageBufferInterface>& buffer, const void* data, size_t bytes) {
+	void UploadChunked(RENDER::Renderer& renderer, const std::shared_ptr<RENDER::StorageBufferInterface>& buffer, const void* data, size_t bytes,
+		size_t firstByte = 0) {
 		const auto* source = static_cast<const uint8_t*>(data);
 		for (size_t offset = 0; offset < bytes; offset += UploadChunkBytes) {
-			renderer.updateStorageBufferRange(buffer, source + offset, std::min(UploadChunkBytes, bytes - offset), offset);
+			renderer.updateStorageBufferRange(buffer, source + offset, std::min(UploadChunkBytes, bytes - offset), firstByte + offset);
 		}
 	}
 
@@ -149,6 +169,84 @@ bool VirtualGeometryGpuSelection::loadHierarchyShaders() {
 		}
 	}
 	return mHierarchyTraverseShader && mHierarchyFinalizeShader && mHierarchyClusterCullShader;
+}
+
+bool VirtualGeometryGpuSelection::prepareFlatBatch(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame) {
+	using RENDER::BufferUsage;
+	if (!frame.BatchedFlatSelection || frame.Hierarchy.Enabled || frame.Assets.size() < 3) {
+		return false;
+	}
+	const auto features = renderer.gpuFeatures();
+	const auto width = std::min(FlatMaxDispatchWidth, features.MaxComputeWorkGroupCountX);
+	const auto workgroupLimit = std::min<uint64_t>(uint64_t(width) * features.MaxComputeWorkGroupCountY, UINT32_MAX - width);
+	std::vector<FlatAssetGpu> table;
+	table.reserve(frame.Assets.size());
+	size_t clusterCount = 0;
+	uint64_t instanceGroups = 0;
+	uint64_t postGroups = 0;
+	for (const auto& entry : frame.Assets) {
+		const auto count = entry.Asset->clusters().size();
+		if (entry.Asset->streamsPages() || count > FlatClusterBudget / sizeof(VMeshCluster) - clusterCount) {
+			return false;
+		}
+		table.push_back(
+			{ static_cast<uint32_t>(clusterCount), static_cast<uint32_t>(count), entry.FirstInstance, entry.OccludedBase, entry.OccludedCapacity });
+		clusterCount += count;
+		instanceGroups += uint64_t(CeilDiv(static_cast<uint32_t>(count), GroupSize)) * entry.InstanceCount;
+		postGroups += (uint64_t(entry.OccludedCapacity) + GroupSize - 1) / GroupSize;
+		if (instanceGroups > workgroupLimit || postGroups > workgroupLimit) {
+			return false;
+		}
+	}
+	if (width == 0 || clusterCount == 0) {
+		return false;
+	}
+	try {
+		if (!mFlatShaderLoadAttempted) {
+			mFlatShaderLoadAttempted = true;
+			mFlatScheduleShader = RESOURCES::ShaderLoader::Create(FlatScheduleShaderPath);
+			mFlatCullShader = RESOURCES::ShaderLoader::Create(FlatCullShaderPath);
+			mFlatCullPostShader = RESOURCES::ShaderLoader::Create(FlatCullPostShaderPath);
+		}
+		if (!mFlatScheduleShader || !mFlatCullShader || !mFlatCullPostShader) {
+			return false;
+		}
+		if (!mFlatClusters || !std::ranges::equal(mFlatPackedAssets, frame.Assets, [](const auto& cached, const auto& next) {
+				return cached.lock() == next.Asset;
+			})) {
+			auto packed = renderer.createStorageBuffer(nullptr, clusterCount, sizeof(VMeshCluster), BufferUsage::STORAGE);
+			std::vector<std::weak_ptr<VirtualMeshAsset>> packedAssets;
+			packedAssets.reserve(frame.Assets.size());
+			for (size_t index = 0; index < frame.Assets.size(); ++index) {
+				const auto& asset = frame.Assets[index].Asset;
+				const auto& clusters = asset->clusters();
+				UploadChunked(renderer, packed, clusters.data(), clusters.size() * sizeof(VMeshCluster),
+					size_t(table[index].ClusterBase) * sizeof(VMeshCluster));
+				packedAssets.push_back(asset);
+			}
+			mFlatClusters = std::move(packed);
+			mFlatPackedAssets = std::move(packedAssets);
+			mFlatClusterBytes = clusterCount * sizeof(VMeshCluster);
+		}
+		if (!mFlatPrefix || frame.Assets.size() > mFlatAssetCapacity) {
+			const auto capacity = GrowCapacity(mFlatAssetCapacity, frame.Assets.size());
+			auto assets = renderer.createStorageBuffer(nullptr, capacity, sizeof(FlatAssetGpu), BufferUsage::STORAGE);
+			auto prefix = renderer.createStorageBuffer(nullptr, capacity, 2 * sizeof(uint32_t), BufferUsage::STORAGE);
+			mFlatAssetTable = std::move(assets);
+			mFlatPrefix = std::move(prefix);
+			mFlatAssetCapacity = capacity;
+		}
+		if (!mFlatDispatch) {
+			mFlatDispatch
+				= renderer.createStorageBuffer(nullptr, 2 * AssetDispatchWords, sizeof(uint32_t), BufferUsage::STORAGE | BufferUsage::INDIRECT);
+		}
+		UploadChunked(renderer, mFlatAssetTable, table.data(), table.size() * sizeof(FlatAssetGpu));
+		mFlatDispatchWidth = width;
+		return true;
+	} catch (const std::exception& error) {
+		std::cerr << "VG_GPU_FLAT_BATCH_UNAVAILABLE using per-asset selection: " << error.what() << std::endl;
+		return false;
+	}
 }
 
 std::string VirtualGeometryGpuSelection::unavailableReason(RENDER::Renderer& renderer) {
@@ -293,8 +391,64 @@ void VirtualGeometryGpuSelection::bindClusterCullBuffers(RENDER::Renderer& rende
 	renderer.setStorageBuffer(PostClusterArgsName, mPostClusterArgsBuffer);
 }
 
+void VirtualGeometryGpuSelection::bindPostClusterCullBuffers(RENDER::Renderer& renderer, const std::shared_ptr<RENDER::TextureInterface>& hzb) {
+	renderer.setStorageBuffer(CullInstancesName, mCullInstanceBuffer);
+	renderer.setStorageBuffer(OccludedClustersName, mOccludedClusterBuffer);
+	renderer.setStorageBuffer(OccludedClusterCountsName, mOccludedClusterCountBuffer);
+	renderer.setStorageBuffer(SlotBatchesName, mSlotBatchBuffer);
+	renderer.setStorageBuffer(SegmentsName, mSegmentBuffer);
+	renderer.setStorageBuffer(SegmentCountsName, mSegmentCountBuffer);
+	renderer.setStorageBuffer(DrawCommandsName, mIndirectBuffer);
+	renderer.setStorageBuffer(DrawRecordsName, mDrawRecordBuffer);
+	renderer.setStorageBuffer(StatisticsName, mStatisticsBuffer);
+	renderer.setTexture(HzbName, hzb);
+}
+
+void VirtualGeometryGpuSelection::recordFlatBatch(RENDER::Renderer& renderer, VirtualGeometryCullViewGpu view,
+	const std::shared_ptr<RENDER::TextureInterface>& hzb, bool post, PROFILER::GpuStageProfiler* profiler) {
+	view.HierarchyNodeCount = mFlatDispatchWidth;
+	renderer.setShader(mFlatScheduleShader);
+	setViewUniforms(renderer, view);
+	const auto& viewUniform = mViewUniformPool[mViewUniformsUsed - 1];
+	renderer.setStorageBuffer(AssetDispatchName, post ? mPostInstanceDispatchBuffer : mAssetDispatchBuffer);
+	renderer.setStorageBuffer(OccludedClusterCountsName, mOccludedClusterCountBuffer);
+	renderer.setStorageBuffer(FlatAssetsName, mFlatAssetTable);
+	renderer.setStorageBuffer(FlatPrefixName, mFlatPrefix);
+	renderer.setStorageBuffer(FlatDispatchName, mFlatDispatch);
+	{
+		auto scope = Measure(profiler, post ? "VgFlatSchedulePost" : "VgFlatSchedule");
+		renderer.dispatch(1, 1, 1);
+	}
+
+	renderer.setShader(mFlatCullShader);
+	renderer.setUniformBuffer(ViewUniformName, viewUniform);
+	bindClusterCullBuffers(renderer);
+	renderer.setStorageBuffer(VisibleInstancesName, post ? mPostVisibleInstanceBuffer : mVisibleInstanceBuffer);
+	renderer.setStorageBuffer(ClustersName, mFlatClusters);
+	renderer.setStorageBuffer(FlatAssetsName, mFlatAssetTable);
+	renderer.setStorageBuffer(FlatPrefixName, mFlatPrefix);
+	renderer.setTexture(HzbName, hzb);
+	renderer.dispatchIndirect(mFlatDispatch, 0);
+	mDispatchCount += 2;
+
+	if (post) {
+		renderer.setShader(mFlatCullPostShader);
+		renderer.setUniformBuffer(ViewUniformName, viewUniform);
+		bindPostClusterCullBuffers(renderer, hzb);
+		renderer.setStorageBuffer(ClustersName, mFlatClusters);
+		renderer.setStorageBuffer(FlatAssetsName, mFlatAssetTable);
+		renderer.setStorageBuffer(FlatPrefixName, mFlatPrefix);
+		renderer.dispatchIndirect(mFlatDispatch, AssetDispatchWords * sizeof(uint32_t));
+		++mDispatchCount;
+	}
+}
+
 void VirtualGeometryGpuSelection::recordClusterSelection(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame,
 	VirtualGeometryCullViewGpu view, const std::shared_ptr<RENDER::TextureInterface>& hzb, bool post, PROFILER::GpuStageProfiler* profiler) {
+	if (mFlatActive) {
+		recordFlatBatch(renderer, view, hzb, post, profiler);
+		return;
+	}
 	const auto& visibleInstances = post ? mPostVisibleInstanceBuffer : mVisibleInstanceBuffer;
 	const auto& instanceDispatch = post ? mPostInstanceDispatchBuffer : mAssetDispatchBuffer;
 	view.HierarchyQueueCapacity = std::min(frame.Hierarchy.QueueCapacity, HierarchyMaxQueueCapacity);
@@ -324,10 +478,12 @@ void VirtualGeometryGpuSelection::recordClusterSelection(RENDER::Renderer& rende
 			setViewUniforms(renderer, view);
 			renderer.setStorageBuffer(ClustersName, buffers.Clusters);
 			renderer.dispatchIndirect(instanceDispatch, dispatchOffset);
+			++mDispatchCount;
 			continue;
 		}
 
 		view.HierarchyStateIndex = asset + (post ? view.AssetCount : 0u);
+		mDispatchCount += 4;
 		renderer.setShader(mHierarchyTraverseShader);
 		setViewUniforms(renderer, view);
 		const auto& viewUniform = mViewUniformPool[mViewUniformsUsed - 1];
@@ -380,11 +536,14 @@ void VirtualGeometryGpuSelection::recordClusterSelection(RENDER::Renderer& rende
 }
 
 void VirtualGeometryGpuSelection::record(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame, PROFILER::GpuStageProfiler* profiler) {
+	mDispatchCount = 0;
+	mFlatActive = false;
 	if (frame.Instances.empty() || !loadShaders()) {
 		return;
 	}
 	ensureCapacity(renderer, frame);
 	ensureHierarchyCapacity(renderer, frame);
+	mFlatActive = prepareFlatBatch(renderer, frame);
 	mViewUniformsUsed = 0;
 	const auto& occlusion = frame.Occlusion;
 	const auto assets = static_cast<uint32_t>(frame.Assets.size());
@@ -457,6 +616,7 @@ void VirtualGeometryGpuSelection::record(RENDER::Renderer& renderer, const Virtu
 		renderer.setStorageBuffer(PostInstanceArgsName, mPostInstanceArgsBuffer);
 		renderer.setTexture(HzbName, hzb);
 		renderer.dispatch(CeilDiv(view.InstanceCount, GroupSize), 1, 1);
+		++mDispatchCount;
 	}
 	{
 		auto scope = Measure(profiler, "VgClusterCull");
@@ -497,24 +657,20 @@ void VirtualGeometryGpuSelection::recordPost(RENDER::Renderer& renderer, const V
 		renderer.setStorageBuffer(StatisticsName, mStatisticsBuffer);
 		renderer.setTexture(HzbName, hzb);
 		renderer.dispatchIndirect(mPostInstanceArgsBuffer, 0);
+		++mDispatchCount;
 	}
 	{
 		auto scope = Measure(profiler, "VgClusterCullPost");
 		// Revived instances: the full cluster test, occlusion against the current HZB.
 		recordClusterSelection(renderer, frame, view, hzb, true, profiler);
+		if (mFlatActive) {
+			requestStatisticsReadback(renderer, frame.Frame);
+			return;
+		}
 		// Clusters listed by phase 1: only the occlusion test is repeated.
 		view.PassMode = static_cast<uint32_t>(VirtualGeometryCullPass::POST_CLUSTERS);
 		renderer.setShader(mClusterCullPostShader);
-		renderer.setStorageBuffer(CullInstancesName, mCullInstanceBuffer);
-		renderer.setStorageBuffer(OccludedClustersName, mOccludedClusterBuffer);
-		renderer.setStorageBuffer(OccludedClusterCountsName, mOccludedClusterCountBuffer);
-		renderer.setStorageBuffer(SlotBatchesName, mSlotBatchBuffer);
-		renderer.setStorageBuffer(SegmentsName, mSegmentBuffer);
-		renderer.setStorageBuffer(SegmentCountsName, mSegmentCountBuffer);
-		renderer.setStorageBuffer(DrawCommandsName, mIndirectBuffer);
-		renderer.setStorageBuffer(DrawRecordsName, mDrawRecordBuffer);
-		renderer.setStorageBuffer(StatisticsName, mStatisticsBuffer);
-		renderer.setTexture(HzbName, hzb);
+		bindPostClusterCullBuffers(renderer, hzb);
 		for (uint32_t asset = 0; asset < assets; ++asset) {
 			const auto& entry = frame.Assets[asset];
 			view.AssetDispatch = asset;
@@ -525,6 +681,7 @@ void VirtualGeometryGpuSelection::recordPost(RENDER::Renderer& renderer, const V
 			setViewUniforms(renderer, view);
 			renderer.setStorageBuffer(ClustersName, entry.Asset->gpuBuffers().Clusters);
 			renderer.dispatchIndirect(mPostClusterArgsBuffer, size_t(asset) * AssetDispatchWords * sizeof(uint32_t));
+			++mDispatchCount;
 		}
 	}
 	requestStatisticsReadback(renderer, frame.Frame);
@@ -689,6 +846,14 @@ const std::shared_ptr<RENDER::VertexBufferInterface>& VirtualGeometryGpuSelectio
 	return mDrawIndexStream;
 }
 
+uint32_t VirtualGeometryGpuSelection::dispatchCount() const {
+	return mDispatchCount;
+}
+
+bool VirtualGeometryGpuSelection::batchedFlatSelection() const {
+	return mFlatActive;
+}
+
 size_t VirtualGeometryGpuSelection::gpuBytes() const {
 	size_t bytes = 0;
 	// Cull instances, visible list, post visible list, occluded-instance list.
@@ -706,6 +871,8 @@ size_t VirtualGeometryGpuSelection::gpuBytes() const {
 	bytes += size_t(mHierarchyQueueCapacity) * HierarchyEntryWords * sizeof(uint32_t);
 	bytes += size_t(mHierarchyAssetCapacity) * 2 * HierarchyEntryWords * sizeof(uint32_t);
 	bytes += mHierarchyDispatch ? 2 * AssetDispatchWords * sizeof(uint32_t) : 0;
+	bytes += mFlatClusterBytes + size_t(mFlatAssetCapacity) * (sizeof(FlatAssetGpu) + 2 * sizeof(uint32_t));
+	bytes += mFlatDispatch ? 2 * AssetDispatchWords * sizeof(uint32_t) : 0;
 	return bytes;
 }
 }

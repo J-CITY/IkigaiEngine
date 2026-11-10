@@ -20,6 +20,7 @@
 #include "sceneLoadingContext.h"
 #include "utilsModule/log/loggerDefine.h"
 #include "utilsModule/time/loadTimer.h"
+#include <iterator>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -29,6 +30,37 @@ using namespace IKIGAI::COROUTINE;
 using namespace IKIGAI::RESOURCES;
 
 namespace {
+using PrefabCache = std::map<std::string, nlohmann::json>;
+
+Task<PrefabCache> PreloadPrefabs(std::vector<std::string> pending, std::shared_ptr<ResourceLoadControl> control) {
+	PrefabCache cache;
+	auto& files = ServiceManager::Get<FileSystem>();
+	while (!pending.empty()) {
+		control->check();
+		auto path = std::move(pending.back());
+		pending.pop_back();
+		if (cache.contains(path)) {
+			continue;
+		}
+		auto file = files.getFile(path, FileMode::READ);
+		if (!file || !file->isValid()) {
+			throw std::runtime_error("Prefab not found: " + path);
+		}
+		auto bytes = co_await file->readAllTask(control);
+		control->check();
+		try {
+			auto asset = nlohmann::json::parse(bytes);
+			auto dependencies = DOCUMENT::PrefabPaths(asset.at("Objects"));
+			pending.insert(pending.end(), std::make_move_iterator(dependencies.begin()), std::make_move_iterator(dependencies.end()));
+			cache.emplace(std::move(path), std::move(asset));
+		} catch (const std::exception& error) {
+			throw std::runtime_error(path + ": " + error.what());
+		}
+		co_await YieldIfBudgetExceeded();
+	}
+	co_return cache;
+}
+
 template <class T>
 Task<> HoldResource(ResourceRequest<T> request, std::shared_ptr<SceneLoadState> state, std::vector<std::shared_ptr<void>>& resources) {
 	state->control->check();
@@ -276,33 +308,16 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 	const auto destruction = DATA::readDescriptor<DESTRUCTION::RuntimeSettings>(json.value("Destruction", nlohmann::json::object()));
 	destruction.validate();
 #endif
+	const auto& entries = json.at("Objects");
+	state->phase = "Reading prefab dependencies";
+	const auto prefabCache = co_await PreloadPrefabs(DOCUMENT::PrefabPaths(entries), state->control);
 	state->phase = "Expanding prefabs";
-	DOCUMENT::Resolver resolver(json.at("Objects"));
+	DOCUMENT::Resolver resolver(entries);
 	DOCUMENT::Expanded expanded;
-	std::map<std::string, nlohmann::json> prefabCache;
-	std::vector<std::string> prefabStack;
-	auto readPrefab = [&](const std::string& path) -> nlohmann::json {
-		if (!prefabCache.contains(path)) {
-			throw std::runtime_error("Prefab not found: " + path);
-		}
-		return prefabCache.at(path);
-	};
-	for (auto entry : json.at("Objects")) {
+	auto readPrefab = [&](const std::string& path) -> nlohmann::json { return prefabCache.at(path); };
+	for (auto entry : entries) {
 		state->control->check();
-		nlohmann::json asset;
-		if (entry.contains("Prefab")) {
-			const auto path = DOCUMENT::Path(entry.at("Prefab").get<std::string>());
-			if (!prefabCache.contains(path)) {
-				auto prefabFile = ServiceManager::Get<FileSystem>().getFile(path);
-				if (!prefabFile || !prefabFile->isValid()) {
-					throw std::runtime_error("Prefab not found: " + path);
-				}
-				auto bytes = co_await prefabFile->readAllTask(state->control);
-				prefabCache[path] = nlohmann::json::parse(bytes);
-			}
-			asset = prefabCache.at(path);
-		}
-		auto part = resolver.Expand(std::move(entry), asset, readPrefab, prefabCache, prefabStack);
+		auto part = resolver.Expand(std::move(entry), readPrefab);
 		for (auto& object : part.objects) {
 			expanded.objects.push_back(std::move(object));
 			co_await YieldIfBudgetExceeded();
@@ -653,38 +668,20 @@ Task<> SceneManager::instantiatePrefab(std::shared_ptr<SceneLoadState> state, in
 				throw std::runtime_error("Unpack prefab before adding a child");
 			}
 		}
-		state->phase = "Reading prefab";
-		auto file = ServiceManager::Get<FileSystem>().getFile(state->path);
-		if (!file || !file->isValid()) {
-			throw std::runtime_error("Prefab not found: " + state->path);
-		}
-		auto bytes = co_await file->readAllTask(state->control);
-		auto asset = nlohmann::json::parse(bytes);
-		auto entries = serializeScene().at("Objects");
+		state->phase = "Reading prefab dependencies";
+		std::vector<std::string> paths { state->path };
+		const auto prefabCache = co_await PreloadPrefabs(std::move(paths), state->control);
+		state->control->check();
+		auto entries = target->serializeObjects();
 		int root = 0;
 		do {
 			root = static_cast<int>(ECS::Entity().getUniqueId());
 		} while (root <= 0 || target->findObjectByID(ECS::Entity(ECS::Entity::ID(root))));
 		nlohmann::json entry { { "Prefab", state->path }, { "Id", root }, { "ParentId", parentId } };
 		entries.push_back(entry);
-		std::map<std::string, nlohmann::json> prefabCache;
-		prefabCache[state->path] = asset;
-		std::vector<std::string> prefabStack;
-		auto readPrefab = [&](const std::string& path) -> nlohmann::json {
-			if (path == state->path) {
-				return asset;
-			}
-			auto prefabFile = ServiceManager::Get<FileSystem>().getFile(path);
-			if (!prefabFile || !prefabFile->isValid()) {
-				throw std::runtime_error("Prefab not found: " + path);
-			}
-			if (!prefabCache.contains(path)) {
-				prefabCache[path] = nlohmann::json::parse(prefabFile->readStr());
-			}
-			return prefabCache.at(path);
-		};
+		auto readPrefab = [&](const std::string& path) -> nlohmann::json { return prefabCache.at(path); };
 		DOCUMENT::Resolver resolver(entries);
-		auto expanded = resolver.Expand(entry, asset, readPrefab, prefabCache, prefabStack);
+		auto expanded = resolver.Expand(entry, readPrefab);
 		auto combined = target->serializeObjects();
 		for (auto object : expanded.objects) {
 			combined.push_back(std::move(object));

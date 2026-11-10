@@ -1,5 +1,6 @@
 #include "renderThread.h"
 #include "coroutineModule/awaitables.h"
+#include "profilerModule/trace.h"
 #include <chrono>
 #include <stdexcept>
 
@@ -13,9 +14,12 @@ COROUTINE::Task<void> AwaitRender(RenderTicket ticket) {
 	}
 }
 
-RenderThread::RenderThread(size_t capacity)
+RenderThread::RenderThread(size_t capacity, Role role)
 	: mCapacity(capacity ? capacity : throw std::invalid_argument("Render thread capacity must be positive"))
-	, mThread([this] { run(); }) { }
+	, mThread([this, role] {
+		PROFILER::TRACE::setThreadName(role == Role::REPLAY ? "Render Replay" : "GPU Completion Wait");
+		run();
+	}) { }
 
 RenderThread::~RenderThread() {
 	{

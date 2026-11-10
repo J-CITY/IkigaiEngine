@@ -9,36 +9,41 @@
 #include <resourceModule/fileSystem/fileSystem.h>
 #include <taskModule/taskSystem.h>
 
-
 namespace IKIGAI::RESOURCES {
 COROUTINE::Task<ResourcePtr<AUDIO::SoundResource>> AudioSourceLoader::createResourceTask(
 	std::string path, ELoadingType type, std::shared_ptr<ResourceLoadControl> control) {
 	control->check();
-	if (auto ready = getResource(path))
+	if (auto ready = getResource(path)) {
 		co_return ready;
+	}
 	AUDIO::SoundConfig config;
 	config.pathSoundSource = path;
+	ConfigCandidate candidate;
 	if (type == ELoadingType::RESOURCE) {
-		auto file = ServiceManager::Get<FileSystem>().getFile(path, FileMode::READ);
-		if (!file || !file->isValid())
-			throw std::runtime_error("Missing audio descriptor: " + path);
-		auto bytes = co_await file->readAllTask(control);
-		auto parsed = UTILS::FromJsonStr<AUDIO::SoundConfig>(std::string(bytes.begin(), bytes.end()));
-		if (parsed.isErr())
-			throw std::runtime_error("Invalid audio descriptor: " + path);
-		config = parsed.unwrap();
+		candidate = BeginConfigLoad(path);
+		if (!candidate.descriptor) {
+			auto file = ServiceManager::Get<FileSystem>().getFile(path, FileMode::READ);
+			if (!file || !file->isValid()) {
+				throw std::runtime_error("Missing audio descriptor: " + path);
+			}
+			auto bytes = co_await file->readAllTask(control);
+			ParseConfigCandidate(candidate, std::string(bytes.begin(), bytes.end()), path);
+		}
+		config = *candidate.descriptor;
 	}
 	control->check();
 	co_await COROUTINE::NextFrame();
 	control->check();
 	const auto desiredState = config.state;
 	config.state = AUDIO::SoundStatus::STOP;
-	auto resource = CreateFromResource(config, nullptr, [](AUDIO::SoundResource* source) {
-		if (source->id)
-			AUDIO::AudioManagerAL::GetInstance().stop(*source);
-	});
+	auto resource = CreateFromResource(config, nullptr, createCacheDeleter(path));
 	resource->data.state = desiredState;
-	co_return registerResource(path, resource);
+	if (candidate.descriptor && !PublishConfig(path, candidate)) {
+		throw ResourceLoadCancelled();
+	}
+	auto published = registerResource(path, std::move(resource), control.get());
+	addFileWatchSubscribe(path, { path, config.pathSoundSource }, published);
+	co_return published;
 }
 using SoundDeleter = std::function<void(AUDIO::SoundResource*)>;
 
@@ -66,6 +71,9 @@ ResourcePtr<AUDIO::SoundResource> AudioSourceLoader::CreateFromResource(const st
 
 ResourcePtr<AUDIO::SoundResource> AudioSourceLoader::CreateFromResource(
 	const AUDIO::SoundConfig& config, UTILS::IAllocator* allocator, AudioDeleter deleter) {
+	if (!ServiceManager::Get<FileSystem>().isFileExist(config.pathSoundSource)) {
+		throw std::runtime_error("Missing audio source: " + config.pathSoundSource);
+	}
 	auto resource
 		= MEMORY::MakeSharedWithDeleter<AUDIO::SoundResource, MEMORY::Category::Audio>(allocator, std::move(deleter), config.pathSoundSource, config);
 
@@ -91,16 +99,13 @@ ResourcePtr<AUDIO::SoundResource> AudioSourceLoader::createResource(const std::s
 	ResourcePtr<AUDIO::SoundResource> res;
 	std::unordered_set<std::string> paths;
 	if (type == ELoadingType::RESOURCE) {
-		AUDIO::SoundConfig config;
-		if (HasConfig(path)) {
-			config = *GetConfig(path);
-		}
-		else {
-			config = LoadConfig(path);
-			AddConfigToCache(path, config);
-		}
+		const auto candidate = ReadConfigCandidate(path);
+		const auto& config = *candidate.descriptor;
 		paths.insert(config.pathSoundSource);
 		res = CreateFromResource(config, nullptr, createCacheDeleter(path));
+		if (res && !PublishConfig(path, candidate)) {
+			return nullptr;
+		}
 	}
 	else if (type == ELoadingType::FILE) {
 		res = CreateFromFile(path, nullptr, createCacheDeleter(path));
@@ -116,22 +121,28 @@ ResourcePtr<AUDIO::SoundResource> AudioSourceLoader::createResource(const std::s
 bool AudioSourceLoader::reloadResource(std::weak_ptr<AUDIO::SoundResource> weakRes, const std::string& path) {
 	if (auto sound = weakRes.lock()) {
 		std::unordered_set<std::string> paths = { path };
-		AUDIO::SoundConfig config;
+		auto generation = ServiceManager::Get<FileSystem>().generation();
+		auto config = sound->data;
+		ConfigCandidate candidate;
 		if (path.ends_with(".sound")) {
-			config = LoadConfig(path);
-			AddConfigToCache(path, config);
+			candidate = ReadConfigCandidate(path, true);
+			config = *candidate.descriptor;
+			generation = candidate.generation;
 			paths.insert(config.pathSoundSource);
 		}
-		else {
-			config.path = path;
-			config.pathSoundSource = path;
+		auto& audio = AUDIO::AudioManagerAL::GetInstance();
+		auto replacement = audio.prepareReload(*sound, config, generation);
+		const auto swap = [&]() noexcept {
+			sound->swapReloadedSource(replacement.source);
+			return true;
+		};
+		const bool committed
+			= candidate.descriptor ? commitResourceReload(path, sound, path, candidate, swap) : commitResourceSwap(path, sound, generation, swap);
+		audio.finishReload(*sound, replacement, committed);
+		if (!committed) {
+			return false;
 		}
-		sound->data = config;
-
 		addFileWatchSubscribe(path, paths, weakRes);
-		// Simply reloading via removing and adding source back to trigger reload in audioManagerAL if needed
-		AUDIO::AudioManagerAL::GetInstance().removeSource(*sound);
-		AUDIO::AudioManagerAL::GetInstance().addSource(*sound);
 		return true;
 	}
 	return false;

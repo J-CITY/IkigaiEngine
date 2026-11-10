@@ -21,7 +21,8 @@ ResourcePtr<SKELETON::Animation> SkeletonAnimationLoader::CreateFromFile(const s
 	}
 
 	auto animation = MEMORY::MakeSharedWithDeleter<SKELETON::Animation, MEMORY::Category::Skeleton>(allocator, deleter);
-	auto data = ServiceManager::Get<FileSystem>().getFile(path)->read();
+	auto file = ServiceManager::Get<FileSystem>().getFile(path);
+	auto data = file && file->isValid() ? file->read() : std::vector<uint8_t> {};
 	if (data.empty()) {
 		throw std::runtime_error("SkeletonAnimationLoader: empty file: " + path);
 	}
@@ -46,12 +47,13 @@ ResourcePtr<SKELETON::Animation> SkeletonAnimationLoader::CreateFromResource(
 	std::shared_ptr<SKELETON::Animation> additiveRefPtr;
 	if (!res.additiveReference.empty()) {
 		additiveRefPtr = ServiceManager::Get<SkeletonAnimationLoader>().loadResource(res.additiveReference);
-		if (additiveRefPtr) {
-			additiveRef = additiveRefPtr.get();
+		if (!additiveRefPtr) {
+			throw std::runtime_error("Missing additive reference animation: " + res.additiveReference);
 		}
+		additiveRef = additiveRefPtr.get();
 	}
 
-	auto animation = CreateFromFile(res.pathAnimation, skeleton, res.additive, additiveRef);
+	auto animation = CreateFromFile(res.pathAnimation, skeleton, res.additive, additiveRef, allocator, deleter);
 	return animation;
 }
 
@@ -90,61 +92,36 @@ ResourcePtr<SKELETON::Animation> SkeletonAnimationLoader::createResource(const s
 		addFileWatchSubscribe(path, { path }, res);
 	}
 	else if (type == ELoadingType::RESOURCE) {
-		RENDER::AnimationResource config;
-		if (HasConfig(path)) {
-			config = *GetConfig(path);
-		}
-		else {
-			config = LoadConfig(path);
-			AddConfigToCache(path, config);
-		}
+		const auto candidate = ReadConfigCandidate(path);
+		const auto& config = *candidate.descriptor;
 		skeleton = ServiceManager::Get<SkeletonLoader>().loadResource(
 			config.skeletonPath, config.skeletonPath.ends_with(".skeleton") ? ELoadingType::RESOURCE : ELoadingType::FILE);
 		if (!skeleton) {
-			ASSERT("SkeletonAnimationLoader: AnimationLoadContext.skeleton is null");
-			return nullptr;
+			throw std::runtime_error("Missing animation skeleton: " + config.skeletonPath);
 		}
 		res = CreateFromResource(config, skeleton, nullptr, createCacheDeleter(path));
+		if (res && !PublishConfig(path, candidate)) {
+			return nullptr;
+		}
 		addFileWatchSubscribe(path, { path, config.pathAnimation }, res);
 	}
 	return res;
 }
 
 bool SkeletonAnimationLoader::reloadResource(std::weak_ptr<SKELETON::Animation> weakRes, const std::string& path) {
-	if (auto res = weakRes.lock()) {
-		std::unordered_set<std::string> paths = { path };
-		RENDER::AnimationResource config;
-		if (path.ends_with(".animation")) {
-			config = LoadConfig(path);
-			AddConfigToCache(path, config);
-			paths.insert(config.pathAnimation);
+	if (auto res = weakRes.lock(); res && path.ends_with(".animation")) {
+		const auto candidate = ReadConfigCandidate(path, true);
+		const auto& config = *candidate.descriptor;
+		if (!config.additiveReference.empty() && NormalizePath(config.additiveReference) == path) {
+			throw std::runtime_error("Animation references itself: " + path);
 		}
-		else {
-			config.path = path;
-			config.pathAnimation = path;
-		}
-
-		SKELETON::Animation* additiveRef = nullptr;
-		std::shared_ptr<SKELETON::Animation> additiveRefPtr;
-		if (!config.additiveReference.empty()) {
-			additiveRefPtr = ServiceManager::Get<SkeletonAnimationLoader>().loadResource(config.additiveReference);
-			if (additiveRefPtr) {
-				additiveRef = additiveRefPtr.get();
-			}
-		}
-
-		auto skeleton = ServiceManager::Get<SkeletonLoader>().loadResource(config.skeletonPath);
-		if (!skeleton) {
-			ASSERT("SkeletonAnimationLoader: AnimationLoadContext.skeleton is null");
+		auto skeleton = ServiceManager::Get<SkeletonLoader>().loadResource(
+			config.skeletonPath, config.skeletonPath.ends_with(".skeleton") ? ELoadingType::RESOURCE : ELoadingType::FILE);
+		auto replacement = CreateFromResource(config, skeleton);
+		if (!replacement || !CommitReload(path, candidate, [&]() noexcept { std::swap(*res, *replacement); })) {
 			return false;
 		}
-
-		auto newAnim = CreateFromFile(path, nullptr, config.additive, additiveRef);
-		if (newAnim) {
-			*res = *newAnim;
-		}
-
-		addFileWatchSubscribe(path, paths, res);
+		addFileWatchSubscribe(path, { path, config.pathAnimation }, res);
 		return true;
 	}
 	return false;

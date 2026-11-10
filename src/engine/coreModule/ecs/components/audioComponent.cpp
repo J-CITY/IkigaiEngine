@@ -20,8 +20,10 @@ AudioComponent::AudioComponent(UTILS::Ref<ECS::Object> _obj, const Descriptor& d
 		const auto prepared = RESOURCES::ServiceManager::Get<RESOURCES::AudioSourceLoader>().loadResource(
 			descriptor.AudioPath, descriptor.AudioPath.ends_with(".sound") ? RESOURCES::ELoadingType::RESOURCE : RESOURCES::ELoadingType::FILE);
 		// Decode/cache the sample once; every component keeps its own voice.
-		if (prepared)
+		if (prepared) {
 			res = std::make_shared<AUDIO::SoundResource>(prepared->path, prepared->data);
+			res->clip = prepared->clip;
+		}
 	}
 }
 

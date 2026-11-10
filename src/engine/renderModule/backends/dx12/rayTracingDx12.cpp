@@ -1057,6 +1057,9 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 	}
 	if (data.PushRoot >= 0)
 		list->SetComputeRoot32BitConstants(data.PushRoot, data.PushSize / 4, dispatch.PushConstants.data(), 0);
+	if (!computeList) {
+		mBoundPipelineKey.reset();
+	}
 	if (compute) {
 		list->SetPipelineState(data.ComputeState.Get());
 		list->Dispatch(groups[0], groups[1], groups[2]);
@@ -1084,8 +1087,5 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 		}
 	}
 	mRayFrameResources.push_back(std::move(snapshot));
-	if (!computeList) {
-		setDirty(Dirty::PIPELINE);
-	}
 }
 #endif

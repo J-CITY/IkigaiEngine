@@ -23,8 +23,9 @@ public:
 		, mBudget(budget)
 		, mCategory(category)
 		, mTrackLogical(mUpstream && !mUpstream->tracksAllocations()) {
-		if (!mUpstream || !pageBytes || static_cast<std::size_t>(category) >= static_cast<std::size_t>(Category::Count))
+		if (!mUpstream || !pageBytes || static_cast<std::size_t>(category) >= static_cast<std::size_t>(Category::Count)) {
 			throw std::invalid_argument("Invalid arena configuration");
+		}
 #if IKIGAI_ENABLE_MEMORY_TRACKING
 		(void)PROFILER::MemoryProfiler::instance();
 #endif
@@ -51,18 +52,21 @@ public:
 				mPeak = std::max(mPeak, mUsed);
 				++mCount;
 #if IKIGAI_ENABLE_MEMORY_TRACKING
-				if (mTrackLogical)
+				if (mTrackLogical) {
 					PROFILER::MemoryProfiler::instance().record({ result, this, bytes, alignment, mCategory });
+				}
 #endif
 				return result;
 			}
 		}
 		const auto capacity = std::max(mPageBytes, Detail::CheckedAdd(size, alignment - 1));
-		if (capacity > mBudget - mReserved)
+		if (capacity > mBudget - mReserved) {
 			throw std::bad_alloc();
+		}
 		auto* data = static_cast<std::byte*>(mUpstream->allocate(capacity, alignment));
-		if (!data)
+		if (!data) {
 			throw std::bad_alloc();
+		}
 		try {
 			mPages.push_back({ data, capacity, 0 });
 		} catch (...) {
@@ -76,16 +80,20 @@ public:
 	void deallocate(void*) override { }
 	void reset() noexcept {
 #if IKIGAI_ENABLE_MEMORY_TRACKING
-		PROFILER::MemoryProfiler::instance().releaseAllocator(this);
+		if (mTrackLogical) {
+			PROFILER::MemoryProfiler::instance().releaseAllocator(this);
+		}
 #endif
-		for (auto& page : mPages)
+		for (auto& page : mPages) {
 			page.offset = 0;
+		}
 		mCurrent = mUsed = mCount = 0;
 	}
 	void release() noexcept {
 		reset();
-		for (auto& page : mPages)
+		for (auto& page : mPages) {
 			mUpstream->deallocate(page.data);
+		}
 		mPages.clear();
 		mReserved = 0;
 	}
@@ -118,8 +126,9 @@ public:
 		return StlAllocator<T>(mArena);
 	}
 	void reset() {
-		if (mArena.use_count() != 1)
+		if (mArena.use_count() != 1) {
 			throw std::logic_error("Scratch consumers must be destroyed before reset");
+		}
 		mArena->reset();
 	}
 	AllocatorStats stats() const {

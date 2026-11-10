@@ -1,8 +1,10 @@
 #pragma once
 #include "fracturePreparation.h"
+#include "taskModule/backgroundTicket.h"
 #include <atomic>
 #include <deque>
 #include <serdepp/adaptor/nlohmann_json.hpp>
+#include <stop_token>
 
 namespace IKIGAI::DESTRUCTION {
 struct RuntimeSettings {
@@ -66,8 +68,10 @@ struct FractureBudget {
 struct FractureJob {
 	explicit FractureJob(std::shared_ptr<FractureBudget> account, std::size_t reservation);
 	~FractureJob();
+	std::string errorMessage() const;
 	FractureSnapshot snapshot {};
 	PreparedFracture result {};
+	TASK::BackgroundResult completion {};
 	std::atomic<RequestStage> stage { RequestStage::Queued };
 	std::atomic<bool> cancelled { false };
 	std::atomic<bool> done { false };
@@ -77,7 +81,8 @@ struct FractureJob {
 // Bounded scene-local jobs on the engine's background executor; work owns no scene/component/world/GPU pointers.
 class DestructionRuntime {
 public:
-	using Executor = std::function<void(std::function<void()>)>;
+	// The executor completes rejected work synchronously and accepted work exactly once.
+	using Executor = std::function<void(std::function<void(std::stop_token)>, std::function<void(const TASK::BackgroundResult&)>)>;
 	enum class Admission { Ready, Wait, ExceedsBudget };
 	explicit DestructionRuntime(Executor executor);
 	~DestructionRuntime();

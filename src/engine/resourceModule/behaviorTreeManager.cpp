@@ -35,6 +35,7 @@ bool BehaviorTreeLoader::reloadResource(std::weak_ptr<BehaviorTreeResource> weak
 			auto candidate = compileFile(path);
 			resource->definition = std::move(candidate);
 			++resource->revision;
+			addFileWatchSubscribe(path, {}, resource);
 			return true;
 		} catch (const std::exception& error) {
 			std::cerr << "Behavior Tree reload rejected: " << error.what() << '\n';
@@ -45,11 +46,6 @@ bool BehaviorTreeLoader::reloadResource(std::weak_ptr<BehaviorTreeResource> weak
 bool BehaviorTreeLoader::reload(const std::string& path) {
 	auto resource = loadResource(path);
 	const auto normalized = NormalizePath(path);
-	if (!reloadResource(resource, normalized)) {
-		return false;
-	}
-	unsubscribeFileWatch(normalized);
-	addFileWatchSubscribe(normalized, {}, resource);
-	return true;
+	return reloadResource(resource, normalized);
 }
 }

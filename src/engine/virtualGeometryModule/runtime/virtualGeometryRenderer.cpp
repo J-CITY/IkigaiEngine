@@ -368,6 +368,7 @@ bool VirtualGeometryRenderer::recordOcclusionPost(
 		return false;
 	}
 	mGpuSelection.recordPost(renderer, mGpuFrame, hzb, profiler);
+	mStatistics.SelectionDispatches = mGpuSelection.dispatchCount();
 	mOcclusionPostDone = true;
 	mStatistics.OcclusionPostMilliseconds = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 	return (mGpuFrame.Occlusion.DebugFlags & VG_OCCLUSION_DEBUG_SKIP_POST) == 0u;
@@ -667,6 +668,8 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 		mStatistics.GpuSelection = true;
 		if (!mCandidates.empty()) {
 			mGpuSelection.record(renderer, mGpuFrame, input.GpuProfiler);
+			mStatistics.BatchedFlatSelection = mGpuSelection.batchedFlatSelection();
+			mStatistics.SelectionDispatches = mGpuSelection.dispatchCount();
 			uploadFrame(renderer);
 			mGpuDrawActive = true;
 			mGpuFrameRecorded = true;
@@ -819,6 +822,7 @@ bool VirtualGeometryRenderer::buildGpuFrame(RENDER::Renderer& renderer, const Vi
 	auto& frame = mGpuFrame;
 	frame.Frame = input.Frame;
 	frame.Hierarchy.Enabled = mSettings.HierarchyTraversal;
+	frame.BatchedFlatSelection = mSettings.BatchedFlatSelection;
 	frame.Hierarchy.QueueCapacity = mSettings.HierarchyQueueCapacity;
 	frame.Hierarchy.VisitBudget = mSettings.HierarchyVisitBudget;
 	frame.Instances.clear();

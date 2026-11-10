@@ -6,6 +6,7 @@
 #include <dxgi1_6.h>
 #include <map>
 #include <set>
+#include <span>
 #include <tuple>
 
 #include "../interface/driverInterface.h"
@@ -88,7 +89,7 @@ public:
 	void latencySimulationEnd() override;
 	void latencySubmitBegin() override;
 	void latencySubmitEnd() override;
-	void invalidateUpscalerState();
+	void invalidateCommandState();
 	Microsoft::WRL::ComPtr<ID3D12Device5> mRayDevice;
 	Microsoft::WRL::ComPtr<ID3D12Device> mStreamlineDeviceProxy;
 	Microsoft::WRL::ComPtr<ID3D12CommandQueue> mStreamlineQueueProxy;
@@ -324,10 +325,15 @@ private:
 	static constexpr uint32_t TransientDescriptorsPerFrame = 65536;
 	static constexpr uint32_t BindlessSamplerCapacity = 2048;
 	uint32_t mBindlessDescriptorCursor = TransientDescriptorStart;
-	uint32_t mBindlessSamplerCursor = 0;
 	uint32_t mBindlessDescriptorEnd = TransientDescriptorStart + TransientDescriptorsPerFrame;
-	std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> bindlessSnapshot(
-		const ShaderReflection::Uniform&, uint32_t, const BindlessResourceTable* localTable = nullptr);
+	std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> bindlessSnapshot(const ShaderReflection::Uniform&, uint32_t);
+	D3D12_GPU_DESCRIPTOR_HANDLE bindlessBufferView(const std::shared_ptr<StorageBufferDx12>& buffer);
+	struct BindlessBufferViewKey {
+		std::uintptr_t Resource = 0;
+		size_t ByteSize = 0;
+		auto operator<=>(const BindlessBufferViewKey&) const = default;
+	};
+	std::map<BindlessBufferViewKey, D3D12_GPU_DESCRIPTOR_HANDLE> mBindlessBufferViews;
 	std::map<std::string, std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE>> mBindlessSnapshots;
 	struct BindlessViewStamp {
 		std::weak_ptr<void> Owner;
@@ -335,23 +341,35 @@ private:
 		uint64_t Revision = 0;
 		size_t Size = 0;
 	};
-	using BindlessSamplerStamp = std::array<int, 5>;
+	struct BindlessSamplerStamp {
+		MinMagFilter Min = MinMagFilter::LINEAR;
+		MinMagFilter Mag = MinMagFilter::LINEAR;
+		WrapFilter WrapS = WrapFilter::CLAMP_TO_EDGE;
+		WrapFilter WrapT = WrapFilter::CLAMP_TO_EDGE;
+		WrapFilter WrapR = WrapFilter::CLAMP_TO_EDGE;
+		bool operator==(const BindlessSamplerStamp&) const = default;
+	};
 	using BindlessTableKey = std::tuple<uint32_t, uint32_t, bool, bool>;
 	struct BindlessDescriptorRange {
 		uint32_t ViewStart = 0;
-		uint32_t SamplerStart = 0;
 		bool Used = false;
 		std::vector<BindlessViewStamp> Views;
+	};
+	struct BindlessSamplerRange {
+		uint32_t Start = 0;
+		bool Used = false;
 		std::vector<BindlessSamplerStamp> Samplers;
 	};
 	struct BindlessDescriptorSlot {
 		uint32_t ViewEnd = 0;
 		uint32_t SamplerEnd = BindlessSamplerCapacity;
 		std::map<BindlessTableKey, std::vector<BindlessDescriptorRange>> Tables;
+		std::map<uint32_t, std::vector<BindlessSamplerRange>> SamplerRanges;
 	};
+	std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, uint32_t> bindlessSamplerTable(
+		BindlessDescriptorSlot& slot, std::span<const BindlessSamplerStamp> samplers);
 	std::vector<BindlessDescriptorSlot> mBindlessDescriptorSlots;
 	std::map<ID3D12Resource*, Dx12Resource> mBindlessNativeResources;
-	uint32_t mBindlessSamplerEnd = BindlessSamplerCapacity;
 
 	struct StorageImageBinding {
 		std::shared_ptr<TextureDx12> Texture;
@@ -528,8 +546,11 @@ private:
 		auto operator<=>(const PipelineKey&) const = default;
 	};
 	PipelineKey pipelineKey(const State& state, bool compute);
+	void ensurePipelineState(bool compute);
 	State mCurrentState;
 	std::map<PipelineKey, Microsoft::WRL::ComPtr<ID3D12PipelineState>> mStates {};
+	// DX12 uses one PSO binding for both graphics and compute on this list.
+	std::optional<PipelineKey> mBoundPipelineKey;
 	// CreatePipelineLibrary keeps the input memory until the COM object is released.
 	std::vector<uint8_t> mPipelineLibraryBytes;
 	Microsoft::WRL::ComPtr<ID3D12PipelineLibrary> mPipelineLibrary;

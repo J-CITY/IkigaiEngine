@@ -1,9 +1,11 @@
 #include "deviceHealthDx12.h"
 
 #ifdef DX12_BACKEND
+#include "profilerModule/trace.h"
 #include "utilsModule/crashReport.h"
 #include "windowMessageWait.h"
 #include <algorithm>
+#include <cstring>
 #include <iostream>
 #include <limits>
 #include <sstream>
@@ -92,6 +94,7 @@ void DeviceHealthDx12::execute(ID3D12CommandQueue* queue, UINT count, ID3D12Comm
 		if (mFailed.load()) {
 			throw std::runtime_error(mFailure);
 		}
+		IKIGAI_PROFILE_SCOPE("DX12 Execute Command Lists");
 		queue->ExecuteCommandLists(count, lists);
 	}
 	check(mDevice->GetDeviceRemovedReason(), "ExecuteCommandLists");
@@ -109,6 +112,8 @@ void DeviceHealthDx12::waitForFence(ID3D12Fence* fence, UINT64 value, const char
 	if (completedValue(fence, operation) >= value) {
 		return;
 	}
+	IKIGAI_PROFILE_SCOPE("DX12 Wait for GPU Fence");
+	IKIGAI_PROFILE_ZONE_TEXT(operation, std::strlen(operation));
 	ScopedFenceEvent localEvent;
 	if (!event) {
 		localEvent.Handle = CreateEventExW(nullptr, nullptr, 0, EVENT_MODIFY_STATE | SYNCHRONIZE);

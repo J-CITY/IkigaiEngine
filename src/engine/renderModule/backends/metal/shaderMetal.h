@@ -25,6 +25,7 @@ namespace IKIGAI::RENDER {
 		void bind() override;
 		void unbind() override;
 		void recompile(const ShaderResource& res) override;
+		bool adoptReloadedShader(ShaderInterface& replacement) noexcept override;
 
 		void setUniform(const std::string& name, int value);
 		void setUniform(const std::string& name, float value);

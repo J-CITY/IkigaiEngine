@@ -231,12 +231,23 @@ inline void Draw() {
 					throw std::runtime_error("Scene changed; open the dialog again");
 				}
 				if (dialogMode == 1) {
+					auto previous = Snapshot(dialogRoot).instances;
 					Manager().createPrefab(dialogRoot, dialogPath);
 					auto instance = *Manager().getCurrentScene().prefabFor(dialogRoot);
 					const int root = dialogRoot;
 					EditorRender::GlobalState.mCommandHistory.addCommand(std::make_unique<Command>(
-						"Create Prefab", [instance](auto& scene) { scene.prefabInstances.push_back(instance); },
-						[root](auto& scene) { scene.unpackPrefab(root); }, true));
+						"Create Prefab",
+						[instance, previous](auto& scene) {
+							for (const auto& nested : previous) {
+								scene.unpackPrefab(SCENE_SYSTEM::DOCUMENT::Id(nested.entry.at("Id")));
+							}
+							scene.prefabInstances.push_back(instance);
+						},
+						[root, previous](auto& scene) {
+							scene.unpackPrefab(root);
+							scene.prefabInstances.insert(scene.prefabInstances.end(), previous.begin(), previous.end());
+						},
+						true));
 				}
 				else {
 					Instantiate(dialogPath, dialogRoot);

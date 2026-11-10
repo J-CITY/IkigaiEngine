@@ -1,6 +1,8 @@
 #include "fileSystem.h"
 #include "nativeFile.h"
+#include "resourceModule/serviceManager.h"
 #include "storage.h"
+#include "taskModule/taskSystem.h"
 #include "userStorage.h"
 #include "vfsCompatibility.h"
 #include "vfspp/VFS.h"
@@ -235,18 +237,30 @@ namespace {
 		std::shared_ptr<STORAGE::UserStorage> storage;
 		std::string prefix;
 		std::shared_ptr<ZipRangeBacking> zipRange;
+		bool memory = false;
+		// Ordinary vfspp ZIP handles share one archive cursor across the mount.
+		std::mutex zipReadMutex;
+		// vfspp also appends to a per-entry handle list in OpenFile.
+		std::mutex zipOpenMutex;
+		// Memory mounts share both the entry table and each file's mutable bytes.
+		mutable std::mutex memoryMutex;
+		[[nodiscard]] std::unique_lock<std::mutex> lockMemory() const {
+			return memory && !storage ? std::unique_lock { memoryMutex } : std::unique_lock<std::mutex> {};
+		}
 		std::string storagePath(const std::string& path) const {
 			const auto relative = STORAGE::Utf8(std::filesystem::u8path(path).lexically_relative(std::filesystem::u8path(info.alias)));
 			return relative == "." ? prefix : prefix + "/" + relative;
 		}
 	};
 	std::optional<vfspp::EntryInfo> Entry(const Mount& mount, const std::string& path) {
-		if (path == mount.info.alias)
+		if (path == mount.info.alias) {
 			return vfspp::EntryInfo(mount.info.alias, mount.info.source, path, vfspp::EntryType::Directory);
+		}
 		if (mount.storage) {
 			const auto key = mount.storagePath(path);
-			if (!mount.storage->exists(key))
-				return { };
+			if (!mount.storage->exists(key)) {
+				return {};
+			}
 			return vfspp::EntryInfo(
 				mount.info.alias, "", path, mount.storage->isDirectory(key) ? vfspp::EntryType::Directory : vfspp::EntryType::File);
 		}
@@ -255,11 +269,13 @@ namespace {
 			std::error_code ec;
 			const auto relative = std::filesystem::path(path).lexically_relative(mount.info.alias).generic_string();
 			const auto status = std::filesystem::status(STORAGE::Child(std::filesystem::u8path(mount.info.source), relative), ec);
-			if (ec || (!std::filesystem::is_regular_file(status) && !std::filesystem::is_directory(status)))
-				return { };
+			if (ec || (!std::filesystem::is_regular_file(status) && !std::filesystem::is_directory(status))) {
+				return {};
+			}
 			return vfspp::EntryInfo(mount.info.alias, mount.info.source, path,
 				std::filesystem::is_directory(status) ? vfspp::EntryType::Directory : vfspp::EntryType::File);
 		}
+		const auto memoryLock = mount.lockMemory();
 		return mount.fs->GetEntryInfo(path);
 	}
 }
@@ -270,12 +286,14 @@ public:
 	uint64_t nextId = 1;
 	std::atomic<uint64_t> generation { 0 };
 	FileSystem::MountId add(vfspp::IFileSystemPtr fs, std::vector<std::string> deleted = {}, std::shared_ptr<ZipRangeBacking> zipRange = {}) {
-		if (!fs->Initialize())
+		if (!fs->Initialize()) {
 			throw std::runtime_error("Cannot initialize filesystem: " + fs->BasePath());
+		}
 		std::lock_guard lock(mutex);
 		auto alias = FileSystem::normalizePath(fs->VirtualPath());
-		auto record = std::make_shared<Mount>(
-			Mount { { nextId++, fs->BasePath(), alias, fs->IsReadOnly(), std::move(deleted) }, fs, {}, {}, std::move(zipRange) });
+		auto record = std::make_shared<Mount>(FileSystem::MountInfo { nextId++, fs->BasePath(), alias, fs->IsReadOnly(), std::move(deleted) }, fs,
+			std::shared_ptr<STORAGE::UserStorage> {}, std::string {}, std::move(zipRange),
+			dynamic_cast<vfspp::MemoryFileSystem*>(fs.get()) != nullptr);
 		mounts.push_back(record);
 		++generation;
 		return record->info.id;
@@ -315,6 +333,24 @@ public:
 };
 class FileInternal {
 public:
+	class CursorLease {
+	public:
+		explicit CursorLease(std::atomic_flag& inUse)
+			: mInUse(inUse) {
+			if (mInUse.test_and_set(std::memory_order_acquire)) {
+				throw std::logic_error("File cursor is already in use");
+			}
+		}
+		~CursorLease() {
+			mInUse.clear(std::memory_order_release);
+		}
+		CursorLease(const CursorLease&) = delete;
+		CursorLease& operator=(const CursorLease&) = delete;
+
+	private:
+		std::atomic_flag& mInUse;
+	};
+
 	// vfspp ZipFile holds a weak archive reference. Retain the owning mount.
 	std::shared_ptr<Mount> owner;
 	vfspp::IFilePtr file;
@@ -322,19 +358,66 @@ public:
 	FileInternal(vfspp::IFilePtr value, std::shared_ptr<Mount> mount)
 		: owner(std::move(mount))
 		, file(std::move(value)) { }
+	[[nodiscard]] CursorLease acquireCursor() {
+		return CursorLease(cursorInUse);
+	}
+	bool isOpened() const {
+		return !closed && file && file->IsOpened();
+	}
+	bool isReadOnly() const {
+		return !file || owner->info.readOnly || bool(owner->storage);
+	}
+	size_t size() const {
+		const auto memoryLock = lockMemory();
+		return file ? file->Size() : 0;
+	}
+	size_t tell() const {
+		return file ? file->Tell() : 0;
+	}
+	size_t remaining() const {
+		const auto total = size();
+		return total - std::min(total, tell());
+	}
+	std::vector<uint8_t> read(size_t size) {
+		const auto backingLock = lockRead();
+		std::vector<uint8_t> result;
+		if (isOpened()) {
+			result.resize(static_cast<size_t>(file->Read(result, size)));
+		}
+		return result;
+	}
+	size_t read(std::span<uint8_t> output) {
+		const auto backingLock = lockRead();
+		return isOpened() ? file->Read(output) : 0;
+	}
+	[[nodiscard]] std::unique_lock<std::mutex> lockMemory() const {
+		return owner ? owner->lockMemory() : std::unique_lock<std::mutex> {};
+	}
+
+private:
+	std::atomic_flag cursorInUse = {};
+
+	[[nodiscard]] std::unique_lock<std::mutex> lockRead() const {
+		return owner && owner->zipRange ? std::unique_lock { owner->zipReadMutex } : lockMemory();
+	}
 };
 std::string FileSystem::normalizePath(std::string path) {
 	std::replace(path.begin(), path.end(), '\\', '/');
-	if (path.find(':') != std::string::npos || path.find('\0') != std::string::npos || path.starts_with("//"))
+	if (path.find(':') != std::string::npos || path.find('\0') != std::string::npos || path.starts_with("//")) {
 		throw std::runtime_error("Expected a virtual path: " + path);
-	for (const auto& part : std::filesystem::u8path(path))
-		if (part == "..")
+	}
+	for (const auto& part : std::filesystem::u8path(path)) {
+		if (part == "..") {
 			throw std::runtime_error("Parent traversal in virtual path: " + path);
-	if (path.empty() || path.front() != '/')
+		}
+	}
+	if (path.empty() || path.front() != '/') {
 		path.insert(path.begin(), '/');
+	}
 	path = STORAGE::Utf8(std::filesystem::u8path(path).lexically_normal());
-	while (path.size() > 1 && path.back() == '/')
+	while (path.size() > 1 && path.back() == '/') {
 		path.pop_back();
+	}
 	return path;
 }
 File::File(std::unique_ptr<FileInternal> internal)
@@ -344,83 +427,179 @@ bool File::isValid() const {
 	return isOpened();
 }
 bool File::isOpened() const {
-	return !mInternal->closed && mInternal->file && mInternal->file->IsOpened();
+	const auto cursor = mInternal->acquireCursor();
+	return mInternal->isOpened();
 }
 bool File::isReadOnly() const {
-	return !mInternal->file || mInternal->owner->info.readOnly || bool(mInternal->owner->storage);
+	const auto cursor = mInternal->acquireCursor();
+	return mInternal->isReadOnly();
 }
 bool File::isDir() const {
+	const auto cursor = mInternal->acquireCursor();
 	return mInternal->file && mInternal->file->GetEntryInfo().IsDirectory();
 }
 size_t File::getSize() const {
-	return mInternal->file ? mInternal->file->Size() : 0;
+	const auto cursor = mInternal->acquireCursor();
+	return mInternal->size();
 }
 size_t File::tell() const {
-	return mInternal->file ? mInternal->file->Tell() : 0;
+	const auto cursor = mInternal->acquireCursor();
+	return mInternal->tell();
 }
 void File::seek(size_t offset) {
-	if (!isOpened() || mInternal->file->Seek(offset, vfspp::IFile::Origin::Begin) != offset)
+	const auto cursor = mInternal->acquireCursor();
+	const auto memoryLock = mInternal->lockMemory();
+	if (!mInternal->isOpened() || mInternal->file->Seek(offset, vfspp::IFile::Origin::Begin) != offset) {
 		throw std::runtime_error("Cannot seek file");
+	}
 }
 std::string File::getFileExtension() const {
+	const auto cursor = mInternal->acquireCursor();
 	return mInternal->file ? mInternal->file->GetEntryInfo().Extension() : "";
 }
 std::string File::getFileName() const {
+	const auto cursor = mInternal->acquireCursor();
 	return mInternal->file ? mInternal->file->GetEntryInfo().Filename() : "";
 }
 std::string File::getAbsolutePath() const {
+	const auto cursor = mInternal->acquireCursor();
 	return mInternal->file ? mInternal->file->GetEntryInfo().NativePath() : "";
 }
 void File::open(FileMode mode) const {
-	if (!mInternal->file || (isReadOnly() && (static_cast<uint8_t>(mode) & 2)) || !mInternal->file->Open(static_cast<vfspp::IFile::FileMode>(mode)))
+	const auto cursor = mInternal->acquireCursor();
+	const auto memoryLock = mInternal->lockMemory();
+	if (!mInternal->file || (mInternal->isReadOnly() && (static_cast<uint8_t>(mode) & 2))
+		|| !mInternal->file->Open(static_cast<vfspp::IFile::FileMode>(mode))) {
 		throw std::runtime_error("Cannot open file");
+	}
 	mInternal->closed = false;
 }
 void File::close() const {
-	if (mInternal->file)
+	const auto cursor = mInternal->acquireCursor();
+	if (mInternal->file) {
 		mInternal->file->Close();
+	}
 	mInternal->closed = true;
 }
-std::vector<uint8_t> File::read(size_t size) {
-	std::vector<uint8_t> result;
-	if (isOpened())
-		result.resize(static_cast<size_t>(mInternal->file->Read(result, size)));
-	return result;
-}
 std::vector<uint8_t> File::read() {
-	return read(getSize() - std::min(getSize(), tell()));
+	const auto cursor = mInternal->acquireCursor();
+	return mInternal->read(mInternal->remaining());
 }
 std::vector<uint8_t> File::readChunk(size_t size) {
-	if (!isOpened())
+	const auto cursor = mInternal->acquireCursor();
+	if (!mInternal->isOpened()) {
 		throw std::runtime_error("File is not open");
-	return read(size);
+	}
+	return mInternal->read(size);
 }
 std::string File::readStr() {
 	const auto bytes = read();
 	return { bytes.begin(), bytes.end() };
 }
 void File::read(uint8_t* data, size_t size) {
-	if (!isOpened() || mInternal->file->Read(std::span<uint8_t>(data, size)) != size)
+	const auto cursor = mInternal->acquireCursor();
+	if (!mInternal->isOpened() || mInternal->read(std::span<uint8_t>(data, size)) != size) {
 		throw std::runtime_error("Short file read");
+	}
 }
 void File::write(const uint8_t* data, size_t size) {
-	if (!isOpened() || isReadOnly() || mInternal->file->Write(std::span<const uint8_t>(data, size)) != size)
+	const auto cursor = mInternal->acquireCursor();
+	const auto memoryLock = mInternal->lockMemory();
+	if (!mInternal->isOpened() || mInternal->isReadOnly() || mInternal->file->Write(std::span<const uint8_t>(data, size)) != size) {
 		throw std::runtime_error("Short file write");
+	}
+}
+namespace {
+	struct FileReadState {
+		std::shared_ptr<FileInternal> file;
+		FileInternal::CursorLease cursor;
+		std::vector<uint8_t> bytes;
+		size_t offset = 0;
+
+		explicit FileReadState(std::shared_ptr<FileInternal> handle)
+			: file(std::move(handle))
+			, cursor(file->acquireCursor()) { }
+
+		void prepare() {
+			if (!file->isOpened()) {
+				throw std::runtime_error("File is not open");
+			}
+			bytes.resize(file->remaining());
+		}
+
+		void readNext() {
+			constexpr size_t chunkSize = 64 * 1024;
+			const auto count = file->read(std::span<uint8_t>(bytes).subspan(offset, std::min(chunkSize, bytes.size() - offset)));
+			if (count == 0) {
+				throw std::runtime_error("Unexpected EOF: " + file->file->GetEntryInfo().Filename());
+			}
+			offset += count;
+		}
+	};
+
+	COROUTINE::Task<std::vector<uint8_t>> readFileTask(std::shared_ptr<FileInternal> file, std::shared_ptr<ResourceLoadControl> control) {
+		const auto check = [&] {
+			if (control) {
+				control->check();
+			}
+		};
+		check();
+		auto state = std::make_shared<FileReadState>(std::move(file));
+#ifdef __EMSCRIPTEN__
+		// The WebAssembly Core uses a single-threaded scheduler.
+		state->prepare();
+		while (state->offset < state->bytes.size()) {
+			state->readNext();
+			co_await COROUTINE::NextFrame();
+			check();
+		}
+#else
+		if (!ServiceManager::Check<TASK::TaskSystem>()) {
+			throw std::runtime_error("File read requires the I/O executor");
+		}
+		auto& tasks = ServiceManager::Get<TASK::TaskSystem>();
+		struct CancelOnExit {
+			std::stop_source source;
+			~CancelOnExit() {
+				source.request_stop();
+			}
+		} cancellation;
+		const auto work = [state, stop = cancellation.source.get_token()](std::stop_token shutdown) {
+			if (stop.stop_requested() || shutdown.stop_requested()) {
+				return;
+			}
+			state->prepare();
+			while (state->offset < state->bytes.size() && !stop.stop_requested() && !shutdown.stop_requested()) {
+				state->readNext();
+			}
+		};
+		auto ticket = tasks.dispatchIo("Read file", work);
+		while (!ticket.accepted() && ticket.get().Rejection == TASK::BackgroundRejection::QueueFull) {
+			co_await COROUTINE::NextFrame();
+			check();
+			ticket = tasks.dispatchIo("Read file", work);
+		}
+		while (!ticket.ready()) {
+			co_await COROUTINE::NextFrame();
+			check();
+		}
+		check();
+		const auto result = ticket.get();
+		if (result.Exception) {
+			std::rethrow_exception(result.Exception);
+		}
+		if (result.Outcome == TASK::BackgroundOutcome::Cancelled || result.Rejection == TASK::BackgroundRejection::Stopping) {
+			throw ResourceLoadCancelled();
+		}
+		if (result.Outcome != TASK::BackgroundOutcome::Succeeded) {
+			throw std::runtime_error(std::string("Cannot schedule file read: ") + TASK::backgroundRejectionMessage(result.Rejection));
+		}
+#endif
+		co_return std::move(state->bytes);
+	}
 }
 COROUTINE::Task<std::vector<uint8_t>> File::readAllTask(std::shared_ptr<ResourceLoadControl> control) {
-	const auto size = getSize() - std::min(getSize(), tell());
-	std::vector<uint8_t> bytes;
-	bytes.reserve(size);
-	while (bytes.size() < size) {
-		if (control)
-			control->check();
-		auto chunk = readChunk(std::min<size_t>(64 * 1024, size - bytes.size()));
-		if (chunk.empty())
-			throw std::runtime_error("Unexpected EOF: " + getFileName());
-		bytes.insert(bytes.end(), chunk.begin(), chunk.end());
-		co_await COROUTINE::NextFrame();
-	}
-	co_return bytes;
+	return readFileTask(mInternal, std::move(control));
 }
 FileSystem::FileSystem()
 	: mInternal(std::make_unique<FileSystemInternal>()) { }
@@ -521,6 +700,13 @@ std::vector<FileSystem::MountInfo> FileSystem::mounts() const {
 uint64_t FileSystem::generation() const {
 	return mInternal->generation;
 }
+std::unique_lock<std::recursive_mutex> FileSystem::lockGeneration(uint64_t expected) const {
+	std::unique_lock lock(mInternal->mutex);
+	if (mInternal->generation != expected) {
+		return {};
+	}
+	return lock;
+}
 bool FileSystem::isValid(const std::string& path) const {
 	return bool(mInternal->resolve(normalizePath(path)));
 }
@@ -546,6 +732,26 @@ std::optional<std::string> FileSystem::getAbsolutePath(const std::string& path) 
 	if (mount && std::dynamic_pointer_cast<vfspp::NativeFileSystem>(mount->fs))
 		return Entry(*mount, key)->NativePath();
 	return { };
+}
+std::optional<std::string> FileSystem::getNativeWatchPath(const std::string& path) const {
+	const auto key = normalizePath(path);
+	if (auto native = getAbsolutePath(key); native || isValid(key)) {
+		return native;
+	}
+	const auto target = std::filesystem::u8path(key);
+	for (auto parent = target.parent_path(); !parent.empty(); parent = parent.parent_path()) {
+		const auto ancestor = STORAGE::Utf8(parent);
+		if (isFileExist(ancestor)) {
+			return {};
+		}
+		if (const auto native = getAbsolutePath(ancestor)) {
+			return STORAGE::Utf8(STORAGE::Child(std::filesystem::u8path(*native), STORAGE::Utf8(target.lexically_relative(parent))));
+		}
+		if (parent == parent.root_path()) {
+			break;
+		}
+	}
+	return {};
 }
 std::optional<std::string> FileSystem::getFilePath(const std::string& path) const {
 	const auto key = normalizePath(path);
@@ -617,8 +823,10 @@ std::shared_ptr<File> FileSystem::getFile(const std::string& path, FileMode mode
 			if (handle->Open(static_cast<vfspp::IFile::FileMode>(mode)))
 				file = handle;
 		}
-		else
+		else {
+			const auto openLock = mount->zipRange ? std::unique_lock { mount->zipOpenMutex } : mount->lockMemory();
 			file = mount->fs->OpenFile(key, static_cast<vfspp::IFile::FileMode>(mode));
+		}
 	}
 	return std::make_shared<File>(std::make_unique<FileInternal>(std::move(file), std::move(mount)));
 }
@@ -645,12 +853,15 @@ std::vector<FileSystem::DirectoryEntry> FileSystem::listDirectory(const std::str
 			for (std::filesystem::directory_iterator it(std::filesystem::u8path(entry.NativePath()), ec); !ec && it != end; it.increment(ec))
 				candidates.insert(normalizePath((key == "/" ? "" : key) + "/" + it->path().filename().generic_string()));
 		}
-		else
+		else {
+			const auto memoryLock = mount->lockMemory();
 			for (const auto& entry : mount->fs->GetEntriesList(false)) {
 				const auto candidate = normalizePath(entry.VirtualPath());
-				if (std::filesystem::path(candidate).parent_path().generic_string() == key)
+				if (std::filesystem::path(candidate).parent_path().generic_string() == key) {
 					candidates.insert(candidate);
+				}
 			}
+		}
 	}
 	std::vector<DirectoryEntry> result;
 	for (const auto& candidate : candidates)

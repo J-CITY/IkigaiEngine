@@ -14,6 +14,8 @@
 #include "coreModule/testHooks.h"
 #include "profilerModule/profiler.h"
 #include "profilerModule/profilerSpy.h"
+#include "profilerModule/trace.h"
+#include "utilsModule/memory/frameArena.h"
 #if USE_PHYSICS_3D
 #include "coreModule/ecs/components/ragdollComponent.h"
 #include "coreModule/ecs/systems/destructionSystem.h"
@@ -25,6 +27,9 @@
 #endif
 
 #include <algorithm>
+#include <cstdint>
+#include <optional>
+#include <span>
 
 #include "coreModule/ecs/componentTypes.h"
 #include <renderModule/backends/interface/renderEnums.h>
@@ -38,6 +43,9 @@
 #include "renderModule/backends/interface/meshInterface.h"
 #include "renderModule/gpuScene.h"
 #include "renderModule/spatial/frustumBvh.h"
+#include "renderModule/spatial/frustumVisibility.h"
+#include "resourceModule/serviceManager.h"
+#include "taskModule/taskSystem.h"
 #include "utilsModule/log/loggerDefine.h"
 #include <unordered_map>
 #include <unordered_set>
@@ -232,6 +240,7 @@ void Scene::beginSimulationFrame() {
 }
 
 void Scene::simulateFixedStep(std::chrono::duration<double> dt) {
+	IKIGAI_PROFILE_SCOPE("Fixed Simulation Step");
 	fixedUpdate(dt);
 	getWorld().getSystemManager()->runFixedUpdate(dt);
 #if USE_PHYSICS_3D
@@ -244,6 +253,7 @@ void Scene::simulateFixedStep(std::chrono::duration<double> dt) {
 }
 
 void Scene::simulateFrame(std::chrono::duration<double> dt, [[maybe_unused]] float interpolationAlpha) {
+	IKIGAI_PROFILE_SCOPE("Frame Simulation");
 	auto* systems = getWorld().getSystemManager();
 	systems->runUpdate(dt);
 	update(dt);
@@ -513,10 +523,8 @@ void Scene::removeLastObject() {
 
 const DOCUMENT::Instance* Scene::prefabFor(int objectId) const {
 	for (const auto& instance : prefabInstances) {
-		for (auto [local, id] : DOCUMENT::ReadMap(instance.entry)) {
-			if (id == objectId) {
-				return &instance;
-			}
+		if (DOCUMENT::OwnsId(instance.entry, objectId)) {
+			return &instance;
 		}
 	}
 	return nullptr;
@@ -561,10 +569,7 @@ void Scene::capturePrefabBaselines() {
 			continue;
 		}
 		const auto descriptors = serializeObjects();
-		std::unordered_set<int> owned;
-		for (auto [local, id] : DOCUMENT::ReadMap(instance.entry)) {
-			owned.insert(id);
-		}
+		const auto owned = DOCUMENT::OwnedIds(instance.entry);
 		for (const auto& object : descriptors) {
 			if (owned.contains(DOCUMENT::Id(object.at("Id")))) {
 				instance.baseline.push_back(object);
@@ -612,10 +617,10 @@ std::shared_ptr<ECS::Object> Scene::appendDocument(const DOCUMENT::Expanded& doc
 		for (const auto& source : document.instances) {
 			auto instance = source;
 			if (instance.baseline.empty()) {
-				const auto ids = DOCUMENT::ReadMap(instance.entry);
+				const auto ids = DOCUMENT::OwnedIds(instance.entry);
 				for (auto value : serializeObjects()) {
 					const int id = DOCUMENT::Id(value.at("Id"));
-					if (std::any_of(ids.begin(), ids.end(), [id](auto pair) { return pair.second == id; })) {
+					if (ids.contains(id)) {
 						instance.baseline.push_back(std::move(value));
 					}
 				}
@@ -963,8 +968,12 @@ std::vector<std::shared_ptr<RENDER::MeshInterface>> Scene::getMeshesInFrustum(co
 }
 
 namespace {
-void MapChildrenToChunk(IKIGAI::ECS::Object* obj, size_t chunkIdx, std::unordered_map<IKIGAI::ECS::Entity, size_t>& map,
-	const std::unordered_map<IKIGAI::ECS::Entity, size_t>& rtMap) {
+template <class Key, class Value>
+using ScratchMap = std::unordered_map<Key, Value, std::hash<Key>, std::equal_to<Key>, MEMORY::StlAllocator<std::pair<const Key, Value>>>;
+template <class Value> using ScratchVector = std::vector<Value, MEMORY::StlAllocator<Value>>;
+
+void MapChildrenToChunk(
+	IKIGAI::ECS::Object* obj, size_t chunkIdx, ScratchMap<IKIGAI::ECS::Entity, size_t>& map, const ScratchMap<IKIGAI::ECS::Entity, size_t>& rtMap) {
 	for (auto child : obj->getChildren()) {
 		if (rtMap.contains(child->getID())) {
 			continue; // child has its own RenderTargetComponent, skip it and its children
@@ -975,9 +984,15 @@ void MapChildrenToChunk(IKIGAI::ECS::Object* obj, size_t chunkIdx, std::unordere
 }
 
 struct ChunkContext {
+	std::shared_ptr<MEMORY::IAllocator> domain;
 	std::vector<IKIGAI::RENDER::RenderChunk> chunks;
-	std::unordered_map<IKIGAI::ECS::Entity, size_t> objToChunk;
-	std::unordered_map<const ECS::Transform*, MATH::Matrix4f> previousWorlds {};
+	ScratchMap<IKIGAI::ECS::Entity, size_t> objToChunk;
+	ScratchMap<const ECS::Transform*, MATH::Matrix4f> previousWorlds;
+
+	explicit ChunkContext(std::shared_ptr<MEMORY::IAllocator> allocationDomain)
+		: domain(allocationDomain ? std::move(allocationDomain) : MEMORY::FrameArena::heapDomain())
+		, objToChunk(MEMORY::StlAllocator<std::pair<const ECS::Entity, size_t>>(domain))
+		, previousWorlds(MEMORY::StlAllocator<std::pair<const ECS::Transform* const, MATH::Matrix4f>>(domain)) { }
 
 	const MATH::Matrix4f& previousWorld(ECS::Transform& transform) {
 		// Each material batch must see the same history even when another batch already advanced the transform.
@@ -985,17 +1000,17 @@ struct ChunkContext {
 	}
 
 	void init(ECS::World& world) {
-		chunks.push_back({ nullptr, nullptr }); // Main chunk (index 0)
+		chunks.emplace_back(nullptr, nullptr, domain); // Main chunk (index 0)
 
 		auto cm = world.getComponentManager();
-		std::unordered_map<IKIGAI::ECS::Entity, size_t> rtMap;
+		ScratchMap<IKIGAI::ECS::Entity, size_t> rtMap(objToChunk.get_allocator());
 
 		for (auto& rt : cm->getComponentsArray<IKIGAI::ECS::RenderTargetComponent>()) {
 			if (!rt.obj->getIsActive()) {
 				continue;
 			}
 
-			chunks.push_back({ rt.getFrameBuffer(), rt.getCamera() });
+			chunks.emplace_back(rt.getFrameBuffer(), rt.getCamera(), domain);
 			size_t chunkIdx = chunks.size() - 1;
 
 			rtMap[rt.obj->getID()] = chunkIdx;
@@ -1195,9 +1210,10 @@ void AppendSurfaceDrawables(Scene& scene, ChunkContext& ctx, const MATH::Vector3
 }
 }
 
-std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledBVHDrawables(
-	const MATH::Vector3f& cameraPosition, const RENDER::Frustum& frustum, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial) {
-	ChunkContext ctx;
+std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledBVHDrawables(const MATH::Vector3f& cameraPosition,
+	const RENDER::Frustum& frustum, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial,
+	std::shared_ptr<MEMORY::IAllocator> allocationDomain) {
+	ChunkContext ctx(std::move(allocationDomain));
 	ctx.init(getWorld());
 
 	std::vector<std::shared_ptr<BVHData>> toDraw;
@@ -1272,97 +1288,227 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledBVHDrawa
 	return std::move(ctx.chunks);
 }
 
-std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledDrawables(
-	const MATH::Vector3f& cameraPosition, const RENDER::Frustum& frustum, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial) {
-	ChunkContext ctx;
+std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledDrawables(const MATH::Vector3f& cameraPosition,
+	const RENDER::Frustum& frustum, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial, FrustumCullMode mode,
+	std::shared_ptr<MEMORY::IAllocator> allocationDomain) {
+	IKIGAI_PROFILE_SCOPE("Prepare Linear Frustum Drawables");
+	ChunkContext ctx(std::move(allocationDomain));
 	ctx.init(getWorld());
 
-	auto cm = getWorld().getComponentManager();
-	for (const auto& modelRenderer : cm->getComponentsArray<ECS::ModelRenderer>()) {
-		auto owner = modelRenderer.obj;
+	// These handles stay on the scene owner. The job receives only frustum and bounds values.
+	struct ModelDrawInput {
+		std::shared_ptr<RENDER::ModelInterface> model;
+		ECS::Object& owner;
+		ECS::Transform& transform;
+		const ECS::MaterialRenderer& materialRenderer;
+		ECS::SkeletalComponent* skeletonComp = nullptr;
+		std::optional<std::size_t> queryIndex = std::nullopt;
+	};
 
-		if (owner->getIsVisible() && owner->getIsActive()) {
-			if (auto model = modelRenderer.getModel()) {
-				if (auto materialRenderer = modelRenderer.obj.get().getComponent<ECS::MaterialRenderer>()) {
-					auto& transform = owner->getTransform()->getTransform();
-					auto skeletonComp = modelRenderer.obj.get().getComponent<ECS::SkeletalComponent>();
-					auto animComp = modelRenderer.obj.get().getComponent<ECS::SkeletalAnimationComponent>();
-					std::shared_ptr<SKELETON::Skeleton> skeleton = skeletonComp ? skeletonComp->getSkeleton() : nullptr;
-					SKELETON::IAnimationPlayable* animationPlayable
-						= skeletonComp ? skeletonComp->finalPlayable(animComp ? animComp->getPlayable() : nullptr) : nullptr;
-					SKELETON::AnimOffset* animOffset = skeletonComp ? skeletonComp->mAnimOffset.get() : nullptr;
-					SKELETON::AnimLocalTransform* animLocalTransform = skeletonComp ? skeletonComp->mAnimLocalTransform.get() : nullptr;
-					SKELETON::AnimGlobalTransform* animGlobalTransform = skeletonComp ? skeletonComp->mAnimGlobalTransform.get() : nullptr;
+	const auto appendDrawables = [&](const ModelDrawInput& input, std::span<const std::shared_ptr<RENDER::MeshInterface>> meshes,
+									 std::span<const std::uint8_t> meshVisibility = {}) {
+		if (meshes.empty()) {
+			return;
+		}
+		auto& owner = input.owner;
+		auto& transform = input.transform;
+		auto* skeletonComp = input.skeletonComp;
+		auto animComp = owner.getComponent<ECS::SkeletalAnimationComponent>();
+		std::shared_ptr<SKELETON::Skeleton> skeleton = skeletonComp ? skeletonComp->getSkeleton() : nullptr;
+		auto* animationPlayable = skeletonComp ? skeletonComp->finalPlayable(animComp ? animComp->getPlayable() : nullptr) : nullptr;
+		auto* animOffset = skeletonComp ? skeletonComp->mAnimOffset.get() : nullptr;
+		auto* animLocalTransform = skeletonComp ? skeletonComp->mAnimLocalTransform.get() : nullptr;
+		auto* animGlobalTransform = skeletonComp ? skeletonComp->mAnimGlobalTransform.get() : nullptr;
+		auto& chunk = ctx.getChunk(ctx.getChunkIdxForObj(owner.getID()));
+		const auto localCameraPos = chunk.camera ? chunk.camera->obj->tryGetTransform()->getWorldPosition() : cameraPosition;
+		const auto distanceToActor = MATH::Vector3f::Distance(transform.getWorldPosition(), localCameraPos);
+		const auto& materials = input.materialRenderer.getMaterials();
 
-					RENDER::CullingOptions cullingOptions = RENDER::CullingOptions::NONE;
-
-					if (modelRenderer.getFrustumBehaviour() != ECS::EFrustumBehaviour::DISABLED) {
-						cullingOptions |= RENDER::CullingOptions::FRUSTUM_PER_MODEL;
-					}
-
-					if (modelRenderer.getFrustumBehaviour() == ECS::EFrustumBehaviour::CULL_MESHES) {
-						cullingOptions |= RENDER::CullingOptions::FRUSTUM_PER_MESH;
-					}
-
-					const auto& modelBoundingSphere = modelRenderer.getFrustumBehaviour() == ECS::EFrustumBehaviour::CULL_CUSTOM
-						? modelRenderer.getCustomBoundingSphere()
-						: model->getBoundingSphere();
-
-					auto meshes = (skeletonComp && skeletonComp->finalPlayable(nullptr)) || DeformationPadding(*materialRenderer) > 0
-						? model->getMeshes()
-						: getMeshesInFrustum(*model, modelBoundingSphere, transform, frustum, cullingOptions);
-
-					if (!meshes.empty()) {
-						size_t chunkIdx = ctx.getChunkIdxForObj(owner->getID());
-						auto& chunk = ctx.getChunk(chunkIdx);
-
-						MATH::Vector3f localCameraPos = cameraPosition;
-						if (chunk.camera) {
-							localCameraPos = chunk.camera->obj->tryGetTransform()->getWorldPosition();
-						}
-
-						float distanceToActor = MATH::Vector3f::Distance(transform.getWorldPosition(), localCameraPos);
-						const ECS::MaterialRenderer::MaterialList& materials = materialRenderer->getMaterials();
-
-						for (const auto mesh : meshes) {
-							std::shared_ptr<RENDER::MaterialInterface> material;
-							if (mesh->getMaterialIndex() < MAX_MATERIAL_COUNT) {
-								material = materials.at(mesh->getMaterialIndex());
-								if (!material || (!material->getShader() && !material->isDeferred())) {
-									material = defaultMaterial;
-								}
-							}
-
-							if (material) {
-								RENDER::Drawable element
-									= { ctx.previousWorld(transform), transform.getWorldMatrix(), mesh, material, skeleton, animationPlayable,
-										  animOffset, animLocalTransform, animGlobalTransform, static_cast<int>(owner->getID().getUniqueId()) };
-								if (auto facial = owner->getComponent<ECS::FacialAnimationComponent>()) {
-									facial->bind(*model);
-									element.facialAnimation = facial.get();
-								}
-
-								if (material->isBlendable()) {
-									if (!material->isDeferred()) {
-										chunk.transparentDrawablesForward.emplace(distanceToActor, element);
-									}
-									else {
-										chunk.transparentDrawablesDeferred.emplace(distanceToActor, element);
-									}
-								}
-								else {
-									if (!material->isDeferred()) {
-										chunk.opaqueDrawablesForward.emplace(distanceToActor, element);
-									}
-									else {
-										chunk.opaqueDrawablesDeferred.emplace(distanceToActor, element);
-									}
-								}
-							}
-						}
-					}
+		for (std::size_t index = 0; index < meshes.size(); ++index) {
+			if (!meshVisibility.empty() && !meshVisibility[index]) {
+				continue;
+			}
+			const auto& mesh = meshes[index];
+			std::shared_ptr<RENDER::MaterialInterface> material;
+			if (mesh->getMaterialIndex() < MAX_MATERIAL_COUNT) {
+				material = materials.at(mesh->getMaterialIndex());
+				if (!material || (!material->getShader() && !material->isDeferred())) {
+					material = defaultMaterial;
 				}
 			}
+			if (!material) {
+				continue;
+			}
+			RENDER::Drawable element = { ctx.previousWorld(transform), transform.getWorldMatrix(), mesh, material, skeleton, animationPlayable,
+				animOffset, animLocalTransform, animGlobalTransform, static_cast<int>(owner.getID().getUniqueId()) };
+			if (auto facial = owner.getComponent<ECS::FacialAnimationComponent>()) {
+				facial->bind(*input.model);
+				element.facialAnimation = facial.get();
+			}
+
+			if (material->isBlendable()) {
+				auto& queue = material->isDeferred() ? chunk.transparentDrawablesDeferred : chunk.transparentDrawablesForward;
+				queue.emplace(distanceToActor, element);
+			}
+			else {
+				auto& queue = material->isDeferred() ? chunk.opaqueDrawablesDeferred : chunk.opaqueDrawablesForward;
+				queue.emplace(distanceToActor, element);
+			}
+		}
+	};
+
+	auto& modelRenderers = getWorld().getComponentManager()->getComponentsArray<ECS::ModelRenderer>();
+	const auto rendererCount = static_cast<std::size_t>(modelRenderers.getSize());
+	constexpr std::size_t minParallelModels = 1024;
+	// The full Scene benchmark amortized snapshot and scheduling costs at 16K visible-parent mesh checks.
+	constexpr std::size_t minParallelMeshChecks = 16'384;
+	TASK::TaskSystem* tasks = nullptr;
+	if ((mode == FrustumCullMode::Parallel || (mode == FrustumCullMode::Automatic && rendererCount >= minParallelModels))
+		&& RESOURCES::ServiceManager::Check<TASK::TaskSystem>()) {
+		auto& taskSystem = RESOURCES::ServiceManager::Get<TASK::TaskSystem>();
+		if (taskSystem.isReady() && taskSystem.getThreadCounts() > 0) {
+			tasks = &taskSystem;
+		}
+	}
+
+	enum class ParentVisibility : std::uint8_t { Unchecked, Culled, Visible };
+	ScratchVector<ParentVisibility> checkedParents { MEMORY::StlAllocator<ParentVisibility>(ctx.domain) };
+	if (tasks && mode == FrustumCullMode::Automatic) {
+		IKIGAI_PROFILE_SCOPE("Estimate Linear Frustum Mesh Work");
+		std::size_t remainingMeshChecks = minParallelMeshChecks;
+		std::size_t rendererIndex = 0;
+		for (const auto& renderer : modelRenderers) {
+			const auto index = rendererIndex++;
+			if (renderer.getFrustumBehaviour() != ECS::EFrustumBehaviour::CULL_MESHES) {
+				continue;
+			}
+			const auto& owner = renderer.obj.get();
+			if (!owner.getIsVisible() || !owner.getIsActive()) {
+				continue;
+			}
+			const auto model = renderer.getModel();
+			auto* transform = owner.tryGetTransform();
+			if (!model || model->getMeshes().size() < 2 || !transform) {
+				continue;
+			}
+			if (checkedParents.empty()) {
+				checkedParents.resize(rendererCount, ParentVisibility::Unchecked);
+			}
+			const bool visible = frustum.boundingSphereInFrustum(model->getBoundingSphere(), transform->getTransform());
+			checkedParents[index] = visible ? ParentVisibility::Visible : ParentVisibility::Culled;
+			if (visible) {
+				remainingMeshChecks -= std::min(remainingMeshChecks, model->getMeshes().size());
+				if (remainingMeshChecks == 0) {
+					break;
+				}
+			}
+		}
+		if (remainingMeshChecks != 0) {
+			tasks = nullptr;
+		}
+	}
+
+	ScratchVector<ModelDrawInput> pending { MEMORY::StlAllocator<ModelDrawInput>(ctx.domain) };
+	ScratchVector<RENDER::FrustumModelQuery> modelQueries { MEMORY::StlAllocator<RENDER::FrustumModelQuery>(ctx.domain) };
+	ScratchVector<RENDER::BoundingSphere> meshQueries { MEMORY::StlAllocator<RENDER::BoundingSphere>(ctx.domain) };
+	ScratchVector<std::shared_ptr<RENDER::MeshInterface>> serialMeshes { MEMORY::StlAllocator<std::shared_ptr<RENDER::MeshInterface>>(ctx.domain) };
+	if (tasks) {
+		pending.reserve(rendererCount);
+		modelQueries.reserve(rendererCount);
+	}
+	{
+		IKIGAI_PROFILE_SCOPE("Extract Linear Frustum Models");
+		std::size_t rendererIndex = 0;
+		for (const auto& renderer : modelRenderers) {
+			const auto index = rendererIndex++;
+			auto& owner = renderer.obj.get();
+			if (!owner.getIsVisible() || !owner.getIsActive()) {
+				continue;
+			}
+			auto model = renderer.getModel();
+			if (!model || model->getMeshes().empty()) {
+				continue;
+			}
+			auto materials = owner.getComponent<ECS::MaterialRenderer>();
+			if (!materials) {
+				continue;
+			}
+			auto skeleton = owner.getComponent<ECS::SkeletalComponent>();
+			ModelDrawInput input { std::move(model), owner, owner.getTransform()->getTransform(), *materials, skeleton ? skeleton.get() : nullptr };
+			const auto behavior = renderer.getFrustumBehaviour();
+			const bool bypass = behavior == ECS::EFrustumBehaviour::DISABLED || (skeleton && skeleton->finalPlayable(nullptr))
+				|| DeformationPadding(*materials) > 0;
+			if (bypass) {
+				if (tasks) {
+					pending.push_back(std::move(input));
+				}
+				else {
+					appendDrawables(input, input.model->getMeshes());
+				}
+				continue;
+			}
+
+			const auto& modelBounds
+				= behavior == ECS::EFrustumBehaviour::CULL_CUSTOM ? renderer.getCustomBoundingSphere() : input.model->getBoundingSphere();
+			const auto& meshes = input.model->getMeshes();
+			const bool perMesh = behavior == ECS::EFrustumBehaviour::CULL_MESHES && meshes.size() > 1;
+			const auto parent = checkedParents.empty() ? ParentVisibility::Unchecked : checkedParents[index];
+			if (parent == ParentVisibility::Culled) {
+				continue;
+			}
+			if (!tasks) {
+				if (parent != ParentVisibility::Visible && !frustum.boundingSphereInFrustum(modelBounds, input.transform)) {
+					continue;
+				}
+				if (!perMesh) {
+					appendDrawables(input, meshes);
+					continue;
+				}
+				serialMeshes.clear();
+				for (const auto& mesh : meshes) {
+					if (frustum.boundingSphereInFrustum(mesh->getBoundingSphere(), input.transform)) {
+						serialMeshes.push_back(mesh);
+					}
+				}
+				appendDrawables(input, serialMeshes);
+				continue;
+			}
+			if (mode == FrustumCullMode::Automatic && perMesh && parent == ParentVisibility::Unchecked
+				&& !frustum.boundingSphereInFrustum(modelBounds, input.transform)) {
+				continue;
+			}
+
+			RENDER::FrustumModelQuery query { modelBounds, input.transform.getWorldPosition(), input.transform.getWorldRotation(),
+				input.transform.getWorldScale(), meshQueries.size() };
+			if (perMesh) {
+				query.meshCount = meshes.size();
+				for (const auto& mesh : meshes) {
+					meshQueries.push_back(mesh->getBoundingSphere());
+				}
+			}
+			input.queryIndex = modelQueries.size();
+			modelQueries.push_back(query);
+			pending.push_back(std::move(input));
+		}
+	}
+	if (tasks) {
+		auto* cullTasks = mode == FrustumCullMode::Parallel || meshQueries.size() >= minParallelMeshChecks ? tasks : nullptr;
+		ScratchVector<std::uint8_t> visibleModels(modelQueries.size(), std::uint8_t {}, MEMORY::StlAllocator<std::uint8_t>(ctx.domain));
+		ScratchVector<std::uint8_t> visibleMeshes(meshQueries.size(), std::uint8_t {}, MEMORY::StlAllocator<std::uint8_t>(ctx.domain));
+		RENDER::evaluateFrustumVisibility(frustum, modelQueries, meshQueries, visibleModels, visibleMeshes, cullTasks);
+		IKIGAI_PROFILE_SCOPE("Merge Linear Frustum Drawables");
+		// Equivalent multimap keys retain their original model and mesh insertion order.
+		for (const auto& input : pending) {
+			std::span<const std::uint8_t> meshVisibility;
+			if (input.queryIndex) {
+				const auto index = *input.queryIndex;
+				if (!visibleModels[index]) {
+					continue;
+				}
+				const auto& query = modelQueries[index];
+				meshVisibility = std::span<const std::uint8_t>(visibleMeshes).subspan(query.firstMesh, query.meshCount);
+			}
+			appendDrawables(input, input.model->getMeshes(), meshVisibility);
 		}
 	}
 
@@ -1370,9 +1516,11 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortFrustumCulledDrawable
 	return std::move(ctx.chunks);
 }
 
-std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(
-	const MATH::Vector3f& cameraPosition, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial, RENDER::GpuSceneSnapshot* gpuScene) {
-	ChunkContext ctx;
+std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(const MATH::Vector3f& cameraPosition,
+	std::shared_ptr<RENDER::MaterialInterface> defaultMaterial, RENDER::GpuSceneSnapshot* gpuScene,
+	std::shared_ptr<MEMORY::IAllocator> allocationDomain) {
+	IKIGAI_PROFILE_SCOPE("Extract and Sort Drawables");
+	ChunkContext ctx(std::move(allocationDomain));
 	ctx.init(getWorld());
 
 	auto cm = getWorld().getComponentManager();
@@ -1465,17 +1613,19 @@ std::vector<IKIGAI::RENDER::RenderChunk> Scene::findAndSortDrawables(
 }
 
 std::vector<IKIGAI::RENDER::RenderChunk> Scene::findDrawables(const MATH::Vector3f& cameraPosition, const RENDER::Camera& camera,
-	const RENDER::Frustum* customFrustum, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial) {
+	const RENDER::Frustum* customFrustum, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial,
+	std::shared_ptr<MEMORY::IAllocator> allocationDomain) {
+	IKIGAI_PROFILE_SCOPE("Extract Camera Drawables");
 	auto cullingProfile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("Scene::findDrawables") : nullptr;
 	if (camera.isFrustumGeometryBVHCulling()) {
 		const auto& frustum = customFrustum ? *customFrustum : camera.getFrustum();
-		return findAndSortFrustumCulledBVHDrawables(cameraPosition, frustum, defaultMaterial);
+		return findAndSortFrustumCulledBVHDrawables(cameraPosition, frustum, defaultMaterial, std::move(allocationDomain));
 	}
 	else if (camera.isFrustumGeometryCulling()) {
 		const auto& frustum = customFrustum ? *customFrustum : camera.getFrustum();
-		return findAndSortFrustumCulledDrawables(cameraPosition, frustum, defaultMaterial);
+		return findAndSortFrustumCulledDrawables(cameraPosition, frustum, defaultMaterial, FrustumCullMode::Automatic, std::move(allocationDomain));
 	}
 	else {
-		return findAndSortDrawables(cameraPosition, defaultMaterial);
+		return findAndSortDrawables(cameraPosition, defaultMaterial, nullptr, std::move(allocationDomain));
 	}
 }

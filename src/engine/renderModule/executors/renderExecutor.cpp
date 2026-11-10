@@ -41,6 +41,13 @@ void RenderExecutorInterface::endFrame() {
 	mCommands = mStandaloneCommands;
 }
 
+RenderExecutorInterface::SealedReplay RenderExecutorInterface::detachSealedFrame(const std::shared_ptr<RenderCommandBuffer>& frame) {
+	if (mCommands != frame || mCommands == mStandaloneCommands || !mCommands->isSealed()) {
+		throw std::logic_error("Cannot detach an unsealed or inactive render frame");
+	}
+	return { std::exchange(mCommands, mStandaloneCommands), mDispatch };
+}
+
 bool RenderExecutorInterface::isExecuting() const noexcept {
 	return mCommands->isExecuting();
 }

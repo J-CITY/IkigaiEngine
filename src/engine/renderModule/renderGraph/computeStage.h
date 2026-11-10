@@ -5,12 +5,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace IKIGAI::RENDER {
 class DriverInterface;
 class Renderer;
+class ShaderInterface;
 class StorageBufferInterface;
 class TextureInterface;
 class UniformBufferInterface;
@@ -30,6 +32,11 @@ struct ResolvedAsyncImageProgramBinding {
 	std::string Name;
 	const std::shared_ptr<TextureInterface>* Texture = nullptr;
 	std::shared_ptr<StorageBufferInterface> Buffer;
+};
+
+struct ScopedTextureDispatch {
+	std::weak_ptr<ShaderInterface> Shader;
+	uint64_t Generation = 0;
 };
 
 // Load-time resolution of a COMPUTE stage that uses the "Compute" descriptor block.
@@ -56,6 +63,7 @@ struct ComputeStageState {
 	uint32_t MipCount = 0;
 	std::vector<std::shared_ptr<UniformBufferInterface>> MipUniforms;
 	std::array<size_t, 3> MipUniformExtent = { 0, 0, 0 };
+	std::optional<ScopedTextureDispatch> TextureWrite;
 };
 
 BufferUsage ResolveBufferUsage(const std::vector<PipelineBufferUsage>& usage);

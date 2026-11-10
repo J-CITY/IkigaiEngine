@@ -113,6 +113,7 @@ bool SkeletonStateGraphLoader::reloadResource(std::weak_ptr<SKELETON::SkeletalSt
 			auto candidate = CreateFromResource(path);
 			res->definition = candidate->definition;
 			++res->revision;
+			addFileWatchSubscribe(path, {}, res);
 			return true;
 		} catch (const std::exception& e) {
 			std::cerr << "State graph reload rejected (" << path << "): " << e.what() << std::endl;

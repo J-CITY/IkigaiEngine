@@ -34,6 +34,7 @@ namespace IKIGAI::RENDER {
 
 		void* getImguiId() override;
 		void recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) override;
+		bool adoptReloadedTexture(TextureInterface& texture) noexcept override;
 
 		unsigned id = 0;
 		int slot = 0;

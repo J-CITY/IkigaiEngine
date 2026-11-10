@@ -114,8 +114,7 @@ void SurfaceComponent::pollUpdate() {
 		}
 		update.Ready = update.NextTile == update.Prepared->Tiles.size();
 	} catch (const std::exception& error) {
-		mUpdateError = error.what();
-		mUpdate.reset();
+		failUpdate(error.what());
 	}
 }
 void SurfaceComponent::publishUpdate(bool dependenciesReady) {
@@ -127,10 +126,17 @@ void SurfaceComponent::publishUpdate(bool dependenciesReady) {
 	mRevision = mUpdate->Revision;
 	mUpdate.reset();
 }
+void SurfaceComponent::failUpdate(std::string error) {
+	mUpdateError = std::move(error);
+	mUpdate.reset();
+}
 bool SurfaceComponent::updatePending() const {
 	return bool(mUpdate);
 }
 const std::string& SurfaceComponent::updateError() const {
+	if (!mUpdate && mUpdateError.empty() && mTerrain) {
+		return mTerrain->buildError();
+	}
 	return mUpdateError;
 }
 uint64_t SurfaceComponent::requestedRevision() const {

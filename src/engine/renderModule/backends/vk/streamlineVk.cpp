@@ -88,12 +88,11 @@ StreamlineCallbacks DriverVk::streamlineCallbacks(){
 																	: VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
 				return r;
 			},
-		[this]() { return reinterpret_cast<void*>(VkCommandBuffer(*getCurrentFrame().mCommandBuffer)); },
 		[this]() {
-			mBoundPipelineKey.reset();
-			mDirty.set();
+			invalidateCommandState();
+			return reinterpret_cast<void*>(VkCommandBuffer(*getCurrentFrame().mCommandBuffer));
 		},
-		[this](bool enabled) { streamlinePresenter(enabled); },
+		[this]() { invalidateCommandState(); }, [this](bool enabled) { streamlinePresenter(enabled); },
 		[this](void* semaphore, uint64_t value) {
             if(!semaphore||!value)
 				return;

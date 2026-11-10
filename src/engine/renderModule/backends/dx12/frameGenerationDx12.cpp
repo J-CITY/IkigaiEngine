@@ -224,6 +224,7 @@ public:
 			prep.cameraRight[i] = f.Right[i];
 			prep.cameraForward[i] = f.Forward[i];
 		}
+		d.invalidateCommandState();
 		check(dispatch(&fg, &prep.header), "FSR FG prepare");
 		void* commands = nullptr;
 		FfxApiResource output {};
@@ -248,7 +249,6 @@ public:
 		gen.frameID = f.RealFrameId;
 		gen.generationRect = config.generationRect;
 		check(dispatch(&fg, &gen.header), "FSR FG generate");
-		d.invalidateUpscalerState();
 		state.Active = true;
 		prepared = true;
 		if (state.RealFrames == 0 || f.Reset) {
@@ -339,6 +339,7 @@ std::unique_ptr<IKIGAI::RENDER::FrameGenerationInterface> IKIGAI::RENDER::Driver
 	throw UnsupportedFrameGeneration("Requested Frame Generation SDK is not compiled for DX12");
 }
 void IKIGAI::RENDER::DriverDx12::renderPresentationUI(std::shared_ptr<FrameBufferInterface> target) {
+	invalidateCommandState();
 	for (auto& texture : mImGuiTextures) {
 		texture->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 		mRayFrameResources.push_back(std::move(texture));
@@ -349,6 +350,5 @@ void IKIGAI::RENDER::DriverDx12::renderPresentationUI(std::shared_ptr<FrameBuffe
 		imgui->renderDrawDataTo(std::move(target));
 	}
 	mPresentationUIRendered = true;
-	invalidateUpscalerState();
 }
 #endif

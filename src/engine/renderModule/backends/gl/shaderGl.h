@@ -26,6 +26,7 @@ public:
   ~ShaderGl() override;
 
   void recompile(const ShaderResource &res) override;
+  bool adoptReloadedShader(ShaderInterface& replacement) noexcept override;
 
   void bind() override;
   void unbind() override;

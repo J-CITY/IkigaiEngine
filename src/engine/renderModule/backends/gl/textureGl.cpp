@@ -609,6 +609,21 @@ void* TextureGl::getImguiId() {
 	return reinterpret_cast<void*>(static_cast<uintptr_t>(id));
 }
 
+bool TextureGl::adoptReloadedTexture(TextureInterface& texture) noexcept {
+	auto* replacement = dynamic_cast<TextureGl*>(&texture);
+	if (!replacement || !replacement->id) {
+		return false;
+	}
+	swapTextureDescription(*replacement);
+	using std::swap;
+	swap(id, replacement->id);
+#if IKIGAI_ENABLE_MEMORY_TRACKING
+	swap(mMemory, replacement->mMemory);
+	swap(mMemoryLayout, replacement->mMemoryLayout);
+#endif
+	return true;
+}
+
 void TextureGl::recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) {
 	requireOwnerThread();
 	++mRevision;

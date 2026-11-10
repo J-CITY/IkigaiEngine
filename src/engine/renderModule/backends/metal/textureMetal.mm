@@ -427,6 +427,23 @@ namespace IKIGAI::RENDER {
 		mSampler = [device newSamplerStateWithDescriptor:sampler];
 	}
 
+	bool TextureMetal::adoptReloadedTexture(TextureInterface& texture) noexcept {
+		auto* replacement = dynamic_cast<TextureMetal*>(&texture);
+		if (!replacement || !replacement->mTexture) {
+			return false;
+		}
+		swapTextureDescription(*replacement);
+		using std::swap;
+		swap(mMetalFormat, replacement->mMetalFormat);
+		id<MTLTexture> oldTexture = mTexture;
+		id<MTLSamplerState> oldSampler = mSampler;
+		mTexture = replacement->mTexture;
+		mSampler = replacement->mSampler;
+		replacement->mTexture = oldTexture;
+		replacement->mSampler = oldSampler;
+		return true;
+	}
+
 	void TextureMetal::recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) {
 		requireOwnerThread();
 		++mRevision;

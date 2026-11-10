@@ -139,6 +139,7 @@ bool DestructibleLoader::reloadResource(std::weak_ptr<DestructibleResource> weak
 			resource->materials = std::move(candidate->materials);
 			resource->dependencies = std::move(candidate->dependencies);
 			++resource->revision;
+			addFileWatchSubscribe(path, {}, resource);
 			return true;
 		} catch (const std::exception& error) {
 			std::cerr << "Destructible reload rejected: " << error.what() << '\n';

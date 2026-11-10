@@ -1,5 +1,6 @@
 #include "driverDx12.h"
 #include "captureModule/screenshot.h"
+#include "profilerModule/trace.h"
 #include "renderModule/backends/driverFactory.h"
 #include "renderModule/backends/interface/integerColorAttachment.h"
 #include "renderModule/backends/interface/pipelineCacheStorage.h"
@@ -121,6 +122,10 @@ const static std::map<StencilOperation, D3D12_STENCIL_OP> StencilOperationMap = 
 namespace {
 bool profilePipelineCache() {
 	return std::getenv("IKIGAI_PROFILE_PIPELINE_CACHE") != nullptr;
+}
+bool profileBindlessUpdates() {
+	static const bool enabled = std::getenv("IKIGAI_BINDLESS_UPDATES") != nullptr;
+	return enabled;
 }
 // Hash individual descriptor fields, never native structures containing padding or pointers.
 class PipelineNameBuilder {
@@ -306,6 +311,9 @@ void DriverDx12::savePipelineLibrary() noexcept {
 }
 
 void DriverDx12::retireShaderPipelines(size_t shaderId) {
+	if (mBoundPipelineKey && mBoundPipelineKey->shaderId == shaderId) {
+		mBoundPipelineKey.reset();
+	}
 	for (auto state = mStates.begin(); state != mStates.end();) {
 		if (state->first.shaderId == shaderId) {
 			destroyDeferred(state->second);
@@ -654,6 +662,7 @@ void DriverDx12::executeRecordedCommands() {
 	mDeviceHealth->execute(mCommandQueue.Get(), 1, lists);
 	// The allocator still backs the executed list; Reset on the list alone only reopens recording.
 	mDeviceHealth->check(mCommandList->Reset(mCommandAllocator.Get(), nullptr), "Reset graphics segment");
+	mBoundPipelineKey.reset();
 	mRecording = true;
 	for (auto flag :
 		{ Dirty::VIEWPORT, Dirty::SCISSOR, Dirty::PRIMITIVE_MODE, Dirty::RASTERIZATION_MODE, Dirty::VERTEX_BUFFER, Dirty::INDEX_BUFFER }) {
@@ -1101,6 +1110,11 @@ Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> DriverDx12::getCommandList() 
 	return mCommandList;
 }
 
+void DriverDx12::invalidateCommandState() {
+	mBoundPipelineKey.reset();
+	mDirty.set();
+}
+
 FrameGenerationInputs DriverDx12::stageFrameGenerationInputs(const FrameGenerationInputs& inputs) {
 	if (!settings.pipelined()) {
 		return inputs;
@@ -1189,7 +1203,10 @@ void DriverDx12::presentFrame() {
 		std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->commonPresentBefore();
 	}
 #endif
-	mDeviceHealth->check(mSwapchains[mCurrentWindowID].mSwapChain->Present(vsync ? 1 : 0, 0), "Present");
+	{
+		IKIGAI_PROFILE_SCOPE("DXGI Present");
+		mDeviceHealth->check(mSwapchains[mCurrentWindowID].mSwapChain->Present(vsync ? 1 : 0, 0), "Present");
+	}
 #ifdef IKIGAI_USE_STREAMLINE
 	if (mDlssRuntime && !mSwapchains.at(mCurrentWindowID).streamline) {
 		std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->commonPresentAfter();
@@ -1206,6 +1223,7 @@ void DriverDx12::presentFrame() {
 }
 
 void DriverDx12::finishPresent() {
+	IKIGAI_PROFILE_SCOPE("DX12 Finish Present");
 	if (settings.pipelined()) {
 		collectCompletedFrames();
 		mRecordingSlot = (mRecordingSlot + 1) % mRecordingSlots.size();
@@ -1215,6 +1233,7 @@ void DriverDx12::finishPresent() {
 			collectCompletedFrames();
 		}
 		if (mFrameGeneration && slot.FrameGenerationId) {
+			IKIGAI_PROFILE_SCOPE("DX12 Wait for Generated Frame");
 			mFrameGeneration->waitForFrame(*slot.FrameGenerationId);
 			mFrameGenerationStatus = mFrameGeneration->status();
 		}
@@ -1229,6 +1248,7 @@ void DriverDx12::finishPresent() {
 	}
 	releaseCompletedFrame();
 	if (mFrameGeneration) {
+		IKIGAI_PROFILE_SCOPE("DX12 Wait for Generated Presents");
 		mFrameGeneration->waitForPresents();
 		mFrameGenerationStatus = mFrameGeneration->status();
 	}
@@ -1255,10 +1275,10 @@ void DriverDx12::begin() {
 		}
 	}
 	mBindlessSnapshots.clear();
+	mBindlessBufferViews.clear();
 	mBindlessFrameResources.clear();
 	mBindlessNativeResources.clear();
 	mBindlessDescriptorCursor = TransientDescriptorStart + static_cast<uint32_t>(mRecordingSlot) * TransientDescriptorsPerFrame;
-	mBindlessSamplerCursor = 0;
 	mBindlessDescriptorEnd = mBindlessDescriptorCursor + TransientDescriptorsPerFrame;
 	if (mBindlessDescriptorSlots.empty()) {
 		mBindlessDescriptorSlots.resize(settings.pipelined() ? mRecordingSlots.size() : 1);
@@ -1268,8 +1288,12 @@ void DriverDx12::begin() {
 		bindlessSlot.ViewEnd = mBindlessDescriptorEnd;
 	}
 	mBindlessDescriptorEnd = bindlessSlot.ViewEnd;
-	mBindlessSamplerEnd = bindlessSlot.SamplerEnd;
 	for (auto& [binding, ranges] : bindlessSlot.Tables) {
+		for (auto& range : ranges) {
+			range.Used = false;
+		}
+	}
+	for (auto& [count, ranges] : bindlessSlot.SamplerRanges) {
 		for (auto& range : ranges) {
 			range.Used = false;
 		}
@@ -1336,6 +1360,7 @@ void DriverDx12::splitGraphGraphics() {
 	endCommandList(mCommandQueue.Get(), mCommandList.Get(), false);
 	// The allocator covers every graphics segment until the final frame fence.
 	mDeviceHealth->check(mCommandList->Reset(mCommandAllocator.Get(), nullptr), "Reset graphics segment for graph compute");
+	mBoundPipelineKey.reset();
 	mRecording = true;
 	setDirty(Dirty::VIEWPORT);
 	setDirty(Dirty::SCISSOR);
@@ -1343,7 +1368,6 @@ void DriverDx12::splitGraphGraphics() {
 	setDirty(Dirty::RASTERIZATION_MODE);
 	setDirty(Dirty::VERTEX_BUFFER);
 	setDirty(Dirty::INDEX_BUFFER);
-	setDirty(Dirty::PIPELINE);
 }
 
 void DriverDx12::joinGraphCompute() {
@@ -1366,6 +1390,7 @@ void DriverDx12::enqueueGraphComputeWait() {
 void DriverDx12::beginCommandList(ID3D12CommandAllocator* cmdAlloc, ID3D12GraphicsCommandList* cmdList) {
 	mDeviceHealth->check(cmdAlloc->Reset(), "Reset frame command allocator");
 	mDeviceHealth->check(cmdList->Reset(cmdAlloc, nullptr), "Reset frame command list");
+	mBoundPipelineKey.reset();
 	mRecording = true;
 }
 
@@ -1631,6 +1656,8 @@ std::function<void()> DriverDx12::presentedFrameWait(GpuCompletionToken token) {
 		throw std::logic_error("DX12 presentation fence does not match the submission");
 	}
 	return [health = mDeviceHealth, fence = mFence, value = slot.FenceValue, source = completionSource(), token] {
+		IKIGAI_PROFILE_SCOPE("Wait for Present GPU Completion");
+		IKIGAI_PROFILE_ZONE_VALUE(token.Value);
 		health->waitForFence(fence.Get(), value, "Wait for pipelined presentation fence");
 		source->completed(token);
 	};
@@ -2135,18 +2162,34 @@ DriverDx12::PipelineKey DriverDx12::pipelineKey(const State& state, bool compute
 	return key;
 }
 
+void DriverDx12::ensurePipelineState(bool compute) {
+	const auto key = pipelineKey(mCurrentState, compute);
+	if (mBoundPipelineKey == key) {
+		return;
+	}
+
+	IKIGAI_PROFILE_SCOPE("DX12 Resolve and Bind Pipeline");
+	auto cached = mStates.find(key);
+	if (cached == mStates.end()) {
+		UTILS::LoadTimer timing(compute ? "compute-pipeline" : "graphics-pipeline", mCurrentState.mShader->mPath);
+		cached = mStates.emplace(key, createNewState(mCurrentState)).first;
+	}
+	mCommandList->SetPipelineState(cached->second.Get());
+	mBoundPipelineKey = key;
+	static const bool profileBinds = std::getenv("IKIGAI_PROFILE_PIPELINE_BINDS") != nullptr;
+	if (profileBinds) {
+		std::cout << "PSO_BIND backend=dx12 compute=" << compute << " generation=" << key.shaderGeneration << " path=" << mCurrentState.mShader->mPath
+				  << '\n';
+	}
+}
+
 void DriverDx12::applyState() {
 	auto shader = mCurrentState.mShader;
 	assert(shader);
 
 	const bool isCompute = shader->mBlobs.contains(ShaderType::COMPUTE) && shader->mBlobs.at(ShaderType::COMPUTE)
 		&& !shader->mBlobs.contains(ShaderType::VERTEX) && !shader->mBlobs.contains(ShaderType::FRAGMENT);
-	auto key = pipelineKey(mCurrentState, isCompute);
-	auto cached = mStates.find(key);
-	if (cached == mStates.end()) {
-		UTILS::LoadTimer timing(isCompute ? "compute-pipeline" : "graphics-pipeline", shader->mPath);
-		cached = mStates.emplace(key, createNewState(mCurrentState)).first;
-	}
+	ensurePipelineState(isCompute);
 
 	std::shared_ptr<FrameBufferDx12> fb;
 
@@ -2177,8 +2220,6 @@ void DriverDx12::applyState() {
 			FALSE, &dsv_descriptor);
 	}
 
-	const auto state = cached->second.Get();
-	mCommandList->SetPipelineState(state);
 	if (isCompute) {
 		mCommandList->SetComputeRootSignature(shader->getRootSignature().Get());
 	} else {
@@ -2243,10 +2284,13 @@ void DriverDx12::applyState() {
 		else if (uniform.mType == ShaderReflection::UniformType::STORAGE_BUFFER) {
 			auto ssbo = mStorageBuffers.at(binding);
 			if (shader->bindingMode()==ShaderBindingMode::Bindless && uniform.mReadOnly) {
-				BindlessResourceTable local;local.capacity=1;local.entries.push_back({{},ssbo});
-				const auto snapshot=bindlessSnapshot(uniform,1,&local);
-				if (isCompute) mCommandList->SetComputeRootDescriptorTable(rootId,snapshot.first);
-				else mCommandList->SetGraphicsRootDescriptorTable(rootId,snapshot.first);
+				const auto view = bindlessBufferView(ssbo);
+				if (isCompute) {
+					mCommandList->SetComputeRootDescriptorTable(rootId, view);
+				}
+				else {
+					mCommandList->SetGraphicsRootDescriptorTable(rootId, view);
+				}
 				continue;
 			}
 			const auto& ssboResource = ssbo->getBuffer();
@@ -2389,9 +2433,115 @@ IKIGAI::RENDER::BindlessCapabilities IKIGAI::RENDER::DriverDx12::bindlessCapabil
 	return { true, true, false, true, options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3, 128, 64 };
 }
 
-std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> IKIGAI::RENDER::DriverDx12::bindlessSnapshot(
-	const ShaderReflection::Uniform& uniform, uint32_t count, const BindlessResourceTable* localTable) {
-	const auto& table = localTable ? *localTable : bindlessTable(uniform, count);
+namespace {
+D3D12_SHADER_RESOURCE_VIEW_DESC rawBufferView(size_t byteSize) {
+	D3D12_SHADER_RESOURCE_VIEW_DESC view {};
+	view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	view.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+	view.Format = DXGI_FORMAT_R32_TYPELESS;
+	view.Buffer.NumElements = static_cast<UINT>(byteSize / 4);
+	view.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+	return view;
+}
+
+D3D12_TEXTURE_ADDRESS_MODE samplerAddressMode(WrapFilter wrap) {
+	switch (wrap) {
+	case WrapFilter::REPEAT:
+		return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+	case WrapFilter::MIRRORED_REPEAT:
+		return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+	case WrapFilter::CLAMP_TO_BORDER:
+		return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+	default:
+		return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+	}
+}
+}
+
+D3D12_GPU_DESCRIPTOR_HANDLE DriverDx12::bindlessBufferView(const std::shared_ptr<StorageBufferDx12>& buffer) {
+	buffer->transition(mCommandList.Get(), D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE);
+	const auto& resource = buffer->getBuffer();
+	const BindlessBufferViewKey key { reinterpret_cast<std::uintptr_t>(resource.Get()), buffer->getSizeByte() };
+	if (auto found = mBindlessBufferViews.find(key); found != mBindlessBufferViews.end()) {
+		return found->second;
+	}
+	if (key.ByteSize % 4) {
+		throw std::runtime_error("Bindless byte-address buffer size must be a multiple of four");
+	}
+	if (mBindlessDescriptorCursor >= mBindlessDescriptorEnd) {
+		throw std::runtime_error("Bindless descriptor snapshot capacity exhausted in current frame");
+	}
+
+	if (mBindlessNativeResources.try_emplace(resource.Get(), resource).second) {
+		mBindlessFrameResources.push_back({ {}, buffer });
+	}
+	auto cpu = mDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+	cpu.ptr += SIZE_T(mBindlessDescriptorCursor) * mDescriptorIncSize;
+	auto gpu = mDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
+	gpu.ptr += UINT64(mBindlessDescriptorCursor) * mDescriptorIncSize;
+	mBindlessBufferViews.emplace(key, gpu);
+	const auto view = rawBufferView(key.ByteSize);
+	mDevice->CreateShaderResourceView(resource.Get(), &view, cpu);
+	++mBindlessDescriptorCursor;
+	if (profileBindlessUpdates()) {
+		std::cerr << "DX12_BINDLESS_BUFFER_VIEW slot=" << mRecordingSlot << " bytes=" << key.ByteSize << '\n';
+	}
+	return gpu;
+}
+
+std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, uint32_t> DriverDx12::bindlessSamplerTable(
+	BindlessDescriptorSlot& slot, std::span<const BindlessSamplerStamp> samplers) {
+	const auto count = static_cast<uint32_t>(samplers.size());
+	auto& ranges = slot.SamplerRanges[count];
+	auto range = std::ranges::find_if(ranges, [&](const auto& candidate) { return std::ranges::equal(candidate.Samplers, samplers); });
+	const bool unchanged = range != ranges.end();
+	if (!unchanged) {
+		range = std::ranges::find_if(ranges, [](const auto& candidate) { return !candidate.Used; });
+	}
+	const bool newRange = range == ranges.end();
+	if (newRange) {
+		if (count > slot.SamplerEnd) {
+			throw std::runtime_error("Bindless sampler descriptor capacity exhausted in current frame");
+		}
+		range = ranges.insert(ranges.end(), BindlessSamplerRange { slot.SamplerEnd - count, false, std::vector<BindlessSamplerStamp>(count) });
+		slot.SamplerEnd -= count;
+	}
+
+	const auto stride = mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+	auto gpu = mBindlessSamplerHeap->GetGPUDescriptorHandleForHeapStart();
+	gpu.ptr += UINT64(range->Start) * stride;
+	uint32_t writes = 0;
+	if (!unchanged) {
+		auto cpu = mBindlessSamplerHeap->GetCPUDescriptorHandleForHeapStart();
+		cpu.ptr += SIZE_T(range->Start) * stride;
+		for (uint32_t index = 0; index < count; ++index) {
+			const auto& stamp = samplers[index];
+			if (!newRange && range->Samplers[index] == stamp) {
+				continue;
+			}
+			const auto min = stamp.Min == MinMagFilter::NEAREST ? D3D12_FILTER_TYPE_POINT : D3D12_FILTER_TYPE_LINEAR;
+			const auto mag = stamp.Mag == MinMagFilter::NEAREST ? D3D12_FILTER_TYPE_POINT : D3D12_FILTER_TYPE_LINEAR;
+			D3D12_SAMPLER_DESC desc {};
+			desc.Filter = D3D12_ENCODE_BASIC_FILTER(min, mag, min, D3D12_FILTER_REDUCTION_TYPE_STANDARD);
+			desc.AddressU = samplerAddressMode(stamp.WrapS);
+			desc.AddressV = samplerAddressMode(stamp.WrapT);
+			desc.AddressW = samplerAddressMode(stamp.WrapR);
+			desc.MaxAnisotropy = 1;
+			desc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+			desc.MaxLOD = D3D12_FLOAT32_MAX;
+			mDevice->CreateSampler(&desc, { cpu.ptr + SIZE_T(index) * stride });
+			range->Samplers[index] = stamp;
+			++writes;
+		}
+	}
+	// Referenced ranges may be shared, but only unreferenced ranges can be rewritten.
+	range->Used = true;
+	return { gpu, writes };
+}
+
+std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> DriverDx12::bindlessSnapshot(
+	const ShaderReflection::Uniform& uniform, uint32_t count) {
+	const auto& table = bindlessTable(uniform, count);
 	const auto& fallback = table.get(0);
 	const bool textures = bool(fallback.texture);
 	// Bindless capabilities cap these tables at 128 views. Stack stamps avoid
@@ -2416,222 +2566,118 @@ std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> IKIGAI::REND
 				mBindlessFrameResources.push_back(entry);
 			}
 			views[i] = { entry.texture, texture->getResource().Get(), texture->getRevision(), 0 };
-			samplers[i] = { static_cast<int>(texture->getMinFilter()), static_cast<int>(texture->getMagFilter()),
-				static_cast<int>(texture->getWrapS()), static_cast<int>(texture->getWrapT()), static_cast<int>(texture->getWrapR()) };
+			samplers[i] = { texture->getMinFilter(), texture->getMagFilter(), texture->getWrapS(), texture->getWrapT(), texture->getWrapR() };
 		}
 		else {
 			const auto buffer = std::static_pointer_cast<StorageBufferDx12>(entry.buffer);
+			const auto byteSize = buffer->getSizeByte();
+			if (byteSize % 4) {
+				throw std::runtime_error("Bindless byte-address buffer size must be a multiple of four");
+			}
 			buffer->transition(
 				mCommandList.Get(), uniform.mReadOnly ? D3D12_RESOURCE_STATE_ALL_SHADER_RESOURCE : D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 			if (mBindlessNativeResources.try_emplace(buffer->getBuffer().Get(), buffer->getBuffer()).second) {
 				mBindlessFrameResources.push_back(entry);
 			}
-			views[i] = { entry.buffer, buffer->getBuffer().Get(), 0, buffer->getSizeByte() };
+			views[i] = { entry.buffer, buffer->getBuffer().Get(), 0, byteSize };
 		}
 	}
 	const BindlessTableKey tableKey { static_cast<uint32_t>(uniform.mBind), count, uniform.mReadOnly, textures };
-	std::string localKey;
-	if (localTable) {
-		localKey = "local:" + std::to_string(uniform.mBind) + ":" + std::to_string(count) + ":" + std::to_string(uniform.mReadOnly);
-		for (uint32_t i = 0; i < count; ++i) {
-			localKey += ":" + std::to_string(reinterpret_cast<uintptr_t>(views[i].Resource)) + ":" + std::to_string(views[i].Revision) + ":"
-				+ std::to_string(views[i].Size);
-		}
-		if (const auto it = mBindlessSnapshots.find(localKey); it != mBindlessSnapshots.end()) {
-			return it->second;
-		}
-	}
 	auto sameView = [](const BindlessViewStamp& left, const BindlessViewStamp& right) {
 		return left.Resource == right.Resource && left.Revision == right.Revision && left.Size == right.Size && !left.Owner.owner_before(right.Owner)
 			&& !right.Owner.owner_before(left.Owner);
 	};
-	BindlessDescriptorRange* range = nullptr;
-	bool exactMatch = false;
-	uint32_t viewStart = mBindlessDescriptorCursor;
-	uint32_t samplerStart = mBindlessSamplerCursor;
-	if (!localTable) {
-		auto& slot = mBindlessDescriptorSlots[mRecordingSlot];
-		auto& ranges = slot.Tables[tableKey];
-		for (auto& candidate : ranges) {
-			if (candidate.Views.size() == count && candidate.Samplers.size() == (textures ? count : 0)
-				&& std::equal(candidate.Views.begin(), candidate.Views.end(), views.begin(), sameView)
-				&& (!textures || std::equal(candidate.Samplers.begin(), candidate.Samplers.end(), samplers.begin()))) {
-				range = &candidate;
-				exactMatch = true;
-				break;
-			}
-		}
-		if (!range) {
-			for (auto& candidate : ranges) {
-				if (!candidate.Used) {
-					range = &candidate;
-					break;
-				}
-			}
-		}
-		if (!range) {
-			if (count > slot.ViewEnd - mBindlessDescriptorCursor || (textures && count > slot.SamplerEnd - mBindlessSamplerCursor)) {
-				throw std::runtime_error("Bindless persistent descriptor capacity exhausted in current frame");
-			}
-			ranges.emplace_back();
-			slot.ViewEnd -= count;
-			if (textures) {
-				slot.SamplerEnd -= count;
-			}
-			mBindlessDescriptorEnd = slot.ViewEnd;
-			mBindlessSamplerEnd = slot.SamplerEnd;
-			range = &ranges.back();
-			range->ViewStart = slot.ViewEnd;
-			range->SamplerStart = slot.SamplerEnd;
-		}
-		viewStart = range->ViewStart;
-		samplerStart = range->SamplerStart;
+	auto& slot = mBindlessDescriptorSlots[mRecordingSlot];
+	auto& ranges = slot.Tables[tableKey];
+	const auto stamps = std::span(views).first(count);
+	auto range = std::ranges::find_if(ranges, [&](const auto& candidate) { return std::ranges::equal(candidate.Views, stamps, sameView); });
+	const bool unchanged = range != ranges.end();
+	if (!unchanged) {
+		range = std::ranges::find_if(ranges, [](const auto& candidate) { return !candidate.Used; });
 	}
-	else if (count > mBindlessDescriptorEnd - mBindlessDescriptorCursor || (textures && count > mBindlessSamplerEnd - mBindlessSamplerCursor)) {
-		throw std::runtime_error("Bindless descriptor snapshot capacity exhausted in current frame");
+	const bool newRange = range == ranges.end();
+	if (newRange && count > slot.ViewEnd - mBindlessDescriptorCursor) {
+		throw std::runtime_error("Bindless persistent view descriptor capacity exhausted in current frame");
+	}
+	const auto [samplerHandle, samplerWrites]
+		= textures ? bindlessSamplerTable(slot, std::span(samplers).first(count)) : std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, uint32_t> {};
+	if (newRange) {
+		range = ranges.insert(ranges.end(), BindlessDescriptorRange { slot.ViewEnd - count, false, std::vector<BindlessViewStamp>(count) });
+		slot.ViewEnd -= count;
+		mBindlessDescriptorEnd = slot.ViewEnd;
 	}
 
-	auto cpu = mDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-	cpu.ptr += SIZE_T(viewStart) * mDescriptorIncSize;
 	auto gpu = mDescriptorHeap->GetGPUDescriptorHandleForHeapStart();
-	gpu.ptr += UINT64(viewStart) * mDescriptorIncSize;
-	auto samplerCpu = mBindlessSamplerHeap->GetCPUDescriptorHandleForHeapStart();
-	auto samplerGpu = mBindlessSamplerHeap->GetGPUDescriptorHandleForHeapStart();
-	const auto samplerStride = mDevice->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-	samplerCpu.ptr += SIZE_T(samplerStart) * samplerStride;
-	samplerGpu.ptr += UINT64(samplerStart) * samplerStride;
-	if (exactMatch) {
-		range->Used = true;
-		markBindlessTableUsed(static_cast<uint32_t>(uniform.mBind));
-		if (std::getenv("IKIGAI_BINDLESS_UPDATES")) {
-			std::cerr << "DX12_BINDLESS_UPDATE binding=" << uniform.mBind << " slot=" << mRecordingSlot << " views=0 samplers=0\n";
-		}
-		return { gpu, samplerGpu };
-	}
+	gpu.ptr += UINT64(range->ViewStart) * mDescriptorIncSize;
 	uint32_t viewWrites = 0;
-	uint32_t samplerWrites = 0;
-	for (uint32_t i = 0; i < count; ++i) {
-		const auto entry = table.get(i);
-		const bool writeView = !range || range->Views.size() != count || !sameView(range->Views[i], views[i]);
-		const bool writeSampler = textures && (!range || range->Samplers.size() != count || range->Samplers[i] != samplers[i]);
-		if (entry.texture) {
-			const auto t = std::static_pointer_cast<TextureDx12>(entry.texture);
-			auto* resource = t->getResource().Get();
-			D3D12_SHADER_RESOURCE_VIEW_DESC view {};
-			view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-			view.Format = resource->GetDesc().Format;
-			if (view.Format == DXGI_FORMAT_R32_TYPELESS) {
-				view.Format = DXGI_FORMAT_R32_FLOAT;
+	if (!unchanged) {
+		auto cpu = mDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+		cpu.ptr += SIZE_T(range->ViewStart) * mDescriptorIncSize;
+		for (uint32_t index = 0; index < count; ++index) {
+			if (!newRange && sameView(range->Views[index], views[index])) {
+				continue;
 			}
-			if (view.Format == DXGI_FORMAT_R24G8_TYPELESS) {
-				view.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
-			}
-			switch (t->getType()) {
-			case TextureType::TEXTURE_CUBE:
-				view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-				view.TextureCube.MipLevels = t->getMipCount();
-				break;
-			case TextureType::TEXTURE_3D:
-				view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
-				view.Texture3D.MipLevels = t->getMipCount();
-				break;
-			case TextureType::TEXTURE_2D_ARRAY:
-				view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-				view.Texture2DArray.MipLevels = t->getMipCount();
-				view.Texture2DArray.ArraySize = resource->GetDesc().DepthOrArraySize;
-				break;
-			default:
-				view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-				view.Texture2D.MipLevels = t->getMipCount();
-				break;
-			}
-			if (writeView) {
-				mDevice->CreateShaderResourceView(resource, &view, cpu);
-				++viewWrites;
-			}
-			auto wrap = [](WrapFilter value) {
-				switch (value) {
-				case WrapFilter::REPEAT:
-					return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-				case WrapFilter::MIRRORED_REPEAT:
-					return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
-				case WrapFilter::CLAMP_TO_BORDER:
-					return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-				default:
-					return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-				}
-			};
-			D3D12_SAMPLER_DESC sampler {};
-			const auto min = t->getMinFilter() == MinMagFilter::NEAREST ? D3D12_FILTER_TYPE_POINT : D3D12_FILTER_TYPE_LINEAR;
-			const auto mag = t->getMagFilter() == MinMagFilter::NEAREST ? D3D12_FILTER_TYPE_POINT : D3D12_FILTER_TYPE_LINEAR;
-			sampler.Filter = D3D12_ENCODE_BASIC_FILTER(min, mag, min, D3D12_FILTER_REDUCTION_TYPE_STANDARD);
-			sampler.AddressU = wrap(t->getWrapS());
-			sampler.AddressV = wrap(t->getWrapT());
-			sampler.AddressW = wrap(t->getWrapR());
-			sampler.MaxAnisotropy = 1;
-			sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-			sampler.MaxLOD = D3D12_FLOAT32_MAX;
-			if (writeSampler) {
-				mDevice->CreateSampler(&sampler, samplerCpu);
-				++samplerWrites;
-			}
-			samplerCpu.ptr += samplerStride;
-		}
-		else {
-			const auto b = std::static_pointer_cast<StorageBufferDx12>(entry.buffer);
-			if (b->getSizeByte() % 4) {
-				throw std::runtime_error("Bindless byte-address buffer size must be a multiple of four");
-			}
-			if (uniform.mReadOnly) {
+			const auto handle = D3D12_CPU_DESCRIPTOR_HANDLE { cpu.ptr + SIZE_T(index) * mDescriptorIncSize };
+			const auto& entry = table.get(index);
+			if (entry.texture) {
+				const auto texture = std::static_pointer_cast<TextureDx12>(entry.texture);
+				auto* resource = texture->getResource().Get();
 				D3D12_SHADER_RESOURCE_VIEW_DESC view {};
 				view.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-				view.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-				view.Format = DXGI_FORMAT_R32_TYPELESS;
-				view.Buffer.NumElements = static_cast<UINT>(b->getSizeByte() / 4);
-				view.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
-				if (writeView) {
-					mDevice->CreateShaderResourceView(b->getBuffer().Get(), &view, cpu);
-					++viewWrites;
+				view.Format = resource->GetDesc().Format;
+				if (view.Format == DXGI_FORMAT_R32_TYPELESS) {
+					view.Format = DXGI_FORMAT_R32_FLOAT;
 				}
+				if (view.Format == DXGI_FORMAT_R24G8_TYPELESS) {
+					view.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+				}
+				switch (texture->getType()) {
+				case TextureType::TEXTURE_CUBE:
+					view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+					view.TextureCube.MipLevels = texture->getMipCount();
+					break;
+				case TextureType::TEXTURE_3D:
+					view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+					view.Texture3D.MipLevels = texture->getMipCount();
+					break;
+				case TextureType::TEXTURE_2D_ARRAY:
+					view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+					view.Texture2DArray.MipLevels = texture->getMipCount();
+					view.Texture2DArray.ArraySize = resource->GetDesc().DepthOrArraySize;
+					break;
+				default:
+					view.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+					view.Texture2D.MipLevels = texture->getMipCount();
+					break;
+				}
+				mDevice->CreateShaderResourceView(resource, &view, handle);
 			}
 			else {
-				D3D12_UNORDERED_ACCESS_VIEW_DESC view {};
-				view.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-				view.Format = DXGI_FORMAT_R32_TYPELESS;
-				view.Buffer.NumElements = static_cast<UINT>(b->getSizeByte() / 4);
-				view.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
-				if (writeView) {
-					mDevice->CreateUnorderedAccessView(b->getBuffer().Get(), nullptr, &view, cpu);
-					++viewWrites;
+				const auto buffer = std::static_pointer_cast<StorageBufferDx12>(entry.buffer);
+				if (uniform.mReadOnly) {
+					const auto view = rawBufferView(buffer->getSizeByte());
+					mDevice->CreateShaderResourceView(buffer->getBuffer().Get(), &view, handle);
+				}
+				else {
+					D3D12_UNORDERED_ACCESS_VIEW_DESC view {};
+					view.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+					view.Format = DXGI_FORMAT_R32_TYPELESS;
+					view.Buffer.NumElements = static_cast<UINT>(buffer->getSizeByte() / 4);
+					view.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_RAW;
+					mDevice->CreateUnorderedAccessView(buffer->getBuffer().Get(), nullptr, &view, handle);
 				}
 			}
-		}
-		cpu.ptr += mDescriptorIncSize;
-	}
-	const auto result = std::make_pair(gpu, samplerGpu);
-	if (range) {
-		range->Views.assign(views.begin(), views.begin() + count);
-		if (textures) {
-			range->Samplers.assign(samplers.begin(), samplers.begin() + count);
-		}
-		else {
-			range->Samplers.clear();
-		}
-		range->Used = true;
-		markBindlessTableUsed(static_cast<uint32_t>(uniform.mBind));
-		if (std::getenv("IKIGAI_BINDLESS_UPDATES")) {
-			std::cerr << "DX12_BINDLESS_UPDATE binding=" << uniform.mBind << " slot=" << mRecordingSlot << " views=" << viewWrites
-					  << " samplers=" << samplerWrites << "\n";
+			range->Views[index] = views[index];
+			++viewWrites;
 		}
 	}
-	else {
-		mBindlessDescriptorCursor += count;
-		if (textures) {
-			mBindlessSamplerCursor += count;
-		}
-		mBindlessSnapshots.emplace(localKey, result);
+	range->Used = true;
+	markBindlessTableUsed(static_cast<uint32_t>(uniform.mBind));
+	if (profileBindlessUpdates()) {
+		std::cerr << "DX12_BINDLESS_UPDATE binding=" << uniform.mBind << " slot=" << mRecordingSlot << " views=" << viewWrites
+				  << " samplers=" << samplerWrites << '\n';
 	}
-	return result;
+	return { gpu, samplerHandle };
 }
 
 void IKIGAI::RENDER::DriverDx12::draw(const DrawArguments& args) {

@@ -17,10 +17,11 @@ using namespace IKIGAI::RENDER;
 using namespace IKIGAI;
 namespace {
 using UpscalerDriver=DriverDx12;
-void beginUpscaler(DriverDx12&) {}
+void beginUpscaler(DriverDx12& driver) {
+	driver.invalidateCommandState();
+}
 void endUpscaler(DriverDx12& driver) {
     auto barrier=CD3DX12_RESOURCE_BARRIER::UAV(nullptr);driver.getCommandList()->ResourceBarrier(1,&barrier);
-    driver.invalidateUpscalerState();
 }
 void* upscalerCommand(DriverDx12& driver) {return driver.getCommandList().Get();}
 void deferUpscaler(DriverDx12& driver,std::shared_ptr<void> context) {
@@ -59,7 +60,8 @@ NVSDK_NGX_Result initNgx(DriverDx12& d,const wchar_t* cache) {
 }
 void shutdownNgx(DriverDx12& d) {NVSDK_NGX_D3D12_Shutdown1(d.getDevice().Get());}
 NVSDK_NGX_Result createNgx(DriverDx12& d,NVSDK_NGX_Handle** h,NVSDK_NGX_Parameter* p,NVSDK_NGX_DLSS_Create_Params* desc) {
-    return NGX_D3D12_CREATE_DLSS_EXT(d.getCommandList().Get(),1,1,h,p,desc);
+	d.invalidateCommandState();
+	return NGX_D3D12_CREATE_DLSS_EXT(d.getCommandList().Get(),1,1,h,p,desc);
 }
 NVSDK_NGX_Result evaluateNgx(DriverDx12& d,NVSDK_NGX_Handle* handle,NVSDK_NGX_Parameter* params,const UpscaleFrameInputs& f) {
     auto color=upscaleTexture(d,f.Color,false),depth=upscaleTexture(d,f.Depth,false),motion=upscaleTexture(d,f.MotionVectors,false),out=upscaleTexture(d,f.Output,true);
@@ -91,5 +93,4 @@ std::unique_ptr<IKIGAI::RENDER::UpscalerInterface> IKIGAI::RENDER::DriverDx12::c
 #endif
     throw UnsupportedUpscaler("Requested upscaler SDK is not compiled for DX12");
 }
-void IKIGAI::RENDER::DriverDx12::invalidateUpscalerState() { mDirty.set(); }
 #endif

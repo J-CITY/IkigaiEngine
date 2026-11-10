@@ -56,8 +56,11 @@ public:
 	SoundResource(const std::string& path, const SoundConfig& data)
 		: path(path)
 		, data(data) { }
+	SoundResource(SoundResource&& other) noexcept;
+	~SoundResource();
 
 	unsigned int getBusId();
+	void swapReloadedSource(SoundResource& replacement) noexcept;
 
 	// private:
 	std::optional<SoLoud::handle> id;
@@ -66,5 +69,6 @@ public:
 public:
 	SoundConfig data;
 	std::shared_ptr<AudioMixerSource> mixer;
+	std::shared_ptr<SoLoud::AudioSource> clip;
 };
 }

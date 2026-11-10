@@ -49,6 +49,26 @@ FractureJob::~FractureJob() {
 	budget->bytes.fetch_sub(reservedBytes);
 	budget->jobs.fetch_sub(1);
 }
+std::string FractureJob::errorMessage() const {
+	switch (completion.Outcome) {
+	case TASK::BackgroundOutcome::Rejected:
+		return TASK::backgroundRejectionMessage(completion.Rejection);
+	case TASK::BackgroundOutcome::Failed:
+		if (completion.Exception) {
+			try {
+				std::rethrow_exception(completion.Exception);
+			} catch (const std::exception& error) {
+				return error.what();
+			} catch (...) { }
+		}
+		return "Fracture preparation failed";
+	case TASK::BackgroundOutcome::Cancelled:
+		return "Fracture preparation cancelled";
+	case TASK::BackgroundOutcome::Succeeded:
+		return result.error;
+	}
+	return {};
+}
 DestructionRuntime::DestructionRuntime(Executor executor)
 	: mExecutor(std::move(executor)) {
 	if (!mExecutor) {
@@ -82,27 +102,59 @@ std::shared_ptr<FractureJob> DestructionRuntime::submit(FractureSnapshot snapsho
 	job->snapshot = std::move(snapshot);
 	std::erase_if(mJobs, [](const auto& weak) { return weak.expired(); });
 	mJobs.push_back(job);
-	mExecutor([job] {
-		if (!job->cancelled.load()) {
-			job->stage.store(RequestStage::Slicing);
-			job->result = prepareFracture(job->snapshot, &job->cancelled, [&] { job->stage.store(RequestStage::Cooking); });
-		}
-		if (job->cancelled.load()) {
-			job->result.status = SliceStatus::Cancelled;
-		}
-		job->snapshot = {};
-		job->done.store(true, std::memory_order_release);
-	});
-	++statistics.submitted;
+	mExecutor(
+		[job](std::stop_token stopToken) {
+			const std::stop_callback stopCallback(stopToken, [&] { job->cancelled.store(true); });
+			if (!job->cancelled.load()) {
+				job->stage.store(RequestStage::Slicing);
+				job->result = prepareFracture(job->snapshot, &job->cancelled, [&] { job->stage.store(RequestStage::Cooking); });
+			}
+		},
+		[job](const TASK::BackgroundResult& completion) {
+			job->completion = completion;
+			switch (completion.Outcome) {
+			case TASK::BackgroundOutcome::Rejected:
+				job->result.status = SliceStatus::Busy;
+				break;
+			case TASK::BackgroundOutcome::Failed:
+				job->result.status = SliceStatus::UnsupportedMesh;
+				break;
+			case TASK::BackgroundOutcome::Cancelled:
+				job->result.status = SliceStatus::Cancelled;
+				break;
+			case TASK::BackgroundOutcome::Succeeded:
+				if (job->cancelled.load()) {
+					job->completion.Outcome = TASK::BackgroundOutcome::Cancelled;
+					job->result.status = SliceStatus::Cancelled;
+				}
+				break;
+			}
+			if (job->completion.Outcome != TASK::BackgroundOutcome::Succeeded) {
+				job->result.pieces.clear();
+				job->stage.store(RequestStage::Completed);
+			}
+			job->snapshot = {};
+			job->done.store(true, std::memory_order_release);
+		});
+	if (!job->done.load(std::memory_order_acquire) || job->completion.Outcome != TASK::BackgroundOutcome::Rejected) {
+		++statistics.submitted;
+	}
 	return job;
 }
 bool DestructionRuntime::canPublish(const FractureJob& job) const {
+	if (!job.done.load(std::memory_order_acquire)) {
+		return false;
+	}
+	// Dispatch failures do not mutate the scene and can complete ahead of earlier work.
+	if (job.completion.Outcome != TASK::BackgroundOutcome::Succeeded) {
+		return true;
+	}
 	// Workers prepare in parallel, but upload and commit follow scene admission order.
 	// A slow head can delay publication to a later fixed step.
 	for (const auto& weak : mJobs) {
 		const auto candidate = weak.lock();
 		if (candidate && !candidate->cancelled.load() && candidate->stage.load() != RequestStage::Completed) {
-			return candidate.get() == &job && job.done.load(std::memory_order_acquire);
+			return candidate.get() == &job;
 		}
 	}
 	return false;

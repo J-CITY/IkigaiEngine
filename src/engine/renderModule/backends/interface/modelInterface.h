@@ -31,6 +31,9 @@ namespace IKIGAI
 		};
 
 		class ModelInterface {
+			friend class RESOURCES::ModelLoader;
+			void swapImportedState(ModelInterface& replacement) noexcept;
+
 		public:
 			virtual ~ModelInterface() = default;
 

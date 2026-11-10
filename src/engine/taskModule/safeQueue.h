@@ -34,6 +34,17 @@ namespace TASK {
 			return out;
 		}
 
+		// Transfers an abandoned item to the shutdown caller without reopening the queue.
+		std::optional<T> tryTakeInvalidated() {
+			std::lock_guard<std::shared_mutex> lock { mMutex };
+			if (mQueue.empty() || mValid) {
+				return std::nullopt;
+			}
+			auto out = std::move(mQueue.front());
+			mQueue.pop_front();
+			return out;
+		}
+
 		std::optional<T> waitPop() {
 			std::unique_lock<std::shared_mutex> lock { mMutex };
 			mCondition.wait(lock, [this]() { return !mQueue.empty() || !mValid; });

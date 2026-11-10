@@ -1,4 +1,5 @@
 #include "frameContext.h"
+#include "profilerModule/trace.h"
 #include <algorithm>
 #include <stdexcept>
 #include <utility>
@@ -49,6 +50,8 @@ bool FrameContext::retire(const GpuCompletionSource& completion) {
 	if (mState != State::SUBMITTED || !completion.isComplete(mCompletion)) {
 		return false;
 	}
+	IKIGAI_PROFILE_SCOPE("Retire Render Frame");
+	IKIGAI_PROFILE_ZONE_VALUE(mCompletion.Value);
 	mCommands->reset();
 	mState = State::COMPLETE;
 	return true;

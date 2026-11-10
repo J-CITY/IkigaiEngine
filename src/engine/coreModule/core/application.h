@@ -21,6 +21,7 @@ struct ApplicationOptions {
 	std::string screenshot;
 	std::string screenshotTexture;
 	bool profileLoading = false;
+	bool renderCpuOverlap = false;
 	// Offline virtual mesh cooking (IKIGAI_VG_COOKER builds): cook cookVmesh into cookOutput and exit.
 	std::string cookVmesh;
 	std::string cookOutput;

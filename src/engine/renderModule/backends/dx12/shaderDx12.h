@@ -28,17 +28,19 @@ public:
   void bind() override {};
   void unbind() override {};
   void recompile(const ShaderResource &res) override;
+  bool adoptReloadedShader(ShaderInterface& replacement) noexcept override;
 
-	std::map<ShaderType, Microsoft::WRL::ComPtr<ID3DBlob>> mBlobs;
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> mRootSignature;
-	Microsoft::WRL::ComPtr<ID3DBlob> mSerializedRootSignature;
-	int mPushConstantRootIndex = -1;
-	uint32_t mPushConstantDwords = 0;
+  std::map<ShaderType, Microsoft::WRL::ComPtr<ID3DBlob>> mBlobs;
+  Microsoft::WRL::ComPtr<ID3D12RootSignature> mRootSignature;
+  Microsoft::WRL::ComPtr<ID3DBlob> mSerializedRootSignature;
+  int mPushConstantRootIndex = -1;
+  uint32_t mPushConstantDwords = 0;
 
   void buildRootSignature();
 
 private:
-  void create(const ShaderResource& res);
+	void prepareRetirement(const std::shared_ptr<ShaderInterface>& replacement) override;
+	void create(const ShaderResource& res);
 };
 } // namespace IKIGAI::RENDER
 #endif

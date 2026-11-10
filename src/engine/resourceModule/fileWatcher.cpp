@@ -4,17 +4,23 @@
 #include "serviceManager.h"
 #include "utilsModule/exeptions.h"
 #include <iostream>
+#include <unordered_set>
 
 namespace IKIGAI::RESOURCES {
 
 #ifndef USE_FILE_WATCHER
 
-IKIGAI::IdGenerator<IKIGAI::EVENT::Event<>>::ID FileWatcher::_add(const std::string&, std::function<void(FileStatus)>) {
-	return EVENT::Event<FileStatus>::ID(0);
+IKIGAI::IdGenerator<IKIGAI::EVENT::Event<>>::ID FileWatcher::_add(const std::string&, Listener) {
+	return {};
 }
 
 IKIGAI::IdGenerator<IKIGAI::EVENT::Event<>>::ID FileWatcher::add(const Path&, std::function<void(FileStatus)>) {
-	return EVENT::Event<FileStatus>::ID(0);
+	return {};
+}
+
+EVENT::Event<FileWatcher::FileStatus>::ID FileWatcher::addResourceWatch(
+	const Path&, std::function<void(FileStatus)>, std::shared_ptr<const void>, std::weak_ptr<void>) {
+	return {};
 }
 
 void FileWatcher::addDeferred(const Path&, std::function<void(FileStatus)>, std::function<void(EVENT::Event<FileStatus>::ID)>) { }
@@ -38,56 +44,66 @@ void FileWatcher::requestUpdate() { }
 
 #else
 
-IKIGAI::IdGenerator<IKIGAI::EVENT::Event<>>::ID FileWatcher::_add(const std::string& path, std::function<void(FileStatus)> cb) {
+IKIGAI::IdGenerator<IKIGAI::EVENT::Event<>>::ID FileWatcher::_add(const std::string& path, Listener listener) {
 	auto& fs = ServiceManager::Get<FileSystem>();
-	if (!fs.isFileExist(path)) {
+	const bool exists = fs.isFileExist(path);
+	if (!exists && !listener.group) {
 		throw UTILS::EXEPTIONS::WrongPath(path.c_str());
 	}
-	m_filesLastModifications[path].mLastModifyTime = fs.lastWriteTime(path);
-	m_filesLastModifications[path].mFileSize = fs.fileSize(path);
-	m_filesLastModifications[path].mNativePath = fs.getAbsolutePath(path);
-	if (!m_filesCallbacks.contains(path)) {
-		m_filesCallbacks[path] = EVENT::Event<FileStatus>();
+	auto native = listener.group ? fs.getNativeWatchPath(path) : fs.getAbsolutePath(path);
+	FileModificationInfo info { exists ? fs.lastWriteTime(path) : FileTime {}, exists ? fs.fileSize(path) : 0, std::move(native), 0, exists };
+	if (listener.group && !info.mNativePath) {
+		return {};
 	}
-	return m_filesCallbacks[path].add(cb);
-};
+	const std::lock_guard lock(m_mutex);
+	const auto current = m_filesLastModifications.find(path);
+	if (current == m_filesLastModifications.end() || current->second.mNativePath != info.mNativePath) {
+		info.mRegistration = ++mNextRegistration;
+		m_filesLastModifications.insert_or_assign(path, std::move(info));
+	}
+	const auto id = EVENT::Event<FileStatus>::generateId();
+	m_filesCallbacks[path].emplace(id, std::move(listener));
+	return id;
+}
 
 IKIGAI::IdGenerator<IKIGAI::EVENT::Event<>>::ID FileWatcher::add(const Path& path, std::function<void(FileStatus)> cb) {
-	const std::lock_guard lock(m_mutex);
-	const auto _path = path.string();
-	return _add(_path, cb);
+	return _add(FileSystem::normalizePath(path.string()), { std::move(cb), {}, {} });
+}
+
+EVENT::Event<FileWatcher::FileStatus>::ID FileWatcher::addResourceWatch(
+	const Path& path, std::function<void(FileStatus)> cb, std::shared_ptr<const void> group, std::weak_ptr<void> resource) {
+	return _add(FileSystem::normalizePath(path.string()), { std::move(cb), std::move(group), std::move(resource) });
 }
 
 void FileWatcher::addDeferred(const Path& path, std::function<void(FileStatus)> cb, std::function<void(EVENT::Event<FileStatus>::ID)> retCb) {
-	const std::lock_guard lock(m_mutexDeferred);
-	const auto _path = path.string();
-	if (!ServiceManager::Get<FileSystem>().isFileExist(_path)) {
-		throw UTILS::EXEPTIONS::WrongPath(_path.c_str());
+	const auto key = FileSystem::normalizePath(path.string());
+	if (!ServiceManager::Get<FileSystem>().isFileExist(key)) {
+		throw UTILS::EXEPTIONS::WrongPath(key.c_str());
 	}
-
-	deferredEvents.push({ QueueEvent::Action::ADD, _path, cb, retCb });
+	const std::lock_guard lock(m_mutexDeferred);
+	deferredEvents.push({ QueueEvent::Action::ADD, key, std::move(cb), std::move(retCb) });
 }
 
 void FileWatcher::_remove(const std::string& path, EVENT::Event<FileStatus>::ID id) {
 	if (!m_filesCallbacks.contains(path)) {
 		return;
 	}
-	m_filesCallbacks.at(path).removeListener(id);
-	if (!m_filesCallbacks.at(path).getListenerCount()) {
+	m_filesCallbacks.at(path).erase(id);
+	if (m_filesCallbacks.at(path).empty()) {
 		m_filesCallbacks.erase(path);
 		m_filesLastModifications.erase(path);
+		m_events.erase(path);
 	}
 }
 
 void FileWatcher::remove(const Path& path, EVENT::Event<FileStatus>::ID id) {
 	const std::lock_guard lock(m_mutex);
-	const auto _path = path.string();
-	_remove(_path, id);
+	_remove(FileSystem::normalizePath(path.string()), id);
 }
 
 void FileWatcher::removeDeferred(const Path& path, EVENT::Event<FileStatus>::ID id) {
 	const std::lock_guard lock(m_mutexDeferred);
-	const auto _path = path.string();
+	const auto _path = FileSystem::normalizePath(path.string());
 	deferredEvents.push({ QueueEvent::Action::REMOVE, _path, nullptr, nullptr, id });
 }
 
@@ -151,18 +167,41 @@ void FileWatcher::applyUpdate() {
 	{
 		const std::lock_guard lock(m_mutex);
 		events.swap(m_events);
-	}
-	for (const auto& [path, status] : events) {
-		std::optional<EVENT::Event<FileStatus>> callbacks;
-		{
-			const std::lock_guard lock(m_mutex);
-			if (const auto found = m_filesCallbacks.find(path); found != m_filesCallbacks.end()) {
-				callbacks.emplace(found->second);
+		for (auto it = m_filesCallbacks.begin(); it != m_filesCallbacks.end();) {
+			std::erase_if(it->second, [](const auto& item) {
+				const auto& listener = item.second;
+				return listener.group && listener.resource.expired();
+			});
+			if (it->second.empty()) {
+				m_filesLastModifications.erase(it->first);
+				it = m_filesCallbacks.erase(it);
+			}
+			else {
+				++it;
 			}
 		}
-		// Reload callbacks may remove and re-register their own watches.
-		if (callbacks) {
-			callbacks->run(status);
+	}
+	std::unordered_set<std::shared_ptr<const void>> dispatched;
+	for (const auto& [path, change] : events) {
+		std::map<EVENT::Event<FileStatus>::ID, Listener> callbacks;
+		{
+			const std::lock_guard lock(m_mutex);
+			if (const auto info = m_filesLastModifications.find(path);
+				info != m_filesLastModifications.end() && info->second.mRegistration == change.registration) {
+				callbacks = m_filesCallbacks.at(path);
+			}
+		}
+		for (const auto& [id, listener] : callbacks) {
+			if (listener.group && (change.status == FileStatus::DEL || listener.resource.expired() || !dispatched.insert(listener.group).second)) {
+				continue;
+			}
+			try {
+				listener.callback(change.status);
+			} catch (const std::exception& error) {
+				std::cerr << "File watcher listener " << path << ": " << error.what() << '\n';
+			} catch (...) {
+				std::cerr << "File watcher listener " << path << ": unknown error\n";
+			}
 		}
 	}
 	decltype(deferredEvents) pending;
@@ -173,17 +212,23 @@ void FileWatcher::applyUpdate() {
 	while (!pending.empty()) {
 		auto event = std::move(pending.front());
 		pending.pop();
-		if (event.action == QueueEvent::Action::ADD) {
-			EVENT::Event<FileStatus>::ID listener {};
-			{
-				const std::lock_guard stateLock(m_mutex);
-				listener = _add(event.path, std::move(event.cb));
+		try {
+			if (event.action == QueueEvent::Action::ADD) {
+				const auto listener = _add(event.path, { std::move(event.cb), {}, {} });
+				try {
+					event.retCb(listener);
+				} catch (...) {
+					remove(event.path, listener);
+					throw;
+				}
 			}
-			event.retCb(listener);
-		}
-		else {
-			const std::lock_guard stateLock(m_mutex);
-			_remove(event.path, event.id.value());
+			else {
+				remove(event.path, event.id.value());
+			}
+		} catch (const std::exception& error) {
+			std::cerr << "File watcher subscription " << event.path << ": " << error.what() << '\n';
+		} catch (...) {
+			std::cerr << "File watcher subscription " << event.path << ": unknown error\n";
 		}
 	}
 }
@@ -217,18 +262,20 @@ void FileWatcher::update() {
 			continue;
 		}
 		const auto size = exists ? std::filesystem::file_size(native, error) : uintmax_t {};
-		if (error || (exists && modified == previous.mLastModifyTime && size == previous.mFileSize)) {
+		if (error || (exists == previous.mExists && modified == previous.mLastModifyTime && size == previous.mFileSize)) {
 			continue;
 		}
 		const std::lock_guard lock(m_mutex);
 		const auto current = m_filesLastModifications.find(path);
-		if (current == m_filesLastModifications.end() || current->second.mNativePath != previous.mNativePath
-			|| current->second.mLastModifyTime != previous.mLastModifyTime || current->second.mFileSize != previous.mFileSize) {
+		if (current == m_filesLastModifications.end() || current->second.mRegistration != previous.mRegistration
+			|| current->second.mLastModifyTime != previous.mLastModifyTime || current->second.mFileSize != previous.mFileSize
+			|| current->second.mExists != previous.mExists) {
 			continue;
 		}
 		current->second.mLastModifyTime = modified;
 		current->second.mFileSize = size;
-		m_events.emplace_back(path, exists ? FileStatus::MODIFIED : FileStatus::DEL);
+		current->second.mExists = exists;
+		m_events.insert_or_assign(path, PendingChange { exists ? FileStatus::MODIFIED : FileStatus::DEL, previous.mRegistration });
 	}
 }
 

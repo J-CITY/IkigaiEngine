@@ -30,6 +30,7 @@ struct ImDrawData;
 
 namespace IKIGAI::RENDER {
 struct StreamlineCallbacks;
+struct UniformSnapshotVk;
 class StorageBufferVk;
 class UniformBufferVk;
 class MeshInterface;
@@ -41,6 +42,7 @@ class CommandBuffer;
 class DriverVk : public DriverInterface {
 	friend class FsrFrameGenerationVk;
 	friend class StreamlineFrameGenerationVk;
+	friend class UniformBufferVk;
 	friend struct UtilityVk;
 
 public:
@@ -160,6 +162,8 @@ public:
 	size_t mDescriptorPoolIndex = 0;
 	vk::raii::DescriptorPool createDrawDescriptorPool();
 	std::vector<vk::raii::DescriptorSet> mFrameDescriptorSets;
+	std::vector<std::shared_ptr<UniformSnapshotVk>> mRecordedUniformSnapshots;
+	void retainUniformSnapshot(const std::shared_ptr<UniformSnapshotVk>& snapshot);
 
 	constexpr static vk::Format DefaultDepthStencilFormat = vk::Format::eD32SfloatS8Uint;
 
@@ -190,6 +194,7 @@ public:
 		GpuCompletionToken Completion {};
 		uint64_t Epoch = 0;
 		std::vector<vk::raii::DescriptorSet> DescriptorSets;
+		std::vector<std::shared_ptr<UniformSnapshotVk>> UniformSnapshots;
 		std::vector<std::shared_ptr<void>> RayTracingResources;
 		std::vector<BindlessResourceEntry> BindlessResources;
 		std::array<vk::raii::CommandPool, 2> TransferPools { nullptr, nullptr };
@@ -315,9 +320,9 @@ public:
 	// bool blend_mode_dirty = true;
 
 	std::unordered_set<uint32_t> graphics_pipeline_ignore_bindings;
-	// Name of the pipeline bound in the current command buffer (shader id + framebuffer id).
-	// Used to rebind the pipeline when shader/framebuffer changed between draws.
+	// Vulkan tracks graphics and compute pipeline bindings independently.
 	std::optional<PipelineKey> mBoundPipelineKey;
+	std::optional<PipelineKey> mBoundComputePipelineKey;
 	//
 	// uint32_t getBackbufferWidth();
 	// uint32_t getBackbufferHeight();
@@ -351,6 +356,7 @@ public:
 	void EnsureDepthMode(vk::raii::CommandBuffer& cmdlist);
 	void EnsureStencilMode(vk::raii::CommandBuffer& cmdlist);
 	void EnsureGraphicsPipelineState(vk::raii::CommandBuffer& cmdlist);
+	void EnsureComputePipelineState(vk::raii::CommandBuffer& cmd, const ShaderVk& shader);
 	void EnsureGraphicsDescriptors(vk::raii::CommandBuffer& cmdlist);
 	void EnsureGraphicsState(bool draw_indexed);
 

@@ -32,6 +32,7 @@ namespace IKIGAI::RENDER {
 
 		void* getImguiId() override;
 		void recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) override;
+		bool adoptReloadedTexture(TextureInterface& texture) noexcept override;
 
 		static std::shared_ptr<TextureVk> Create(const std::string& path, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr);
 		static std::shared_ptr<TextureVk> Create(const TextureResource& descriptor, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr);

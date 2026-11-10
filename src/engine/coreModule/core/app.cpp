@@ -1,5 +1,6 @@
 #include "app.h"
 #include "captureModule/screenshot.h"
+#include "coreModule/config.h"
 #include "coreModule/ecs/componentTypes.h"
 #include "coreModule/testHooks.h"
 #include "coroutineModule/scheduler.h"
@@ -8,6 +9,7 @@
 #include "networkModule/networkRuntime.h"
 #include "profilerModule/profiler.h"
 #include "profilerModule/profilerSpy.h"
+#include "profilerModule/trace.h"
 #include "renderModule/gameRendererInterface.h"
 #include "renderModule/render.h"
 #include "resourceModule/fileWatcher.h"
@@ -23,6 +25,7 @@
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
+#include <vector>
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
@@ -51,8 +54,43 @@ void emscriptenMainLoop(IKIGAI::CORE::App* application) {
 #endif
 } // namespace
 
+struct App::RenderTransformStaging {
+	struct Sample {
+		ECS::Transform* Target = nullptr;
+		MATH::Matrix4f World {};
+	};
+
+	void prepare(SCENE_SYSTEM::Scene& scene) {
+		IKIGAI_PROFILE_SCOPE("Prepare Render Transform History");
+		auto& components = scene.getWorld().getComponentManager()->getComponentsArray<ECS::TransformComponent>();
+		mSamples.clear();
+		mSamples.reserve(static_cast<size_t>(components.getSize()));
+		for (auto& component : components) {
+			auto& transform = component.getTransform();
+			mSamples.push_back({ &transform, transform.getWorldMatrix() });
+		}
+	}
+
+	void commit() {
+		for (const auto& sample : mSamples) {
+			sample.Target->setPrevWorldMatrix(sample.World);
+		}
+		mSamples.clear();
+	}
+
+	std::vector<Sample> mSamples;
+};
+
 App::App(const PlatformStartup& platform)
-	: core(platform) { }
+	: core(platform) {
+	if (Config::RENDER_CPU_OVERLAP) {
+		if (!core.render->supportsCpuReplayOverlap()) {
+			throw std::invalid_argument("--render-cpu-overlap requires pipelined Vulkan or DirectX 12 with upscaling and frame generation off");
+		}
+		mRenderTransformStaging = std::make_unique<RenderTransformStaging>();
+	}
+	PROFILER::TRACE::setThreadName("Main");
+}
 
 App::~App() = default;
 
@@ -67,6 +105,7 @@ void App::run() {
 }
 
 bool App::runMainLoop() {
+	IKIGAI_PROFILE_SCOPE("App Frame");
 	core.network->poll();
 
 	if (!isRunning()) {
@@ -89,6 +128,7 @@ bool App::runMainLoop() {
 #endif
 
 	{
+		IKIGAI_PROFILE_SCOPE("Coroutine Scheduler");
 		auto coroutineProfile
 			= IKIGAI::PROFILER::Profiler::IsEnabled() ? std::make_unique<IKIGAI::PROFILER::ProfilerSpy>("CoroutineScheduler::tick") : nullptr;
 		core.coroutineScheduler->tick(frameDt, timer.getDeltaTimeUnscaled());
@@ -99,6 +139,7 @@ bool App::runMainLoop() {
 	update(frameDt);
 
 	postUpdate(frameDt);
+	IKIGAI_PROFILE_FRAME();
 
 	return true;
 }
@@ -108,6 +149,7 @@ bool App::isRunning() const {
 }
 
 void App::preUpdate(std::chrono::duration<double> dt) {
+	IKIGAI_PROFILE_SCOPE("App Pre-Update");
 	core.window->preUpdate();
 #if USE_PHYSICS_3D && defined(USE_EDITOR)
 	if (core.sceneManager->hasCurrentScene() && !core.sceneManager->isEditingLocked()) {
@@ -134,6 +176,7 @@ void App::preUpdate(std::chrono::duration<double> dt) {
 }
 
 void App::update(std::chrono::duration<double> dt) {
+	IKIGAI_PROFILE_SCOPE("App Update");
 	auto* frameDriver = RENDER::DriverInterface::Get();
 	if (frameDriver) {
 		frameDriver->latencyFrameBegin();
@@ -189,6 +232,7 @@ void App::update(std::chrono::duration<double> dt) {
 #endif
 
 	bool presentationAllowed = true;
+	bool historyCommitted = false;
 	if (simulate) {
 		const float interpolationAlpha = static_cast<float>(m_fixedTimeAccumulator.count() / fixedDt.count());
 		core.sceneManager->getCurrentScene().simulateFrame(dt, interpolationAlpha);
@@ -224,7 +268,10 @@ void App::update(std::chrono::duration<double> dt) {
 
 #endif
 #ifndef __EMSCRIPTEN__
-	RESOURCES::ServiceManager::Get<TASK::TaskSystem>().waitSync();
+	{
+		IKIGAI_PROFILE_SCOPE("Wait for Frame Tasks");
+		RESOURCES::ServiceManager::Get<TASK::TaskSystem>().waitSync();
+	}
 #endif
 
 #ifndef OCULUS
@@ -235,7 +282,16 @@ void App::update(std::chrono::duration<double> dt) {
 				SDL_GetPointerProperty(SDL_GetWindowProperties(core.window->getSDLWindow()), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
 		}
 #endif
-		core.render->submitAsync();
+		if (mRenderTransformStaging && core.render->supportsCpuReplayOverlap() && core.sceneManager->hasCurrentScene()
+			&& !core.sceneManager->isTransitioning()) {
+			auto& scene = core.sceneManager->getCurrentScene();
+			core.render->submitAsync([&] { mRenderTransformStaging->prepare(scene); });
+			mRenderTransformStaging->commit();
+			historyCommitted = true;
+		}
+		else {
+			core.render->submitAsync();
+		}
 	}
 #endif
 
@@ -258,14 +314,14 @@ void App::update(std::chrono::duration<double> dt) {
 	core.render->submit();
 #endif
 
-	if (presentationAllowed && core.sceneManager->hasCurrentScene() && !core.sceneManager->isTransitioning()) {
+	if (!historyCommitted && presentationAllowed && core.sceneManager->hasCurrentScene() && !core.sceneManager->isTransitioning()) {
 		core.sceneManager->getCurrentScene().commitRenderTransforms();
 	}
 	core.sceneManager->update();
 }
 
 void App::postUpdate(std::chrono::duration<double> dt) {
-
+	IKIGAI_PROFILE_SCOPE("App Post-Update");
 	core.window->draw();
 #ifndef OCULUS
 	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL && core.render->hasActiveFrame()) {

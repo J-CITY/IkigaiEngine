@@ -162,6 +162,8 @@ void IKIGAI::RENDER::TextureVk::init(const TextureResource& descriptor, const st
 #endif
 	mWidth = desc.width;
 	mHeight = desc.height;
+	mChannels = desc.channels;
+	mUseMipMap = desc.useMipmap;
 	mMipCount = desc.mipMapCount > 0 ? static_cast<uint32_t>(desc.mipMapCount) : 1u;
 	mLayouts.assign(static_cast<size_t>(mMipCount) * arrayLayerCount(), vk::ImageLayout::eUndefined);
 	mDiscardAliasContents = false;
@@ -336,6 +338,28 @@ void IKIGAI::RENDER::TextureVk::releaseResources() {
 	if (*mImageView) driver->destroyDeferred(std::move(mImageView));
 	if (*mSampler) driver->destroyDeferred(std::move(mSampler));
 	if (mImage) driver->destroyDeferred(std::move(mImage));
+}
+
+bool IKIGAI::RENDER::TextureVk::adoptReloadedTexture(TextureInterface& texture) noexcept {
+	auto* replacement = dynamic_cast<TextureVk*>(&texture);
+	if (!replacement || !replacement->mImage) {
+		return false;
+	}
+	swapTextureDescription(*replacement);
+	using std::swap;
+	swap(mImage, replacement->mImage);
+	swap(mImagePtr, replacement->mImagePtr);
+	swap(mImageView, replacement->mImageView);
+	swap(mDepth, replacement->mDepth);
+	swap(mDiscardAliasContents, replacement->mDiscardAliasContents);
+	swap(mSampler, replacement->mSampler);
+	swap(mDescriptorSet, replacement->mDescriptorSet);
+	swap(mAttachmentViews, replacement->mAttachmentViews);
+	swap(mViewType, replacement->mViewType);
+	swap(mImageUsage, replacement->mImageUsage);
+	swap(mBaseMipStorageView, replacement->mBaseMipStorageView);
+	swap(mLayouts, replacement->mLayouts);
+	return true;
 }
 
 void IKIGAI::RENDER::TextureVk::recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) {

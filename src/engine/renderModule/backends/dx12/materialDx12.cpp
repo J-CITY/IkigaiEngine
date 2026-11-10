@@ -35,6 +35,20 @@ void MaterialDx12::create(const MaterialResource& res) {
 	applyMaterialState(res);
 }
 
+bool MaterialDx12::adoptReloadedMaterial(MaterialInterface& prepared) noexcept {
+	auto* replacement = dynamic_cast<MaterialDx12*>(&prepared);
+	if (!replacement) {
+		return false;
+	}
+	swapMaterialState(*replacement);
+	mShader.swap(replacement->mShader);
+	mUniforms.swap(replacement->mUniforms);
+	mExternalBuffers.swap(replacement->mExternalBuffers);
+	mUniformBuffers.swap(replacement->mUniformBuffers);
+	mStorageBuffers.swap(replacement->mStorageBuffers);
+	return true;
+}
+
 void MaterialDx12::setShader(std::shared_ptr<ShaderInterface> shader) {
 	mShader = std::static_pointer_cast<ShaderDx12>(shader);
 	generateUniformsData();

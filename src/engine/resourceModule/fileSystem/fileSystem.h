@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <future>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <stdexcept>
@@ -47,15 +48,16 @@ public:
 };
 
 class File {
-	std::unique_ptr<FileInternal> mInternal;
+	std::shared_ptr<FileInternal> mInternal;
 
-	std::vector<uint8_t> read(size_t sz);
 	void read(uint8_t* data, size_t sz);
 	void write(const uint8_t* data, size_t sz);
 
 public:
 	File(std::unique_ptr<FileInternal> internal);
 	~File();
+	File(const File&) = delete;
+	File& operator=(const File&) = delete;
 	size_t tell() const;
 	void seek(size_t offset);
 	bool isValid() const;
@@ -71,7 +73,9 @@ public:
 
 	std::vector<uint8_t> read();
 	std::vector<uint8_t> readChunk(size_t maxBytes);
-	COROUTINE::Task<std::vector<uint8_t>> readAllTask(std::shared_ptr<ResourceLoadControl> control = { });
+	// Retains this handle and its mount. The read advances its cursor, including any bytes consumed before cancellation.
+	// Cursor operations on the same handle throw std::logic_error while a read owns it.
+	COROUTINE::Task<std::vector<uint8_t>> readAllTask(std::shared_ptr<ResourceLoadControl> control = {});
 	std::string readStr();
 	template <typename T> void read(T& value) {
 		read(reinterpret_cast<uint8_t*>(&value), sizeof(value));
@@ -111,6 +115,9 @@ public:
 	bool unmount(MountId id);
 	std::vector<MountInfo> mounts() const;
 	uint64_t generation() const;
+	// Pins the mount generation while publishing already prepared resource state.
+	// An empty lock means the candidate was read from a different generation.
+	std::unique_lock<std::recursive_mutex> lockGeneration(uint64_t expected) const;
 	static std::string normalizePath(std::string path);
 	void addZipFileSystem(const std::string& path, const std::string& pathInFs);
 	void addMemoryFileSystem(const std::string& pathInFs);
@@ -122,6 +129,7 @@ public:
 	std::string getFileExtension(const std::string& path) const;
 	std::string getFileName(const std::string& path) const;
 	std::optional<std::string> getAbsolutePath(const std::string& path) const;
+	std::optional<std::string> getNativeWatchPath(const std::string& path) const;
 	bool isDir(const std::string& path) const;
 
 	FileTime lastWriteTime(const std::string& path);

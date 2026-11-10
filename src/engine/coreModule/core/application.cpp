@@ -49,6 +49,9 @@ namespace {
 		parser.addArg<bool>({ "--fullscreen" }, [&](bool value) { options.fullscreen = value; }, {}, "Use fullscreen mode");
 		parser.addArg<bool>({ "--windowed" }, [&](bool) { options.fullscreen = false; }, {}, "Use windowed mode");
 		parser.addArg<bool>({ "--profile-loading" }, [&](bool value) { options.profileLoading = value; }, {}, "Report loading timings");
+		parser.addArg<bool>(
+			{ "--render-cpu-overlap" }, [&](bool value) { options.renderCpuOverlap = value; }, {},
+			"Prepare transform history during pipelined Vulkan or DirectX 12 replay with upscaling and frame generation off");
 		return parser;
 	}
 	void applyOptions(const ApplicationOptions& options) {
@@ -73,6 +76,7 @@ namespace {
 		Config::PROFILE_ID = options.profile;
 		Config::CONTENT_RELEASE = options.contentRelease;
 		Config::PROFILE_LOADING = options.profileLoading;
+		Config::RENDER_CPU_OVERLAP = options.renderCpuOverlap;
 		if (!options.pipeline.empty()) {
 			RENDER::SetCliRenderPipelineOverride(options.pipeline);
 		}

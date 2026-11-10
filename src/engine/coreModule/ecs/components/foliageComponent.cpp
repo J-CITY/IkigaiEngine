@@ -4,6 +4,7 @@
 #include "resourceModule/materialManager.h"
 #include "resourceModule/modelManager.h"
 #include "surfaceModule/surfaceJob.h"
+#include "surfaceModule/surfaceRuntime.h"
 #include <algorithm>
 #include <unordered_set>
 
@@ -102,8 +103,15 @@ void FoliageComponent::bind(SCENE_SYSTEM::Scene& scene) {
 		}
 		throw std::runtime_error("Foliage.Surface must reference an existing SurfaceComponent");
 	}
-	if (changed || mRequestedSurfaceRevision != mSurface->requestedRevision()) {
-		const auto& settings = mSurface->settings();
+	const bool updating = mSurface->updatePending();
+	const auto revision = updating ? mSurface->requestedRevision() : mSurface->revision();
+	if (!changed && mRequestedSurfaceRevision > revision && mSurfaceRevision == revision) {
+		mPlacementJob.reset();
+		mPreparedPlacements.reset();
+		return;
+	}
+	if (changed || mRequestedSurfaceRevision != revision) {
+		const auto& settings = updating ? mSurface->settings() : mSurface->terrain().settings();
 		for (const auto& species : mDescriptor.Species) {
 			SURFACE::validateScatter(settings, species);
 		}
@@ -123,7 +131,7 @@ void FoliageComponent::bind(SCENE_SYSTEM::Scene& scene) {
 			const std::atomic_bool cancellation = false;
 			mPreparedPlacements = std::any_cast<std::vector<std::vector<SURFACE::Placement>>>(work(cancellation));
 		}
-		mRequestedSurfaceRevision = mSurface->requestedRevision();
+		mRequestedSurfaceRevision = revision;
 		mUpdateError.clear();
 	}
 	if (mPlacementJob && mPlacementJob->ready()) {

@@ -65,6 +65,7 @@ Terrain::~Terrain() {
 }
 void Terrain::beginFrame() {
 	mUploadEnd = std::chrono::steady_clock::time_point::max();
+	std::erase_if(mPending, [&](const auto& entry) { return recordFailedBuild(entry.first, *entry.second); });
 }
 bool Terrain::canUpload() {
 	if (mUploadEnd == std::chrono::steady_clock::time_point::max()) {
@@ -116,6 +117,21 @@ PreparedSurface prepareSurface(const Settings& settings, const std::vector<Terra
 const Settings& Terrain::settings() const {
 	return mSettings;
 }
+const std::string& Terrain::buildError() const {
+	return mBuildError;
+}
+bool Terrain::recordFailedBuild(const Key& key, BackgroundJob& job) {
+	if (!job.failed()) {
+		return false;
+	}
+	try {
+		job.take();
+	} catch (const std::exception& error) {
+		mBuildError = error.what();
+	}
+	mFailedBuilds.insert(key);
+	return true;
+}
 std::shared_ptr<RENDER::ModelInterface> Terrain::model(unsigned x, unsigned z, unsigned lod, unsigned& budget) {
 	const auto key = std::tuple { x, z, lod };
 	if (const auto found = mModels.find(key); found != mModels.end()) {
@@ -124,17 +140,22 @@ std::shared_ptr<RENDER::ModelInterface> Terrain::model(unsigned x, unsigned z, u
 	}
 	if (mSettings.BackgroundUpdates) {
 		auto pending = mPending.find(key);
-		if (pending == mPending.end() && mPending.size() < mSettings.PendingBuilds) {
+		if (pending == mPending.end() && mPending.size() < mSettings.PendingBuilds && !mFailedBuilds.contains(key)) {
 			mPending.emplace(key, std::make_shared<BackgroundJob>([settings = mSettings, x, z, lod](const auto& cancellation) -> std::any {
 				return buildTile(settings, x, z, lod, &cancellation);
 			}));
 			pending = mPending.find(key);
 		}
-		if (pending != mPending.end() && pending->second->ready() && budget && canUpload()) {
-			auto geometry = std::any_cast<Geometry>(pending->second->take());
-			mPending.erase(pending);
-			--budget;
-			return cacheModel(mModels, key, geometry, mSettings.CacheMegabytes, ++mClock);
+		if (pending != mPending.end() && pending->second->ready()) {
+			if (recordFailedBuild(key, *pending->second)) {
+				mPending.erase(pending);
+			}
+			else if (budget && canUpload()) {
+				auto geometry = std::any_cast<Geometry>(pending->second->take());
+				mPending.erase(pending);
+				--budget;
+				return cacheModel(mModels, key, geometry, mSettings.CacheMegabytes, ++mClock);
+			}
 		}
 		for (unsigned alternative = 0; alternative <= mSettings.LodDistances.size(); ++alternative) {
 			if (const auto found = mModels.find({ x, z, alternative }); found != mModels.end()) {
@@ -175,6 +196,8 @@ std::shared_ptr<RENDER::ModelInterface> Terrain::water(unsigned x, unsigned z, u
 void Terrain::clearCache() {
 	mModels.clear();
 	mPending.clear();
+	mFailedBuilds.clear();
+	mBuildError.clear();
 }
 std::optional<unsigned> Terrain::residentLod(unsigned x, unsigned z, unsigned requested) const {
 	if (mModels.contains({ x, z, requested })) {

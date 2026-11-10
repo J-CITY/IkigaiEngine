@@ -14,6 +14,16 @@ const std::string& ModelInterface::getPath() {
 	return mPath;
 }
 
+void ModelInterface::swapImportedState(ModelInterface& replacement) noexcept {
+	mMeshes.swap(replacement.mMeshes);
+	mMaterialNames.swap(replacement.mMaterialNames);
+	mMorphNodeMeshes.swap(replacement.mMorphNodeMeshes);
+	mMorphAnimations.swap(replacement.mMorphAnimations);
+	mBoneInfoMap.swap(replacement.mBoneInfoMap);
+	std::swap(mBoneCounter, replacement.mBoneCounter);
+	std::swap(mBoundingSphere, replacement.mBoundingSphere);
+}
+
 void ModelInterface::addMorphNodeMesh(const std::string& nodeName, std::size_t meshIndex) {
 	mMorphNodeMeshes[nodeName].push_back(meshIndex);
 }

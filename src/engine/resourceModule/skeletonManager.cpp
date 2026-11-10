@@ -13,14 +13,13 @@ AssimpParser SkeletonLoader::_ASSIMP;
 
 ResourcePtr<SKELETON::Skeleton> SkeletonLoader::CreateFromFile(const std::string& path, UTILS::IAllocator* allocator, ResourceDeleter deleter) {
 	auto skeleton = MEMORY::MakeSharedWithDeleter<SKELETON::Skeleton, MEMORY::Category::Skeleton>(allocator, deleter);
-	auto data = ServiceManager::Get<FileSystem>().getFile(path)->read();
+	auto file = ServiceManager::Get<FileSystem>().getFile(path);
+	auto data = file && file->isValid() ? file->read() : std::vector<uint8_t> {};
 	if (data.empty()) {
-		ASSERT(std::string("SkeletonLoader::CreateFromFile: empty file: " + path).c_str());
-		return nullptr;
+		throw std::runtime_error("Missing or empty skeleton source: " + path);
 	}
 	if (!_ASSIMP.LoadSkeleton(path, data, *skeleton)) {
-		ASSERT(std::string("SkeletonLoader::CreateFromFile: failed to parse: " + path).c_str());
-		return nullptr;
+		throw std::runtime_error("Cannot import skeleton: " + path);
 	}
 
 	return skeleton;
@@ -54,15 +53,12 @@ ResourcePtr<SKELETON::Skeleton> SkeletonLoader::createResource(const std::string
 		addFileWatchSubscribe(path, { path }, res);
 	}
 	else if (type == ELoadingType::RESOURCE) {
-		RENDER::SkeletonResource config;
-		if (HasConfig(path)) {
-			config = *GetConfig(path);
-		}
-		else {
-			config = LoadConfig(path);
-			AddConfigToCache(path, config);
-		}
+		const auto candidate = ReadConfigCandidate(path);
+		const auto& config = *candidate.descriptor;
 		res = CreateFromResource(config);
+		if (res && !PublishConfig(path, candidate)) {
+			return nullptr;
+		}
 		addFileWatchSubscribe(path, { path, config.pathSkeleton }, res);
 	}
 	return res;
@@ -72,9 +68,10 @@ bool SkeletonLoader::reloadResource(std::weak_ptr<SKELETON::Skeleton> weakRes, c
 	if (auto res = weakRes.lock()) {
 		std::unordered_set<std::string> paths = { path };
 		RENDER::SkeletonResource config;
+		ConfigCandidate candidate;
 		if (path.ends_with(".skeleton")) {
-			config = LoadConfig(path);
-			AddConfigToCache(path, config);
+			candidate = ReadConfigCandidate(path, true);
+			config = *candidate.descriptor;
 			paths.insert(config.pathSkeleton);
 		}
 		else {
@@ -83,9 +80,20 @@ bool SkeletonLoader::reloadResource(std::weak_ptr<SKELETON::Skeleton> weakRes, c
 		}
 
 		auto newSkeleton = CreateFromFile(config.pathSkeleton);
-		if (newSkeleton) {
+		if (!newSkeleton) {
+			return false;
+		}
+		const auto swap = [&]() noexcept {
 			res->setNumJoints(newSkeleton->getNumJolts());
-			res->joints() = newSkeleton->joints();
+			res->joints().swap(newSkeleton->joints());
+		};
+		if (candidate.descriptor) {
+			if (!CommitReload(path, candidate, swap)) {
+				return false;
+			}
+		}
+		else {
+			swap();
 		}
 
 		addFileWatchSubscribe(path, paths, res);

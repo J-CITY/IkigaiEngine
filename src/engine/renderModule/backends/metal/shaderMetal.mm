@@ -100,10 +100,32 @@ namespace IKIGAI::RENDER {
 
 	void ShaderMetal::recompile(const ShaderResource& res) {
 		requireOwnerThread();
-		if (!res.sources.empty()) {
-			res.spirvSources.clear();
+		auto replacement = std::make_shared<ShaderMetal>(res);
+		prepareReloadedShader(replacement);
+		adoptReloadedShader(*replacement);
+	}
+
+	bool ShaderMetal::adoptReloadedShader(ShaderInterface& prepared) noexcept {
+		auto* replacement = dynamic_cast<ShaderMetal*>(&prepared);
+		if (!replacement) {
+			return false;
 		}
-		create(res);
+		swapCompiledInterface(*replacement);
+		std::swap(mComputeFunction, replacement->mComputeFunction);
+		std::swap(mVertexFunction, replacement->mVertexFunction);
+		std::swap(mFragmentFunction, replacement->mFragmentFunction);
+		std::swap(mGeometryFunction, replacement->mGeometryFunction);
+		std::swap(mTessControlFunction, replacement->mTessControlFunction);
+		std::swap(mTessEvalFunction, replacement->mTessEvalFunction);
+		std::swap(mTessVertexFunction, replacement->mTessVertexFunction);
+		std::swap(mTessVertexIndexedFunction, replacement->mTessVertexIndexedFunction);
+		std::swap(mTessControlPoints, replacement->mTessControlPoints);
+		std::swap(mTessTriangles, replacement->mTessTriangles);
+		std::swap(mTessPartition, replacement->mTessPartition);
+		mSamplerBindings.swap(replacement->mSamplerBindings);
+		mArgumentIds.swap(replacement->mArgumentIds);
+		++mGeneration;
+		return true;
 	}
 
 	void ShaderMetal::create(const ShaderResource& res) {

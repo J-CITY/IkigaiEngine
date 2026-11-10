@@ -157,10 +157,27 @@ IKIGAI::RENDER::ShaderGl::Create(const ShaderResource &resource) {
 
 IKIGAI::RENDER::ShaderGl::ShaderGl(const ShaderResource &res) { create(res); }
 
-void IKIGAI::RENDER::ShaderGl::recompile(const ShaderResource &res) {
+void IKIGAI::RENDER::ShaderGl::recompile(const ShaderResource& res) {
 	requireOwnerThread();
-	clear();
-	create(res);
+	auto replacement = std::make_shared<ShaderGl>();
+	replacement->create(res);
+	prepareReloadedShader(replacement);
+	adoptReloadedShader(*replacement);
+}
+
+bool IKIGAI::RENDER::ShaderGl::adoptReloadedShader(ShaderInterface& prepared) noexcept {
+	auto* replacement = dynamic_cast<ShaderGl*>(&prepared);
+	if (!replacement) {
+		return false;
+	}
+	swapCompiledInterface(*replacement);
+	using std::swap;
+	swap(mId, replacement->mId);
+	uniformLocationCache.clear();
+#if IKIGAI_ENABLE_MEMORY_TRACKING
+	swap(mGpuProgram, replacement->mGpuProgram);
+#endif
+	return true;
 }
 
 IKIGAI::RENDER::ShaderGl::~ShaderGl() { clear(); }
@@ -388,6 +405,9 @@ void IKIGAI::RENDER::ShaderGl::compile(
   }
   glLinkProgram(static_cast<unsigned>(mId));
   CheckCompileErrors(static_cast<unsigned>(mId), "PROGRAM");
+  for (auto& [type, id] : shaderIds) {
+	  glDeleteShader(id);
+  }
   GLint linked = 0;
   glGetProgramiv(static_cast<unsigned>(mId), GL_LINK_STATUS, &linked);
   if(!linked) {
@@ -400,9 +420,6 @@ void IKIGAI::RENDER::ShaderGl::compile(
   mGpuProgram = PROFILER::TrackGpuObject(PROFILER::GpuBackend::OpenGL, 0, mId,
       PROFILER::GpuResourceKind::Shader, mPath.c_str());
 #endif
-  for (auto &[type, id] : shaderIds) {
-    glDeleteShader(id);
-  }
 }
 
 void IKIGAI::RENDER::ShaderGl::bind() {

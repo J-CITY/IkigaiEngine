@@ -38,6 +38,7 @@ public:
 	uint64_t requestedRevision() const;
 	void pollUpdate();
 	void publishUpdate(bool dependenciesReady);
+	void failUpdate(std::string error);
 	bool updatePending() const;
 	const std::string& updateError() const;
 	SURFACE::FrameState frame = {};

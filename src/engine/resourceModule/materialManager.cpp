@@ -21,17 +21,16 @@ COROUTINE::Task<ResourcePtr<RENDER::MaterialInterface>> MaterialLoader::createRe
 	if (auto ready = getResource(path)) {
 		co_return ready;
 	}
-	auto file = ServiceManager::Get<FileSystem>().getFile(path, FileMode::READ);
-	if (!file || !file->isValid()) {
-		throw std::runtime_error("Missing material: " + path);
+	auto candidate = BeginConfigLoad(path);
+	if (!candidate.descriptor) {
+		auto file = ServiceManager::Get<FileSystem>().getFile(path, FileMode::READ);
+		if (!file || !file->isValid()) {
+			throw std::runtime_error("Missing material: " + path);
+		}
+		auto bytes = co_await file->readAllTask(control);
+		ParseConfigCandidate(candidate, std::string(bytes.begin(), bytes.end()), path);
 	}
-	auto bytes = co_await file->readAllTask(control);
-	auto parsed = UTILS::FromJsonStr<RENDER::MaterialResource>(std::string(bytes.begin(), bytes.end()));
-	if (parsed.isErr()) {
-		throw std::runtime_error("Invalid material: " + path);
-	}
-	auto descriptor = parsed.unwrap();
-	descriptor.path = path;
+	const auto& descriptor = *candidate.descriptor;
 	descriptor.PbrLayers.validate(path);
 	std::vector<std::shared_ptr<void>> dependencies;
 	dependencies.push_back(co_await ServiceManager::Get<ShaderLoader>().loadResourceTask(descriptor.ShaderPath));
@@ -59,29 +58,21 @@ COROUTINE::Task<ResourcePtr<RENDER::MaterialInterface>> MaterialLoader::createRe
 	co_await COROUTINE::NextFrame();
 	control->check();
 	auto material = ServiceManager::Get<RENDER::Renderer>().createMaterial(descriptor, nullptr, createCacheDeleter(path));
-	addFileWatchSubscribe(path, { path }, material);
-	co_return registerResource(path, material);
+	if (!material) {
+		throw std::runtime_error("Cannot create material: " + path);
+	}
+	if (!PublishConfig(path, candidate)) {
+		throw ResourceLoadCancelled();
+	}
+	auto published = registerResource(path, std::move(material), control.get());
+	addFileWatchSubscribe(path, { path }, published);
+	co_return published;
 }
 
 ResourcePtr<RENDER::MaterialInterface> MaterialLoader::Create(
 	const std::string& path, UTILS::IAllocator* allocator, RENDER::MaterialDeleter deleter) {
 	auto& render = ServiceManager::Get<RENDER::Renderer>();
-	auto file = ServiceManager::Get<FileSystem>().getFile(path, FileMode::READ);
-	if (!file || !file->isValid()) {
-		ASSERT("MaterialLoader: cannot open .material file");
-		return nullptr;
-	}
-
-	auto parseResult = UTILS::FromJsonStr<RENDER::MaterialResource>(file->readStr());
-	if (parseResult.isErr()) {
-		ASSERT("MaterialLoader: failed to parse .material file");
-		return nullptr;
-	}
-
-	auto materialDescriptor = parseResult.unwrap();
-	materialDescriptor.path = path;
-
-	return render.createMaterial(materialDescriptor, allocator, deleter);
+	return render.createMaterial(LoadConfig(path), allocator, deleter);
 }
 
 ResourcePtr<RENDER::MaterialInterface> MaterialLoader::createFromResource(const std::string& path) {
@@ -89,21 +80,12 @@ ResourcePtr<RENDER::MaterialInterface> MaterialLoader::createFromResource(const 
 		return resource;
 	}
 
-	// TODO fix it
-	auto _path = NormalizePath(path);
-
-	RENDER::MaterialResource config;
-	if (HasConfig(_path)) {
-		config = *GetConfig(_path);
-	}
-	else {
-		config = LoadConfig(_path);
-		AddConfigToCache(_path, config);
-	}
-
-	if (auto newResource = Create(_path, nullptr, createCacheDeleter(path))) {
-		addFileWatchSubscribe(_path, { _path }, newResource);
-		return registerResource(_path, newResource);
+	const auto key = NormalizePath(path);
+	const auto candidate = ReadConfigCandidate(key);
+	auto& renderer = ServiceManager::Get<RENDER::Renderer>();
+	if (auto resource = renderer.createMaterial(*candidate.descriptor, nullptr, createCacheDeleter(key)); resource && PublishConfig(key, candidate)) {
+		addFileWatchSubscribe(key, { key }, resource);
+		return registerResource(key, resource);
 	}
 	return nullptr;
 }
@@ -126,10 +108,12 @@ ResourcePtr<RENDER::MaterialInterface> MaterialLoader::createResource(const std:
 
 bool MaterialLoader::reloadResource(std::weak_ptr<RENDER::MaterialInterface> weakRes, const std::string& path) {
 	if (auto mat = weakRes.lock()) {
-		auto config = LoadConfig(path);
-		AddConfigToCache(path, config);
-		mat->create(config);
-		addFileWatchSubscribe(path, { path }, weakRes);
+		const auto candidate = ReadConfigCandidate(path, true);
+		auto replacement = ServiceManager::Get<RENDER::Renderer>().createMaterial(*candidate.descriptor);
+		if (!replacement || !commitResourceReload(path, mat, path, candidate, [&]() noexcept { return mat->adoptReloadedMaterial(*replacement); })) {
+			return false;
+		}
+		addFileWatchSubscribe(path, { path }, mat);
 		return true;
 	}
 	return false;

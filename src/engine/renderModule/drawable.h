@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "mathModule/math.h"
+#include "utilsModule/memory/resourceAllocator.h"
 #include "utilsModule/weakPtr.h"
 
 // #include <map>
@@ -44,8 +45,9 @@ namespace RENDER {
 		MATH::Vector4f tint = { 1, 1, 1, 1 };
 	};
 
-	using OpaqueDrawables = std::multimap<float, Drawable, std::less<float>>;
-	using TransparentDrawables = std::multimap<float, Drawable, std::greater<float>>;
+	using DrawableAllocator = MEMORY::StlAllocator<std::pair<const float, Drawable>>;
+	using OpaqueDrawables = std::multimap<float, Drawable, std::less<float>, DrawableAllocator>;
+	using TransparentDrawables = std::multimap<float, Drawable, std::greater<float>, DrawableAllocator>;
 
 	class FrameBufferInterface;
 }
@@ -54,6 +56,8 @@ namespace RENDER {
 namespace IKIGAI {
 namespace RENDER {
 	struct RenderChunk {
+		RenderChunk(std::shared_ptr<FrameBufferInterface> target = {}, UTILS::WeakPtr<ECS::CameraComponent> viewCamera = {},
+			std::shared_ptr<MEMORY::IAllocator> allocationDomain = {});
 		std::shared_ptr<FrameBufferInterface> frameBuffer;
 		UTILS::WeakPtr<ECS::CameraComponent> camera;
 

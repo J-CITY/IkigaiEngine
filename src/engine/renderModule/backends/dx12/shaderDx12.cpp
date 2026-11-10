@@ -249,8 +249,22 @@ ShaderDx12::ShaderDx12(const ShaderResource& res) : ShaderDx12() {
 
 void ShaderDx12::recompile(const ShaderResource& res) {
 	requireOwnerThread();
-	auto* driver = d3dUtil::GetDriver();
 	auto replacement = std::make_shared<ShaderDx12>(res);
+	prepareReloadedShader(replacement);
+	adoptReloadedShader(*replacement);
+}
+
+void ShaderDx12::prepareRetirement(const std::shared_ptr<ShaderInterface>& replacement) {
+	auto* driver = d3dUtil::GetDriver();
+	driver->mRayDeferred.push_back(replacement);
+	driver->retireShaderPipelines(mId);
+}
+
+bool ShaderDx12::adoptReloadedShader(ShaderInterface& prepared) noexcept {
+	auto* replacement = dynamic_cast<ShaderDx12*>(&prepared);
+	if (!replacement) {
+		return false;
+	}
 	using std::swap;
 	swapCompiledInterface(*replacement);
 	swap(mBlobs, replacement->mBlobs);
@@ -258,8 +272,7 @@ void ShaderDx12::recompile(const ShaderResource& res) {
 	swap(mSerializedRootSignature, replacement->mSerializedRootSignature);
 	swap(mPushConstantRootIndex, replacement->mPushConstantRootIndex);
 	swap(mPushConstantDwords, replacement->mPushConstantDwords);
-	driver->mRayDeferred.push_back(std::move(replacement));
-	driver->retireShaderPipelines(mId);
+	return true;
 }
 
 void ShaderDx12::create(const ShaderResource& res) {

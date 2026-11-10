@@ -9,7 +9,8 @@
 namespace IKIGAI::RENDER {
 class RenderThread final {
 public:
-	explicit RenderThread(size_t capacity = 1);
+	enum class Role { REPLAY, GPU_COMPLETION };
+	explicit RenderThread(size_t capacity = 1, Role role = Role::REPLAY);
 	~RenderThread();
 
 	// Capacity includes work currently executing.

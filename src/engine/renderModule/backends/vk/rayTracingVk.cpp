@@ -1015,6 +1015,9 @@ void DriverVk::executeRayProgram(const RayTracingDispatch& dispatch, bool rayQue
 	if (computeList) {
 		transferGraphResources(cmd, mQueueFamilyIndex, mGraphComputeFamily, false);
 	}
+	else {
+		mBoundComputePipelineKey.reset();
+	}
 	vkCmdBindPipeline(cmd, bindPoint, data.Pipeline);
 	if (!sets.empty())
 		vkCmdBindDescriptorSets(cmd, bindPoint, data.Layout, 0, static_cast<uint32_t>(sets.size()), sets.data(), 0, nullptr);

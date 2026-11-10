@@ -44,6 +44,7 @@ protected:
 	DeformationDescriptor mDeformation = {};
 	PreparedMaterial prepareMaterial(const MaterialResource& resource);
 	void applyMaterialState(const MaterialResource& resource);
+	void swapMaterialState(MaterialInterface& replacement) noexcept;
 	void completeDescriptor(MaterialResource& resource) const;
 
 public:
@@ -82,6 +83,9 @@ public:
 	virtual const UniformData* findUniform(const std::string& name) const noexcept = 0;
 
 	virtual void create(const MaterialResource& res) = 0;
+	virtual bool adoptReloadedMaterial(MaterialInterface&) noexcept {
+		return false;
+	}
 
 	unsigned getGPUInstances() const {
 		return mGpuInstances;

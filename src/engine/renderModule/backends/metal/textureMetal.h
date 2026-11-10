@@ -20,6 +20,7 @@ namespace IKIGAI::RENDER {
 
 		void* getImguiId() override { return (__bridge void*)mTexture; }
 		void recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) override;
+		bool adoptReloadedTexture(TextureInterface& texture) noexcept override;
 
 		id<MTLTexture> getTexture() const { return mTexture; }
 		id<MTLSamplerState> getSampler() const { return mSampler; }

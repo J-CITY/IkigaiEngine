@@ -3,12 +3,13 @@
 #include <filesystem>
 #include <resourceModule/fileSystem/fileSystem.h>
 
-
 #include "fileWatcher.h"
 #include "renderModule/backends/interface/resourceStruct.h"
 #include "renderModule/render.h"
 #include "utilsModule/jsonLoader.h"
-
+#include "utilsModule/stdLoader.h"
+#include <bit>
+#include <limits>
 
 namespace {
 constexpr auto TEXTURE_RES_EXT = ".texture";
@@ -16,6 +17,105 @@ constexpr auto TEXTURE_HDR_EXT = ".hdr";
 }
 
 namespace IKIGAI::RESOURCES {
+namespace {
+	std::vector<std::vector<uint8_t>> readTextureSources(const RENDER::TextureResource& descriptor) {
+		if (descriptor.pathTexture.empty() && descriptor.colorData.empty() && (descriptor.width <= 0 || descriptor.height <= 0)) {
+			throw std::runtime_error("Missing texture data: " + descriptor.path);
+		}
+		std::vector<std::vector<uint8_t>> data;
+		auto& files = ServiceManager::Get<FileSystem>();
+		for (const auto& source : descriptor.pathTexture) {
+			auto file = files.getFile(source, FileMode::READ);
+			auto bytes = file && file->isValid() ? file->read() : std::vector<uint8_t> {};
+			if (bytes.empty()) {
+				throw std::runtime_error("Missing or empty texture source: " + source);
+			}
+			data.push_back(std::move(bytes));
+		}
+		return data;
+	}
+
+	size_t texturePixelSize(RENDER::PixelFormat format) {
+		using enum RENDER::PixelFormat;
+		switch (format) {
+		case R_INT:
+			return 1;
+		case RG_INT:
+		case R16_FLOAT:
+			return 2;
+		case RGB_INT:
+			return 3;
+		case RGBA_INT:
+		case BGRA_INT:
+		case R_FLOAT:
+		case R32_INT:
+		case RG16_FLOAT:
+		case R11G11B10_FLOAT:
+			return 4;
+		case RG_FLOAT:
+		case RG32_INT:
+		case RGBA16_FLOAT:
+			return 8;
+		case RGB_FLOAT:
+		case RGB32_INT:
+			return 12;
+		case RGBA_FLOAT:
+		case RGBA32_INT:
+			return 16;
+		default:
+			throw std::invalid_argument("Cannot upload color data to a depth texture format");
+		}
+	}
+
+	void validateTextureReload(RENDER::TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& data) {
+		if (!descriptor.colorData.empty()) {
+			const auto componentSize = descriptor.isFloat ? sizeof(float) : sizeof(uint8_t);
+			const auto bytesPerPixel = std::max(texturePixelSize(descriptor.pixelType), componentSize * std::max(1, descriptor.channels));
+			if (descriptor.width <= 0 || descriptor.height <= 0 || descriptor.channels < 1 || descriptor.channels > 4
+				|| descriptor.colorData.size() / bytesPerPixel / descriptor.height / std::max(1, descriptor.depth)
+					< static_cast<size_t>(descriptor.width)) {
+				throw std::runtime_error("Invalid texture color data: " + descriptor.path);
+			}
+			return;
+		}
+		if (descriptor.texType == RENDER::TextureType::TEXTURE_CUBE && data.size() != 6) {
+			throw std::runtime_error("A cubemap requires six images: " + descriptor.path);
+		}
+		if (!data.empty()
+			&& (texturePixelSize(descriptor.pixelType) > (descriptor.isFloat ? 16u : 4u)
+				|| ((descriptor.texType == RENDER::TextureType::TEXTURE_3D || descriptor.texType == RENDER::TextureType::TEXTURE_2D_ARRAY)
+					&& (descriptor.depth > 1 || data.size() > 1)))) {
+			throw std::runtime_error("Texture source does not match the descriptor's pixel layout: " + descriptor.path);
+		}
+		int width = 0;
+		int height = 0;
+		for (const auto& bytes : data) {
+			if (bytes.size() > std::numeric_limits<int>::max()) {
+				throw std::runtime_error("Texture source is too large: " + descriptor.path);
+			}
+			int imageWidth = 0;
+			int imageHeight = 0;
+			int channels = 0;
+			const auto length = static_cast<int>(bytes.size());
+			auto* pixels = descriptor.isFloat
+				? static_cast<void*>(UTILS::STBiLoadfFromMemory(bytes.data(), length, &imageWidth, &imageHeight, &channels, 4))
+				: static_cast<void*>(UTILS::STBiLoadFromMemory(bytes.data(), length, &imageWidth, &imageHeight, &channels, 4));
+			if (!pixels) {
+				throw std::runtime_error("Cannot decode texture source: " + descriptor.path);
+			}
+			UTILS::STBiImageFree(static_cast<unsigned char*>(pixels));
+			if (width && (width != imageWidth || height != imageHeight)) {
+				throw std::runtime_error("Texture sources have different dimensions: " + descriptor.path);
+			}
+			width = imageWidth;
+			height = imageHeight;
+		}
+		if (width > 0) {
+			descriptor.width = width;
+			descriptor.height = height;
+		}
+	}
+}
 
 TextureLoader::LoadedTextureData TextureLoader::LoadFileData(const std::string& realPath, bool generateMipmap, bool isHDR) {
 	LoadedTextureData result;
@@ -25,7 +125,6 @@ TextureLoader::LoadedTextureData TextureLoader::LoadFileData(const std::string& 
 
 	auto file = ServiceManager::Get<FileSystem>().getFile(realPath, FileMode::READ);
 	if (!file || !file->isValid()) {
-		ASSERT("TextureLoader::LoadFileData — cannot open file");
 		return result;
 	}
 	result.fileData = file->read();
@@ -36,8 +135,9 @@ TextureLoader::LoadedTextureData TextureLoader::LoadFileData(const std::string& 
 TextureLoader::TextureLoader() = default;
 
 ResolvedTexture TextureLoader::resolveSprite(const std::string& path) {
-	if (!mResolver)
+	if (!mResolver) {
 		mResolver = std::make_unique<ResourceResolver>(ServiceManager::Get<FileSystem>());
+	}
 	return mResolver->texture(NormalizePath(path));
 }
 ResourceRequest<RENDER::TextureInterface> TextureLoader::requestSprite(const std::string& path) {
@@ -65,11 +165,13 @@ COROUTINE::Task<ResourcePtr<RENDER::TextureInterface>> TextureLoader::createAtla
 	std::string path, std::shared_ptr<ResourceLoadControl> control) {
 	control->check();
 	const auto cacheKey = std::to_string(ServiceManager::Get<FileSystem>().generation()) + ":" + path;
-	if (auto ready = mAtlases[cacheKey].lock())
+	if (auto ready = mAtlases[cacheKey].lock()) {
 		co_return ready;
+	}
 	auto file = ServiceManager::Get<FileSystem>().getFile(path, FileMode::READ);
-	if (!file || !file->isValid())
+	if (!file || !file->isValid()) {
 		throw std::runtime_error("Missing texture atlas: " + path);
+	}
 	auto bytes = co_await file->readAllTask(control);
 	control->check();
 	RENDER::TextureResource descriptor;
@@ -84,22 +186,25 @@ COROUTINE::Task<ResourcePtr<RENDER::TextureInterface>> TextureLoader::createAtla
 COROUTINE::Task<ResourcePtr<RENDER::TextureInterface>> TextureLoader::createResourceTask(
 	std::string path, ELoadingType type, std::shared_ptr<ResourceLoadControl> control) {
 	control->check();
-	if (auto ready = getResource(path))
+	if (auto ready = getResource(path)) {
 		co_return ready;
+	}
 	auto& fs = ServiceManager::Get<FileSystem>();
 	RENDER::TextureResource descriptor;
 	descriptor.path = path;
 	descriptor.useMipmap = true;
+	ConfigCandidate candidate;
 	if (path.ends_with(".texture") && type == ELoadingType::RESOURCE) {
-		auto file = fs.getFile(path, FileMode::READ);
-		if (!file || !file->isValid())
-			throw std::runtime_error("Missing texture descriptor: " + path);
-		auto bytes = co_await file->readAllTask(control);
-		auto parsed = UTILS::FromJsonStr<RENDER::TextureResource>(std::string(bytes.begin(), bytes.end()));
-		if (parsed.isErr())
-			throw std::runtime_error("Invalid texture descriptor: " + path);
-		descriptor = parsed.unwrap();
-		descriptor.path = path;
+		candidate = BeginConfigLoad(path);
+		if (!candidate.descriptor) {
+			auto file = fs.getFile(path, FileMode::READ);
+			if (!file || !file->isValid()) {
+				throw std::runtime_error("Missing texture descriptor: " + path);
+			}
+			auto bytes = co_await file->readAllTask(control);
+			ParseConfigCandidate(candidate, std::string(bytes.begin(), bytes.end()), path);
+		}
+		descriptor = *candidate.descriptor;
 	}
 	else {
 		descriptor.pathTexture = { path };
@@ -110,8 +215,9 @@ COROUTINE::Task<ResourcePtr<RENDER::TextureInterface>> TextureLoader::createReso
 	for (const auto& source : descriptor.pathTexture) {
 		control->check();
 		auto file = fs.getFile(source, FileMode::READ);
-		if (!file || !file->isValid())
+		if (!file || !file->isValid()) {
 			throw std::runtime_error("Missing texture: " + source);
+		}
 		data.push_back(co_await file->readAllTask(control));
 		watches.insert(source);
 	}
@@ -119,10 +225,15 @@ COROUTINE::Task<ResourcePtr<RENDER::TextureInterface>> TextureLoader::createReso
 	co_await COROUTINE::YieldIfBudgetExceeded();
 	control->check();
 	auto texture = ServiceManager::Get<RENDER::Renderer>().createTexture(descriptor, data, nullptr, createCacheDeleter(path));
-	if (!texture)
+	if (!texture) {
 		throw std::runtime_error("Cannot create texture: " + path);
-	addFileWatchSubscribe(path, watches, texture);
-	co_return registerResource(path, texture);
+	}
+	if (candidate.descriptor && !PublishConfig(path, candidate)) {
+		throw ResourceLoadCancelled();
+	}
+	auto published = registerResource(path, std::move(texture), control.get());
+	addFileWatchSubscribe(path, watches, published);
+	co_return published;
 }
 
 TextureLoader::~TextureLoader() {
@@ -147,7 +258,6 @@ ResourcePtr<RENDER::TextureInterface> TextureLoader::CreateFromFile(
 	const std::string& filepath, bool generateMipmap, UTILS::IAllocator* allocator, RENDER::TextureDeleter deleter) {
 	auto loaded = LoadFileData(filepath, generateMipmap, false);
 	if (!loaded.valid()) {
-		ASSERT("TextureLoader::CreateFromFile — failed to read file");
 		return GetDefaultTexture();
 	}
 
@@ -163,30 +273,15 @@ ResourcePtr<RENDER::TextureInterface> TextureLoader::CreateFromResource(
 
 ResourcePtr<RENDER::TextureInterface> TextureLoader::CreateFromResource(
 	const RENDER::TextureResource& res, UTILS::IAllocator* allocator, RENDER::TextureDeleter deleter) {
-	if (!res.pathTexture.empty() || !res.colorData.empty() || (res.width > 0 && res.height > 0)) {
-		auto& render = ServiceManager::Get<RENDER::Renderer>();
-		std::vector<std::vector<uint8_t>> fileData;
-		for (const auto& p : res.pathTexture) {
-			auto file = ServiceManager::Get<FileSystem>().getFile(p, FileMode::READ);
-			if (file && file->isValid()) {
-				fileData.push_back(file->read());
-			}
-			else {
-				ASSERT("TextureLoader::CreateFromResource — failed to read file");
-				return GetDefaultTexture();
-			}
-		}
-		return render.createTexture(res, fileData, allocator, deleter);
-	}
-	ASSERT("TextureLoader::CreateFromResource — failed to read file");
-	return GetDefaultTexture();
+	auto descriptor = res;
+	auto fileData = readTextureSources(descriptor);
+	return ServiceManager::Get<RENDER::Renderer>().createTexture(descriptor, fileData, allocator, deleter);
 }
 
 ResourcePtr<RENDER::TextureInterface> TextureLoader::CreateAtlasFromFile(
 	const std::string& path, bool generateMipmap, UTILS::IAllocator* allocator, RENDER::TextureDeleter deleter) {
 	auto loaded = LoadFileData(path, generateMipmap, false);
 	if (!loaded.valid()) {
-		ASSERT("TextureLoader::CreateAtlasFromFile — failed to read file");
 		return GetDefaultTexture();
 	}
 	auto& render = ServiceManager::Get<RENDER::Renderer>();
@@ -201,7 +296,6 @@ ResourcePtr<RENDER::TextureInterface> TextureLoader::CreateFromFileHDR(
 	const std::string& filepath, bool generateMipmap, UTILS::IAllocator* allocator, RENDER::TextureDeleter deleter) {
 	auto loaded = LoadFileData(filepath, generateMipmap, true);
 	if (!loaded.valid()) {
-		ASSERT("TextureLoader::CreateFromFileHDR — failed to read file");
 		return GetDefaultTexture();
 	}
 	auto& render = ServiceManager::Get<RENDER::Renderer>();
@@ -249,15 +343,16 @@ ResourcePtr<RENDER::TextureInterface> TextureLoader::createResource(const std::s
 }
 
 ResourcePtr<RENDER::TextureInterface> TextureLoader::createResource(const std::string& path, ELoadingType type) {
-	return createResource(path, type, std::any { });
+	return createResource(path, type, std::any {});
 }
 
 ResourcePtr<RENDER::TextureInterface> TextureLoader::createResource(const std::string& path, ELoadingType type, std::any data) {
 	if (type == ELoadingType::RESOURCE) {
 		if (data.has_value()) {
 			if (auto* res = std::any_cast<RENDER::TextureResource>(&data)) {
-				if (auto newResource = CreateFromResource(*res))
+				if (auto newResource = CreateFromResource(*res)) {
 					return registerResource(path, newResource);
+				}
 				return GetDefaultTexture();
 			}
 		}
@@ -287,46 +382,14 @@ ResourcePtr<RENDER::TextureInterface> TextureLoader::createFromResource(const st
 		return resource;
 	}
 
-	RENDER::TextureResource cachedDescriptor;
-	if (auto it = sResourceCache.find(path); it != sResourceCache.end()) {
-		cachedDescriptor = it->second;
-	}
-	else {
-		auto file = ServiceManager::Get<FileSystem>().getFile(path, FileMode::READ);
-		if (!file || !file->isValid()) {
-			ASSERT("TextureLoader: cannot open .res file");
-			return GetDefaultTexture();
-		}
-		auto parseResult = UTILS::FromJsonStr<RENDER::TextureResource>(file->readStr());
-		if (parseResult.isErr()) {
-			ASSERT("TextureLoader: failed to parse .res file");
-			return GetDefaultTexture();
-		}
-		cachedDescriptor = parseResult.unwrap();
-		cachedDescriptor.path = path;
-		sResourceCache[path] = cachedDescriptor;
-	}
-
-	if (auto newResource = CreateFromResource(cachedDescriptor, nullptr, createCacheDeleter(path))) {
-		auto& fs = ServiceManager::Get<FileSystem>();
-		auto basePathOpt = fs.getFilePath(path);
-		if (!basePathOpt) {
-			ASSERT("Path not found");
-		}
-
-		{ // FileWatch
-			std::unordered_set<std::string> paths;
-			paths.insert(*basePathOpt);
-			for (const auto& imgPath : cachedDescriptor.pathTexture) {
-				auto pathOpt = fs.getFilePath(imgPath);
-				if (pathOpt) {
-					paths.insert(*pathOpt);
-				}
-			}
-			addFileWatchSubscribe(*basePathOpt, paths, newResource);
-		}
-
-		return registerResource(path, newResource);
+	const auto key = NormalizePath(path);
+	const auto candidate = ReadConfigCandidate(key);
+	const auto& descriptor = *candidate.descriptor;
+	if (auto resource = CreateFromResource(descriptor, nullptr, createCacheDeleter(key)); resource && PublishConfig(key, candidate)) {
+		std::unordered_set<std::string> paths { key };
+		paths.insert(descriptor.pathTexture.begin(), descriptor.pathTexture.end());
+		addFileWatchSubscribe(key, paths, resource);
+		return registerResource(key, resource);
 	}
 	return GetDefaultTexture();
 }
@@ -399,8 +462,9 @@ ResourcePtr<RENDER::TextureInterface> TextureLoader::createFromMemory(
 
 ResourcePtr<RENDER::TextureInterface> TextureLoader::createAtlasFromFile(const std::string& path, bool generateMipmap) {
 	const auto cacheKey = std::to_string(ServiceManager::Get<FileSystem>().generation()) + ":" + NormalizePath(path);
-	if (auto cached = mAtlases[cacheKey].lock())
+	if (auto cached = mAtlases[cacheKey].lock()) {
 		return cached;
+	}
 	if (auto newResource = CreateAtlasFromFile(path, generateMipmap)) {
 		mAtlases[cacheKey] = newResource;
 		return newResource;
@@ -411,35 +475,35 @@ ResourcePtr<RENDER::TextureInterface> TextureLoader::createAtlasFromFile(const s
 
 bool TextureLoader::reloadResource(std::weak_ptr<RENDER::TextureInterface> weakRes, const std::string& path) {
 	if (auto res = weakRes.lock()) {
+		res->requireReloadOwner();
 		RENDER::TextureResource config;
+		ConfigCandidate candidate;
 		if (path.ends_with(".texture")) {
-			config = LoadConfig(path);
-			AddConfigToCache(path, config);
-		}
-		else if (path.ends_with(".hdr")) {
-			auto generateMipmap = weakRes.lock()->getUseMipMap();
-			config.path = path;
-			config.pathTexture = { path };
-			config.useMipmap = generateMipmap;
-			config.isFloat = true;
+			candidate = ReadConfigCandidate(path, true);
+			config = *candidate.descriptor;
 		}
 		else {
-			auto generateMipmap = weakRes.lock()->getUseMipMap();
 			config.path = path;
 			config.pathTexture = { path };
-			config.useMipmap = generateMipmap;
+			config.useMipmap = res->getUseMipMap();
+			config.isFloat = path.ends_with(".hdr");
 		}
-		if (!config.pathTexture.empty() || !config.colorData.empty()) {
-			std::vector<std::vector<uint8_t>> fileData;
-			for (const auto& p : config.pathTexture) {
-				auto file = ServiceManager::Get<FileSystem>().getFile(p, FileMode::READ);
-				if (file && file->isValid()) {
-					fileData.push_back(file->read());
-				}
-				file->close();
-			}
-			res->recreate(config, fileData);
+		const auto data = readTextureSources(config);
+		validateTextureReload(config, data);
+		if (config.useMipmap && config.mipMapCount == 0) {
+			config.mipMapCount = std::bit_width(static_cast<unsigned>(std::max(config.width, config.height)));
 		}
+		auto replacement = ServiceManager::Get<RENDER::Renderer>().createTexture(config, data);
+		if (!replacement) {
+			return false;
+		}
+		const auto swap = [&]() noexcept { return res->adoptReloadedTexture(*replacement); };
+		if (!(candidate.descriptor ? CommitReload(path, candidate, swap) : swap())) {
+			return false;
+		}
+		std::unordered_set<std::string> paths { path };
+		paths.insert(config.pathTexture.begin(), config.pathTexture.end());
+		addFileWatchSubscribe(path, paths, res);
 		return true;
 	}
 	return false;

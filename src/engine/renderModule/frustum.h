@@ -26,6 +26,8 @@ namespace RENDER {
 		[[nodiscard]] bool sphereInFrustum(float x, float y, float z, float radius) const;
 		[[nodiscard]] bool cubeInFrustum(float x, float y, float z, float size) const;
 		[[nodiscard]] bool boundingSphereInFrustum(const BoundingSphere& boundingSphere, const ECS::Transform& transform) const;
+		[[nodiscard]] bool boundingSphereInFrustum(const BoundingSphere& boundingSphere, const MATH::Vector3f& position,
+			const MATH::QuaternionF& rotation, const MATH::Vector3f& scale) const;
 		[[nodiscard]] std::array<float, 4> getNearPlane() const;
 		[[nodiscard]] std::array<float, 4> getFarPlane() const;
 		// Plane i of make() (A, B, C, D with A*x + B*y + C*z + D >= 0 inside), i in [0, 6).
@@ -34,7 +36,7 @@ namespace RENDER {
 		COLLISION::TYPE boundingSphereInFrustumCollide(const BoundingSphere& boundingSphere) const;
 
 	private:
-		float data[6][4] = { };
+		float data[6][4] = {};
 	};
 }
 }

@@ -100,7 +100,8 @@ public:
 				draw.ClipRect.w = std::clamp(draw.ClipRect.w, origin.y, limit.y);
 			}
 		}
-		ImGui_ImplDX12_RenderDrawData(drawData, driverDx12->getCommandList().Get());
+		ImGui_ImplDX12_RenderDrawData(drawData, command);
+		driverDx12->invalidateCommandState();
 		// Initialization and offscreen work may submit the same UI draw data more than once.
 		const int imguiFrame = ImGui::GetFrameCount();
 		if ((io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) && mPlatformFrame != imguiFrame) {

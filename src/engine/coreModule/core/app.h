@@ -1,5 +1,6 @@
 #pragma once
 #include <chrono>
+#include <memory>
 
 #include "core.h"
 #include <utilsModule/ref.h>
@@ -20,7 +21,11 @@ namespace CORE {
 
 	protected:
 		Core core;
-		std::chrono::duration<double> m_fixedTimeAccumulator { };
+		std::chrono::duration<double> m_fixedTimeAccumulator {};
+
+	private:
+		struct RenderTransformStaging;
+		std::unique_ptr<RenderTransformStaging> mRenderTransformStaging;
 	};
 }
 }

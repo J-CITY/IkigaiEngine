@@ -46,6 +46,7 @@ namespace IKIGAI {
 			MaterialResource getDescriptor() override;
 
 			void create(const MaterialResource& res) override;
+			bool adoptReloadedMaterial(MaterialInterface& replacement) noexcept override;
 			auto& getUniforms() { return mUniforms; }
 		private:
 			void generateUniformsData();

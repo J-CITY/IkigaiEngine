@@ -22,6 +22,7 @@ public:
 	// Frame owner calls reset only after GPU completion or abandoning the native recording.
 	void reset() noexcept;
 	void seal();
+	[[nodiscard]] bool isSealed() const noexcept;
 	[[nodiscard]] bool isExecuting() const noexcept;
 	[[nodiscard]] bool retainsExecuted() const noexcept;
 	[[nodiscard]] size_t pendingCommandCount() const noexcept;

@@ -221,9 +221,14 @@ class Renderer {
 	bool mPreparingAccess = false;
 	bool mRetiringFrames = false;
 	bool mWaitingForPresent = false;
+	bool mPreparingCpuReplay = false;
 	std::unique_ptr<RenderThread> mRenderThread {};
 	std::unique_ptr<RenderThread> mGpuWaitThread {};
+	RenderTicket mPendingReplay {};
+	std::exception_ptr mReplayFailure {};
 	std::deque<RenderTicket> mPendingPresents {};
+	void waitForReplay();
+	void replayWhilePreparing(const std::function<void()>& prepare);
 	void waitOldestPresent();
 	void prepareBackendAccess();
 	void retireFrames(bool wait);
@@ -236,6 +241,10 @@ public:
 	// Present on the window thread, then allow the fence wait to overlap producer work.
 	// A default ticket represents synchronous completion.
 	RenderTicket submitAsync();
+	// Prepare only producer-owned CPU data. Direct backend access joins the replay.
+	// Do not record commands, cancel or submit a frame, or shut down from this callback.
+	RenderTicket submitAsync(const std::function<void()>& prepare);
+	[[nodiscard]] bool supportsCpuReplayOverlap() const;
 	void waitForPendingPresent();
 	void pollPresent();
 	void addView(RenderViewSnapshot view);
@@ -252,6 +261,9 @@ public:
 		mOwner.requireCurrentThread();
 		if (mShutdown) {
 			throw std::logic_error("Renderer is shut down");
+		}
+		if (mActiveFrame && mActiveFrame->state() != FrameContext::State::RECORDING) {
+			throw std::logic_error("Cannot append to a sealed render frame");
 		}
 		if (!mActiveFrame && !mSubmittedFrames.empty()) {
 			retireFrames(!mGpuWaitThread);
@@ -270,7 +282,8 @@ public:
 		updateStorageBuffer(std::move(buffer), data.data(), data.size(), sizeof(T));
 	}
 
-	// Hybrid approach:
+	// Threaded replay callbacks run on the backend owner and may only touch backend
+	// state or data they own. They cannot access the producer's scene or UI state.
 	void execute(std::function<void()> func) {
 		push<CmdLambda>(OpCode::LAMBDA, std::move(func));
 	}

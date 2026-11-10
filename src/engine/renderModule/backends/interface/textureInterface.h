@@ -3,6 +3,7 @@
 #include "renderEnums.h"
 #include "renderResourceOwner.h"
 #include <string>
+#include <utility>
 
 namespace IKIGAI::RENDER {
 	struct TextureResource; // forward declaration (defined in resourceStruct.h)
@@ -39,6 +40,25 @@ namespace IKIGAI::RENDER {
 
 		bool mUseMipMap = false;
 
+		void swapTextureDescription(TextureInterface& replacement) noexcept {
+			using std::swap;
+			swap(mPath, replacement.mPath);
+			swap(mType, replacement.mType);
+			swap(mFormat, replacement.mFormat);
+			swap(mWidth, replacement.mWidth);
+			swap(mHeight, replacement.mHeight);
+			swap(mDepth, replacement.mDepth);
+			swap(mChannels, replacement.mChannels);
+			swap(mMipCount, replacement.mMipCount);
+			swap(mMinFilter, replacement.mMinFilter);
+			swap(mMagFilter, replacement.mMagFilter);
+			swap(mWrapS, replacement.mWrapS);
+			swap(mWrapT, replacement.mWrapT);
+			swap(mWrapR, replacement.mWrapR);
+			swap(mUseMipMap, replacement.mUseMipMap);
+			++mRevision;
+		}
+
 	public:
 		TextureType getType() const { return mType; }
 		PixelFormat getFormat() const { return mFormat; }
@@ -63,5 +83,12 @@ namespace IKIGAI::RENDER {
 		// Пересоздать GPU-ресурс из нового/обновлённого дескриптора (для hot-reload)
 		// fileData - это сырые байты файлов (PNG/JPG), загруженные менеджером (один или несколько)
 		virtual void recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) = 0;
+		// On the render owner, swap a prepared replacement into this live handle.
+		void requireReloadOwner() const {
+			requireOwnerThread();
+		}
+		virtual bool adoptReloadedTexture(TextureInterface&) noexcept {
+			return false;
+		}
 	};
 }

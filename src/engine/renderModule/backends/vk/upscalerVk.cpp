@@ -35,10 +35,13 @@ void upscaleBarrier(DriverVk& driver) {
     vkCmdPipelineBarrier(*driver.getCurrentFrame().mCommandBuffer,VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,0,1,&barrier,0,nullptr,0,nullptr);
 }
-void beginUpscaler(DriverVk& driver) {driver.deactivateRenderPass();upscaleBarrier(driver);}
+void beginUpscaler(DriverVk& driver) {
+	driver.deactivateRenderPass();
+	upscaleBarrier(driver);
+	driver.invalidateCommandState();
+}
 void endUpscaler(DriverVk& driver) {
 	upscaleBarrier(driver);
-	driver.mBoundPipelineKey.reset();
 }
 void* upscalerCommand(DriverVk& driver) {return reinterpret_cast<void*>(VkCommandBuffer(*driver.getCurrentFrame().mCommandBuffer));}
 void deferUpscaler(DriverVk& driver,std::shared_ptr<void> context) {driver.destroyDeferred(std::move(context));}
@@ -84,7 +87,8 @@ NVSDK_NGX_Result initNgx(DriverVk& d,const wchar_t* cache) {
 }
 void shutdownNgx(DriverVk& d) {NVSDK_NGX_VULKAN_Shutdown1(*d.mDevice);}
 NVSDK_NGX_Result createNgx(DriverVk& d,NVSDK_NGX_Handle** h,NVSDK_NGX_Parameter* p,NVSDK_NGX_DLSS_Create_Params* desc) {
-    return NGX_VULKAN_CREATE_DLSS_EXT1(*d.mDevice,*d.getCurrentFrame().mCommandBuffer,1,1,h,p,desc);
+	d.invalidateCommandState();
+	return NGX_VULKAN_CREATE_DLSS_EXT1(*d.mDevice,*d.getCurrentFrame().mCommandBuffer,1,1,h,p,desc);
 }
 NVSDK_NGX_Resource_VK ngxResource(DriverVk& d,const std::shared_ptr<TextureInterface>& texture,bool write) {
     auto t=upscaleTexture(d,texture,write);

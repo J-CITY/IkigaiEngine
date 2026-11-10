@@ -148,6 +148,7 @@ struct VirtualGeometryGpuFrame {
 	uint32_t DrawCapacity = 0;
 	VirtualGeometryGpuOcclusion Occlusion = {};
 	VirtualGeometryGpuHierarchy Hierarchy = {};
+	bool BatchedFlatSelection = false;
 };
 
 // Counters written by the cluster/instance passes (word order of VG_STAT_* in vgCullCommon.glsl).
@@ -234,16 +235,22 @@ public:
 	const std::shared_ptr<RENDER::StorageBufferInterface>& drawRecordBuffer() const;
 	const std::shared_ptr<RENDER::StorageBufferInterface>& segmentCountBuffer() const;
 	const std::shared_ptr<RENDER::VertexBufferInterface>& drawIndexStream() const;
+	uint32_t dispatchCount() const;
+	bool batchedFlatSelection() const;
 	// Bytes of the selection buffers currently allocated.
 	size_t gpuBytes() const;
 
 private:
 	bool loadShaders();
 	bool loadHierarchyShaders();
+	bool prepareFlatBatch(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame);
 	void ensureHierarchyCapacity(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame);
 	void ensureCapacity(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame);
 	void setViewUniforms(RENDER::Renderer& renderer, const VirtualGeometryCullViewGpu& view);
 	void bindClusterCullBuffers(RENDER::Renderer& renderer);
+	void bindPostClusterCullBuffers(RENDER::Renderer& renderer, const std::shared_ptr<RENDER::TextureInterface>& hzb);
+	void recordFlatBatch(RENDER::Renderer& renderer, VirtualGeometryCullViewGpu view, const std::shared_ptr<RENDER::TextureInterface>& hzb, bool post,
+		PROFILER::GpuStageProfiler* profiler);
 	void recordClusterSelection(RENDER::Renderer& renderer, const VirtualGeometryGpuFrame& frame, VirtualGeometryCullViewGpu view,
 		const std::shared_ptr<RENDER::TextureInterface>& hzb, bool post, PROFILER::GpuStageProfiler* profiler);
 	void requestStatisticsReadback(RENDER::Renderer& renderer, uint64_t sourceFrame);
@@ -261,6 +268,20 @@ private:
 	std::shared_ptr<RENDER::ShaderInterface> mHierarchyTraverseShader = {};
 	std::shared_ptr<RENDER::ShaderInterface> mHierarchyFinalizeShader = {};
 	std::shared_ptr<RENDER::ShaderInterface> mHierarchyClusterCullShader = {};
+	bool mFlatShaderLoadAttempted = false;
+	bool mFlatActive = false;
+	uint32_t mFlatDispatchWidth = 0;
+	uint32_t mDispatchCount = 0;
+	std::shared_ptr<RENDER::ShaderInterface> mFlatScheduleShader = {};
+	std::shared_ptr<RENDER::ShaderInterface> mFlatCullShader = {};
+	std::shared_ptr<RENDER::ShaderInterface> mFlatCullPostShader = {};
+	std::shared_ptr<RENDER::StorageBufferInterface> mFlatClusters = {};
+	std::shared_ptr<RENDER::StorageBufferInterface> mFlatAssetTable = {};
+	std::shared_ptr<RENDER::StorageBufferInterface> mFlatPrefix = {};
+	std::shared_ptr<RENDER::StorageBufferInterface> mFlatDispatch = {};
+	uint32_t mFlatAssetCapacity = 0;
+	size_t mFlatClusterBytes = 0;
+	std::vector<std::weak_ptr<VirtualMeshAsset>> mFlatPackedAssets = {};
 	// One uniform buffer per dispatch of the frame: a buffer updated between dispatches of one command list would
 	// rely on the backend versioning setData (V1 did); separate buffers make the ordering explicit.
 	std::vector<std::shared_ptr<RENDER::UniformBufferInterface>> mViewUniformPool = {};

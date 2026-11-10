@@ -36,26 +36,10 @@ namespace {
 		return { std::move(bytes), options, std::move(paths) };
 	}
 }
-FontLoader::~FontLoader() {
-	for (auto& path : mWatched)
-		unsubscribeFileWatch(path);
-}
-void FontLoader::addFileWatchSubscribe(
-	const std::string& path, const std::unordered_set<std::string>& previous, std::weak_ptr<VECTOR::FontResource> font) {
-	// ResourceManager re-subscribes after reload using its original paths.
-	// Resolve dependencies again when a descriptor switches to another TTF.
-	try {
-		auto loaded = readFont(path);
-		ResourceManager::addFileWatchSubscribe(path, loaded.files, font);
-	} catch (const std::exception&) {
-		ResourceManager::addFileWatchSubscribe(path, previous, font);
-	}
-}
 ResourcePtr<VECTOR::FontResource> FontLoader::createResource(const std::string& path) {
 	auto loaded = readFont(path);
 	auto result = MEMORY::MakeShared<VECTOR::FontResource, MEMORY::Category::Font>(std::move(loaded.bytes), loaded.options);
 	addFileWatchSubscribe(path, loaded.files, result);
-	mWatched.insert(path);
 	return result;
 }
 bool FontLoader::reloadResource(std::weak_ptr<VECTOR::FontResource> weak, const std::string& path) {
@@ -63,6 +47,7 @@ bool FontLoader::reloadResource(std::weak_ptr<VECTOR::FontResource> weak, const 
 		try {
 			auto data = readFont(path);
 			font->reload(std::move(data.bytes), data.options);
+			addFileWatchSubscribe(path, data.files, font);
 			return true;
 		} catch (const std::exception& e) {
 			std::cerr << "SDF font reload: " << e.what() << '\n';

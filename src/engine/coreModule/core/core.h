@@ -143,7 +143,6 @@ namespace CORE {
 		std::unique_ptr<SCENE_SYSTEM::SceneManager> sceneManager;
 		std::unique_ptr<AUDIO::AudioManager> audioManager;
 		std::unique_ptr<RESOURCES::AudioSourceLoader> audioSourceLoader;
-		std::unique_ptr<TASK::TaskSystem> taskManger;
 		std::unique_ptr<COROUTINE::Scheduler> coroutineScheduler;
 		std::unique_ptr<EVENT::EventBroadcaster> eventBroadcaster;
 		std::unique_ptr<ECS::World> world;
@@ -176,6 +175,8 @@ namespace CORE {
 		std::unique_ptr<RESOURCES::SkeletonBlendspaceLoader> skeletonBlendspaceLoader;
 		std::unique_ptr<RESOURCES::SkeletonAnimationLoader> skeletonAnimationLoader;
 		std::unique_ptr<VG::VirtualMeshLoader> virtualMeshLoader;
+		// Destroy workers first even when construction throws before ~Core runs.
+		std::unique_ptr<TASK::TaskSystem> taskManger = {};
 	};
 }
 }

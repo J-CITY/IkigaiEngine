@@ -51,8 +51,10 @@ namespace IKIGAI::RENDER {
 		void bind() override{};
 		void unbind() override{};
 		void recompile(const ShaderResource& res) override;
+		bool adoptReloadedShader(ShaderInterface& replacement) noexcept override;
 
 	private:
+		void prepareRetirement(const std::shared_ptr<ShaderInterface>& replacement) override;
 		void create(const ShaderResource& res);
 		void clear() const;
 	};

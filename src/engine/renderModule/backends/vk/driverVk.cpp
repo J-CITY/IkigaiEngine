@@ -2,6 +2,7 @@
 
 #include "captureModule/screenshot.h"
 #include "driverVk.h"
+#include "profilerModule/trace.h"
 #include "renderModule/backends/driverFactory.h"
 #include "renderModule/backends/interface/pipelineCacheStorage.h"
 #include "utilsModule/time/loadTimer.h"
@@ -147,6 +148,12 @@ static const std::unordered_map<PixelFormat, vk::Format> FormatMap = {
 };
 
 void DriverVk::retireShaderPipelines(size_t shaderId) {
+	if (mBoundPipelineKey && mBoundPipelineKey->shaderId == shaderId) {
+		mBoundPipelineKey.reset();
+	}
+	if (mBoundComputePipelineKey && mBoundComputePipelineKey->shaderId == shaderId) {
+		mBoundComputePipelineKey.reset();
+	}
 	for (auto state = mStates.begin(); state != mStates.end();) {
 		if (state->first.shaderId == shaderId) {
 #if IKIGAI_ENABLE_MEMORY_TRACKING
@@ -325,6 +332,7 @@ DriverVk::~DriverVk() {
 	mVertexStreams.clear();
 	mIndexBuffer.reset();
 	mUniformBuffers.clear();
+	mRecordedUniformSnapshots.clear();
 	mStorageBuffers.clear();
 	mTextures.clear();
 	mStorageImageBindings.clear();
@@ -936,7 +944,6 @@ bool DriverVk::checkInstanceExtensionSupport(const std::vector<const char*>& ext
 void DriverVk::begin() try {
 	requireUsableDevice();
 	working = true;
-	UniformBufferVk::BeginFrame(settings.framesInFlight);
 	mRayTracingFrameResources.clear();
 	// In pipelined mode submitted sets have moved to their owning frame.
 	mFrameDescriptorSets.clear();
@@ -963,6 +970,7 @@ void DriverVk::begin() try {
 
 void DriverVk::invalidateCommandState() {
 	mBoundPipelineKey.reset();
+	mBoundComputePipelineKey.reset();
 	graphics_pipeline_ignore_bindings.clear();
 	setDirty(Dirty::VERTEX_BUFFER);
 	setDirty(Dirty::INDEX_BUFFER);
@@ -1011,6 +1019,10 @@ void DriverVk::end() try {
 
 	submitGraphics(*frame.mRenderCompleteSemaphore, 0, **frame.fence);
 	frame.Completion = completionSource()->submitted();
+	for (const auto& snapshot : mRecordedUniformSnapshots) {
+		snapshot->Recorded = false;
+	}
+	frame.UniformSnapshots.swap(mRecordedUniformSnapshots);
 	if (settings.pipelined()) {
 		getCurrentSwapchainContext().frames.at(mSemaphoreIndex).AcquireConsumed = frame.Completion;
 		frame.Epoch = mSubmissionEpoch++;
@@ -1706,6 +1718,8 @@ void DriverVk::waitFrameFence(const vk::raii::Fence& fence, const char* operatio
 		requireUsableDevice();
 	}
 	const VkFence nativeFence = *fence;
+	IKIGAI_PROFILE_SCOPE("Vulkan Wait for GPU Fence");
+	IKIGAI_PROFILE_ZONE_TEXT(operation, std::strlen(operation));
 	checkFrameResult(mDevice.getDispatcher()->vkWaitForFences(*mDevice, 1, &nativeFence, VK_TRUE, GpuWaitTimeoutNs), operation, true);
 }
 
@@ -1810,6 +1824,8 @@ void DriverVk::checkFrameResult(VkResult result, const char* operation, bool com
 void DriverVk::submitToQueue(const vk::raii::Queue& queue, const vk::SubmitInfo& submit, VkFence fence, const char* operation) {
 	std::lock_guard lock(mQueueMutex);
 	requireUsableDevice();
+	IKIGAI_PROFILE_SCOPE("Vulkan Submit Queue");
+	IKIGAI_PROFILE_ZONE_TEXT(operation, std::strlen(operation));
 	checkFrameResult(queue.getDispatcher()->vkQueueSubmit(*queue, 1, &static_cast<const VkSubmitInfo&>(submit), fence), operation);
 }
 
@@ -1818,8 +1834,10 @@ void DriverVk::waitDeviceIdle() {
 	// Vulkan has no timed device-idle call. Keep the native drain, including
 	// queues used by presentation, and terminate before freeing live objects if it stalls.
 	VkResult drainResult = VK_ERROR_UNKNOWN;
-	watchGpuWait(
-		"Vulkan vkDeviceWaitIdle timed out with GPU completion unknown", [&] { drainResult = mDevice.getDispatcher()->vkDeviceWaitIdle(*mDevice); });
+	watchGpuWait("Vulkan vkDeviceWaitIdle timed out with GPU completion unknown", [&] {
+		IKIGAI_PROFILE_SCOPE("Vulkan Wait for Device Idle");
+		drainResult = mDevice.getDispatcher()->vkDeviceWaitIdle(*mDevice);
+	});
 	checkFrameResult(drainResult, "vkDeviceWaitIdle", true);
 	for (auto& [_, swapchain] : mSwapchains) {
 		for (auto& frame : swapchain.frames) {
@@ -1858,6 +1876,8 @@ std::function<void()> DriverVk::presentedFrameWait(GpuCompletionToken token) {
 		throw std::logic_error("Vulkan presentation fence does not match the submission");
 	}
 	return [this, fence = frame.fence, source = completionSource(), token] {
+		IKIGAI_PROFILE_SCOPE("Wait for Present GPU Completion");
+		IKIGAI_PROFILE_ZONE_VALUE(token.Value);
 		waitFrameFence(*fence);
 		source->completed(token);
 	};
@@ -1879,6 +1899,7 @@ void DriverVk::releaseFrame(Frame& frame) {
 	mCompletedEpoch = std::max(mCompletedEpoch, frame.Epoch);
 	frame.Completion = {};
 	frame.DescriptorSets.clear();
+	frame.UniformSnapshots.clear();
 	frame.RayTracingResources.clear();
 	frame.BindlessResources.clear();
 	frame.TransferLists.clear();
@@ -2078,11 +2099,13 @@ void DriverVk::nextFrame() {
 			waitForCompletion(slot.AcquireConsumed);
 		}
 		if (ctx.sdkAcquire) {
+			IKIGAI_PROFILE_SCOPE("Vulkan SDK Acquire Image");
 			return ctx.sdkAcquire(*slot.mImageAcquiredSemaphore, &mFrameIndex);
 		}
 		waitAcquireFence(slot);
 		const VkFence fence = *slot.AcquireFence;
 		checkFrameResult(mDevice.getDispatcher()->vkResetFences(*mDevice, 1, &fence), "vkResetFences (acquire)");
+		IKIGAI_PROFILE_SCOPE("Vulkan Acquire Image");
 		const auto result = mDevice.getDispatcher()->vkAcquireNextImageKHR(
 			*mDevice, *ctx.swapchain, GpuWaitTimeoutNs, *slot.mImageAcquiredSemaphore, fence, &mFrameIndex);
 		slot.AcquireFencePending = result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR;
@@ -2279,6 +2302,13 @@ void DriverVk::PushDescriptorTexture(
 									.setImageInfo(descriptor_image_info);
 
 	cmdlist.pushDescriptorSetKHR(pipeline_bind_point, *pipeline_layout, 0, write_descriptor_set);
+}
+
+void DriverVk::retainUniformSnapshot(const std::shared_ptr<UniformSnapshotVk>& snapshot) {
+	if (!snapshot->Recorded) {
+		mRecordedUniformSnapshots.push_back(snapshot);
+		snapshot->Recorded = true;
+	}
 }
 
 void DriverVk::PushDescriptorUniformBuffer(
@@ -2888,41 +2918,39 @@ void DriverVk::dispatchMipCompute(
 	cmd.pipelineBarrier2(vk::DependencyInfo().setImageMemoryBarriers(barrier));
 }
 
-void DriverVk::EnsureComputeState(vk::raii::CommandBuffer& cmd) try {
-	requireUsableDevice();
-	// Orders earlier graphics/transfer work (including indirect-argument reads) before compute writes.
-	EnsureMemoryState(cmd, vk::PipelineStageFlagBits2::eComputeShader);
-	deactivateRenderPass();
-	auto shader = mCurrentState.mShader;
-	if (!*shader->mComputeShaderModule) {
-		throw std::runtime_error("Dispatch requires compute shader");
-	}
+void DriverVk::EnsureComputePipelineState(vk::raii::CommandBuffer& cmd, const ShaderVk& shader) {
 	PipelineKey key;
 	key.compute = true;
-	key.shaderId = shader->getId();
-	key.shaderGeneration = shader->generation();
-	key.layout = PROFILER::GpuHandleValue(static_cast<VkPipelineLayout>(*shader->mPipelineLayout));
-	if (!mStates.contains(key)) {
+	key.shaderId = shader.getId();
+	key.shaderGeneration = shader.generation();
+	key.layout = PROFILER::GpuHandleValue(static_cast<VkPipelineLayout>(*shader.mPipelineLayout));
+	if (mBoundComputePipelineKey == key) {
+		return;
+	}
+
+	IKIGAI_PROFILE_SCOPE("Vulkan Resolve and Bind Compute Pipeline");
+	auto pipeline = mStates.find(key);
+	if (pipeline == mStates.end()) {
 		auto stage = vk::PipelineShaderStageCreateInfo()
 						 .setStage(vk::ShaderStageFlagBits::eCompute)
-						 .setModule(*shader->mComputeShaderModule)
+						 .setModule(*shader.mComputeShaderModule)
 						 .setPName("main");
-		auto info = vk::ComputePipelineCreateInfo().setStage(stage).setLayout(*shader->mPipelineLayout);
+		auto info = vk::ComputePipelineCreateInfo().setStage(stage).setLayout(*shader.mPipelineLayout);
 		VkPipelineCreationFeedback feedback {};
 		VkPipelineCreationFeedbackCreateInfo feedbackInfo { VK_STRUCTURE_TYPE_PIPELINE_CREATION_FEEDBACK_CREATE_INFO };
 		if (mPipelineCacheFeedback) {
 			feedbackInfo.pPipelineCreationFeedback = &feedback;
 			info.setPNext(&feedbackInfo);
 		}
-		UTILS::LoadTimer timing("compute-pipeline", shader->mPath);
-		mStates.emplace(key, mDevice.createComputePipeline(*mPipelineCache ? &mPipelineCache : nullptr, info));
+		UTILS::LoadTimer timing("compute-pipeline", shader.mPath);
+		pipeline = mStates.emplace(key, mDevice.createComputePipeline(*mPipelineCache ? &mPipelineCache : nullptr, info)).first;
 		if (mPipelineCacheFeedback && (feedback.flags & VK_PIPELINE_CREATION_FEEDBACK_VALID_BIT)) {
 			std::cerr << "PSO_DISK_CACHE backend=vulkan pipeline=compute application_hit="
 					  << !!(feedback.flags & VK_PIPELINE_CREATION_FEEDBACK_APPLICATION_PIPELINE_CACHE_HIT_BIT) << " duration_ns=" << feedback.duration
 					  << '\n';
 		}
 #if IKIGAI_ENABLE_MEMORY_TRACKING
-		const auto handle = PROFILER::GpuHandleValue(static_cast<VkPipeline>(*mStates.at(key)));
+		const auto handle = PROFILER::GpuHandleValue(static_cast<VkPipeline>(*pipeline->second));
 		try {
 			mGpuPipelines.emplace(handle,
 				PROFILER::TrackGpuObject(PROFILER::GpuBackend::Vulkan, reinterpret_cast<std::uintptr_t>(static_cast<VkDevice>(*mDevice)), handle,
@@ -2932,7 +2960,24 @@ void DriverVk::EnsureComputeState(vk::raii::CommandBuffer& cmd) try {
 		}
 #endif
 	}
-	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, *mStates.at(key));
+	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, *pipeline->second);
+	static const bool profileBinds = std::getenv("IKIGAI_PROFILE_PIPELINE_BINDS") != nullptr;
+	if (profileBinds) {
+		std::cout << "PSO_BIND backend=vulkan compute=1 generation=" << key.shaderGeneration << " path=" << shader.mPath << '\n';
+	}
+	mBoundComputePipelineKey = std::move(key);
+}
+
+void DriverVk::EnsureComputeState(vk::raii::CommandBuffer& cmd) try {
+	requireUsableDevice();
+	// Orders earlier graphics/transfer work (including indirect-argument reads) before compute writes.
+	EnsureMemoryState(cmd, vk::PipelineStageFlagBits2::eComputeShader);
+	deactivateRenderPass();
+	auto shader = mCurrentState.mShader;
+	if (!*shader->mComputeShaderModule) {
+		throw std::runtime_error("Dispatch requires compute shader");
+	}
+	EnsureComputePipelineState(cmd, *shader);
 	std::unordered_set<uint32_t> ignored;
 	PushDescriptors(cmd, vk::PipelineBindPoint::eCompute, shader->mPipelineLayout, shader->mRequiredDescriptorBindings, ignored);
 	mBoundPipelineKey.reset();
@@ -3050,9 +3095,11 @@ void DriverVk::presentFrame() try {
 			std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->marker(sl::PCLMarker::ePresentStart);
 		}
 #endif
+		IKIGAI_PROFILE_SCOPE("Vulkan SDK Present");
 		result = ctx.sdkPresent(&static_cast<const VkPresentInfoKHR&>(presentInfo));
 	}
 	else {
+		IKIGAI_PROFILE_SCOPE("Vulkan Queue Present");
 		result = mQueue.getDispatcher()->vkQueuePresentKHR(*mQueue, &static_cast<const VkPresentInfoKHR&>(presentInfo));
 	}
 	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
@@ -3079,6 +3126,7 @@ void DriverVk::presentFrame() try {
 }
 
 void DriverVk::finishPresent() {
+	IKIGAI_PROFILE_SCOPE("Vulkan Finish Present");
 	requireUsableDevice();
 	if (settings.pipelined()) {
 		collectCompletedFrames();
@@ -3090,6 +3138,7 @@ void DriverVk::finishPresent() {
 	releaseCompletedFrame();
 	mCompletedEpoch = mSubmissionEpoch - 1;
 	if (mFrameGeneration) {
+		IKIGAI_PROFILE_SCOPE("Vulkan Wait for Generated Presents");
 		mFrameGeneration->waitForPresents();
 		mFrameGeneration->afterPresent();
 		mFrameGenerationStatus = mFrameGeneration->status();

@@ -24,7 +24,7 @@ namespace {
 			return nullptr;
 		}
 		auto& tasks = RESOURCES::ServiceManager::Get<TASK::TaskSystem>();
-		return !TASK::isPoolWorkerThread() && tasks.isReady() && tasks.getThreadCounts() > 0 ? &tasks : nullptr;
+		return !tasks.isFrameWorkerThread() && tasks.isReady() && tasks.getThreadCounts() > 0 ? &tasks : nullptr;
 #endif
 	}
 

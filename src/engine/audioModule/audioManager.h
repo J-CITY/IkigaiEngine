@@ -2,7 +2,9 @@
 #pragma once
 
 #include <filesystem>
+#include <mutex>
 #include <string>
+#include <unordered_map>
 // #include <irrKlang.h>
 
 #include <unordered_set>
@@ -67,8 +69,14 @@ namespace AUDIO {
 		std::unique_ptr<SoLoud::Soloud> audioEngine;
 		bool mReady = false;
 
-		std::unordered_map<std::string, SoLoud::Wav> sounds;
-		std::unordered_map<std::string, SoLoud::WavStream> musics;
+		using ClipCache = std::unordered_map<std::string, std::weak_ptr<SoLoud::AudioSource>>;
+		ClipCache mSounds;
+		ClipCache mStreams;
+		std::mutex mClipMutex;
+		std::mutex mVoiceMutex;
+		ClipCache& clipCache(SoundType type);
+		std::shared_ptr<SoLoud::AudioSource> getClip(const SoundConfig& config);
+		void startVoice(SoundResource& source, bool paused, bool reserveForReload);
 		AudioManagerAL();
 
 		bool isReady() const {
@@ -76,12 +84,19 @@ namespace AUDIO {
 		}
 
 	public:
+		struct PreparedReload {
+			SoundResource source;
+			std::string clipKey;
+		};
+
 		~AudioManagerAL() override;
 
 		unsigned int playBus(SoLoud::Bus& bus);
 
 		void addSource(SoundResource& source);
 		void removeSource(SoundResource& source);
+		PreparedReload prepareReload(const SoundResource& current, const SoundConfig& config, uint64_t generation);
+		void finishReload(SoundResource& live, PreparedReload& prepared, bool committed);
 
 		void set3dSoundSpeedSpeed(float speed);
 		void setListenerPos(MATH::Vector3f pos, MATH::Vector3f dir);

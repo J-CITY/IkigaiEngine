@@ -1,6 +1,8 @@
 #include "audioManager.h"
 
 #include "resourceModule/fileSystem/fileSystem.h"
+#include <limits>
+#include <stdexcept>
 #ifdef __EMSCRIPTEN__
 #include <iostream>
 #endif
@@ -21,88 +23,151 @@ IKIGAI::AUDIO::AudioManagerAL::~AudioManagerAL() {
 	}
 }
 
-unsigned IKIGAI::AUDIO::AudioManagerAL::playBus(SoLoud::Bus& bus) {
+namespace IKIGAI::AUDIO {
+namespace {
+	std::string makeClipKey(const SoundConfig& config, uint64_t generation) {
+		return std::to_string(generation) + ":" + RESOURCES::FileSystem::normalizePath(config.pathSoundSource);
+	}
+
+	std::shared_ptr<SoLoud::AudioSource> loadClip(const SoundConfig& config) {
+		auto& files = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>();
+		auto file = files.getFile(config.pathSoundSource);
+		auto bytes = file && file->isValid() ? file->read() : std::vector<uint8_t> {};
+		if (bytes.empty() || bytes.size() > std::numeric_limits<unsigned int>::max()) {
+			throw std::runtime_error("Missing, empty or oversized audio source: " + config.pathSoundSource);
+		}
+		const auto size = static_cast<unsigned int>(bytes.size());
+		if (config.type == SoundType::SOUND) {
+			auto clip = std::make_shared<SoLoud::Wav>();
+			if (clip->loadMem(bytes.data(), size, false, false) == SoLoud::SO_NO_ERROR) {
+				return clip;
+			}
+		}
+		else {
+			auto clip = std::make_shared<SoLoud::WavStream>();
+			// Stream voices decode independently from one immutable compressed snapshot.
+			if (clip->loadMem(bytes.data(), size, true, false) == SoLoud::SO_NO_ERROR) {
+				return clip;
+			}
+		}
+		throw std::runtime_error("Cannot decode audio source: " + config.pathSoundSource);
+	}
+}
+
+unsigned AudioManagerAL::playBus(SoLoud::Bus& bus) {
 	if (!isReady()) {
 		return 0;
 	}
+	std::lock_guard lock(mVoiceMutex);
 	return audioEngine->play(bus);
 }
 
-void IKIGAI::AUDIO::AudioManagerAL::addSource(SoundResource& source) {
+AudioManagerAL::ClipCache& AudioManagerAL::clipCache(SoundType type) {
+	return type == SoundType::SOUND ? mSounds : mStreams;
+}
+
+std::shared_ptr<SoLoud::AudioSource> AudioManagerAL::getClip(const SoundConfig& config) {
+	const auto generation = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().generation();
+	const auto key = makeClipKey(config, generation);
+	auto& cache = clipCache(config.type);
+	{
+		std::lock_guard lock(mClipMutex);
+		if (const auto existing = cache.find(key); existing != cache.end()) {
+			if (auto clip = existing->second.lock()) {
+				return clip;
+			}
+		}
+	}
+	auto clip = loadClip(config);
+	std::lock_guard lock(mClipMutex);
+	auto& entry = cache[key];
+	if (auto existing = entry.lock()) {
+		return existing;
+	}
+	entry = clip;
+	return clip;
+}
+
+void AudioManagerAL::startVoice(SoundResource& source, bool paused, bool reserveForReload) {
 	if (!isReady()) {
 		return;
 	}
-	if (source.data.type == SoundType::SOUND) {
-		if (!sounds.contains(source.data.pathSoundSource)) {
-			sounds[source.data.pathSoundSource] = SoLoud::Wav();
-			auto& fs = IKIGAI::RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>();
-			auto path = fs.getFilePath(source.data.pathSoundSource);
-			if (!path) {
-				// problem
-			}
-			auto res = sounds[source.data.pathSoundSource].load(path.value().c_str());
-			if (!res) {
-				// problem
-			}
-		}
-		auto& src = sounds[source.data.pathSoundSource];
-		if (source.data.is3D) {
-			source.id = audioEngine->play3d(
-				src, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, source.data.volume, source.data.state == SoundStatus::PLAY, source.getBusId());
-		}
-		else {
-			source.id = audioEngine->play(src, source.data.volume, source.data.pan, source.data.state != SoundStatus::PLAY, source.getBusId());
-		}
+	std::lock_guard lock(mVoiceMutex);
+	if (reserveForReload && audioEngine->getVoiceCount() >= VOICE_COUNT) {
+		throw std::runtime_error("No spare audio voice for reload: " + source.path);
+	}
+	auto& clip = *source.clip;
+	const auto& config = source.data;
+	const auto bus = source.getBusId();
+	SoLoud::handle handle = 0;
+	if (config.type == SoundType::BACKGROUND) {
+		handle = audioEngine->playBackground(clip, config.volume, paused, bus);
+	}
+	else if (config.is3D) {
+		handle = audioEngine->play3d(clip, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, config.volume, paused, bus);
 	}
 	else {
-		if (!musics.contains(source.data.pathSoundSource)) {
-			musics[source.data.pathSoundSource] = SoLoud::WavStream();
-
-			auto& fs = IKIGAI::RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>();
-			auto path = fs.getFilePath(source.data.pathSoundSource);
-			if (!path) {
-				// problem
-			}
-			auto res = musics[source.data.pathSoundSource].load(path.value().c_str());
-			if (!res) {
-				// problem
-			}
-		}
-		auto& src = musics[source.data.pathSoundSource];
-		if (source.data.type == SoundType::BACKGROUND) {
-			source.id = audioEngine->playBackground(src, source.data.volume, source.data.state != SoundStatus::PLAY, source.getBusId());
-		}
-		else {
-			if (source.data.is3D) {
-				source.id = audioEngine->play3d(
-					src, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, source.data.volume, source.data.state != SoundStatus::PLAY, source.getBusId());
-				// TODO: add to config
-				audioEngine->set3dSourceMinMaxDistance(source.id.value(), 0.0f, 100.0f);
-				audioEngine->set3dSourceAttenuation(source.id.value(), SoLoud::AudioSource::LINEAR_DISTANCE, 1.0f);
-
-				audioEngine->update3dAudio();
-			}
-			else {
-				source.id = audioEngine->play(src, source.data.volume, source.data.pan, source.data.state != SoundStatus::PLAY, source.getBusId());
-			}
-		}
+		handle = audioEngine->play(clip, config.volume, config.pan, paused, bus);
 	}
-	audioEngine->setLooping(source.id.value(), source.data.isLooped);
+	if (!audioEngine->isValidVoiceHandle(handle)) {
+		throw std::runtime_error("Cannot create audio voice: " + source.path);
+	}
+	source.id = handle;
+	audioEngine->setLooping(handle, config.isLooped);
+	if (reserveForReload) {
+		audioEngine->setProtectVoice(handle, true);
+	}
+	if (config.is3D && config.type == SoundType::MUSIC) {
+		audioEngine->set3dSourceMinMaxDistance(handle, 0.0f, 100.0f);
+		audioEngine->set3dSourceAttenuation(handle, SoLoud::AudioSource::LINEAR_DISTANCE, 1.0f);
+		audioEngine->update3dAudio();
+	}
 }
 
-void IKIGAI::AUDIO::AudioManagerAL::removeSource(SoundResource& source) {
-	auto& id = source.id;
-	if (!id) {
+void AudioManagerAL::addSource(SoundResource& source) {
+	if (!isReady()) {
 		return;
 	}
-	audioEngine->stop(*id);
+	if (!source.clip) {
+		source.clip = getClip(source.data);
+	}
+	startVoice(source, source.data.state != SoundStatus::PLAY, false);
+}
 
-	if (musics.contains(source.path)) {
-		musics.erase(source.path);
+void AudioManagerAL::removeSource(SoundResource& source) {
+	stop(source);
+	source.id.reset();
+	source.clip.reset();
+}
+
+AudioManagerAL::PreparedReload AudioManagerAL::prepareReload(const SoundResource& current, const SoundConfig& config, uint64_t generation) {
+	PreparedReload result { SoundResource(config.pathSoundSource, config), makeClipKey(config, generation) };
+	result.source.mixer = current.mixer;
+	result.source.clip = loadClip(config);
+	{
+		std::lock_guard lock(mClipMutex);
+		clipCache(config.type).try_emplace(result.clipKey);
 	}
-	if (sounds.contains(source.path)) {
-		sounds.erase(source.path);
+	startVoice(result.source, true, true);
+	return result;
+}
+
+void AudioManagerAL::finishReload(SoundResource& live, PreparedReload& prepared, bool committed) {
+	removeSource(prepared.source);
+	if (!committed) {
+		return;
 	}
+	{
+		std::lock_guard lock(mClipMutex);
+		clipCache(live.data.type).find(prepared.clipKey)->second = live.clip;
+	}
+	if (live.id) {
+		audioEngine->setProtectVoice(*live.id, false);
+		if (live.data.state == SoundStatus::PLAY) {
+			audioEngine->setPause(*live.id, false);
+		}
+	}
+}
 }
 
 void IKIGAI::AUDIO::AudioManagerAL::set3dSoundSpeedSpeed(float speed) {
@@ -171,10 +236,9 @@ void IKIGAI::AUDIO::AudioManagerAL::stopAll() {
 }
 
 void IKIGAI::AUDIO::AudioManagerAL::stop(SoundResource& source) {
-	if (!source.id) {
-		// problem
+	if (isReady() && source.id) {
+		audioEngine->stop(*source.id);
 	}
-	audioEngine->stop(source.id.value());
 }
 
 void IKIGAI::AUDIO::AudioManagerAL::pause(SoundResource& source) {
@@ -237,24 +301,5 @@ void IKIGAI::AUDIO::AudioManagerAL::setLoop(SoundResource& source, bool isLooped
 }
 
 void IKIGAI::AUDIO::AudioManagerAL::play(SoundResource& source) {
-	if (source.data.type == SoundType::SOUND) {
-		auto& src = sounds[source.data.pathSoundSource];
-		if (source.data.is3D) {
-			source.id = audioEngine->play3d(
-				src, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, source.data.volume, source.data.state == SoundStatus::PLAY, source.getBusId());
-		}
-		else {
-			source.id = audioEngine->play(src, source.data.volume, source.data.pan, source.data.state != SoundStatus::PLAY, source.getBusId());
-		}
-	}
-	else {
-		auto& src = musics[source.data.pathSoundSource];
-		if (source.data.is3D) {
-			source.id = audioEngine->play3d(
-				src, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, source.data.volume, source.data.state == SoundStatus::PLAY, source.getBusId());
-		}
-		else {
-			source.id = audioEngine->play(src, source.data.volume, source.data.pan, source.data.state != SoundStatus::PLAY, source.getBusId());
-		}
-	}
+	addSource(source);
 }

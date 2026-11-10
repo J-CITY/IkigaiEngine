@@ -11,7 +11,12 @@
 #include <stdexcept>
 #include <tuple>
 
-void IKIGAI::RENDER::ShaderInterface::swapCompiledInterface(ShaderInterface& replacement) {
+void IKIGAI::RENDER::ShaderInterface::prepareReloadedShader(const std::shared_ptr<ShaderInterface>& prepared) {
+	requireOwnerThread();
+	if (!prepared || typeid(*this) != typeid(*prepared) || this == prepared.get()) {
+		throw std::invalid_argument("Invalid shader replacement: " + mPath);
+	}
+	const auto& replacement = *prepared;
 	// Materials own storage laid out by the original reflection. A reload may
 	// move descriptor slots, while changing their data layout needs a rebuild.
 	const auto compatible = [&] {
@@ -39,6 +44,10 @@ void IKIGAI::RENDER::ShaderInterface::swapCompiledInterface(ShaderInterface& rep
 	if (!compatible()) {
 		throw std::invalid_argument("Shader interface changed during hot reload: " + mPath);
 	}
+	prepareRetirement(prepared);
+}
+
+void IKIGAI::RENDER::ShaderInterface::swapCompiledInterface(ShaderInterface& replacement) noexcept {
 	using std::swap;
 	swap(mReflection, replacement.mReflection);
 	swap(mBindingMode, replacement.mBindingMode);

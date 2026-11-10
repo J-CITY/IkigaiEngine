@@ -31,6 +31,7 @@ namespace IKIGAI::RENDER {
 
 		void* getImguiId() override;
 		void recreate(const TextureResource& descriptor, const std::vector<std::vector<uint8_t>>& fileData) override;
+		bool adoptReloadedTexture(TextureInterface& texture) noexcept override;
 
 		const Dx12Resource& getResource() const;
 		CD3DX12_GPU_DESCRIPTOR_HANDLE getGpuDescriptorHandle() const;

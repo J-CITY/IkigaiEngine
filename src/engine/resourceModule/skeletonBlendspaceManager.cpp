@@ -25,8 +25,7 @@ ResourcePtr<SKELETON::BlendspaceInterface> SkeletonBlendspaceLoader::CreateBlend
 	}
 	auto skeleton = ServiceManager::Get<SkeletonLoader>().loadResource(desc.skeletonPath);
 	if (!skeleton) {
-		ASSERT(std::string("SkeletonBlendspaceLoader: failed to load skeleton: " + desc.skeletonPath).c_str());
-		return nullptr;
+		throw std::runtime_error("Cannot load blendspace skeleton: " + desc.skeletonPath);
 	}
 
 	auto bs = MEMORY::MakeSharedWithDeleter<SKELETON::Blendspace1D, MEMORY::Category::Skeleton>(allocator, deleter);
@@ -38,8 +37,7 @@ ResourcePtr<SKELETON::BlendspaceInterface> SkeletonBlendspaceLoader::CreateBlend
 		ctx.skeleton = skeleton;
 		auto anim = ServiceManager::Get<SkeletonAnimationLoader>().loadResource(animPath, ELoadingType::RESOURCE, ctx);
 		if (!anim) {
-			ASSERT(std::string("SkeletonBlendspaceLoader: failed to load animation: " + animPath).c_str());
-			return nullptr;
+			throw std::runtime_error("Cannot load blendspace animation: " + animPath);
 		}
 		bs->mNodes.push_back(SKELETON::Blendspace1D::Node { value, anim });
 	}
@@ -51,8 +49,7 @@ ResourcePtr<SKELETON::BlendspaceInterface> SkeletonBlendspaceLoader::CreateBlend
 	const RENDER::SkeletonBlendspace& desc, UTILS::IAllocator* allocator, ResourceDeleter deleter) {
 	auto skeleton = ServiceManager::Get<SkeletonLoader>().loadResource(desc.skeletonPath);
 	if (!skeleton) {
-		ASSERT(std::string("SkeletonBlendspaceLoader: failed to load skeleton: " + desc.skeletonPath).c_str());
-		return nullptr;
+		throw std::runtime_error("Cannot load blendspace skeleton: " + desc.skeletonPath);
 	}
 
 	auto bs = MEMORY::MakeSharedWithDeleter<SKELETON::Blendspace2D, MEMORY::Category::Skeleton>(allocator, deleter);
@@ -67,8 +64,7 @@ ResourcePtr<SKELETON::BlendspaceInterface> SkeletonBlendspaceLoader::CreateBlend
 			ctx.skeleton = skeleton;
 			auto anim = ServiceManager::Get<SkeletonAnimationLoader>().loadResource(animPath, ELoadingType::RESOURCE, ctx);
 			if (!anim) {
-				ASSERT(std::string("SkeletonBlendspaceLoader: failed to load animation: " + animPath).c_str());
-				return nullptr;
+				throw std::runtime_error("Cannot load blendspace animation: " + animPath);
 			}
 			row.nodes.push_back(SKELETON::Blendspace2D::Node { nodeValue, anim });
 		}
@@ -100,8 +96,7 @@ ResourcePtr<SKELETON::BlendspaceInterface> SkeletonBlendspaceLoader::CreateFromR
 		return variant;
 	}
 
-	ASSERT(std::string("SkeletonBlendspaceLoader: unknown extension for: " + path).c_str());
-	return nullptr;
+	throw std::runtime_error("Unknown blendspace extension: " + path);
 }
 
 ResourcePtr<SKELETON::BlendspaceInterface> SkeletonBlendspaceLoader::createResource(const std::string& path) {
@@ -114,21 +109,21 @@ ResourcePtr<SKELETON::BlendspaceInterface> SkeletonBlendspaceLoader::createResou
 
 ResourcePtr<SKELETON::BlendspaceInterface> SkeletonBlendspaceLoader::createResource(const std::string& path, ELoadingType type, std::any /*data*/) {
 	if (type == ELoadingType::RESOURCE) {
-		RENDER::SkeletonBlendspace config;
-		if (HasConfig(path)) {
-			config = *GetConfig(path);
-		}
-		else {
-			config = LoadConfig(path);
-			AddConfigToCache(path, config);
-		}
+		const auto candidate = ReadConfigCandidate(path);
+		const auto& config = *candidate.descriptor;
 
 		ResourcePtr<SKELETON::BlendspaceInterface> res;
 		if (path.ends_with(".blendspace1d")) {
 			res = CreateBlendspace1D(config, nullptr, createCacheDeleter(path));
 		}
-		else {
+		else if (path.ends_with(".blendspace2d")) {
 			res = CreateBlendspace2D(config, nullptr, createCacheDeleter(path));
+		}
+		else {
+			throw std::runtime_error("Unknown blendspace extension: " + path);
+		}
+		if (res && !PublishConfig(path, candidate)) {
+			return nullptr;
 		}
 		addFileWatchSubscribe(path, { path }, res);
 		return res;
@@ -139,21 +134,19 @@ ResourcePtr<SKELETON::BlendspaceInterface> SkeletonBlendspaceLoader::createResou
 bool SkeletonBlendspaceLoader::reloadResource(std::weak_ptr<SKELETON::BlendspaceInterface> weakRes, const std::string& path) {
 	if (auto res = weakRes.lock()) {
 		try {
-			auto config = LoadConfig(path);
+			const auto config = ReadConfigCandidate(path, true);
 			if (auto target = std::dynamic_pointer_cast<SKELETON::Blendspace1D>(res)) {
-				auto candidate = std::static_pointer_cast<SKELETON::Blendspace1D>(CreateBlendspace1D(config));
+				auto candidate = std::static_pointer_cast<SKELETON::Blendspace1D>(CreateBlendspace1D(*config.descriptor));
 				SKELETON::Blendspace1DInstance validate(candidate);
 				candidate->revision = target->revision + 1;
-				*target = std::move(*candidate);
+				return CommitReload(path, config, [&]() noexcept { std::swap(*target, *candidate); });
 			}
 			else if (auto target = std::dynamic_pointer_cast<SKELETON::Blendspace2D>(res)) {
-				auto candidate = std::static_pointer_cast<SKELETON::Blendspace2D>(CreateBlendspace2D(config));
+				auto candidate = std::static_pointer_cast<SKELETON::Blendspace2D>(CreateBlendspace2D(*config.descriptor));
 				SKELETON::Blendspace2DInstance validate(candidate);
 				candidate->revision = target->revision + 1;
-				*target = std::move(*candidate);
+				return CommitReload(path, config, [&]() noexcept { std::swap(*target, *candidate); });
 			}
-			AddConfigToCache(path, config);
-			return true;
 		} catch (const std::exception& e) {
 			std::cerr << "Blendspace reload rejected: " << e.what() << std::endl;
 			return false;

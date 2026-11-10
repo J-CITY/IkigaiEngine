@@ -1,7 +1,6 @@
 ﻿#include "frustum.h"
 
-#include "coreModule/ecs/components/transform.h"
-
+#include <algorithm>
 #include <stdexcept>
 
 using namespace IKIGAI;
@@ -86,32 +85,37 @@ bool Frustum::sphereInFrustum(float x, float y, float z, float radius) const {
 
 bool Frustum::cubeInFrustum(float x, float y, float z, float size) const {
 	for (int i = 0; i < 6; i++) {
-		if (data[i][A] * (x - size) + data[i][B] * (y - size) + data[i][C] * (z - size) + data[i][D] > 0)
+		if (data[i][A] * (x - size) + data[i][B] * (y - size) + data[i][C] * (z - size) + data[i][D] > 0) {
 			continue;
-		if (data[i][A] * (x + size) + data[i][B] * (y - size) + data[i][C] * (z - size) + data[i][D] > 0)
+		}
+		if (data[i][A] * (x + size) + data[i][B] * (y - size) + data[i][C] * (z - size) + data[i][D] > 0) {
 			continue;
-		if (data[i][A] * (x - size) + data[i][B] * (y + size) + data[i][C] * (z - size) + data[i][D] > 0)
+		}
+		if (data[i][A] * (x - size) + data[i][B] * (y + size) + data[i][C] * (z - size) + data[i][D] > 0) {
 			continue;
-		if (data[i][A] * (x + size) + data[i][B] * (y + size) + data[i][C] * (z - size) + data[i][D] > 0)
+		}
+		if (data[i][A] * (x + size) + data[i][B] * (y + size) + data[i][C] * (z - size) + data[i][D] > 0) {
 			continue;
-		if (data[i][A] * (x - size) + data[i][B] * (y - size) + data[i][C] * (z + size) + data[i][D] > 0)
+		}
+		if (data[i][A] * (x - size) + data[i][B] * (y - size) + data[i][C] * (z + size) + data[i][D] > 0) {
 			continue;
-		if (data[i][A] * (x + size) + data[i][B] * (y - size) + data[i][C] * (z + size) + data[i][D] > 0)
+		}
+		if (data[i][A] * (x + size) + data[i][B] * (y - size) + data[i][C] * (z + size) + data[i][D] > 0) {
 			continue;
-		if (data[i][A] * (x - size) + data[i][B] * (y + size) + data[i][C] * (z + size) + data[i][D] > 0)
+		}
+		if (data[i][A] * (x - size) + data[i][B] * (y + size) + data[i][C] * (z + size) + data[i][D] > 0) {
 			continue;
-		if (data[i][A] * (x + size) + data[i][B] * (y + size) + data[i][C] * (z + size) + data[i][D] > 0)
+		}
+		if (data[i][A] * (x + size) + data[i][B] * (y + size) + data[i][C] * (z + size) + data[i][D] > 0) {
 			continue;
+		}
 		return false;
 	}
 	return true;
 }
 
-bool Frustum::boundingSphereInFrustum(const BoundingSphere& boundingSphere, const ECS::Transform& transform) const {
-	const auto& position = transform.getWorldPosition();
-	const auto& rotation = transform.getWorldRotation();
-	const auto& scale = transform.getWorldScale();
-
+bool Frustum::boundingSphereInFrustum(
+	const BoundingSphere& boundingSphere, const MATH::Vector3f& position, const MATH::QuaternionF& rotation, const MATH::Vector3f& scale) const {
 	float maxScale = std::max(std::max(std::max(scale.x, scale.y), scale.z), 0.0f);
 	float scaledRadius = boundingSphere.radius * maxScale;
 	auto sphereOffset = MATH::QuaternionF::RotatePoint(boundingSphere.position, rotation) * maxScale;
@@ -136,41 +140,6 @@ std::array<float, 4> Frustum::getFarPlane() const {
 	return { data[BACK][0], data[BACK][1], data[BACK][2], data[BACK][3] };
 }
 
-COLLISION::TYPE Frustum::boundingSphereInFrustumCollide(const BoundingSphere& boundingSphere, const ECS::Transform& transform) const {
-	const auto& position = transform.getWorldPosition();
-	const auto& rotation = transform.getWorldRotation();
-	const auto& scale = transform.getWorldScale();
-
-	float maxScale = std::max(std::max(std::max(scale.x, scale.y), scale.z), 0.0f);
-	float scaledRadius = boundingSphere.radius * maxScale;
-	auto sphereOffset = MATH::QuaternionF::RotatePoint(boundingSphere.position, rotation) * maxScale;
-
-	MATH::Vector3f worldCenter = position + sphereOffset;
-
-	// various distances
-	float fDistance;
-
-	// calculate our distances to each of the planes
-	for (int i = 0; i < 6; ++i) {
-
-		// find the distance to this plane
-		MATH::Vector3f n(data[i][A], data[i][B], data[i][C]);
-		fDistance = n.dot(MATH::Vector3f(worldCenter.x, worldCenter.y, worldCenter.z)) + data[i][D];
-		// m_plane[i].Normal().dotProduct(refSphere.Center()) + m_plane[i].Distance();
-
-		// if this distance is < -sphere.radius, we are outside
-		if (fDistance < -scaledRadius)
-			return COLLISION::TYPE::OUTSIDE;
-
-		// else if the distance is between +- radius, then we intersect
-		if ((float)fabs(fDistance) < scaledRadius)
-			return COLLISION::TYPE::INTERSECTION;
-	}
-
-	// otherwise we are fully in view
-	return COLLISION::TYPE::INSIDE;
-}
-
 COLLISION::TYPE Frustum::boundingSphereInFrustumCollide(const BoundingSphere& boundingSphere) const {
 	float scaledRadius = boundingSphere.radius;
 	MATH::Vector3f worldCenter = boundingSphere.position;
@@ -187,12 +156,14 @@ COLLISION::TYPE Frustum::boundingSphereInFrustumCollide(const BoundingSphere& bo
 		// m_plane[i].Normal().dotProduct(refSphere.Center()) + m_plane[i].Distance();
 
 		// if this distance is < -sphere.radius, we are outside
-		if (fDistance < -scaledRadius)
+		if (fDistance < -scaledRadius) {
 			return COLLISION::TYPE::OUTSIDE;
+		}
 
 		// else if the distance is between +- radius, then we intersect
-		if ((float)fabs(fDistance) < scaledRadius)
+		if ((float)fabs(fDistance) < scaledRadius) {
 			return COLLISION::TYPE::INTERSECTION;
+		}
 	}
 
 	// otherwise we are fully in view

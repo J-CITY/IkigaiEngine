@@ -76,6 +76,42 @@ namespace {
 		return uniform;
 	}
 
+	bool WritesOnlyDispatchMipZero(const PipelineStage::Descriptor& stage, const ShaderInterface& shader, const TextureDesc& target) {
+		using UniformType = ShaderReflection::UniformType;
+		if (shader.bindingMode() != ShaderBindingMode::Bound || !target.FullMipChain || !target.Path.empty() || target.History
+			|| !target.Resource.storage || target.Resource.texType != TextureType::TEXTURE_2D || target.Name != stage.DispatchTexture) {
+			return false;
+		}
+
+		bool writesTarget = false;
+		for (const auto& uniform : shader.getReflection().mUniforms) {
+			if (uniform.mSet != 0 || uniform.mDescriptorCount != 1 || uniform.mRuntimeArray) {
+				return false;
+			}
+			switch (uniform.mType) {
+			case UniformType::SAMPLER_2D:
+			case UniformType::SAMPLER_3D:
+			case UniformType::SAMPLER_CUBE:
+			case UniformType::SAMPLER_2D_ARRAY:
+			case UniformType::UNIFORM_BUFFER:
+				break;
+			case UniformType::IMAGE_2D: {
+				const auto binding = stage.Uniforms.find(uniform.mName);
+				const auto* resource = binding == stage.Uniforms.end() ? nullptr : std::get_if<std::string>(&binding->second);
+				if (writesTarget || !uniform.mWriteOnly || uniform.mReadOnly || !resource || *resource != target.Name
+					|| uniform.mName.starts_with("engine_") || uniform.mName.starts_with("Engine")) {
+					return false;
+				}
+				writesTarget = true;
+				break;
+			}
+			default:
+				return false;
+			}
+		}
+		return writesTarget;
+	}
+
 	ShaderReflection ReflectComputeProgram(const RayTracingProgramResource& resource, const std::string& path) {
 		if (resource.Shaders.size() != 1 || resource.Shaders[0].Stage != ShaderType::COMPUTE) {
 			throw std::runtime_error("Compute program needs exactly one compute shader: " + path);
@@ -547,8 +583,16 @@ void LoadComputeStage(RenderGraphPipeline& pipeline, PipelineStage& stage) {
 			}
 		}
 		else {
-			const auto& local = stage.mMaterial->getShader()->getReflection().mLocalSize;
+			const auto shader = stage.mMaterial->getShader();
+			const auto& local = shader->getReflection().mLocalSize;
 			state->LocalSize = { local[0], local[1], local[2] };
+			if (state->Mode == ComputeDispatchMode::TEXTURE && state->Clears.empty() && desc.Queue == GRAPH::Queue::GRAPHICS
+				&& features.StorageImageMipViews) {
+				const auto* target = FindPipelineTexture(pipeline, state->DispatchTexture);
+				if (target && WritesOnlyDispatchMipZero(desc, *shader, *target)) {
+					state->TextureWrite = ScopedTextureDispatch { shader, shader->generation() };
+				}
+			}
 		}
 		state->Resolved = true;
 	} catch (const UnsupportedGpuFeature& error) {
@@ -592,6 +636,7 @@ void GameRenderer::runComputeStage(PipelineStage& stage, bool async) {
 		const auto& texture = mRenderPipeline->mTextures.at(name);
 		return std::array<size_t, 3> { texture->getWidth(), texture->getHeight(), std::max<size_t>(1, texture->getDepth()) };
 	};
+	bool scopedTextureWrite = false;
 	if (state.UsesProgram) {
 		auto dispatch = buildProgramDispatch(stage);
 		if (state.Mode == ComputeDispatchMode::GROUPS) {
@@ -616,8 +661,28 @@ void GameRenderer::runComputeStage(PipelineStage& stage, bool async) {
 	else {
 		bindStage(stage);
 		if (state.Mode == ComputeDispatchMode::TEXTURE) {
-			const auto extent = textureExtent(state.DispatchTexture);
-			renderer.dispatch(CeilDiv(extent[0], state.LocalSize[0]), CeilDiv(extent[1], state.LocalSize[1]), CeilDiv(extent[2], state.LocalSize[2]));
+			const auto texture = mRenderPipeline->mTextures.at(state.DispatchTexture);
+			const auto groupsX = CeilDiv(texture->getWidth(), state.LocalSize[0]);
+			const auto groupsY = CeilDiv(texture->getHeight(), state.LocalSize[1]);
+			const auto groupsZ = CeilDiv(std::max<size_t>(1, texture->getDepth()), state.LocalSize[2]);
+			const auto shader = stage.mMaterial->getShader();
+			if (state.TextureWrite && state.TextureWrite->Shader.lock() == shader && state.TextureWrite->Generation == shader->generation()
+				&& texture->getType() == TextureType::TEXTURE_2D) {
+				scopedTextureWrite = true;
+				renderer.execute([driver, texture, shader, generation = state.TextureWrite->Generation, groupsX, groupsY, groupsZ] {
+					RenderStatistics::Get().recordDispatch();
+					if (shader->generation() == generation) {
+						// The regular storage-image binding selects mip zero, layer zero.
+						driver->dispatchMipCompute(groupsX, groupsY, groupsZ, texture, 0, 0);
+					}
+					else {
+						driver->dispatch(groupsX, groupsY, groupsZ);
+					}
+				});
+			}
+			else {
+				renderer.dispatch(groupsX, groupsY, groupsZ);
+			}
 		}
 		else if (state.Mode == ComputeDispatchMode::GROUPS) {
 			renderer.dispatch(state.Groups[0], state.Groups[1], state.Groups[2]);
@@ -680,6 +745,9 @@ void GameRenderer::runComputeStage(PipelineStage& stage, bool async) {
 					  << '\n';
 		}
 		std::cout << "Pipeline generic compute: " << stage.mName << (state.UsesProgram ? " program" : " material") << " mode=" << int(state.Mode);
+		if (!state.UsesProgram && state.Mode == ComputeDispatchMode::TEXTURE) {
+			std::cout << " texture_barrier=" << (scopedTextureWrite ? "scoped" : "generic");
+		}
 		if (state.Mode == ComputeDispatchMode::MIP_CHAIN) {
 			std::cout << " mip_barriers=" << (state.MipScopedBarriers ? "scoped" : "generic");
 		}

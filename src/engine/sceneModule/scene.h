@@ -45,6 +45,9 @@ struct GpuSceneSnapshot;
 }
 
 namespace IKIGAI::SCENE_SYSTEM {
+// Parallel bypasses the size threshold when a worker pool is available.
+enum class FrustumCullMode { Automatic, Serial, Parallel };
+
 struct PhysicsFactories {
 #if USE_PHYSICS_2D
 	std::function<std::unique_ptr<PHYSICS2D::World>()> physics2d;
@@ -148,16 +151,20 @@ public:
 		RENDER::CullingOptions cullingOptions);
 
 	std::vector<IKIGAI::RENDER::RenderChunk> findDrawables(const MATH::Vector3f& p_cameraPosition, const RENDER::Camera& p_camera,
-		const RENDER::Frustum* p_customFrustum, std::shared_ptr<RENDER::MaterialInterface> p_defaultMaterial);
+		const RENDER::Frustum* p_customFrustum, std::shared_ptr<RENDER::MaterialInterface> p_defaultMaterial,
+		std::shared_ptr<MEMORY::IAllocator> allocationDomain = {});
 
-	std::vector<IKIGAI::RENDER::RenderChunk> findAndSortFrustumCulledBVHDrawables(
-		const MATH::Vector3f& cameraPosition, const RENDER::Frustum& frustum, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial);
+	std::vector<IKIGAI::RENDER::RenderChunk> findAndSortFrustumCulledBVHDrawables(const MATH::Vector3f& cameraPosition,
+		const RENDER::Frustum& frustum, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial,
+		std::shared_ptr<MEMORY::IAllocator> allocationDomain = {});
 
-	std::vector<IKIGAI::RENDER::RenderChunk> findAndSortFrustumCulledDrawables(
-		const MATH::Vector3f& cameraPosition, const RENDER::Frustum& frustum, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial);
+	std::vector<IKIGAI::RENDER::RenderChunk> findAndSortFrustumCulledDrawables(const MATH::Vector3f& cameraPosition, const RENDER::Frustum& frustum,
+		std::shared_ptr<RENDER::MaterialInterface> defaultMaterial, FrustumCullMode mode = FrustumCullMode::Automatic,
+		std::shared_ptr<MEMORY::IAllocator> allocationDomain = {});
 
 	std::vector<IKIGAI::RENDER::RenderChunk> findAndSortDrawables(const MATH::Vector3f& cameraPosition,
-		std::shared_ptr<RENDER::MaterialInterface> defaultMaterial, RENDER::GpuSceneSnapshot* gpuScene = nullptr);
+		std::shared_ptr<RENDER::MaterialInterface> defaultMaterial, RENDER::GpuSceneSnapshot* gpuScene = nullptr,
+		std::shared_ptr<MEMORY::IAllocator> allocationDomain = {});
 
 	IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::CameraComponent> findMainCamera();
 	// Advance once after all views have recorded a game frame.

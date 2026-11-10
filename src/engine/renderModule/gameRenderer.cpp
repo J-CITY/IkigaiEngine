@@ -11,6 +11,7 @@
 #include "particles/particleRenderer.h"
 #include "profilerModule/profiler.h"
 #include "profilerModule/profilerSpy.h"
+#include "profilerModule/trace.h"
 #include "renderGraph/computeStage.h"
 #include "renderGraph/screenProbeStage.h"
 #include "utilsModule/time/loadTimer.h"
@@ -200,7 +201,7 @@ void GameRenderer::Init() {
 }
 
 void GameRenderer::renderScene() {
-
+	IKIGAI_PROFILE_SCOPE("Record Scene Frame");
 	if (mContext.sceneManager->isTransitioning() || !mContext.sceneManager->hasCurrentScene()) {
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 		if (mGpuSceneMaterials) {
@@ -614,6 +615,10 @@ void GameRenderer::drawDrawable(const Drawable& drawable, const GpuSceneDraw* in
 }
 // TODO: split it
 void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::CameraComponent& cameraComponent) {
+	IKIGAI_PROFILE_SCOPE("Record Scene View");
+	// Draw lists are local to view recording. Recorded commands own their payloads and resource handles.
+	mDrawableArena.reset();
+	const auto drawableDomain = mDrawableArena.domain();
 	mGpuProfiler.beginFrame();
 	auto frameProfile = mGpuProfiler.measure("Frame");
 	RenderStatistics::Get().beginFrame();
@@ -742,7 +747,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	mEnvironmentSun = std::move(sun);
 
 	const auto& cameraPosition = cameraComponent.obj->getTransform()->getWorldPosition();
-	auto chunks = scene.findDrawables(cameraPosition, cameraComponent.getCamera(), nullptr, mEmptyMaterial);
+	auto chunks = scene.findDrawables(cameraPosition, cameraComponent.getCamera(), nullptr, mEmptyMaterial, drawableDomain);
 	GpuSceneSnapshot* gpuSnapshot = nullptr;
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 	GpuSceneSnapshot ordinary;
@@ -765,9 +770,10 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		mGpuScene.reset();
 	}
 #endif
-	auto shadowChunks = scene.findAndSortDrawables(cameraPosition, mEmptyMaterial, gpuSnapshot);
+	auto shadowChunks = scene.findAndSortDrawables(cameraPosition, mEmptyMaterial, gpuSnapshot, drawableDomain);
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 	if (gpuSnapshot) {
+		IKIGAI_PROFILE_SCOPE("Prepare GPU Scene Draws");
 		auto profile = mGpuProfiler.measure("Ordinary GPU cull");
 		const auto& camera = cameraComponent.getCamera();
 		const bool culling = ordinary.UseBvhBounds || camera.isFrustumGeometryCulling();
@@ -799,6 +805,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	}
 #endif
 	{
+		IKIGAI_PROFILE_SCOPE("Prepare Virtual Geometry Draws");
 		// Virtual geometry: LOD selection (GPU compute passes or CPU) and uploads before any stage; fallback meshes join
 		// the regular drawables (shadows/RT always, the view when the cluster path is unavailable).
 		VG::VirtualGeometryFrameInput virtualGeometryInput;
@@ -856,6 +863,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		}
 	}
 	if (raySceneNeeded) {
+		IKIGAI_PROFILE_SCOPE("Prepare Ray Tracing Scene");
 		// The RT lane consumes stable cooked fallback meshes. Raster cascades may
 		// skip selected draws but never change this input or its mesh identities.
 		const auto& rayProxyChunks = shadowChunks;
@@ -1023,6 +1031,8 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		if (mFrameCount % stage->mDescriptor.UpdateInterval != 0 && !cloudShadowUpdate) {
 			return;
 		}
+		IKIGAI_PROFILE_SCOPE("Record Render Graph Stage");
+		IKIGAI_PROFILE_ZONE_TEXT(stage->mName.data(), stage->mName.size());
 		// Geometric reprojection stays valid when only lighting history was invalidated.
 		const auto content = stage->mDrawContent;
 		const bool writesMotion = content == DrawContent::DEFERRED || content == DrawContent::GPU_SCENE_OCCLUSION_POST
@@ -1494,6 +1504,8 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		auto* stage = mRenderPipeline->mStageIndex[pass.Id];
 		if (asyncCompute && pass.ExecutionQueue == GRAPH::Queue::ASYNC_COMPUTE
 			&& (stage->mCompute->AsyncImageProgramBindings.empty() || presentationDriver->supportsGraphComputeImages())) {
+			IKIGAI_PROFILE_SCOPE("Record Async Compute Stage");
+			IKIGAI_PROFILE_ZONE_TEXT(stage->mName.data(), stage->mName.size());
 			setFrameState(lightingFrameState);
 			runComputeStage(*stage, true);
 			computePending = true;

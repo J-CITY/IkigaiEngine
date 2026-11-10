@@ -127,6 +127,7 @@ public:
 		}
 		driverVk->activateRenderPass();
 		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *driverVk->getCurrentFrame().mCommandBuffer);
+		driverVk->invalidateCommandState();
 		ImGuiIO& io = ImGui::GetIO();
 		// Initialization and offscreen work may submit the same UI draw data more than once.
 		const int imguiFrame = ImGui::GetFrameCount();

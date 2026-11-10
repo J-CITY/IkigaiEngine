@@ -271,6 +271,25 @@ void MaterialInterface::applyMaterialState(const MaterialResource& resource) {
 	mDepthFunc = resource.DepthFunc;
 }
 
+void MaterialInterface::swapMaterialState(MaterialInterface& replacement) noexcept {
+	using std::swap;
+	swap(mPath, replacement.mPath);
+	swap(mParentPath, replacement.mParentPath);
+	swap(mNeedFileWatch, replacement.mNeedFileWatch);
+	swap(mPbrLayers, replacement.mPbrLayers);
+	swap(mEmissive, replacement.mEmissive);
+	swap(mDeformation, replacement.mDeformation);
+	swap(mBlendable, replacement.mBlendable);
+	swap(mBackfaceCulling, replacement.mBackfaceCulling);
+	swap(mFrontfaceCulling, replacement.mFrontfaceCulling);
+	swap(mDepthTest, replacement.mDepthTest);
+	swap(mDepthWriting, replacement.mDepthWriting);
+	swap(mColorWriting, replacement.mColorWriting);
+	swap(mGpuInstances, replacement.mGpuInstances);
+	swap(mIsDeferred, replacement.mIsDeferred);
+	swap(mDepthFunc, replacement.mDepthFunc);
+}
+
 void MaterialInterface::completeDescriptor(MaterialResource& resource) const {
 	resource.path = mPath;
 	resource.parentPath = mParentPath;

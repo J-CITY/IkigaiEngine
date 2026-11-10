@@ -22,6 +22,7 @@
 #include "renderGraph/pipelineExecution.h"
 #include "renderGraph/renderGraphDescriptor.h"
 #include "renderGraph/screenProbeSettings.h"
+#include "utilsModule/memory/frameArena.h"
 #include "virtualGeometryModule/runtime/virtualGeometryShadows.h"
 #include <filesystem>
 #include <set>
@@ -490,6 +491,7 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	std::string mStartupPipelineAsset, mActivePipelineAsset;
 	std::weak_ptr<void> mRenderedScene;
 	std::uint64_t mRenderedTopologyRevision = 0;
+	MEMORY::FrameArena mDrawableArena {};
 
 	std::shared_ptr<StorageBufferInterface> mLightSSBO;
 	struct RayScene;

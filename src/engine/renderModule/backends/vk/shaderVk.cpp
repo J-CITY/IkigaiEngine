@@ -224,8 +224,22 @@ IKIGAI::RENDER::ShaderVk::~ShaderVk() {
 
 void IKIGAI::RENDER::ShaderVk::recompile(const ShaderResource& res) {
 	requireOwnerThread();
-	auto* driver = UtilityVk::GetDriver();
 	auto replacement = std::make_shared<ShaderVk>(res);
+	prepareReloadedShader(replacement);
+	adoptReloadedShader(*replacement);
+}
+
+void IKIGAI::RENDER::ShaderVk::prepareRetirement(const std::shared_ptr<ShaderInterface>& replacement) {
+	auto* driver = UtilityVk::GetDriver();
+	driver->destroyDeferred(std::shared_ptr<void>(replacement));
+	driver->retireShaderPipelines(mId);
+}
+
+bool IKIGAI::RENDER::ShaderVk::adoptReloadedShader(ShaderInterface& prepared) noexcept {
+	auto* replacement = dynamic_cast<ShaderVk*>(&prepared);
+	if (!replacement) {
+		return false;
+	}
 	using std::swap;
 	swapCompiledInterface(*replacement);
 	swap(mDescriptorSetLayout, replacement->mDescriptorSetLayout);
@@ -240,8 +254,7 @@ void IKIGAI::RENDER::ShaderVk::recompile(const ShaderResource& res) {
 #if IKIGAI_ENABLE_MEMORY_TRACKING
 	swap(mGpuModules, replacement->mGpuModules);
 #endif
-	driver->destroyDeferred(std::shared_ptr<void>(std::move(replacement)));
-	driver->retireShaderPipelines(mId);
+	return true;
 }
 
 void IKIGAI::RENDER::ShaderVk::clear() const { }
