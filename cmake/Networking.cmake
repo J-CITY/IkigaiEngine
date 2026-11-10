@@ -48,9 +48,8 @@ function(ikigai_configure_network target)
         target_link_libraries(${target} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
     endif()
     if(WIN32)
-        # Streamline's signature verification and DX12 require newer Windows
-        # declarations. Do not lower their SDK surface to the networking minimum.
-        if(USE_STREAMLINE OR USE_DX12)
+        # Streamline, DX12, and Tracy on GNU/Clang use Windows 10 declarations.
+        if(USE_STREAMLINE OR USE_DX12 OR (IKIGAI_ENABLE_TRACY AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang"))
             set(network_windows_version 0x0A00)
         else()
             set(network_windows_version 0x0601)

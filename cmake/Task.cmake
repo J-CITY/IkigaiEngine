@@ -1,4 +1,5 @@
 # Worker task pool. The implementation does not include the renderer or the scene.
+include("${CMAKE_CURRENT_LIST_DIR}/Tracy.cmake")
 set(IKIGAI_TASK_DIR "${CMAKE_CURRENT_LIST_DIR}/../src/engine/taskModule")
 if(NOT TARGET ikigai_task)
     add_library(ikigai_task STATIC
@@ -6,6 +7,7 @@ if(NOT TARGET ikigai_task)
         "${IKIGAI_TASK_DIR}/taskSystem.cpp")
     target_compile_features(ikigai_task PUBLIC cxx_std_20)
     target_include_directories(ikigai_task PUBLIC "${CMAKE_CURRENT_LIST_DIR}/../src/engine")
+    target_link_libraries(ikigai_task PUBLIC ikigai_trace)
     set_target_properties(ikigai_task PROPERTIES POSITION_INDEPENDENT_CODE ON)
     if(MSVC)
         target_compile_options(ikigai_task PRIVATE /W4 /utf-8)

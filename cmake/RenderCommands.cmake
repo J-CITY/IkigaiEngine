@@ -1,4 +1,5 @@
 # Owner-thread command storage and execution policies, independent of graphics SDKs.
+include("${CMAKE_CURRENT_LIST_DIR}/Tracy.cmake")
 set(IKIGAI_RENDER_COMMAND_ROOT "${CMAKE_CURRENT_LIST_DIR}/../src/engine")
 if(NOT TARGET ikigai_render_commands)
     add_library(ikigai_render_commands STATIC
@@ -11,6 +12,7 @@ if(NOT TARGET ikigai_render_commands)
         "${IKIGAI_RENDER_COMMAND_ROOT}/renderModule/renderGraph/renderGraphCompiler.cpp")
     target_compile_features(ikigai_render_commands PUBLIC cxx_std_20)
     target_include_directories(ikigai_render_commands PUBLIC "${IKIGAI_RENDER_COMMAND_ROOT}")
+    target_link_libraries(ikigai_render_commands PUBLIC ikigai_trace)
     set_target_properties(ikigai_render_commands PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endif()
 foreach(command_source_list PROJECT_ABSOLUTE_SOURCES PROJECT_SOURCES)
