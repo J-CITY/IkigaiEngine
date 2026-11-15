@@ -17,7 +17,7 @@ git clone --recurse-submodules https://github.com/J-CITY/IkigaiEngine.git
 cd IkigaiEngine
 ```
 
-Соберите версию с OpenGL и откройте демо векторного интерфейса из корня репозитория:
+Эти команды из корня репозитория собирают версию с OpenGL и открывают демо векторного интерфейса.
 
 ```powershell
 .\run.cmd run_vs.py -p win -g opengl --build -t Release
@@ -31,7 +31,7 @@ cd IkigaiEngine
 <details>
 <summary><strong>Параметры сборки и пресеты CMake</strong></summary>
 
-Когда платформенные зависимости подготовлены, проект можно настроить и собрать напрямую через CMake. Пример для Windows:
+Когда платформенные зависимости подготовлены, проект можно настроить и собрать напрямую через CMake. В этом примере для Windows включены Vulkan и 2D-физика.
 
 ```powershell
 cmake --preset windows -DUSE_OPENGL=OFF -DUSE_VULKAN=ON -DUSE_PHYSICS_2D=ON
@@ -64,7 +64,7 @@ cmake --build --preset windows-release --target IkigaiEngine
 <details>
 <summary><strong>Прямой и отложенный рендеринг, PBR-материалы и тени</strong></summary>
 
-Прямой и отложенный рендеринг поддерживают физически корректные материалы, освещение от окружения и карты теней. Материалы и шейдеры задаются ресурсами, поэтому для сцены можно настроить собственное затенение.
+Прямой и отложенный рендеринг поддерживают физически обоснованные материалы, освещение от окружения и карты теней. Материалы и шейдеры задаются ресурсами, поэтому для сцены можно настроить собственное затенение.
 
 [Дескриптор PBR-материала](src/engine/renderModule/materials/pbrMaterialDescriptor.h) · [Конвейер освещения](assets/engine/renderPipeline/lighting-demo.json)
 
@@ -77,7 +77,7 @@ cmake --build --preset windows-release --target IkigaiEngine
 
 [Описание демо Pica Pica](assets/game/scenes/pica-pica-demo.md) · [Реализация трассировки](src/engine/renderModule/gameRayTracing.cpp)
 
-![Диорама Pica Pica с гибридным физически корректным рендерингом](screenshots/2.png)
+![Диорама Pica Pica с гибридным физически обоснованным рендерингом](screenshots/2.png)
 
 </details>
 
@@ -91,20 +91,38 @@ cmake --build --preset windows-release --target IkigaiEngine
 </details>
 
 <details>
-<summary><strong>GPU-driven рендеринг и виртуальная геометрия</strong></summary>
+<summary><strong>GPU-driven рендеринг</strong></summary>
 
-В сборках Windows с Vulkan или DirectX 12 GPU участвует в отборе объектов и формировании косвенных команд отрисовки. Модуль виртуальной геометрии разбивает меши на кластеры в формате `.vmesh` и позволяет экспериментировать с выбором LOD по экранной ошибке, отсечением перекрытой геометрии и потоковой загрузкой страниц.
+В сборках Windows с Vulkan или DirectX 12 GPU отбирает видимые объекты и формирует косвенные команды отрисовки обычных мешей.
 
-[GPU-сцена](src/engine/renderModule/gpuScene.h) · [Виртуальная геометрия](src/engine/virtualGeometryModule)
+[GPU-сцена](src/engine/renderModule/gpuScene.h)
 
 </details>
 
 <details>
-<summary><strong>Постобработка, масштабирование и генерация кадров</strong></summary>
+<summary><strong>Виртуальная геометрия</strong></summary>
 
-Среди проходов постобработки есть тональная компрессия HDR, bloom, SSAO, размытие в движении, световые лучи и сглаживание. В сборках Windows с Vulkan или DirectX 12 можно включить масштабирование и генерацию кадров на базе NVIDIA DLSS и AMD FSR при наличии соответствующих SDK и оборудования.
+Модуль разбивает меши на кластеры в формате `.vmesh` и позволяет экспериментировать с выбором LOD по экранной ошибке, отсечением перекрытой геометрии и потоковой загрузкой страниц.
 
-[Конвейер постобработки](assets/engine/renderPipeline/migrated-all-post.json) · [Интеграция масштабирования](cmake/Upscalers.cmake)
+[Модуль виртуальной геометрии](src/engine/virtualGeometryModule)
+
+</details>
+
+<details>
+<summary><strong>Постобработка</strong></summary>
+
+Среди проходов постобработки есть тональная компрессия HDR, bloom, SSAO, размытие в движении, световые лучи и сглаживание.
+
+[Конвейер постобработки](assets/engine/renderPipeline/migrated-all-post.json)
+
+</details>
+
+<details>
+<summary><strong>Масштабирование и генерация кадров</strong></summary>
+
+В сборках Windows с Vulkan или DirectX 12 можно включить NVIDIA DLSS и AMD FSR при наличии соответствующих SDK и оборудования. В скрипте сборки есть независимые параметры `--dlss-sr`, `--fsr-sr`, `--dlss-fg` и `--fsr-fg`.
+
+[Интеграция масштабирования](cmake/Upscalers.cmake)
 
 </details>
 
@@ -135,7 +153,7 @@ cmake --build --preset windows-release --target IkigaiEngine
 
 Клипы скелетной анимации смешиваются в blend spaces и переключаются графами состояний. Настольное демо от третьего лица использует контроллер персонажа и систему анимации для передвижения, перепрыгивания препятствий и подтягивания на уступы.
 
-[Модуль скелетной анимации](src/engine/skeletalModule) · [Пакет демо от третьего лица](assets_packs/demo_third_person)
+[Модуль скелетной анимации](src/engine/skeletalModule) · [Демо-сцена от третьего лица](assets/game/third-person-traversal-demo.json)
 
 ![Персонаж от третьего лица хватается за уступ и забирается наверх](screenshots/4.gif)
 
@@ -144,7 +162,7 @@ cmake --build --preset windows-release --target IkigaiEngine
 <details>
 <summary><strong>Двумерная физика</strong></summary>
 
-Опциональный модуль 2D-физики моделирует твёрдые тела, контакты и ограничения. Включите `-DUSE_PHYSICS_2D=ON`, чтобы открыть демо со стопкой тел в ортографической проекции.
+Модуль 2D-физики рассчитывает контакты и ограничения твёрдых тел, а также поддерживает симуляцию мягких тел, ткани и жидкостей на частицах. Включите `-DUSE_PHYSICS_2D=ON`, чтобы открыть демо со стопкой тел в ортографической проекции.
 
 [Демо 2D-физики](assets/game/scenes/physics-2d-demo.json) · [Модуль 2D-физики](src/engine/physics2dModule)
 
@@ -155,7 +173,7 @@ cmake --build --preset windows-release --target IkigaiEngine
 <details>
 <summary><strong>Трёхмерная физика</strong></summary>
 
-Модуль 3D-физики моделирует твёрдые тела, гравитацию, столкновения и ограничения. По умолчанию он включён через `USE_PHYSICS_3D`.
+Модуль 3D-физики рассчитывает контакты и ограничения твёрдых тел и поддерживает симуляцию мягких тел, ткани и жидкостей на частицах. По умолчанию он включён через `USE_PHYSICS_3D`.
 
 [Демо 3D-физики](assets/game/scenes/physics-3d-demo.json) · [Модуль 3D-физики](src/engine/physicsModule)
 
@@ -258,6 +276,15 @@ SoLoud обеспечивает двумерный и позиционный 3D-
 </details>
 
 <details>
+<summary><strong>Meta Quest и OpenXR</strong></summary>
+
+Версия для Quest использует OpenXR для VR-рендеринга и ввода с контроллеров. Скрипт сборки собирает нативный APK через Gradle.
+
+[Сборка для Quest](cmake/quest/CMakeLists.txt) · [Ввод через OpenXR](src/engine/windowModule/window/oxrInput.cpp)
+
+</details>
+
+<details>
 <summary><strong>Профилирование, журнал и захват кадра</strong></summary>
 
 В редакторе можно смотреть тайминги кадра и журнал. Сервис захвата сохраняет кадр или именованную цель рендеринга в PNG. Для Windows есть отдельная опциональная утилита сбора отчётов о сбоях.
@@ -278,7 +305,7 @@ SoLoud обеспечивает двумерный и позиционный 3D-
 | Meta Quest | OpenGL ES 3.0 / 3.1 / 3.2 с OpenXR | `quest` |
 | Web | WebGL 2 через Emscripten / WebAssembly | `web` |
 
-Параметр `-p` задаёт платформу сборки, а `-g` выбирает графические бэкенды, которые войдут в неё. При запуске `--render-backend=<backend>` выбирает один из собранных бэкендов и переопределяет настройку из `/Configs/render.json`.
+Параметр `-p` задаёт платформу сборки, а `-g` выбирает графические бэкенды, которые войдут в неё. При запуске `--render-backend=<backend>` выбирает один из собранных бэкендов и переопределяет настройку из `/Configs/render.json`. Для Android и Quest можно задать `--abi` и `--esVer`. Для Web параметр `--run` открывает готовую сборку через локальный инструмент Emscripten.
 
 ## Структура репозитория
 
