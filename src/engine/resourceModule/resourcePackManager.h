@@ -42,8 +42,9 @@ public:
 
 	// New asynchronous loads start on the coroutine scheduler owner. Synchronous loads and unload callbacks
 	// run on the caller, who must respect the registered loaders' thread affinity.
-	// Each call acquires a reference. A pending attempt with no references rolls back after any active resource settles.
-	// Synchronous joins on the finalization thread or from task executor callbacks throw while the pack is pending.
+	// Each accepted call acquires a reference. A pending attempt with no references rolls back after any active resource settles.
+	// Synchronous joins of pending asynchronous packs throw without acquiring a reference: their progress requires scheduler ticks.
+	// Other pending synchronous joins on the finalization thread or from task executor callbacks also throw.
 	void loadPack(const std::string& path, ELoadingPolicy policy = ELoadingPolicy::Synchronous);
 	void unloadPack(const std::string& path);
 	[[nodiscard]] ResourcePackLoadStatus getPackLoadStatus(const std::string& path) const;

@@ -24,7 +24,8 @@ class PlayerProfileService {
 	FileSystem& mFiles;
 	std::filesystem::path mRoot;
 	std::shared_ptr<STORAGE::UserStorage> mStorage;
-	FileSystem::MountId mUserMount = 0, mCacheMount = 0;
+	FileSystem::MountId mUserMount = 0;
+	FileSystem::MountId mCacheMount = 0;
 	std::string mSelected;
 	static void validateId(const std::string& id);
 

@@ -20,7 +20,7 @@ std::weak_ptr<ComponentManager> World::getComponentManagerWeak() const noexcept 
 }
 
 Entity World::createEntity() const {
-	Entity newEntity;
+	Entity newEntity = Entity::create();
 	mComponentsManager->registerEntity(newEntity);
 	return newEntity;
 }

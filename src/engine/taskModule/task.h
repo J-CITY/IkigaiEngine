@@ -205,7 +205,8 @@ namespace TASK {
 	class ThreadPoolExecutor {
 		std::shared_ptr<InflightCounter> mInflightCounter = std::make_shared<InflightCounter>();
 		std::vector<std::unique_ptr<Thread>> mThreads;
-		std::atomic<std::shared_ptr<PoolState>> mPoolState;
+		std::shared_ptr<PoolState> mPoolState;
+		mutable std::mutex mPoolStateMutex;
 		std::mutex mLifecycleMutex;
 		std::condition_variable mLifecycleCondition;
 		std::thread::id mStoppingThread = {};
@@ -244,6 +245,8 @@ namespace TASK {
 
 	private:
 		friend class TaskSystem;
+		[[nodiscard]] std::shared_ptr<PoolState> loadPoolState() const;
+		void storePoolState(std::shared_ptr<PoolState> pool);
 		void closeAdmission();
 		void cancelWaitingTasks();
 		size_t getUnfinishedWorkCount() const;

@@ -1,4 +1,5 @@
 #include "core.h"
+#include "utilsModule/reflection/reflection_macros.h"
 #include "utilsModule/time/loadTimer.h"
 #if USE_PHYSICS_3D
 #include "coreModule/ecs/components/physics3dComponent.h"
@@ -37,6 +38,7 @@
 #include "coreModule/gui/components/vectorComponents.h"
 #include "networkModule/networkRuntime.h"
 #include "resourceModule/audioSourceManager.h"
+#include "resourceModule/contentPacks.h"
 #include "resourceModule/contentService.h"
 #include "resourceModule/fileSystem/storage.h"
 #include "resourceModule/fontManager.h"
@@ -78,12 +80,17 @@
 #include <coreModule/ecs/components/scriptComponent.h>
 #include <renderModule/gameRenderer.h>
 
+#ifdef OCULUS
+#include <android_native_app_glue.h>
+#endif
+
 using namespace IKIGAI;
 using namespace IKIGAI::CORE;
 
 Core::Core(const PlatformStartup& platform)
 	: nativeInstance(platform.nativeInstance)
 	, androidApp(platform.android) {
+	UTILS::RegisterGeneratedReflection();
 	UTILS::LoadTimer coreTiming("core");
 	UTILS::InitContentRoot();
 	if (!Config::ROOT.empty()) {
@@ -105,25 +112,11 @@ Core::Core(const PlatformStartup& platform)
 					  << "Run: python3 utils/sync_assets.py ensure. "
 					  << "For Xcode, set scheme Working Directory to mac/build_xcode (with assets symlink).\n";
 		}
-		// fileSystem->addNativeFileSystem(".", "/");
-#ifdef OCULUS
-		fileSystem->addAndroidAssetFileSystem("engine", "/", app->activity->assetManager, app);
-		fileSystem->addAndroidAssetFileSystem("game", "/", app->activity->assetManager, app);
-#elif defined(__ANDROID__)
-		// APK assets root is the repo assets/ folder. SDL_IOFromFile reads engine/ and game/.
-		fileSystem->addSdlFileSystem("engine", "/");
-		fileSystem->addSdlFileSystem("game", "/");
-#elif defined(__APPLE__) && TARGET_OS_IPHONE
-		fileSystem->addSdlFileSystem(Config::ROOT + Config::ENGINE_ASSETS_PATH, "/", true);
-		fileSystem->addSdlFileSystem(Config::ROOT + Config::USER_ASSETS_PATH, "/", true);
-#else
-		fileSystem->addNativeFileSystem(Config::ROOT + Config::ENGINE_ASSETS_PATH, "/");
-		fileSystem->addNativeFileSystem(Config::ROOT + Config::USER_ASSETS_PATH, "/");
-#endif
+		RESOURCES::MountLooseAssets(*fileSystem, Config::ROOT, androidApp);
 	};
 	auto storageRoot = Config::STORAGE_ROOT.empty()
 #if defined(OCULUS) && !defined(USE_SDL)
-		? std::filesystem::path(app->activity->internalDataPath)
+		? std::filesystem::path(androidApp->activity->internalDataPath)
 #else
 		? RESOURCES::STORAGE::AppDataPath(Config::ORGANIZATION, Config::APPLICATION)
 #endif

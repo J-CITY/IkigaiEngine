@@ -106,6 +106,7 @@ struct ResourcePackManager::Impl : std::enable_shared_from_this<Impl> {
 		std::string path;
 		std::thread::id finalizer = std::this_thread::get_id();
 		Phase phase = Phase::Loading;
+		ELoadingPolicy loadingPolicy = ELoadingPolicy::Synchronous;
 		std::size_t callerReferences = 0;
 		std::size_t dependencyReferences = 0;
 		std::promise<void> promise;
@@ -233,6 +234,10 @@ auto ResourcePackManager::Impl::acquire(const std::string& path, Reference kind,
 			if (policy != ELoadingPolicy::Asynchronous && TASK::isTaskExecutorCallback()) {
 				throw std::logic_error("Task executor callbacks cannot synchronously join a pending resource pack: " + path);
 			}
+			if (policy != ELoadingPolicy::Asynchronous && pack->loadingPolicy == ELoadingPolicy::Asynchronous) {
+				// The caller may be a worker that the scheduler owner is waiting for. Never block on frame-driven progress.
+				throw std::logic_error("Cannot synchronously join a pending asynchronous resource pack: " + path);
+			}
 			if (parent) {
 				parent->waitingFor = pack;
 			}
@@ -243,6 +248,7 @@ auto ResourcePackManager::Impl::acquire(const std::string& path, Reference kind,
 
 	auto pack = std::make_shared<Pack>();
 	pack->path = path;
+	pack->loadingPolicy = policy;
 	auto attempt = std::make_shared<Attempt>();
 	attempt->owner = shared_from_this();
 	attempt->pack = pack;

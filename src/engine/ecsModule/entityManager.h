@@ -10,15 +10,27 @@ template <> struct IKIGAI::IdDomain<IKIGAI::ECS::Entity> {
 };
 
 namespace IKIGAI::ECS {
-class Entity : public IdGenerator<Entity> {
+class Entity {
 public:
-	Entity() = default;
+	using ID = Id<Entity>;
+	constexpr Entity() noexcept = default;
+	static Entity create() {
+		return Entity(IdGenerator<Entity>::generateId());
+	}
+	ID getUniqueId() const noexcept {
+		return mId;
+	}
 	Entity(ID id)
-		: IdGenerator<IKIGAI::ECS::Entity>(id) { };
+		: mId(id) {
+		IdGenerator<Entity> observed(id);
+	}
 
 	bool operator==(const IKIGAI::ECS::Entity& rhs) const noexcept {
 		return getUniqueId() == rhs.getUniqueId();
 	}
+
+private:
+	ID mId {};
 };
 
 // Runtime identity for a single registration. Serialized object IDs stay unchanged.

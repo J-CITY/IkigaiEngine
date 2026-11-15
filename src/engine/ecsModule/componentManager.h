@@ -299,7 +299,7 @@ public:
 
 	template <typename T> ComponentType getComponentTypeImpl() const {
 		static const ComponentType componentId = IdGenerator<ComponentManager>::generateId();
-		// std::cout << typeid(T).name() << " - " << (int)componentId << "\n";
+		// Type IDs are process-wide, like the generator: every world agrees on T.
 		return componentId;
 	}
 
@@ -536,6 +536,9 @@ public:
 	}
 
 	void registerEntity(Entity entity) {
+		if (!entity.getUniqueId().valid()) {
+			throw std::invalid_argument("Cannot register an invalid entity");
+		}
 		requireStructuralChangesAllowed();
 		if (mEntityRecords.contains(entity)) {
 			throw std::logic_error("Entity is already registered in this ECS world");

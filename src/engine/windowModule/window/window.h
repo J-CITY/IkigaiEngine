@@ -211,6 +211,7 @@ public:
 	}
 	void setSize(unsigned int width, unsigned int height);
 	MATH::Vector2u getSize() const;
+	[[nodiscard]] MATH::Vector2u getPixelSize() const;
 
 	[[nodiscard]] bool getIsFullscreen() const {
 		return true;
@@ -224,6 +225,8 @@ public:
 		std::function<void(XrCompositionLayerProjectionView& layerView, render_target_t& rtarget, XrPosef& stagePose, uint32_t viewID)> renderCb);
 	void draw() const;
 	[[nodiscard]] bool isClosed() const;
+	[[nodiscard]] bool hasFocus() const;
+	void setCursorVisible(bool isVisible, bool isLock) const;
 	XrSession getXrSession() const {
 		return m_session;
 	}

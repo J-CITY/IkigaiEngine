@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "coreModule/config.h"
+#include "resourceModule/contentPacks.h"
 #include "resourceModule/modelManager.h"
 #include "resourceModule/parser/assimpParser.h"
 #include "resourceModule/parser/importedModel.h"
@@ -107,6 +108,9 @@ std::string ResolveCookModelPath(const std::string& modelPath) {
 		relative.erase(relative.begin());
 	}
 	candidates.push_back(fs::u8path(Config::ROOT + Config::USER_ASSETS_PATH + relative));
+	for (const auto& pack : RESOURCES::ContentPackRoots(Config::ROOT)) {
+		candidates.push_back(pack / fs::u8path(relative));
+	}
 	candidates.push_back(fs::u8path(Config::ROOT + Config::ENGINE_ASSETS_PATH + relative));
 	for (const fs::path& candidate : candidates) {
 		std::error_code error;

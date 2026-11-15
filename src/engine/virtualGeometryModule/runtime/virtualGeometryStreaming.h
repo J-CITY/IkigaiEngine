@@ -85,7 +85,7 @@ private:
 	VirtualGeometryStreamingStatistics mStatistics {};
 	uint64_t mReadBytesThisFrame = 0;
 	uint64_t mUploadBytesThisFrame = 0;
-	std::unordered_map<const VirtualMeshAsset*, std::unique_ptr<Context>> mContexts {};
+	std::unordered_map<const VirtualMeshAsset*, std::unique_ptr<Context>> mContexts;
 	uint64_t mNextGeneration = 1;
 	uint64_t mFrame = 0;
 	uint64_t mCompleted = 0;

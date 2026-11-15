@@ -1,4 +1,4 @@
-"""Generate a Gradle Android project under android/out.
+"""Generate a Gradle Android project under build/android.
 
 SDL3 is compiled from 3rd/SDL3 by CMake. The Java glue in
 org.libsdl.app is copied from 3rd/SDL3/android-project on each run.
@@ -17,6 +17,7 @@ import re
 import shutil
 import subprocess
 from datetime import datetime, timezone
+from utils.build.gradle_cmake import gradle_cmake_arguments
 
 # SDL3's Android port requires API 21. ES 3.0 is available earlier, but the
 # activity glue is not, so 3 and 3.1 share minSdk 21. ES 3.2 needs API 24.
@@ -105,21 +106,27 @@ def _find_sdk():
     return None
 
 
-def _link_assets(repo_root, output_dir):
-    src = os.path.abspath(os.path.join(repo_root, "assets"))
-    dest = os.path.abspath(os.path.join(output_dir, "app", "src", "main", "assets"))
-    if not os.path.isdir(src) or os.path.lexists(dest):
+def _remove_asset_link(dest):
+    if not os.path.lexists(dest):
         return
-    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    if os.path.islink(dest):
+        os.unlink(dest)
+        return
     if os.name == "nt":
-        subprocess.run(
-            ["cmd", "/c", "mklink", "/J", dest, src],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-    else:
-        os.symlink(src, dest, target_is_directory=True)
+        subprocess.run(["cmd", "/c", "rmdir", dest], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        if not os.path.lexists(dest):
+            return
+    shutil.rmtree(dest)
+
+
+def _link_assets(repo_root, output_dir):
+    # APK assets are a filtered copy: assets/ plus the packs this platform ships.
+    import sys
+    dest = os.path.abspath(os.path.join(output_dir, "app", "src", "main", "assets"))
+    _remove_asset_link(dest)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    script = os.path.join(repo_root, "utils", "assets", "content_packs.py")
+    subprocess.run([sys.executable, script, "stage", "--platform", "android", "--layout", "apk", "--dest", dest], check=True)
 
 
 def generate_android(
@@ -128,26 +135,28 @@ def generate_android(
     es_ver="3.2",
     app_id=DEFAULT_APP_ID,
     abis=None,
-    use_editor=True,
-    use_file_watcher=False,
-    use_lua=True, use_ikigai_script=True,
+    use_editor=None,
+    use_file_watcher=None,
+    use_lua=None, use_ikigai_script=None,
+    cmake_cache_variables=None,
+    artifact_output_dir=None,
 ):
     if es_ver not in ES_VERSIONS:
         raise ValueError("es_ver must be one of: " + ", ".join(ES_VERSIONS))
 
     repo_root = os.path.abspath(repo_root)
     if output_dir is None:
-        output_dir = os.path.join(repo_root, "android", "out")
-    output_dir = os.path.abspath(output_dir)
+        output_dir = os.path.join(repo_root, "build", "android")
+    output_dir = os.path.abspath(os.path.join(repo_root, output_dir))
+    artifact_output_dir = os.path.abspath(os.path.join(
+        repo_root, artifact_output_dir or os.path.join("out", "android")))
+    artifact_path = artifact_output_dir.replace("\\", "/").replace("'", "\\'")
 
     if abis is None:
         abis = ["arm64-v8a", "armeabi-v7a"]
     abis = [abi.strip() for abi in abis if abi and abi.strip()]
     if not abis:
         raise ValueError("at least one ABI is required")
-
-    if not use_editor:
-        use_file_watcher = False
 
     sdl_project = os.path.join(repo_root, "3rd", "SDL3", "android-project")
     java_src = os.path.join(sdl_project, "app", "src", "main", "java", "org", "libsdl", "app")
@@ -158,7 +167,7 @@ def generate_android(
 
     spec = ES_VERSIONS[es_ver]
     cmake_rel = os.path.relpath(
-        os.path.join(repo_root, "cmake", "android", "CMakeLists.txt"),
+        os.path.join(repo_root, "CMakeLists.txt"),
         os.path.join(output_dir, "app"),
     ).replace("\\", "/")
     abi_filters = ", ".join("'%s'" % abi for abi in abis)
@@ -173,10 +182,11 @@ def generate_android(
         "GLES_HEX": spec["hex"],
         "ABI_FILTERS": abi_filters,
         "CMAKE_PATH": cmake_rel,
-        "USE_LUA": "ON" if use_lua else "OFF",
-        "USE_IKIGAI_SCRIPT": "ON" if use_ikigai_script else "OFF",
-        "USE_EDITOR": "ON" if use_editor else "OFF",
-        "USE_FILE_WATCHER": "ON" if use_file_watcher else "OFF",
+        "ARTIFACT_OUTPUT": artifact_path,
+        "CMAKE_ARGUMENTS": gradle_cmake_arguments(
+            "android", spec["min_sdk"], spec["cmake"], cmake_cache_variables,
+            USE_LUA=use_lua, USE_IKIGAI_SCRIPT=use_ikigai_script,
+            USE_EDITOR=use_editor, USE_FILE_WATCHER=use_file_watcher),
     }
 
     os.makedirs(output_dir, exist_ok=True)
@@ -265,7 +275,7 @@ def generate_android(
         sdk_escaped = sdk.replace("\\", "\\\\")
         _write(os.path.join(output_dir, "local.properties"), "sdk.dir=%s\n" % sdk_escaped)
     else:
-        print("Warning: Android SDK not found. Set ANDROID_HOME or create android/out/local.properties.")
+        print("Warning: Android SDK not found. Set ANDROID_HOME or create %s." % os.path.join(output_dir, "local.properties"))
 
     _link_assets(repo_root, output_dir)
 
@@ -293,15 +303,17 @@ def generate_android(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Generate android/out from the IkigaiEngine Android templates.")
+    parser = argparse.ArgumentParser(description="Generate build/android from the IkigaiEngine Android templates.")
     parser.add_argument("--esVer", dest="es_ver", default="3.2", choices=sorted(ES_VERSIONS))
     parser.add_argument("--abi", default="arm64-v8a,armeabi-v7a")
-    parser.add_argument("-o", "--output", default=None)
+    parser.add_argument("-o", "--output", default=None, help="Generated Gradle project directory")
+    parser.add_argument("--artifacts-output", default=None, help="APK output base directory (configuration is appended)")
     args = parser.parse_args()
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     generate_android(
         root,
         args.output,
+        artifact_output_dir=args.artifacts_output,
         es_ver=args.es_ver,
         abis=[part.strip() for part in args.abi.split(",") if part.strip()],
     )

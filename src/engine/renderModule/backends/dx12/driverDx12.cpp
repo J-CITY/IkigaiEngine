@@ -49,74 +49,69 @@ using namespace IKIGAI;
 using namespace IKIGAI::RENDER;
 
 const static std::map<PrimitiveMode, D3D_PRIMITIVE_TOPOLOGY> TopologyMap = {
-	{PrimitiveMode::POINTS, D3D_PRIMITIVE_TOPOLOGY_POINTLIST},
-	{PrimitiveMode::LINES, D3D_PRIMITIVE_TOPOLOGY_LINELIST},
-	{PrimitiveMode::LINE_STRIP, D3D_PRIMITIVE_TOPOLOGY_LINESTRIP},
-	{PrimitiveMode::TRIANGLES, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST},
-	{PrimitiveMode::TRIANGLE_STRIP, D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP},
-	{PrimitiveMode::LINES_ADJACENCY, D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ},
-	{PrimitiveMode::LINE_STRIP_ADJACENCY, D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ},
-	{PrimitiveMode::TRIANGLES_ADJACENCY, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ},
-	{PrimitiveMode::TRIANGLE_STRIP_ADJACENCY, D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ},
-	{PrimitiveMode::PATCHES, D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST},
-	//Not support
+	{ PrimitiveMode::POINTS, D3D_PRIMITIVE_TOPOLOGY_POINTLIST },
+	{ PrimitiveMode::LINES, D3D_PRIMITIVE_TOPOLOGY_LINELIST },
+	{ PrimitiveMode::LINE_STRIP, D3D_PRIMITIVE_TOPOLOGY_LINESTRIP },
+	{ PrimitiveMode::TRIANGLES, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST },
+	{ PrimitiveMode::TRIANGLE_STRIP, D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP },
+	{ PrimitiveMode::LINES_ADJACENCY, D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ },
+	{ PrimitiveMode::LINE_STRIP_ADJACENCY, D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ },
+	{ PrimitiveMode::TRIANGLES_ADJACENCY, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ },
+	{ PrimitiveMode::TRIANGLE_STRIP_ADJACENCY, D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ },
+	{ PrimitiveMode::PATCHES, D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST },
+	// Not support
 	//{PrimitiveMode::LINE_LOOP, }
 	//{PrimitiveMode::TRIANGLE_FAN, }
 };
 
 const static std::map<CullFace, D3D12_CULL_MODE> CullMap = {
-	{CullFace::NONE, D3D12_CULL_MODE_NONE},
-	{CullFace::FRONT, D3D12_CULL_MODE_FRONT},
-	{CullFace::BACK, D3D12_CULL_MODE_BACK},
+	{ CullFace::NONE, D3D12_CULL_MODE_NONE },
+	{ CullFace::FRONT, D3D12_CULL_MODE_FRONT },
+	{ CullFace::BACK, D3D12_CULL_MODE_BACK },
 	//{CullFace::FRONT_AND_BACK, D3D12_CULL_MODE_BACK} //Not support
 };
 
-const static std::map<DepthFunction, D3D12_COMPARISON_FUNC> ComparisonFuncMap = {
-	{DepthFunction::EQUAL, D3D12_COMPARISON_FUNC_EQUAL},
-	{DepthFunction::NOT_EQUAL, D3D12_COMPARISON_FUNC_NOT_EQUAL},
-	{DepthFunction::ALWAYS, D3D12_COMPARISON_FUNC_ALWAYS},
-	{DepthFunction::NEVER, D3D12_COMPARISON_FUNC_NEVER},
-	{DepthFunction::LESS, D3D12_COMPARISON_FUNC_LESS},
-	{DepthFunction::LESS_EQUAL, D3D12_COMPARISON_FUNC_LESS_EQUAL},
-	{DepthFunction::GREATER, D3D12_COMPARISON_FUNC_GREATER},
-	{DepthFunction::GREATER_EQUAL, D3D12_COMPARISON_FUNC_GREATER_EQUAL}
-};
+const static std::map<DepthFunction, D3D12_COMPARISON_FUNC> ComparisonFuncMap
+	= { { DepthFunction::EQUAL, D3D12_COMPARISON_FUNC_EQUAL }, { DepthFunction::NOT_EQUAL, D3D12_COMPARISON_FUNC_NOT_EQUAL },
+		  { DepthFunction::ALWAYS, D3D12_COMPARISON_FUNC_ALWAYS }, { DepthFunction::NEVER, D3D12_COMPARISON_FUNC_NEVER },
+		  { DepthFunction::LESS, D3D12_COMPARISON_FUNC_LESS }, { DepthFunction::LESS_EQUAL, D3D12_COMPARISON_FUNC_LESS_EQUAL },
+		  { DepthFunction::GREATER, D3D12_COMPARISON_FUNC_GREATER }, { DepthFunction::GREATER_EQUAL, D3D12_COMPARISON_FUNC_GREATER_EQUAL } };
 
 const static std::map<BlendMode, D3D12_BLEND> BlendMap = {
 	//{BlendFactor::NONE, D3D12_BLEND_ONE},
-	{BlendMode::ONE, D3D12_BLEND_ONE},
-	{BlendMode::ZERO, D3D12_BLEND_ZERO},
-	{BlendMode::SRC_COLOR, D3D12_BLEND_SRC_COLOR},
-	{BlendMode::ONE_MINUS_SRC_COLOR, D3D12_BLEND_INV_SRC_COLOR},
-	{BlendMode::SRC_ALPHA, D3D12_BLEND_SRC_ALPHA},
-	{BlendMode::ONE_MINUS_SRC_ALPHA, D3D12_BLEND_INV_SRC_ALPHA},
-	{BlendMode::DST_COLOR, D3D12_BLEND_DEST_COLOR},
-	{BlendMode::ONE_MINUS_DST_COLOR, D3D12_BLEND_INV_DEST_COLOR},
-	{BlendMode::DST_ALPHA, D3D12_BLEND_DEST_ALPHA},
-	{BlendMode::ONE_MINUS_DST_ALPHA, D3D12_BLEND_INV_DEST_ALPHA},
-	{BlendMode::CONSTANT_COLOR, D3D12_BLEND_BLEND_FACTOR},
-	{BlendMode::ONE_MINUS_CONSTANT_COLOR, D3D12_BLEND_INV_BLEND_FACTOR},
-	{BlendMode::CONSTANT_ALPHA, D3D12_BLEND_ALPHA_FACTOR},
-	{BlendMode::ONE_MINUS_CONSTANT_ALPHA, D3D12_BLEND_INV_ALPHA_FACTOR},
+	{ BlendMode::ONE, D3D12_BLEND_ONE },
+	{ BlendMode::ZERO, D3D12_BLEND_ZERO },
+	{ BlendMode::SRC_COLOR, D3D12_BLEND_SRC_COLOR },
+	{ BlendMode::ONE_MINUS_SRC_COLOR, D3D12_BLEND_INV_SRC_COLOR },
+	{ BlendMode::SRC_ALPHA, D3D12_BLEND_SRC_ALPHA },
+	{ BlendMode::ONE_MINUS_SRC_ALPHA, D3D12_BLEND_INV_SRC_ALPHA },
+	{ BlendMode::DST_COLOR, D3D12_BLEND_DEST_COLOR },
+	{ BlendMode::ONE_MINUS_DST_COLOR, D3D12_BLEND_INV_DEST_COLOR },
+	{ BlendMode::DST_ALPHA, D3D12_BLEND_DEST_ALPHA },
+	{ BlendMode::ONE_MINUS_DST_ALPHA, D3D12_BLEND_INV_DEST_ALPHA },
+	{ BlendMode::CONSTANT_COLOR, D3D12_BLEND_BLEND_FACTOR },
+	{ BlendMode::ONE_MINUS_CONSTANT_COLOR, D3D12_BLEND_INV_BLEND_FACTOR },
+	{ BlendMode::CONSTANT_ALPHA, D3D12_BLEND_ALPHA_FACTOR },
+	{ BlendMode::ONE_MINUS_CONSTANT_ALPHA, D3D12_BLEND_INV_ALPHA_FACTOR },
 };
 
 const static std::map<BlendFunction, D3D12_BLEND_OP> BlendOpMap = {
-	{BlendFunction::ADD, D3D12_BLEND_OP_ADD},
-	{BlendFunction::SUB, D3D12_BLEND_OP_SUBTRACT},
-	{BlendFunction::MIN, D3D12_BLEND_OP_MIN},
-	{BlendFunction::MAX, D3D12_BLEND_OP_MAX},
-	{BlendFunction::REVERT_SUB, D3D12_BLEND_OP_REV_SUBTRACT},
+	{ BlendFunction::ADD, D3D12_BLEND_OP_ADD },
+	{ BlendFunction::SUB, D3D12_BLEND_OP_SUBTRACT },
+	{ BlendFunction::MIN, D3D12_BLEND_OP_MIN },
+	{ BlendFunction::MAX, D3D12_BLEND_OP_MAX },
+	{ BlendFunction::REVERT_SUB, D3D12_BLEND_OP_REV_SUBTRACT },
 };
 
 const static std::map<StencilOperation, D3D12_STENCIL_OP> StencilOperationMap = {
-	{StencilOperation::KEEP, D3D12_STENCIL_OP_KEEP},
-	{StencilOperation::ZERO, D3D12_STENCIL_OP_ZERO},
-	{StencilOperation::INCREMENT, D3D12_STENCIL_OP_INCR_SAT},
-	{StencilOperation::INCREMENT_WRAP, D3D12_STENCIL_OP_INCR_SAT},
-	{StencilOperation::DECREMENT, D3D12_STENCIL_OP_DECR},
-	{StencilOperation::DECREMENT_WRAP, D3D12_STENCIL_OP_DECR_SAT},
-	{StencilOperation::INVERT, D3D12_STENCIL_OP_INVERT},
-	{StencilOperation::REPLACE, D3D12_STENCIL_OP_REPLACE},
+	{ StencilOperation::KEEP, D3D12_STENCIL_OP_KEEP },
+	{ StencilOperation::ZERO, D3D12_STENCIL_OP_ZERO },
+	{ StencilOperation::INCREMENT, D3D12_STENCIL_OP_INCR_SAT },
+	{ StencilOperation::INCREMENT_WRAP, D3D12_STENCIL_OP_INCR_SAT },
+	{ StencilOperation::DECREMENT, D3D12_STENCIL_OP_DECR },
+	{ StencilOperation::DECREMENT_WRAP, D3D12_STENCIL_OP_DECR_SAT },
+	{ StencilOperation::INVERT, D3D12_STENCIL_OP_INVERT },
+	{ StencilOperation::REPLACE, D3D12_STENCIL_OP_REPLACE },
 };
 
 namespace {
@@ -327,18 +322,8 @@ void DriverDx12::retireShaderPipelines(size_t shaderId) {
 
 std::vector<CD3DX12_STATIC_SAMPLER_DESC> DriverDx12::GetStaticSamplers() {
 	auto make = [](UINT shaderRegister, D3D12_FILTER filter, D3D12_TEXTURE_ADDRESS_MODE address, UINT maxAnisotropy = 1) {
-		return CD3DX12_STATIC_SAMPLER_DESC(
-			shaderRegister,
-			filter,
-			address,
-			address,
-			address,
-			0.0f,
-			maxAnisotropy,
-			D3D12_COMPARISON_FUNC_LESS_EQUAL,
-			D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
-			0.0f,
-			D3D12_FLOAT32_MAX);
+		return CD3DX12_STATIC_SAMPLER_DESC(shaderRegister, filter, address, address, address, 0.0f, maxAnisotropy, D3D12_COMPARISON_FUNC_LESS_EQUAL,
+			D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE, 0.0f, D3D12_FLOAT32_MAX);
 	};
 
 	std::vector<CD3DX12_STATIC_SAMPLER_DESC> samplers = {
@@ -357,13 +342,15 @@ std::vector<CD3DX12_STATIC_SAMPLER_DESC> DriverDx12::GetStaticSamplers() {
 
 DriverDx12::DriverDx12() {
 	d3dUtil::mDriver = this;
-    initializeStreamline();
+	initializeStreamline();
 	DriverDx12::init();
 }
 
 DriverDx12::~DriverDx12() {
 #if IKIGAI_ENABLE_MEMORY_TRACKING
-    if (mMemorySampler) mMemorySampler->disable();
+	if (mMemorySampler) {
+		mMemorySampler->disable();
+	}
 #endif
 	try {
 		if (!mShuttingDown && mDeviceHealth && mCommandQueue && mFence && !hasGpuFailure() && std::uncaught_exceptions() == 0) {
@@ -387,17 +374,27 @@ DriverDx12::~DriverDx12() {
 		slot.FrameGenerationTextures = {};
 	}
 #ifdef IKIGAI_USE_STREAMLINE
-	mCurrentState={};mStates.clear();
-    for(auto& [_,ctx]:mSwapchains){
-        for(auto& framebuffer:ctx.mDefaultFb)framebuffer.reset();
-        clearForDestroy();ctx.mSwapChain.Reset();
-    }
-    if(mDlssRuntime)std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->close();
-    mCommandQueue.Reset();mStreamlineQueueProxy.Reset();mStreamlineDeviceProxy.Reset();
-    #endif
-    mImGuiTextures.clear();
+	mCurrentState = {};
+	mStates.clear();
+	for (auto& [_, ctx] : mSwapchains) {
+		for (auto& framebuffer : ctx.mDefaultFb) {
+			framebuffer.reset();
+		}
+		clearForDestroy();
+		ctx.mSwapChain.Reset();
+	}
+	if (mDlssRuntime) {
+		std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->close();
+	}
+	mCommandQueue.Reset();
+	mStreamlineQueueProxy.Reset();
+	mStreamlineDeviceProxy.Reset();
+#endif
+	mImGuiTextures.clear();
 	mVertexBuffer.reset();
-    mBindlessFrameResources.clear();mBindlessTables.clear();mVertexStreams.clear();
+	mBindlessFrameResources.clear();
+	mBindlessTables.clear();
+	mVertexStreams.clear();
 	mBindlessNativeResources.clear();
 	for (auto& slot : mRecordingSlots) {
 		slot.BindlessResources.clear();
@@ -422,14 +419,18 @@ DriverDx12::~DriverDx12() {
 				  << '\n';
 	}
 	mAllocator.Reset();
-    Microsoft::WRL::ComPtr<ID3D12InfoQueue1> callbacks;
-    if(mDebugCallbackCookie&&SUCCEEDED(mDevice.As(&callbacks)))callbacks->UnregisterMessageCallback(mDebugCallbackCookie);
-	if (mFenceEvent) CloseHandle(mFenceEvent);
+	Microsoft::WRL::ComPtr<ID3D12InfoQueue1> callbacks;
+	if (mDebugCallbackCookie && SUCCEEDED(mDevice.As(&callbacks))) {
+		callbacks->UnregisterMessageCallback(mDebugCallbackCookie);
+	}
+	if (mFenceEvent) {
+		CloseHandle(mFenceEvent);
+	}
 }
 
 PixelFormat DriverDx12::getFrameBufferFormat() const {
-	return  mCurrentState.mFrameBuffer ? 
-		std::static_pointer_cast<TextureDx12>(mCurrentState.mFrameBuffer->getTextures()[0])->getFormat() : PixelFormat::RGBA_INT;
+	return mCurrentState.mFrameBuffer ? std::static_pointer_cast<TextureDx12>(mCurrentState.mFrameBuffer->getTextures()[0])->getFormat()
+									  : PixelFormat::RGBA_INT;
 }
 
 void DriverDx12::init() {
@@ -471,42 +472,57 @@ void DriverDx12::init() {
 	ThrowIfFailed(D3D12MA::CreateAllocator(&allocatorDesc, mAllocator.GetAddressOf()));
 	mUploadRing = std::make_unique<UploadRingDx12>();
 #if IKIGAI_ENABLE_MEMORY_TRACKING
-    try {
-        Microsoft::WRL::ComPtr<IDXGIAdapter3> budgetAdapter; adapter.As(&budgetAdapter);
-        DXGI_ADAPTER_DESC description{}; adapter->GetDesc(&description);
-        D3D12_FEATURE_DATA_ARCHITECTURE architecture{};
-        const bool unified = SUCCEEDED(mDevice->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE, &architecture, sizeof(architecture))) && architecture.UMA;
-        mMemorySampler = std::make_shared<PROFILER::GpuMemorySampler>(
-            [allocator = mAllocator, device = mDevice, budgetAdapter, description, unified, sampleIndex = UINT{0}]() mutable {
-                allocator->SetCurrentFrameIndex(++sampleIndex);
-                D3D12MA::Budget budgets[2]{}; allocator->GetBudget(&budgets[0], &budgets[1]);
-                std::vector<PROFILER::GpuHeapSnapshot> result;
-                for (UINT segment = 0; segment < 2; ++segment) {
-                    PROFILER::GpuHeapSnapshot heap;
-                    heap.backend = PROFILER::GpuBackend::DirectX12; heap.device = reinterpret_cast<std::uintptr_t>(device.Get());
-                    heap.heap = segment; heap.deviceLocal = segment == 0; heap.unifiedMemory = unified;
-                    heap.capacityBytes = segment == 0 && !unified ? description.DedicatedVideoMemory : description.SharedSystemMemory;
-                    if (segment == 1 && unified) heap.capacityBytes = 0;
-                    heap.allocationBytes = budgets[segment].Stats.AllocationBytes;
-                    heap.reservedBytes = budgets[segment].Stats.BlockBytes; heap.allocationCount = budgets[segment].Stats.AllocationCount;
-                    heap.processUsageBytes = budgets[segment].UsageBytes; heap.budgetBytes = budgets[segment].BudgetBytes;
-                    DXGI_QUERY_VIDEO_MEMORY_INFO os{};
-                    if (budgetAdapter && SUCCEEDED(budgetAdapter->QueryVideoMemoryInfo(0,
-                        segment == 0 ? DXGI_MEMORY_SEGMENT_GROUP_LOCAL : DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, &os))) {
-                        heap.processUsageBytes = os.CurrentUsage; heap.budgetBytes = os.Budget; heap.driverBudget = true;
-                    }
-                    result.push_back(heap);
-                }
-                return result;
-            });
-        PROFILER::GpuMemoryProfiler::instance().registerSampler(mMemorySampler);
-    } catch (...) { mMemorySampler.reset(); }
+	try {
+		Microsoft::WRL::ComPtr<IDXGIAdapter3> budgetAdapter;
+		adapter.As(&budgetAdapter);
+		DXGI_ADAPTER_DESC description {};
+		adapter->GetDesc(&description);
+		D3D12_FEATURE_DATA_ARCHITECTURE architecture {};
+		const bool unified
+			= SUCCEEDED(mDevice->CheckFeatureSupport(D3D12_FEATURE_ARCHITECTURE, &architecture, sizeof(architecture))) && architecture.UMA;
+		mMemorySampler = std::make_shared<PROFILER::GpuMemorySampler>(
+			[allocator = mAllocator, device = mDevice, budgetAdapter, description, unified, sampleIndex = UINT { 0 }]() mutable {
+				allocator->SetCurrentFrameIndex(++sampleIndex);
+				D3D12MA::Budget budgets[2] {};
+				allocator->GetBudget(&budgets[0], &budgets[1]);
+				std::vector<PROFILER::GpuHeapSnapshot> result;
+				for (UINT segment = 0; segment < 2; ++segment) {
+					PROFILER::GpuHeapSnapshot heap;
+					heap.backend = PROFILER::GpuBackend::DirectX12;
+					heap.device = reinterpret_cast<std::uintptr_t>(device.Get());
+					heap.heap = segment;
+					heap.deviceLocal = segment == 0;
+					heap.unifiedMemory = unified;
+					heap.capacityBytes = segment == 0 && !unified ? description.DedicatedVideoMemory : description.SharedSystemMemory;
+					if (segment == 1 && unified) {
+						heap.capacityBytes = 0;
+					}
+					heap.allocationBytes = budgets[segment].Stats.AllocationBytes;
+					heap.reservedBytes = budgets[segment].Stats.BlockBytes;
+					heap.allocationCount = budgets[segment].Stats.AllocationCount;
+					heap.processUsageBytes = budgets[segment].UsageBytes;
+					heap.budgetBytes = budgets[segment].BudgetBytes;
+					DXGI_QUERY_VIDEO_MEMORY_INFO os {};
+					if (budgetAdapter
+						&& SUCCEEDED(budgetAdapter->QueryVideoMemoryInfo(
+							0, segment == 0 ? DXGI_MEMORY_SEGMENT_GROUP_LOCAL : DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL, &os))) {
+						heap.processUsageBytes = os.CurrentUsage;
+						heap.budgetBytes = os.Budget;
+						heap.driverBudget = true;
+					}
+					result.push_back(heap);
+				}
+				return result;
+			});
+		PROFILER::GpuMemoryProfiler::instance().registerSampler(mMemorySampler);
+	} catch (...) {
+		mMemorySampler.reset();
+	}
 #endif
-    configureRayTracing();
+	configureRayTracing();
 	configureGpuFeatures();
 
-
-#if defined(DEBUG) || defined(_DEBUG) 
+#if defined(DEBUG) || defined(_DEBUG)
 	Microsoft::WRL::ComPtr<ID3D12InfoQueue> infoQueue;
 	mDevice.As(&infoQueue);
 	infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
@@ -517,22 +533,30 @@ void DriverDx12::init() {
 		D3D12_MESSAGE_ID_CLEARDEPTHSTENCILVIEW_MISMATCHINGCLEARVALUE, D3D12_MESSAGE_ID_DRAW_EMPTY_SCISSOR_RECTANGLE,
 		D3D12_MESSAGE_ID_LOADPIPELINE_NAMENOTFOUND, D3D12_MESSAGE_ID_STOREPIPELINE_DUPLICATENAME };
 
-	D3D12_INFO_QUEUE_FILTER filter{};
+	D3D12_INFO_QUEUE_FILTER filter {};
 	filter.DenyList.NumIDs = denyList.size();
 	filter.DenyList.pIDList = denyList.data();
 	infoQueue->AddStorageFilterEntries(&filter);
-    Microsoft::WRL::ComPtr<ID3D12InfoQueue1> callbacks;
-    if(SUCCEEDED(mDevice.As(&callbacks)))callbacks->RegisterMessageCallback(
-        [](D3D12_MESSAGE_CATEGORY,D3D12_MESSAGE_SEVERITY severity,D3D12_MESSAGE_ID,const char* message,void*) {
+	Microsoft::WRL::ComPtr<ID3D12InfoQueue1> callbacks;
+	if (SUCCEEDED(mDevice.As(&callbacks))) {
+		callbacks->RegisterMessageCallback(
+			[](D3D12_MESSAGE_CATEGORY, D3D12_MESSAGE_SEVERITY severity, D3D12_MESSAGE_ID, const char* message, void*) {
 #ifdef IKIGAI_USE_STREAMLINE
-            // DLSS-G's initial queue wait uses zero. This legal, already
-            // satisfied fence wait is diagnosed as a warning by the debug layer.
-            if(severity==D3D12_MESSAGE_SEVERITY_WARNING&&std::string_view(message)=="ID3D12CommandQueue1::Wait: Fence values can never be less than zero, so waiting for a fence value of zero will always be satisfied"){
-                std::cerr<<"DX12_SDK_DIAGNOSTIC initial fence zero wait\n";return;
-            }
+				// DLSS-G's initial queue wait uses zero. This legal, already
+				// satisfied fence wait is diagnosed as a warning by the debug layer.
+				if (severity == D3D12_MESSAGE_SEVERITY_WARNING
+					&& std::string_view(message)
+						== "ID3D12CommandQueue1::Wait: Fence values can never be less than zero, so waiting for a fence value of zero will always be "
+						   "satisfied") {
+					std::cerr << "DX12_SDK_DIAGNOSTIC initial fence zero wait\n";
+					return;
+				}
 #endif
-            if(severity<=D3D12_MESSAGE_SEVERITY_WARNING)std::cerr<<"DX12_VALIDATION "<<message<<"\n";
-        },D3D12_MESSAGE_CALLBACK_FLAG_NONE,nullptr,&mDebugCallbackCookie);
+				if (severity <= D3D12_MESSAGE_SEVERITY_WARNING)
+					std::cerr << "DX12_VALIDATION " << message << "\n";
+			},
+			D3D12_MESSAGE_CALLBACK_FLAG_NONE, nullptr, &mDebugCallbackCookie);
+	}
 #endif
 
 	if (settings.pipelined()) {
@@ -557,7 +581,7 @@ void DriverDx12::init() {
 	mCurrentWindowID = win.getId();
 	SwapchainContextDx12 ctx;
 	mSwapchains[mCurrentWindowID] = std::move(ctx);
-	
+
 	createSwapChain(mCurrentWindowID, mWidth, mHeight);
 
 	ThrowIfFailed(mDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&mFence)));
@@ -566,17 +590,14 @@ void DriverDx12::init() {
 	mDeviceHealth->check(mFenceEvent ? S_OK : HRESULT_FROM_WIN32(GetLastError()), "Create frame fence event");
 
 	// Check 4X MSAA quality support for our back buffer format.
-	// All Direct3D 11 capable devices support 4X MSAA for all render 
+	// All Direct3D 11 capable devices support 4X MSAA for all render
 	// target formats, so we only need to check quality support.
 	D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS msQualityLevels;
 	msQualityLevels.Format = DefaultTextureColorFormat;
 	msQualityLevels.SampleCount = 4;
 	msQualityLevels.Flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE;
 	msQualityLevels.NumQualityLevels = 0;
-	ThrowIfFailed(mDevice->CheckFeatureSupport(
-		D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
-		&msQualityLevels,
-		sizeof(msQualityLevels)));
+	ThrowIfFailed(mDevice->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msQualityLevels, sizeof(msQualityLevels)));
 
 	m4xMsaaQuality = msQualityLevels.NumQualityLevels;
 	assert(m4xMsaaQuality > 0 && "Unexpected MSAA quality level.");
@@ -596,7 +617,8 @@ void DriverDx12::createDescriptorHeaps() {
 		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE,
 	};
 	ThrowIfFailed(mDevice->CreateDescriptorHeap(&descriptor, IID_PPV_ARGS(&mDescriptorHeap)));
-    D3D12_DESCRIPTOR_HEAP_DESC samplers{};samplers.Type=D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+	D3D12_DESCRIPTOR_HEAP_DESC samplers {};
+	samplers.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
 	samplers.NumDescriptors = BindlessSamplerCapacity;
 	samplers.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	ThrowIfFailed(mDevice->CreateDescriptorHeap(&samplers, IID_PPV_ARGS(&mBindlessSamplerHeap)));
@@ -671,23 +693,22 @@ void DriverDx12::executeRecordedCommands() {
 }
 
 void DriverDx12::createCommandList() {
-	D3D12_COMMAND_QUEUE_DESC descriptor{
-		.Type = D3D12_COMMAND_LIST_TYPE_DIRECT,
-		.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE
-	};
-    #ifdef IKIGAI_USE_STREAMLINE
-    if(mDlssRuntime){
-        auto runtime=std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime);
-        void* device=mDevice.Get();mDevice->AddRef();
-        StreamlineRuntime::check(runtime->upgrade(&device),"slUpgradeInterface device");
-        mStreamlineDeviceProxy.Attach(static_cast<ID3D12Device*>(device));
-        ThrowIfFailed(mStreamlineDeviceProxy->CreateCommandQueue(&descriptor,IID_PPV_ARGS(&mStreamlineQueueProxy)));
-        void* nativeQueue=nullptr;
-        StreamlineRuntime::check(runtime->nativeInterface(mStreamlineQueueProxy.Get(),&nativeQueue),"slGetNativeInterface queue");
-        mCommandQueue.Attach(static_cast<ID3D12CommandQueue*>(nativeQueue));
-    }else
-    #endif
-	ThrowIfFailed(mDevice->CreateCommandQueue(&descriptor, IID_PPV_ARGS(&mCommandQueue)));
+	D3D12_COMMAND_QUEUE_DESC descriptor { .Type = D3D12_COMMAND_LIST_TYPE_DIRECT, .Flags = D3D12_COMMAND_QUEUE_FLAG_NONE };
+#ifdef IKIGAI_USE_STREAMLINE
+	if (mDlssRuntime) {
+		auto runtime = std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime);
+		void* device = mDevice.Get();
+		mDevice->AddRef();
+		StreamlineRuntime::check(runtime->upgrade(&device), "slUpgradeInterface device");
+		mStreamlineDeviceProxy.Attach(static_cast<ID3D12Device*>(device));
+		ThrowIfFailed(mStreamlineDeviceProxy->CreateCommandQueue(&descriptor, IID_PPV_ARGS(&mStreamlineQueueProxy)));
+		void* nativeQueue = nullptr;
+		StreamlineRuntime::check(runtime->nativeInterface(mStreamlineQueueProxy.Get(), &nativeQueue), "slGetNativeInterface queue");
+		mCommandQueue.Attach(static_cast<ID3D12CommandQueue*>(nativeQueue));
+	}
+	else
+#endif
+		ThrowIfFailed(mDevice->CreateCommandQueue(&descriptor, IID_PPV_ARGS(&mCommandQueue)));
 	ThrowIfFailed(mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(mCommandAllocator.GetAddressOf())));
 	if (settings.pipelined()) {
 		mRecordingSlots.front().Allocator = mCommandAllocator;
@@ -696,13 +717,14 @@ void DriverDx12::createCommandList() {
 				mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(mRecordingSlots[index].Allocator.GetAddressOf())));
 		}
 	}
-	ThrowIfFailed(mDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mCommandAllocator.Get(), nullptr, IID_PPV_ARGS(mCommandList.GetAddressOf())));
+	ThrowIfFailed(
+		mDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, mCommandAllocator.Get(), nullptr, IID_PPV_ARGS(mCommandList.GetAddressOf())));
 	mCommandList->Close();
 }
 
 void DriverDx12::setVertexBuffer(std::shared_ptr<VertexBufferInterface> buffer) {
 	resetVertexStreams();
-    mVertexBuffer = std::static_pointer_cast<VertexBufferDx12>(buffer);
+	mVertexBuffer = std::static_pointer_cast<VertexBufferDx12>(buffer);
 	setDirty(Dirty::VERTEX_BUFFER);
 }
 
@@ -730,7 +752,8 @@ void DriverDx12::flushPushConstants(bool compute) {
 		const auto count = static_cast<UINT>(std::min<size_t>(write.values.size(), shader->mPushConstantDwords - write.offsetDwords));
 		if (compute) {
 			mCommandList->SetComputeRoot32BitConstants(rootIndex, count, write.values.data(), write.offsetDwords);
-		} else {
+		}
+		else {
 			mCommandList->SetGraphicsRoot32BitConstants(rootIndex, count, write.values.data(), write.offsetDwords);
 		}
 	}
@@ -738,9 +761,13 @@ void DriverDx12::flushPushConstants(bool compute) {
 }
 
 void DriverDx12::resize(size_t width, size_t height) {
-    if(width==0||height==0)return;
-    const auto& current=mSwapchains.at(mCurrentWindowID);
-    if(current.width==width&&current.height==height)return;
+	if (width == 0 || height == 0) {
+		return;
+	}
+	const auto& current = mSwapchains.at(mCurrentWindowID);
+	if (current.width == width && current.height == height) {
+		return;
+	}
 	mWidth = static_cast<unsigned>(width);
 	mHeight = static_cast<unsigned>(height);
 	onResize();
@@ -876,7 +903,7 @@ void DriverDx12::setClearColor(const MATH::Vector4f& color) {
 }
 
 void DriverDx12::setClearColor(float r, float g, float b, float a) {
-	mClearColor = {r, g, b, a};
+	mClearColor = { r, g, b, a };
 }
 
 namespace {
@@ -896,7 +923,9 @@ void DriverDx12::clear(bool clearColor, bool clearDepth, bool clearStencil) {
 	for (auto& texture : fb->getTextures()) {
 		TransitionColorAttachment(mCommandList.Get(), *fb, *texture);
 	}
-	if (fb->getDepth()) std::static_pointer_cast<TextureDx12>(fb->getDepth())->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	if (fb->getDepth()) {
+		std::static_pointer_cast<TextureDx12>(fb->getDepth())->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+	}
 
 	auto dsv_descriptor = fb->getDepthHeap()->GetCPUDescriptorHandleForHeapStart();
 
@@ -905,7 +934,7 @@ void DriverDx12::clear(bool clearColor, bool clearDepth, bool clearStencil) {
 		heapStart = fb->getTexHeap()->GetCPUDescriptorHandleForHeapStart();
 		auto incSize = d3dUtil::GetDriver()->getDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 		for (auto& texture : fb->getTextures()) {
-			mCommandList->ClearRenderTargetView(heapStart, (float*)&mClearColor, 0, nullptr);
+			mCommandList->ClearRenderTargetView(heapStart, mClearColor.toArray().data(), 0, nullptr);
 			heapStart.Offset(1, incSize);
 		}
 	}
@@ -918,8 +947,7 @@ void DriverDx12::clear(bool clearColor, bool clearDepth, bool clearStencil) {
 		if (clearStencil) {
 			flags |= D3D12_CLEAR_FLAG_STENCIL;
 		}
-		mCommandList->ClearDepthStencilView(dsv_descriptor, flags, mDepthValue,
-			mStencilValue, 0, nullptr);
+		mCommandList->ClearDepthStencilView(dsv_descriptor, flags, mDepthValue, mStencilValue, 0, nullptr);
 	}
 }
 
@@ -938,8 +966,10 @@ void DriverDx12::clearIntColorAttachment(uint32_t attachment, int32_t red, int32
 }
 
 void DriverDx12::draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) {
-    if (!vertex_count || !instance_count) return;
-    validateVertexDraw({vertex_count,vertex_offset,instance_count});
+	if (!vertex_count || !instance_count) {
+		return;
+	}
+	validateVertexDraw({ vertex_count, vertex_offset, instance_count });
 	applyState();
 	mCommandList->DrawInstanced((UINT)vertex_count, (UINT)instance_count, (UINT)vertex_offset, 0);
 }
@@ -985,8 +1015,8 @@ std::vector<int32_t> DriverDx12::readIntTexture(std::shared_ptr<TextureInterface
 	return values;
 }
 
-std::vector<float> DriverDx12::readTexture(std::shared_ptr<TextureInterface> texture,unsigned mip,unsigned layer) {
-    const bool unorm=texture->getFormat()==PixelFormat::RGBA_INT;
+std::vector<float> DriverDx12::readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) {
+	const bool unorm = texture->getFormat() == PixelFormat::RGBA_INT;
 	const bool packed = IsPackedFloatFormat(texture->getFormat());
 	if (!unorm && !packed && texture->getFormat() != PixelFormat::RGBA_FLOAT && texture->getFormat() != PixelFormat::RG_FLOAT
 		&& texture->getFormat() != PixelFormat::R_FLOAT && texture->getType() != TextureType::DEPTH) {
@@ -1003,11 +1033,14 @@ std::vector<float> DriverDx12::readTexture(std::shared_ptr<TextureInterface> tex
 		: t->getFormat() == PixelFormat::RG_FLOAT ? 2
 												  : 4,
 				 w = std::max<size_t>(1, t->getWidth() >> mip), h = std::max<size_t>(1, t->getHeight() >> mip);
-    std::vector<float> values(w*h*channels);void* mapped=nullptr;D3D12_RANGE range{0,static_cast<SIZE_T>(bytes)};
-    ThrowIfFailed(buffer.Get()->Map(0,&range,&mapped));
-    const auto* src=static_cast<const uint8_t*>(mapped)+footprint.Offset+(t->getType()==TextureType::TEXTURE_3D?layer*h*footprint.Footprint.RowPitch:0);
-    const bool red=t->getFormat()==PixelFormat::R_FLOAT && t->getType()!=TextureType::DEPTH;
-    for(size_t y=0;y<h;++y) {
+	std::vector<float> values(w * h * channels);
+	void* mapped = nullptr;
+	D3D12_RANGE range { 0, static_cast<SIZE_T>(bytes) };
+	ThrowIfFailed(buffer.Get()->Map(0, &range, &mapped));
+	const auto* src = static_cast<const uint8_t*>(mapped) + footprint.Offset
+		+ (t->getType() == TextureType::TEXTURE_3D ? layer * h * footprint.Footprint.RowPitch : 0);
+	const bool red = t->getFormat() == PixelFormat::R_FLOAT && t->getType() != TextureType::DEPTH;
+	for (size_t y = 0; y < h; ++y) {
 		if (packed) {
 			DecodePackedFloatTexels(t->getFormat(), src + y * footprint.Footprint.RowPitch, w, values.data() + y * w * channels);
 		}
@@ -1016,18 +1049,28 @@ std::vector<float> DriverDx12::readTexture(std::shared_ptr<TextureInterface> tex
 				values[y * w * 4 + x] = src[y * footprint.Footprint.RowPitch + x] / 255.f;
 			}
 		}
-        else if(red) for(size_t x=0;x<w;++x) {
-            float r;std::memcpy(&r,src+y*footprint.Footprint.RowPitch+x*sizeof(float),sizeof(float));
-            values[(y*w+x)*4]=r;values[(y*w+x)*4+3]=1;
-        } else std::memcpy(values.data()+y*w*channels,src+y*footprint.Footprint.RowPitch,w*channels*sizeof(float));
-    }
-    D3D12_RANGE written{0,0};buffer.Get()->Unmap(0,&written);return values;
+		else if (red) {
+			for (size_t x = 0; x < w; ++x) {
+				float r;
+				std::memcpy(&r, src + y * footprint.Footprint.RowPitch + x * sizeof(float), sizeof(float));
+				values[(y * w + x) * 4] = r;
+				values[(y * w + x) * 4 + 3] = 1;
+			}
+		}
+		else {
+			std::memcpy(values.data() + y * w * channels, src + y * footprint.Footprint.RowPitch, w * channels * sizeof(float));
+		}
+	}
+	D3D12_RANGE written { 0, 0 };
+	buffer.Get()->Unmap(0, &written);
+	return values;
 }
 
-void DriverDx12::dispatch(uint32_t x,uint32_t y,uint32_t z) {
-    applyState(); mCommandList->Dispatch(x,y,z);
-    auto barrier=CD3DX12_RESOURCE_BARRIER::UAV(nullptr);
-    mCommandList->ResourceBarrier(1,&barrier);
+void DriverDx12::dispatch(uint32_t x, uint32_t y, uint32_t z) {
+	applyState();
+	mCommandList->Dispatch(x, y, z);
+	auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(nullptr);
+	mCommandList->ResourceBarrier(1, &barrier);
 }
 
 void DriverDx12::dispatchMipCompute(uint32_t x, uint32_t y, uint32_t z, const std::shared_ptr<TextureInterface>& texture, uint32_t, uint32_t) {
@@ -1071,8 +1114,10 @@ void DriverDx12::activateAliasedRenderTarget(TextureInterface& texture) {
 }
 
 void DriverDx12::drawIndexed(uint32_t index_count, uint32_t index_offset, uint32_t instance_count) {
-    if (!index_count || !instance_count) return;
-    validateVertexDraw({index_count,index_offset,instance_count,0,0,true});
+	if (!index_count || !instance_count) {
+		return;
+	}
+	validateVertexDraw({ index_count, index_offset, instance_count, 0, 0, true });
 	applyState();
 	mCommandList->DrawIndexedInstanced((UINT)index_count, (UINT)instance_count, (UINT)index_offset, 0, 0);
 }
@@ -1090,7 +1135,8 @@ void DriverDx12::draw(const MeshInterface& mesh, PrimitiveMode primitive, uint32
 
 		setPrimitiveMode(primitive);
 		mesh.bind();
-        validateVertexDraw({static_cast<uint32_t>(mesh.getIndexCount()?mesh.getIndexCount():mesh.getVertexCount()),0,instances,0,0,mesh.getIndexCount()>0});
+		validateVertexDraw({ static_cast<uint32_t>(mesh.getIndexCount() ? mesh.getIndexCount() : mesh.getVertexCount()), 0, instances, 0, 0,
+			mesh.getIndexCount() > 0 });
 		applyState();
 		if (mesh.getIndexCount() > 0) {
 			mCommandList->DrawIndexedInstanced(mesh.getIndexCount(), instances, mesh.getOffset(), 0, 0);
@@ -1455,7 +1501,7 @@ void DriverDx12::createSwapChain(unsigned int windowID, unsigned width, unsigned
 	ctx.width = width;
 	ctx.height = height;
 
-	DXGI_SWAP_CHAIN_DESC1 descriptor{};
+	DXGI_SWAP_CHAIN_DESC1 descriptor {};
 	descriptor.BufferCount = swapchainImageCount();
 	descriptor.Width = ctx.width;
 	descriptor.Height = ctx.height;
@@ -1468,41 +1514,47 @@ void DriverDx12::createSwapChain(unsigned int windowID, unsigned width, unsigned
 	descriptor.Scaling = DXGI_SCALING_NONE;
 	descriptor.Stereo = false;
 
-	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDescriptor = {0};
+	DXGI_SWAP_CHAIN_FULLSCREEN_DESC fsDescriptor = { 0 };
 	fsDescriptor.Windowed = true;
 
 	Microsoft::WRL::ComPtr<IDXGISwapChain1> swapchain;
-    auto* presentationQueue=mCommandQueue.Get();
+	auto* presentationQueue = mCommandQueue.Get();
 #ifdef IKIGAI_USE_STREAMLINE
-    void* nativeQueue=nullptr;
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> nativeQueueOwner;
-    if(mDlssRuntime&&!streamline&&std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->nativeInterface(mCommandQueue.Get(),&nativeQueue)==sl::Result::eOk){
-        nativeQueueOwner.Attach(static_cast<ID3D12CommandQueue*>(nativeQueue));presentationQueue=nativeQueueOwner.Get();
-    }
-    if(streamline&&mDlssRuntime){
-        presentationQueue=mStreamlineQueueProxy.Get();
-        auto runtime=std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime);
-        void* factory=mDxgiFactory.Get();mDxgiFactory->AddRef();
-        const auto result=runtime->upgrade(&factory);
-        Microsoft::WRL::ComPtr<IDXGIFactory4> proxy;proxy.Attach(static_cast<IDXGIFactory4*>(factory));
-        StreamlineRuntime::check(result,"slUpgradeInterface factory");
-        ThrowIfFailed(proxy->CreateSwapChainForHwnd(presentationQueue,win.getContextDX12(),&descriptor,&fsDescriptor,nullptr,swapchain.GetAddressOf()));
-        ThrowIfFailed(swapchain.As(&ctx.mSwapChain));return;
-    }
+	void* nativeQueue = nullptr;
+	Microsoft::WRL::ComPtr<ID3D12CommandQueue> nativeQueueOwner;
+	if (mDlssRuntime && !streamline
+		&& std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime)->nativeInterface(mCommandQueue.Get(), &nativeQueue) == sl::Result::eOk) {
+		nativeQueueOwner.Attach(static_cast<ID3D12CommandQueue*>(nativeQueue));
+		presentationQueue = nativeQueueOwner.Get();
+	}
+	if (streamline && mDlssRuntime) {
+		presentationQueue = mStreamlineQueueProxy.Get();
+		auto runtime = std::static_pointer_cast<StreamlineRuntime>(mDlssRuntime);
+		void* factory = mDxgiFactory.Get();
+		mDxgiFactory->AddRef();
+		const auto result = runtime->upgrade(&factory);
+		Microsoft::WRL::ComPtr<IDXGIFactory4> proxy;
+		proxy.Attach(static_cast<IDXGIFactory4*>(factory));
+		StreamlineRuntime::check(result, "slUpgradeInterface factory");
+		ThrowIfFailed(
+			proxy->CreateSwapChainForHwnd(presentationQueue, win.getContextDX12(), &descriptor, &fsDescriptor, nullptr, swapchain.GetAddressOf()));
+		ThrowIfFailed(swapchain.As(&ctx.mSwapChain));
+		return;
+	}
 #endif
-    ThrowIfFailed(mDxgiFactory->CreateSwapChainForHwnd(presentationQueue, win.getContextDX12(),
-		&descriptor, &fsDescriptor, nullptr, swapchain.GetAddressOf()));
+	ThrowIfFailed(
+		mDxgiFactory->CreateSwapChainForHwnd(presentationQueue, win.getContextDX12(), &descriptor, &fsDescriptor, nullptr, swapchain.GetAddressOf()));
 
-    ThrowIfFailed(swapchain.As(&ctx.mSwapChain));
+	ThrowIfFailed(swapchain.As(&ctx.mSwapChain));
 }
 
 void DriverDx12::destroyDeferred(Microsoft::WRL::ComPtr<ID3D12DeviceChild> object) {
-    MarkGpuMemoryPendingDx12(object.Get());
+	MarkGpuMemoryPendingDx12(object.Get());
 	mDestroyDeffered.push_back(object);
 }
 
 void DriverDx12::destroyDeferred(Dx12Resource object) {
-    MarkGpuMemoryPendingDx12(object.Get());
+	MarkGpuMemoryPendingDx12(object.Get());
 	mDestroyDeferredResources.push_back(std::move(object));
 }
 
@@ -1552,30 +1604,40 @@ void DriverDx12::clearForDestroy() {
 	}
 	mPendingLegacyDescriptors.clear();
 	mRayFrameResources.clear();
-    while(!mRayDeferred.empty()||!mDestroyDeffered.empty()||!mDestroyDeferredResources.empty()) {
-        auto ray=std::move(mRayDeferred);mRayDeferred.clear();
-        auto objects=std::move(mDestroyDeffered);mDestroyDeffered.clear();
-        auto resources=std::move(mDestroyDeferredResources);mDestroyDeferredResources.clear();
-        ray.clear();objects.clear();resources.clear();
-    }
+	while (!mRayDeferred.empty() || !mDestroyDeffered.empty() || !mDestroyDeferredResources.empty()) {
+		auto ray = std::move(mRayDeferred);
+		mRayDeferred.clear();
+		auto objects = std::move(mDestroyDeffered);
+		mDestroyDeffered.clear();
+		auto resources = std::move(mDestroyDeferredResources);
+		mDestroyDeferredResources.clear();
+		ray.clear();
+		objects.clear();
+		resources.clear();
+	}
 }
 
-std::shared_ptr<TextureInterface> DriverDx12::createTexture(const std::string& path, bool generateMipmap, UTILS::IAllocator* allocator, TextureDeleter deleter) {
+std::shared_ptr<TextureInterface> DriverDx12::createTexture(
+	const std::string& path, bool generateMipmap, UTILS::IAllocator* allocator, TextureDeleter deleter) {
 	return TextureDx12::Create(path, allocator, deleter);
 }
-std::shared_ptr<TextureInterface> DriverDx12::createTextureAtlas(const std::string& path, bool generateMipmap, UTILS::IAllocator* allocator, TextureDeleter deleter) {
+std::shared_ptr<TextureInterface> DriverDx12::createTextureAtlas(
+	const std::string& path, bool generateMipmap, UTILS::IAllocator* allocator, TextureDeleter deleter) {
 	return TextureAtlasDx12::CreateAtlas(path, generateMipmap, allocator, deleter);
 }
 std::shared_ptr<TextureInterface> DriverDx12::createTexture(const TextureResource& res, UTILS::IAllocator* allocator, TextureDeleter deleter) {
 	return TextureDx12::Create(res, allocator, deleter);
 }
-std::shared_ptr<TextureInterface> DriverDx12::createTexture(const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator, TextureDeleter deleter) {
+std::shared_ptr<TextureInterface> DriverDx12::createTexture(
+	const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator, TextureDeleter deleter) {
 	return TextureDx12::Create(res, fileData, allocator, deleter);
 }
-std::shared_ptr<TextureInterface> DriverDx12::createTextureAtlas(const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator, TextureDeleter deleter) {
+std::shared_ptr<TextureInterface> DriverDx12::createTextureAtlas(
+	const TextureResource& res, const std::vector<std::vector<uint8_t>>& fileData, UTILS::IAllocator* allocator, TextureDeleter deleter) {
 	return TextureAtlasDx12::CreateAtlasFromResource(res, fileData, allocator, deleter);
 }
-std::shared_ptr<TextureInterface> DriverDx12::createTexture(const std::string& name, const std::vector<uint8_t>& data, bool generateMipmap, UTILS::IAllocator* allocator, TextureDeleter deleter) {
+std::shared_ptr<TextureInterface> DriverDx12::createTexture(
+	const std::string& name, const std::vector<uint8_t>& data, bool generateMipmap, UTILS::IAllocator* allocator, TextureDeleter deleter) {
 	TextureResource res;
 	res.path = name;
 	res.useMipmap = generateMipmap;
@@ -1775,7 +1837,7 @@ void DriverDx12::createDefaultFrameBuffer(unsigned int windowID, unsigned width,
 		Microsoft::WRL::ComPtr<ID3D12Resource> backbuffer;
 		ThrowIfFailed(ctx.mSwapChain->GetBuffer(i, IID_PPV_ARGS(backbuffer.GetAddressOf())));
 		auto tex = IKIGAI::MEMORY::MakeShared<TextureDx12, IKIGAI::MEMORY::Category::Texture>(width, height, PixelFormat::RGBA_INT, backbuffer);
-		auto fb = std::make_shared<FrameBufferDx12>(std::vector<std::shared_ptr<TextureInterface>>{tex}, nullptr);
+		auto fb = std::make_shared<FrameBufferDx12>(std::vector<std::shared_ptr<TextureInterface>> { tex }, nullptr);
 		ctx.mDefaultFb[i] = fb;
 	}
 
@@ -1817,11 +1879,8 @@ void DriverDx12::logOutputDisplayModes(IDXGIOutput* output, DXGI_FORMAT format) 
 	for (auto& x : modeList) {
 		UINT n = x.RefreshRate.Numerator;
 		UINT d = x.RefreshRate.Denominator;
-		std::wstring text =
-			L"Width = " + std::to_wstring(x.Width) + L" " +
-			L"Height = " + std::to_wstring(x.Height) + L" " +
-			L"Refresh = " + std::to_wstring(n) + L"/" + std::to_wstring(d) +
-			L"\n";
+		std::wstring text = L"Width = " + std::to_wstring(x.Width) + L" " + L"Height = " + std::to_wstring(x.Height) + L" " + L"Refresh = "
+			+ std::to_wstring(n) + L"/" + std::to_wstring(d) + L"\n";
 		OutputDebugStringW(text.c_str());
 	}
 }
@@ -1884,7 +1943,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DriverDx12::createNewState(const Sta
 	if (!depthMode) {
 		depthMode = Depth();
 	}
-	//const auto& blendMode = state.blend_mode;
+	// const auto& blendMode = state.blend_mode;
 
 	auto depthDescriptor = CD3DX12_DEPTH_STENCIL_DESC(D3D12_DEFAULT);
 	depthDescriptor.DepthEnable = state.mDepth.has_value();
@@ -1910,22 +1969,27 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DriverDx12::createNewState(const Sta
 
 		blend.BlendEnable = state.mBlend.has_value();
 
-		if (!blend.BlendEnable)
+		if (!blend.BlendEnable) {
 			continue;
+		}
 
 		const auto& blend_mode_nn = state.mBlend.value();
 
-		if ((blend_mode_nn.mColorMask & Color::R) != Color::NONE)
+		if ((blend_mode_nn.mColorMask & Color::R) != Color::NONE) {
 			blend.RenderTargetWriteMask |= D3D12_COLOR_WRITE_ENABLE_RED;
+		}
 
-		if ((blend_mode_nn.mColorMask & Color::G) != Color::NONE)
+		if ((blend_mode_nn.mColorMask & Color::G) != Color::NONE) {
 			blend.RenderTargetWriteMask |= D3D12_COLOR_WRITE_ENABLE_GREEN;
+		}
 
-		if ((blend_mode_nn.mColorMask & Color::B) != Color::NONE)
+		if ((blend_mode_nn.mColorMask & Color::B) != Color::NONE) {
 			blend.RenderTargetWriteMask |= D3D12_COLOR_WRITE_ENABLE_BLUE;
+		}
 
-		if ((blend_mode_nn.mColorMask & Color::A) != Color::NONE)
+		if ((blend_mode_nn.mColorMask & Color::A) != Color::NONE) {
 			blend.RenderTargetWriteMask |= D3D12_COLOR_WRITE_ENABLE_ALPHA;
+		}
 
 		blend.SrcBlend = BlendMap.at(blend_mode_nn.mColorSrc);
 		blend.DestBlend = BlendMap.at(blend_mode_nn.mColorDst);
@@ -1976,7 +2040,6 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DriverDx12::createNewState(const Sta
 				.InstanceDataStepRate = 0 // TODO: (UINT)(input_layout.rate == InputLayout::Rate::Vertex ? 0 : 1)
 			});
 		}
-
 	}
 
 	std::shared_ptr<FrameBufferDx12> fb = mCurrentState.mFrameBuffer ? mCurrentState.mFrameBuffer : getDefaultFrameBuffer();
@@ -2021,7 +2084,7 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> DriverDx12::createNewState(const Sta
 	if (ID3DBlob* ds = shaderBlob(ShaderType::TESSELLATION_EVALUATION)) {
 		psoDescriptor.DS = CD3DX12_SHADER_BYTECODE(ds);
 	}
-	psoDescriptor.InputLayout = {input_elements.data(), (UINT)input_elements.size()};
+	psoDescriptor.InputLayout = { input_elements.data(), (UINT)input_elements.size() };
 	psoDescriptor.NodeMask = 1;
 	psoDescriptor.PrimitiveTopologyType = topology;
 	psoDescriptor.pRootSignature = state.mShader->getRootSignature().Get();
@@ -2194,9 +2257,10 @@ void DriverDx12::applyState() {
 	std::shared_ptr<FrameBufferDx12> fb;
 
 	if (!mCurrentState.mFrameBuffer) {
-		//default fb
+		// default fb
 		fb = getDefaultFrameBuffer();
-	} else {
+	}
+	else {
 		fb = mCurrentState.mFrameBuffer;
 	}
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtv_descriptors;
@@ -2215,44 +2279,54 @@ void DriverDx12::applyState() {
 	auto dsv_descriptor = fb->getDepthHeap()->GetCPUDescriptorHandleForHeapStart();
 
 	if (!isCompute) {
-		std::static_pointer_cast<TextureDx12>(fb->getDepth())->setState(mCommandList.Get(),D3D12_RESOURCE_STATE_DEPTH_WRITE);
-		mCommandList->OMSetRenderTargets((UINT)rtv_descriptors.size(), rtv_descriptors.data(),
-			FALSE, &dsv_descriptor);
+		std::static_pointer_cast<TextureDx12>(fb->getDepth())->setState(mCommandList.Get(), D3D12_RESOURCE_STATE_DEPTH_WRITE);
+		mCommandList->OMSetRenderTargets((UINT)rtv_descriptors.size(), rtv_descriptors.data(), FALSE, &dsv_descriptor);
 	}
 
 	if (isCompute) {
 		mCommandList->SetComputeRootSignature(shader->getRootSignature().Get());
-	} else {
+	}
+	else {
 		mCommandList->SetGraphicsRootSignature(shader->getRootSignature().Get());
 	}
-    if (shader->bindingMode()==ShaderBindingMode::Bindless) {
-        ID3D12DescriptorHeap* heaps[]={mDescriptorHeap.Get(),mBindlessSamplerHeap.Get()};
-        mCommandList->SetDescriptorHeaps(2,heaps);
-    } else mCommandList->SetDescriptorHeaps(1, mDescriptorHeap.GetAddressOf());
+	if (shader->bindingMode() == ShaderBindingMode::Bindless) {
+		ID3D12DescriptorHeap* heaps[] = { mDescriptorHeap.Get(), mBindlessSamplerHeap.Get() };
+		mCommandList->SetDescriptorHeaps(2, heaps);
+	}
+	else {
+		mCommandList->SetDescriptorHeaps(1, mDescriptorHeap.GetAddressOf());
+	}
 
 	for (const auto& uniform : shader->getReflection().mUniforms) {
 		const auto rootId = static_cast<UINT>(uniform.mRootId);
 		const auto binding = uniform.mBind;
-        if (shader->isBindlessResource(uniform)) {
-            const auto snapshot=bindlessSnapshot(uniform,shader->descriptorCount(uniform));
-            if (isCompute) mCommandList->SetComputeRootDescriptorTable(rootId,snapshot.first);
-            else mCommandList->SetGraphicsRootDescriptorTable(rootId,snapshot.first);
-            if (uniform.mSamplerRootId!=UINT32_MAX) {
-                if (isCompute) mCommandList->SetComputeRootDescriptorTable(uniform.mSamplerRootId,snapshot.second);
-                else mCommandList->SetGraphicsRootDescriptorTable(uniform.mSamplerRootId,snapshot.second);
-            }
-            continue;
-        }
-		
-		if (uniform.mType == ShaderReflection::UniformType::SAMPLER_2D ||
-			uniform.mType == ShaderReflection::UniformType::SAMPLER_CUBE || 
-			uniform.mType == ShaderReflection::UniformType::SAMPLER_3D || 
-			uniform.mType == ShaderReflection::UniformType::SAMPLER_2D_ARRAY) {
+		if (shader->isBindlessResource(uniform)) {
+			const auto snapshot = bindlessSnapshot(uniform, shader->descriptorCount(uniform));
+			if (isCompute) {
+				mCommandList->SetComputeRootDescriptorTable(rootId, snapshot.first);
+			}
+			else {
+				mCommandList->SetGraphicsRootDescriptorTable(rootId, snapshot.first);
+			}
+			if (uniform.mSamplerRootId != UINT32_MAX) {
+				if (isCompute) {
+					mCommandList->SetComputeRootDescriptorTable(uniform.mSamplerRootId, snapshot.second);
+				}
+				else {
+					mCommandList->SetGraphicsRootDescriptorTable(uniform.mSamplerRootId, snapshot.second);
+				}
+			}
+			continue;
+		}
+
+		if (uniform.mType == ShaderReflection::UniformType::SAMPLER_2D || uniform.mType == ShaderReflection::UniformType::SAMPLER_CUBE
+			|| uniform.mType == ShaderReflection::UniformType::SAMPLER_3D || uniform.mType == ShaderReflection::UniformType::SAMPLER_2D_ARRAY) {
 			const auto& texture = mTextures.at(binding);
 			texture->setSampledState(mCommandList.Get());
 			if (isCompute) {
 				mCommandList->SetComputeRootDescriptorTable(rootId, texture->getGpuDescriptorHandle());
-			} else {
+			}
+			else {
 				mCommandList->SetGraphicsRootDescriptorTable(rootId, texture->getGpuDescriptorHandle());
 			}
 		}
@@ -2271,19 +2345,20 @@ void DriverDx12::applyState() {
 				}
 			}
 			mCommandList->SetComputeRootDescriptorTable(rootId, uav);
-        }
+		}
 		else if (uniform.mType == ShaderReflection::UniformType::UNIFORM_BUFFER) {
 			auto ubo = mUniformBuffers.at(binding);
 			const auto address = ubo->getGpuAddress();
 			if (isCompute) {
 				mCommandList->SetComputeRootConstantBufferView(rootId, address);
-			} else {
+			}
+			else {
 				mCommandList->SetGraphicsRootConstantBufferView(rootId, address);
 			}
 		}
 		else if (uniform.mType == ShaderReflection::UniformType::STORAGE_BUFFER) {
 			auto ssbo = mStorageBuffers.at(binding);
-			if (shader->bindingMode()==ShaderBindingMode::Bindless && uniform.mReadOnly) {
+			if (shader->bindingMode() == ShaderBindingMode::Bindless && uniform.mReadOnly) {
 				const auto view = bindlessBufferView(ssbo);
 				if (isCompute) {
 					mCommandList->SetComputeRootDescriptorTable(rootId, view);
@@ -2304,7 +2379,8 @@ void DriverDx12::applyState() {
 			}
 			if (isCompute) {
 				mCommandList->SetComputeRootDescriptorTable(rootId, uav);
-			} else {
+			}
+			else {
 				mCommandList->SetGraphicsRootDescriptorTable(rootId, uav);
 			}
 		}
@@ -2317,19 +2393,22 @@ void DriverDx12::applyState() {
 	}
 
 	flushPushConstants(isCompute);
-    if(isCompute) return;
+	if (isCompute) {
+		return;
+	}
 
 	if (shader->mBlobs.contains(ShaderType::TESSELLATION_CONTROL) && shader->mBlobs.at(ShaderType::TESSELLATION_CONTROL)) {
 		mCommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_3_CONTROL_POINT_PATCHLIST);
 		clearDirty(Dirty::PRIMITIVE_MODE);
-	} else if (isDirty(Dirty::PRIMITIVE_MODE)) {
+	}
+	else if (isDirty(Dirty::PRIMITIVE_MODE)) {
 		clearDirty(Dirty::PRIMITIVE_MODE);
 		mCommandList->IASetPrimitiveTopology(TopologyMap.at(mPrimitiveMode));
 	}
 	if (isDirty(Dirty::VIEWPORT)) {
 		clearDirty(Dirty::VIEWPORT);
-		const auto viewport = mViewport.value_or(Viewport{{0.0f, 0.0f}, {static_cast<float>(mWidth), static_cast<float>(mHeight)}});
-		D3D12_VIEWPORT vp{
+		const auto viewport = mViewport.value_or(Viewport { { 0.0f, 0.0f }, { static_cast<float>(mWidth), static_cast<float>(mHeight) } });
+		D3D12_VIEWPORT vp {
 			.TopLeftX = viewport.mPosition.x,
 			.TopLeftY = viewport.mPosition.y,
 			.Width = viewport.mSize.x,
@@ -2341,40 +2420,38 @@ void DriverDx12::applyState() {
 	}
 	if (isDirty(Dirty::SCISSOR)) {
 		clearDirty(Dirty::SCISSOR);
-		const auto scissor = mScissor.value_or(Scissor{{0.0f, 0.0f}, {static_cast<float>(fb->getWidth()), static_cast<float>(fb->getHeight())}});
-		D3D12_RECT rect {
-			.left = static_cast<LONG>(scissor.mPosition.x),
+		const auto scissor
+			= mScissor.value_or(Scissor { { 0.0f, 0.0f }, { static_cast<float>(fb->getWidth()), static_cast<float>(fb->getHeight()) } });
+		D3D12_RECT rect { .left = static_cast<LONG>(scissor.mPosition.x),
 			.top = static_cast<LONG>(scissor.mPosition.y),
 			.right = static_cast<LONG>(scissor.mPosition.x + scissor.mSize.x),
-			.bottom = static_cast<LONG>(scissor.mPosition.y + scissor.mSize.y)
-		};
+			.bottom = static_cast<LONG>(scissor.mPosition.y + scissor.mSize.y) };
 		mCommandList->RSSetScissorRects(1, &rect);
 	}
 	if (isDirty(Dirty::VERTEX_BUFFER)) {
 		clearDirty(Dirty::VERTEX_BUFFER);
-        if (mVertexLayout) {
-            for (const auto& [binding,buffer] : mVertexStreams) {
-                const auto native=std::static_pointer_cast<VertexBufferDx12>(buffer);
-                auto view=D3D12_VERTEX_BUFFER_VIEW{native->getBuffer()->GetGPUVirtualAddress(),static_cast<UINT>(buffer->getSizeByte()),static_cast<UINT>(buffer->getStride())};
-                mCommandList->IASetVertexBuffers(binding,1,&view);
-            }
-        } else if (mVertexBuffer) {
-		auto view = D3D12_VERTEX_BUFFER_VIEW{
-			.BufferLocation = mVertexBuffer->getBuffer()->GetGPUVirtualAddress(),
-			.SizeInBytes = static_cast<unsigned>(mVertexBuffer->getSizeByte()),
-			.StrideInBytes = static_cast<unsigned>(mVertexBuffer->getStride()),
-		};
-		mCommandList->IASetVertexBuffers(0, 1, &view);
-        }
-
+		if (mVertexLayout) {
+			for (const auto& [binding, buffer] : mVertexStreams) {
+				const auto native = std::static_pointer_cast<VertexBufferDx12>(buffer);
+				auto view = D3D12_VERTEX_BUFFER_VIEW { native->getBuffer()->GetGPUVirtualAddress(), static_cast<UINT>(buffer->getSizeByte()),
+					static_cast<UINT>(buffer->getStride()) };
+				mCommandList->IASetVertexBuffers(binding, 1, &view);
+			}
+		}
+		else if (mVertexBuffer) {
+			auto view = D3D12_VERTEX_BUFFER_VIEW {
+				.BufferLocation = mVertexBuffer->getBuffer()->GetGPUVirtualAddress(),
+				.SizeInBytes = static_cast<unsigned>(mVertexBuffer->getSizeByte()),
+				.StrideInBytes = static_cast<unsigned>(mVertexBuffer->getStride()),
+			};
+			mCommandList->IASetVertexBuffers(0, 1, &view);
+		}
 	}
 	if (mIndexBuffer && isDirty(Dirty::INDEX_BUFFER)) {
 		clearDirty(Dirty::INDEX_BUFFER);
-		D3D12_INDEX_BUFFER_VIEW bufferView{
-			.BufferLocation = mIndexBuffer->getBuffer()->GetGPUVirtualAddress(),
+		D3D12_INDEX_BUFFER_VIEW bufferView { .BufferLocation = mIndexBuffer->getBuffer()->GetGPUVirtualAddress(),
 			.SizeInBytes = static_cast<unsigned>(mIndexBuffer->getSizeByte()),
-			.Format = mIndexBuffer->getStride() == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT
-		};
+			.Format = mIndexBuffer->getStride() == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT };
 		mCommandList->IASetIndexBuffer(&bufferView);
 	}
 }
@@ -2392,14 +2469,18 @@ std::shared_ptr<ShaderInterface> DriverDx12::createShader(const ShaderResource& 
 
 std::shared_ptr<ModelInterface> DriverDx12::createModel(const std::string& path, UTILS::IAllocator* allocator, ModelDeleter deleter) {
 	ModelDeleter finalDeleter = [deleter](ModelInterface* m) {
-		if (deleter) deleter(m);
+		if (deleter) {
+			deleter(m);
+		}
 	};
 	return AllocateModel<ModelDx12>(allocator, std::move(finalDeleter), path);
 }
 
 std::shared_ptr<MaterialInterface> DriverDx12::createMaterial(const MaterialResource& res, UTILS::IAllocator* allocator, MaterialDeleter deleter) {
 	MaterialDeleter finalDeleter = [deleter](MaterialInterface* m) {
-		if (deleter) deleter(m);
+		if (deleter) {
+			deleter(m);
+		}
 	};
 	return AllocateMaterial<MaterialDx12>(allocator, std::move(finalDeleter), res);
 }
@@ -2412,7 +2493,8 @@ std::shared_ptr<StorageBufferInterface> DriverDx12::createStorageBuffer(const vo
 	return std::make_shared<StorageBufferDx12>(data, size, stride);
 }
 
-std::shared_ptr<FrameBufferInterface> DriverDx12::createFrameBuffer(const std::vector<std::shared_ptr<TextureInterface>>& textures, std::shared_ptr<TextureInterface> depth, unsigned mip, unsigned layer) {
+std::shared_ptr<FrameBufferInterface> DriverDx12::createFrameBuffer(
+	const std::vector<std::shared_ptr<TextureInterface>>& textures, std::shared_ptr<TextureInterface> depth, unsigned mip, unsigned layer) {
 	return std::make_shared<FrameBufferDx12>(textures, depth, mip, layer);
 }
 
@@ -2681,17 +2763,23 @@ std::pair<D3D12_GPU_DESCRIPTOR_HANDLE, D3D12_GPU_DESCRIPTOR_HANDLE> DriverDx12::
 }
 
 void IKIGAI::RENDER::DriverDx12::draw(const DrawArguments& args) {
-    if (!args.count || !args.instanceCount) return;
-    validateVertexDraw(args);
-    applyState();
-    if (args.indexed) mCommandList->DrawIndexedInstanced(args.count,args.instanceCount,args.first,args.baseVertex,args.firstInstance);
-    else mCommandList->DrawInstanced(args.count,args.instanceCount,args.first,args.firstInstance);
+	if (!args.count || !args.instanceCount) {
+		return;
+	}
+	validateVertexDraw(args);
+	applyState();
+	if (args.indexed) {
+		mCommandList->DrawIndexedInstanced(args.count, args.instanceCount, args.first, args.baseVertex, args.firstInstance);
+	}
+	else {
+		mCommandList->DrawInstanced(args.count, args.instanceCount, args.first, args.firstInstance);
+	}
 }
 
 namespace {
 const bool kRegisterDx12Backend = [] {
-	IKIGAI::RENDER::RegisterRenderBackend(IKIGAI::RENDER::RenderSettings::Backend::DIRECTX12,
-		[] { return std::make_unique<IKIGAI::RENDER::DriverDx12>(); });
+	IKIGAI::RENDER::RegisterRenderBackend(
+		IKIGAI::RENDER::RenderSettings::Backend::DIRECTX12, [] { return std::make_unique<IKIGAI::RENDER::DriverDx12>(); });
 	return true;
 }();
 }

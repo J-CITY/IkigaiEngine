@@ -21,7 +21,10 @@ MAC_BREW_PACKAGES = (
 
 LINUX_PACMAN_PACKAGES = (
     "cmake",
+    "ninja",
     "base-devel",
+    "zlib",
+    "openssl",
     "mesa",
     "glew",
     "vulkan-headers",
@@ -36,7 +39,11 @@ LINUX_PACMAN_PACKAGES = (
 
 LINUX_APT_PACKAGES = (
     "cmake",
+    "ninja-build",
     "build-essential",
+    "pkg-config",
+    "zlib1g-dev",
+    "libssl-dev",
     "libgl1-mesa-dev",
     "libglew-dev",
     "libvulkan-dev",

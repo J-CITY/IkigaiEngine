@@ -1,9 +1,0 @@
-{
-  "releaseId": "development-1",
-  "platform": "any",
-  "roots": ["../../assets/engine", "../../assets/game"],
-  "packs": [],
-  "atlasGroups": {
-    "ui": {"size": 2048, "padding": 2, "mipmaps": false, "colorSpace": "srgb"}
-  }
-}

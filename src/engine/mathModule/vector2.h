@@ -1,7 +1,9 @@
 #pragma once
 // Lightweight canonical Vector2 math. Include math.h when serde is needed.
+#include <array>
 #include <cmath>
 #include <stdexcept>
+#include <utility>
 
 namespace IKIGAI::MATH {
 constexpr int math_max(int a) {
@@ -12,56 +14,86 @@ template <typename... Args> constexpr int math_max(int a, Args... args) {
 	return a > b ? a : b;
 }
 
+// A swizzle view owns pointers to live scalar members, never an overlapping union.
 template <template <typename> class TT, typename T, int... Indexes> class Swizzle {
-	T v[math_max(Indexes...) + 1];
-
 public:
-	TT<T>& operator=(const TT<T>& rhs) {
-		int indexes[] = { Indexes... }; // unpack
-		for (int i = 0; i < sizeof...(Indexes); i++) {
-			v[indexes[i]] = rhs[i]; // access pack element
+	explicit Swizzle(std::array<T*, sizeof...(Indexes)> values)
+		: mValues(values) { }
+	Swizzle& operator=(const TT<T>& rhs) {
+		const TT<T> copy(rhs);
+		for (size_t i = 0; i < mValues.size(); ++i) {
+			*mValues[i] = copy[static_cast<int>(i)];
 		}
-		return *reinterpret_cast<TT<T>*>(this);
+		return *this;
+	}
+	Swizzle& operator=(const Swizzle& rhs) {
+		return *this = static_cast<TT<T>>(rhs);
 	}
 	operator TT<T>() const {
-		// unpack
-		return TT<T>(v[Indexes]...);
+		return read(std::make_index_sequence<sizeof...(Indexes)> {});
 	}
+
+private:
+	template <size_t... I> TT<T> read(std::index_sequence<I...>) const {
+		return TT<T>(*mValues[I]...);
+	}
+	std::array<T*, sizeof...(Indexes)> mValues;
 };
 
 template <typename T> struct Vector2 {
-	union {
-		T data[2];
-		struct {
-			T x, y;
-		};
-		struct {
-			T width, heights;
-		};
-		Swizzle<Vector2, T, 0, 0> xx;
-		Swizzle<Vector2, T, 0, 0> rr;
-		Swizzle<Vector2, T, 0, 1> xy;
-		Swizzle<Vector2, T, 0, 1> rg;
-		Swizzle<Vector2, T, 1, 0> yx;
-		Swizzle<Vector2, T, 1, 0> gr;
-		Swizzle<Vector2, T, 1, 1> yy;
-		Swizzle<Vector2, T, 1, 1> gg;
-	};
-	Vector2<T>()
+	T x {};
+	T y {};
+	T& width() {
+		return x;
+	}
+	const T& width() const {
+		return x;
+	}
+	T& heights() {
+		return y;
+	}
+	const T& heights() const {
+		return y;
+	}
+	template <template <typename> class Result, int... Indices> auto swizzle() & {
+		return Swizzle<Result, T, Indices...>({ &(*this)[Indices]... });
+	}
+	template <template <typename> class Result, int... Indices> Result<T> swizzle() const& {
+		return Result<T>((*this)[Indices]...);
+	}
+#define IKIGAI_VECTOR_SWIZZLE(Result, Name, ...)                                                                                                     \
+	auto Name() & {                                                                                                                                  \
+		return swizzle<Result, __VA_ARGS__>();                                                                                                       \
+	}                                                                                                                                                \
+	Result<T> Name() const& {                                                                                                                        \
+		return swizzle<Result, __VA_ARGS__>();                                                                                                       \
+	}
+	IKIGAI_VECTOR_SWIZZLE(Vector2, xx, 0, 0)
+	IKIGAI_VECTOR_SWIZZLE(Vector2, rr, 0, 0)
+	IKIGAI_VECTOR_SWIZZLE(Vector2, xy, 0, 1)
+	IKIGAI_VECTOR_SWIZZLE(Vector2, rg, 0, 1)
+	IKIGAI_VECTOR_SWIZZLE(Vector2, yx, 1, 0)
+	IKIGAI_VECTOR_SWIZZLE(Vector2, gr, 1, 0)
+	IKIGAI_VECTOR_SWIZZLE(Vector2, yy, 1, 1)
+	IKIGAI_VECTOR_SWIZZLE(Vector2, gg, 1, 1)
+#undef IKIGAI_VECTOR_SWIZZLE
+	std::array<T, 2> toArray() const {
+		return { x, y };
+	}
+	void fromArray(const std::array<T, 2>& values) {
+		x = values[0];
+		y = values[1];
+	}
+
+	Vector2()
 		: x(0)
 		, y(0) { };
-	Vector2<T>(T _v)
+	Vector2(T _v)
 		: x(_v)
 		, y(_v) { };
-	Vector2<T>(T _x, T _y)
+	Vector2(T _x, T _y)
 		: x(_x)
 		, y(_y) { };
-	operator T*() {
-		return data;
-	};
-	operator const T*() const {
-		return static_cast<const T*>(data);
-	};
 
 	T getX() {
 		return x;

@@ -675,7 +675,7 @@ Task<> SceneManager::instantiatePrefab(std::shared_ptr<SceneLoadState> state, in
 		auto entries = target->serializeObjects();
 		int root = 0;
 		do {
-			root = static_cast<int>(ECS::Entity().getUniqueId());
+			root = static_cast<int>(ECS::Entity::create().getUniqueId());
 		} while (root <= 0 || target->findObjectByID(ECS::Entity(ECS::Entity::ID(root))));
 		nlohmann::json entry { { "Prefab", state->path }, { "Id", root }, { "ParentId", parentId } };
 		entries.push_back(entry);

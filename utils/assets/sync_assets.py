@@ -482,7 +482,12 @@ def pull(root_dir=None, source=None, mirror=False, dry_run=False):
             payload = payload_dir(work)
 
         print(("Mirroring" if mirror else "Merging") + f" {payload} -> {dest}")
-        merge_tree(payload, dest, mirror=mirror)
+        # Engine sources live in git. Drive owns game content and the heavy demo packs.
+        if __package__:
+            from .content_packs import merge_drive_payload
+        else:
+            from content_packs import merge_drive_payload
+        merge_drive_payload(payload, root_dir, mirror=mirror)
         write_stamp(dest, source)
         print(f"Assets ready: {dest}")
         return dest
@@ -510,8 +515,14 @@ def pack(root_dir=None, source=None, use_zip_pull=False, dry_run=False):
     if os.path.isfile(zip_file):
         os.remove(zip_file)
     with zipfile.ZipFile(zip_file, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for file_path in iter_asset_files(dest):
-            archive.write(file_path, os.path.relpath(file_path, dest).replace("\\", "/"))
+        if __package__:
+            from .content_packs import iter_drive_archive
+        else:
+            from content_packs import iter_drive_archive
+        for file_path, archived in iter_drive_archive(root_dir):
+            # Virtual geometry pages must remain directly addressable inside the archive.
+            compression = zipfile.ZIP_STORED if str(file_path).lower().endswith(".vmesh") else zipfile.ZIP_DEFLATED
+            archive.write(file_path, archived, compress_type=compression)
 
     source["version"] = version
     source["sha256"] = file_sha256(zip_file)

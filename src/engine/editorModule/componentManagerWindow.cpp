@@ -671,7 +671,7 @@ void ComponentInspectorWindow::drawComponent(std::shared_ptr<ECS::Object> select
 				case UTILS::WidgetType::DRAG_FLOAT_3: {
 					if (field.typeId == UTILS::ReflectionManager::GetTypeId<MATH::Vector2f>()) {
 						MATH::Vector2f val = field.get<MATH::Vector2f>(component.get());
-						int state = IMGUI::DrawCombineVecEdit(fieldName, 2, reinterpret_cast<float*>(&val), min, max, step, false);
+						int state = IMGUI::DrawCombineVecEdit(fieldName, 2, val, min, max, step, false);
 						changed = state & 1;
 						activated = state & 2;
 						deactivated = state & 4;
@@ -681,7 +681,7 @@ void ComponentInspectorWindow::drawComponent(std::shared_ptr<ECS::Object> select
 					}
 					else {
 						MATH::Vector3f val = field.get<MATH::Vector3f>(component.get());
-						int state = IMGUI::DrawCombineVecEdit(fieldName, 3, reinterpret_cast<float*>(&val), min, max, step, false);
+						int state = IMGUI::DrawCombineVecEdit(fieldName, 3, val, min, max, step, false);
 						changed = state & 1;
 						activated = state & 2;
 						deactivated = state & 4;
@@ -693,7 +693,7 @@ void ComponentInspectorWindow::drawComponent(std::shared_ptr<ECS::Object> select
 				}
 				case UTILS::WidgetType::DRAG_FLOAT_4: {
 					MATH::Vector4f val = field.get<MATH::Vector4f>(component.get());
-					int state = IMGUI::DrawCombineVecEdit(fieldName, 4, reinterpret_cast<float*>(&val), min, max, step, false);
+					int state = IMGUI::DrawCombineVecEdit(fieldName, 4, val, min, max, step, false);
 					changed = state & 1;
 					activated = state & 2;
 					deactivated = state & 4;
@@ -704,7 +704,7 @@ void ComponentInspectorWindow::drawComponent(std::shared_ptr<ECS::Object> select
 				}
 				case UTILS::WidgetType::DRAG_COLOR_3: {
 					MATH::Vector3f val = field.get<MATH::Vector3f>(component.get());
-					int state = IMGUI::DrawCombineVecEdit(fieldName, 3, reinterpret_cast<float*>(&val), min, max, step, true);
+					int state = IMGUI::DrawCombineVecEdit(fieldName, 3, val, min, max, step, true);
 					changed = state & 1;
 					activated = state & 2;
 					deactivated = state & 4;
@@ -715,7 +715,7 @@ void ComponentInspectorWindow::drawComponent(std::shared_ptr<ECS::Object> select
 				}
 				case UTILS::WidgetType::DRAG_COLOR_4: {
 					MATH::Vector4f val = field.get<MATH::Vector4f>(component.get());
-					int state = IMGUI::DrawCombineVecEdit(fieldName, 4, reinterpret_cast<float*>(&val), min, max, step, true);
+					int state = IMGUI::DrawCombineVecEdit(fieldName, 4, val, min, max, step, true);
 					changed = state & 1;
 					activated = state & 2;
 					deactivated = state & 4;

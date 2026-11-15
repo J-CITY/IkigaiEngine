@@ -176,7 +176,7 @@ namespace CORE {
 		std::unique_ptr<RESOURCES::SkeletonAnimationLoader> skeletonAnimationLoader;
 		std::unique_ptr<VG::VirtualMeshLoader> virtualMeshLoader;
 		// Destroy workers first even when construction throws before ~Core runs.
-		std::unique_ptr<TASK::TaskSystem> taskManger = {};
+		std::unique_ptr<TASK::TaskSystem> taskManger;
 	};
 }
 }

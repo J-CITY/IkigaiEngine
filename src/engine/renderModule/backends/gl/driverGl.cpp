@@ -299,7 +299,7 @@ void IKIGAI::RENDER::DriverGl::clear(bool clearColor, bool clearDepth, bool clea
 
 	if (clearColor) {
 		flags |= GL_COLOR_BUFFER_BIT;
-		glClearColor(mClearColor.r, mClearColor.g, mClearColor.b, mClearColor.a);
+		glClearColor(mClearColor.x, mClearColor.y, mClearColor.z, mClearColor.w);
 	}
 	if (clearDepth) {
 		flags |= GL_DEPTH_BUFFER_BIT;

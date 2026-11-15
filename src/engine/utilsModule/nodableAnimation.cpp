@@ -20,7 +20,7 @@ bool bindTransformProperty(ECS::Entity id, std::string_view nodeName, std::strin
 	auto& scene = RESOURCES::ServiceManager::Get<SCENE_SYSTEM::SceneManager>().getCurrentScene();
 	const auto object = scene.findObjectByID(id);
 	if (!object) {
-		LOG_ERROR << nodeName << ": missing object id " << id.getUniqueId();
+		LOG_ERROR << nodeName << ": missing object id " << id.getUniqueId().value();
 		return false;
 	}
 	auto& world = object->getWorld();

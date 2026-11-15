@@ -12,7 +12,7 @@ public:
 
 private:
 	struct State;
-	std::unique_ptr<State> mState = {};
+	std::unique_ptr<State> mState;
 };
 }
 #endif

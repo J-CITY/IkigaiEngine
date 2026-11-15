@@ -159,6 +159,8 @@ inline void Remap(Json& object, const IdMap& ids) {
 	});
 }
 
+void ValidateObject(const Json& object);
+
 inline void ValidateHierarchy(Json objects, int root = 0, bool requireTransform = true) {
 	if (!objects.is_array()) {
 		throw std::runtime_error("Objects must be an array");
@@ -170,6 +172,7 @@ inline void ValidateHierarchy(Json objects, int root = 0, bool requireTransform 
 		if (IsPrefabRef(object)) {
 			throw std::runtime_error("Nested prefabs are not supported; unpack first");
 		}
+		ValidateObject(object);
 		const auto id = Id(object.at("Id"));
 		if (!indices.emplace(id, i).second) {
 			throw std::runtime_error("Duplicate entity ID: " + std::to_string(id));

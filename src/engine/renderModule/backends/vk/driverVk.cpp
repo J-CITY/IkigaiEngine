@@ -2719,7 +2719,7 @@ void DriverVk::clear(bool clearColor, bool clearDepth, bool clearStencil) {
 
 	if (clearColor) {
 
-		auto clear_color_value = vk::ClearColorValue().setFloat32({ mClearColor.r, mClearColor.g, mClearColor.b, mClearColor.a });
+		auto clear_color_value = vk::ClearColorValue().setFloat32({ mClearColor.x, mClearColor.y, mClearColor.z, mClearColor.w });
 
 		auto clear_value = vk::ClearValue().setColor(clear_color_value);
 

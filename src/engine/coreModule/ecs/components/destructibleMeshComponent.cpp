@@ -333,7 +333,7 @@ void DestructibleMeshComponent::release(bool clearDamage) {
 				runtime->statistics.gpuBytes -= piece.gpuBytes;
 			}
 			if (mScene && !mSceneLifetime.expired()) {
-				if (auto renderer = piece.object->getComponent<ModelRenderer>()) {
+				if (auto renderer = piece.object->template getComponent<ModelRenderer>()) {
 					mScene->removeFromBVH(renderer.get());
 				}
 			}

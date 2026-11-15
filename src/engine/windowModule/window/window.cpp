@@ -1001,8 +1001,21 @@ bool Window::isClosed() const {
 	return m_app->destroyRequested != 0;
 }
 
+bool Window::hasFocus() const {
+	return appState.Resumed && oxr_is_session_focused();
+}
+
+void Window::setCursorVisible(bool, bool) const {
+	// The OpenXR view has no desktop cursor to hide or lock.
+}
+
 MATH::Vector2u Window::getSize() const {
 	return mSize;
+}
+
+MATH::Vector2u Window::getPixelSize() const {
+	// The OpenXR viewport size is already expressed in pixels.
+	return getSize();
 }
 
 void Window::setSize(unsigned int width, unsigned int height) {

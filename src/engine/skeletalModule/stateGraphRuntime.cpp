@@ -1,6 +1,7 @@
 #include "stateGraphRuntime.h"
 #include "characterAnimation.h"
 #include "stateGraphDescriptor.h"
+#include "utilsModule/expressions/expressionDescriptor.h"
 #include <algorithm>
 #include <cmath>
 #include <serdepp/adaptor/nlohmann_json.hpp>

@@ -64,6 +64,13 @@ const ComponentCatalog::Record* ComponentCatalog::findInJson(const nlohmann::jso
 		if (!record) {
 			continue;
 		}
+		if (!item.value().is_string()) {
+			throw std::runtime_error("Component type identifier must be a string: " + item.key());
+		}
+		const auto& identifier = item.value().get_ref<const std::string&>();
+		if (identifier != record->name && identifier != record->typeName) {
+			throw std::runtime_error("Component type identifier does not match its discriminator: " + item.key());
+		}
 		if (found) {
 			throw std::runtime_error("Component descriptor has multiple type keys");
 		}

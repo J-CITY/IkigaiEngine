@@ -31,12 +31,12 @@ python run_vs.py --use_file_watcher 1
 python utils/setup_env.py
 --------------------------------------------------------------
 - Android
-Open android/out in Android Studio (not repo root). After changing app id, Sync Gradle and uninstall old com.daniil.cross_test.
+Open build/android in Android Studio (not repo root). After changing app id, Sync Gradle and uninstall old com.daniil.cross_test.
 python run_vs.py -p android
 python run_vs.py -p android --esVer 3.1 --abi arm64-v8a --build
 --------------------------------------------------------------
 - Meta Quest
-Open quest/out in Android Studio (not repo root). Headset must be in developer mode.
+Open build/quest in Android Studio (not repo root). Headset must be in developer mode.
 NativeActivity + OpenXR GLES, no SDL, no editor. ABI by default: arm64-v8a.
 run_vs.py pulls 3rd/OpenXR-SDK and fetches the Android loader into 3rd/MetaOpenXR/ if needed.
 
@@ -47,45 +47,45 @@ python run_vs.py -p quest --abi arm64-v8a --build
 python utils/fetch_meta_openxr.py
 python utils/fetch_meta_openxr.py --force
 
-Do not edit quest/out by hand. Change platform/quest/templates or cmake/IkigaiEngineQuest.cmake, then regenerate.
+Do not edit build/quest by hand. Change platform/quest/templates or cmake/IkigaiEngineQuest.cmake, then regenerate.
 ---------------------------------------------------------------
 - Emscripten
 Нужны Python 3, Git, CMake и Ninja. Emscripten SDK 6.0.10 ставится из submodule 3rd/emsdk
-при первом запуске (версия в emscripten/emsdk.version).
+при первом запуске (версия в platform/web/emsdk.version).
 
 python run_vs.py -p web -t Release --build
 python run_vs.py -p web --run
 
 # или напрямую из SDK:
-3rd\emsdk\upstream\emscripten\emrun.exe emscripten\out\IkigaiEngine.html
+3rd\emsdk\upstream\emscripten\emrun.exe out\web\Release\IkigaiEngine.html
 
 # или
-python -m http.server 8000 --directory emscripten/out
+python -m http.server 8000 --directory out/web/Release
 # открыть http://localhost:8000/IkigaiEngine.html
 ---------------------------------------------------------------
 macOS
 brew install glew vulkan-headers vulkan-loader molten-vk
 
 # -p macos и -p mac — одно и то же. -g задаёт API, которые компилируются
-# в один IkigaiEngine.app (по умолчанию mac/build, бинарник mac/out).
+# в один IkigaiEngine.app (по умолчанию build/mac/Release, бинарник out/mac/Release).
 # Активный API при запуске: assets/engine/Configs/render.json
 # (если есть assets/game/Configs/render.json, он перекрывает engine)
 # или аргумент --render-backend=opengl|vulkan|metal.
 
 python run_vs.py -p macos -g opengl --build
 python run_vs.py -p macos -g opengl vulkan metal --build
-open mac/out/IkigaiEngine.app --args --render-backend=metal
-open mac/out/IkigaiEngine.app --args --render-backend=vulkan
+open out/mac/Release/IkigaiEngine.app --args --render-backend=metal
+open out/mac/Release/IkigaiEngine.app --args --render-backend=vulkan
 
 OpenGL: SDL core 3.2 + GLEW (Homebrew). Apple deprecation warnings are expected.
 Vulkan: needs MoltenVK at runtime (libMoltenVK / vulkan-loader). Debug builds
 also ask for VK_LAYER_KHRONOS_validation; use Release if that layer is missing.
 Metal: SDL_WINDOW_METAL and a CAMetalLayer; no extra brew package.
 
-# Xcode project (default dir mac/build_xcode, binary still mac/out)
-# After changing mac/CMakeLists.txt, re-run configure so Xcode picks up sources/scripts.
+# Xcode project (default dir build/mac/xcode, binary still out/mac/Release)
+# After changing cmake/mac/CMakeLists.txt, re-run configure so Xcode picks up sources/scripts.
 python run_vs.py -p macos -c xcode -g opengl vulkan metal
-open mac/build_xcode/IkigaiEngine.xcodeproj
+open build/mac/xcode/IkigaiEngine.xcodeproj
 python run_vs.py -p macos -c xcode -g opengl vulkan metal --build
 ---------------------------------------------------------------
 - Linux
@@ -100,5 +100,5 @@ sudo pacman -S cmake base-devel python python-pip mesa glew vulkan-headers vulka
 python run_vs.py -p linux -g opengl vulkan --build
 
 Запуск:
-./linux/out/IkigaiEngine --render-backend=vulkan
-./linux/out/IkigaiEngine --render-backend=opengl
+./out/linux/Release/IkigaiEngine --render-backend=vulkan
+./out/linux/Release/IkigaiEngine --render-backend=opengl

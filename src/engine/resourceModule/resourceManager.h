@@ -60,6 +60,15 @@ namespace RESOURCES {
 					path = path.substr(pos + std::char_traits<char>::length(prefix));
 				}
 			}
+			// Pack roots mount at /. Drop assets_packs/<id>/ and the staged packs/<id>/.
+			for (const auto prefix : { "assets_packs/", "packs/" }) {
+				if (const auto pos = path.find(prefix); pos != std::string::npos) {
+					const auto rest = path.substr(pos + std::char_traits<char>::length(prefix));
+					if (const auto slash = rest.find('/'); slash != std::string::npos) {
+						path = rest.substr(slash + 1);
+					}
+				}
+			}
 			return "/" + std::filesystem::path(path).relative_path().lexically_normal().generic_string();
 		}
 		ResourceRequest<ResourceT> requestResource(std::string path, ELoadingType type = ELoadingType::RESOURCE) {

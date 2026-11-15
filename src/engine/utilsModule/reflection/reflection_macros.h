@@ -4,6 +4,8 @@
 // They are parsed by the IkigaiHeaderTool to generate reflection data.
 
 namespace IKIGAI::UTILS {
+// Call during startup before querying generated metadata; repeated calls are safe.
+void RegisterGeneratedReflection();
 template <typename T> struct ReflectionReg;
 }
 

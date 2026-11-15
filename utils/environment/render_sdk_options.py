@@ -15,14 +15,15 @@ class RenderSdkOptions:
     fsr_sr: bool = False
     dlss_fg: bool = False
     fsr_fg: bool = False
+    streamline_enabled: bool | None = None
 
     @property
     def enabled(self):
-        return self.dlss_sr or self.fsr_sr or self.dlss_fg or self.fsr_fg
+        return self.dlss_sr or self.fsr_sr or self.dlss_fg or self.fsr_fg or self.streamline
 
     @property
     def streamline(self):
-        return self.dlss_fg
+        return self.dlss_fg if self.streamline_enabled is None else self.streamline_enabled
 
     def validate(self, platform, backends, architecture='x64'):
         if not self.enabled:

@@ -222,7 +222,7 @@ public:
 		auto& owner = ref->obj.get();
 		auto& world = owner.getWorld();
 		auto* manager = world.getComponentManager();
-		const auto identity = manager->getComponentHandle<T>(owner.getID());
+		const auto identity = manager->template getComponentHandle<T>(owner.getID());
 		return manager->resolveComponent(identity) == ref.get() ? handle<T>(identity, world.getComponentManagerWeak()) : vm.makeValue();
 	}
 	template <class T> V component(ECS::World& world, ECS::Entity owner) {

@@ -123,6 +123,8 @@ template <class T> bool ComponentCatalog::enroll(StorageType storage, bool light
 	record.registerStorage = [storage](World& world) { world.getComponentManager()->template registerComponent<T>(storage); };
 	record.apply = [](Object& object, const nlohmann::json& component) {
 		auto document = component;
+		// GetComponentName is an explicit persistent ID; GetType is the legacy alias.
+		document[GetComponentName<T>() + "Type"] = GetType<T>();
 		typename T::Descriptor descriptor;
 		if constexpr (std::is_same_v<T, SurfaceComponent> || std::is_same_v<T, FoliageComponent> || std::is_same_v<T, ChunkModelRenderer>
 			|| std::is_same_v<T, VirtualMeshRenderer>) {
@@ -133,7 +135,11 @@ template <class T> bool ComponentCatalog::enroll(StorageType storage, bool light
 		}
 		object.template addComponent<T>(static_cast<const ComponentBase::Descriptor&>(descriptor));
 	};
-	record.write = [](const ComponentBase& component) { return serde::serialize<nlohmann::json>(static_cast<const T&>(component).getDescriptor()); };
+	record.write = [](const ComponentBase& component) {
+		auto document = serde::serialize<nlohmann::json>(static_cast<const T&>(component).getDescriptor());
+		document[GetComponentName<T>() + "Type"] = GetComponentName<T>();
+		return document;
+	};
 	record.create = [](Object& object) { object.template addComponent<T>(); };
 	record.remove = [](Object& object) { object.template removeComponent<T>(); };
 	record.resolve = [](Object& object) -> UTILS::WeakPtr<ComponentBase> {

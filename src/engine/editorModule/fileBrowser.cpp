@@ -15,6 +15,7 @@
 #include "misc/cpp/imgui_stdlib.h"
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/backends/interface/textureInterface.h"
+#include "resourceModule/contentPacks.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
 #include "utilsModule/pathGetter.h"
@@ -32,14 +33,17 @@ std::string ToVirtualPath(const std::string& realPath) {
 	};
 
 	const auto path = normalize(realPath);
-	for (const auto& root : {
-		 normalize(IKIGAI::Config::ROOT + IKIGAI::Config::ENGINE_ASSETS_PATH), normalize(IKIGAI::Config::ROOT + IKIGAI::Config::USER_ASSETS_PATH) }) {
-		if (path.starts_with(root)) {
-			auto rel = path.substr(root.length());
-			if (!rel.empty() && rel.front() == '/') {
-				rel.erase(0, 1);
-			}
-			return "/" + rel;
+	std::vector<std::string> roots = {
+		normalize(IKIGAI::Config::ROOT + IKIGAI::Config::USER_ASSETS_PATH),
+		normalize(IKIGAI::Config::ROOT + IKIGAI::Config::ENGINE_ASSETS_PATH),
+	};
+	for (const auto& pack : IKIGAI::RESOURCES::ContentPackRoots(IKIGAI::Config::ROOT)) {
+		roots.push_back(normalize(pack.generic_string()));
+	}
+	for (const auto& root : roots) {
+		const auto prefix = root.back() == '/' ? root : root + "/";
+		if (path.starts_with(prefix)) {
+			return "/" + path.substr(prefix.length());
 		}
 	}
 	return realPath;

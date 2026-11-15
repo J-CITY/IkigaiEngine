@@ -2,13 +2,18 @@ import os
 import sys
 import subprocess
 import argparse
+import json
+import re
+from contextlib import contextmanager
 from datetime import datetime
+from pathlib import Path
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 from utils.setup_env import ensure_mac_brew_packages, ensure_render_sdks, is_environment_ready, main as setup_environment
 from utils.assets.sync_assets import ensure_assets
 from utils.environment.ensure_emsdk import ensure_emsdk, emrun_path
-from utils.environment.render_sdk_options import add_render_sdk_arguments, render_sdk_options
+from utils.environment.render_sdk_options import add_render_sdk_arguments, RenderSdkOptions
+from utils.build.cmake_presets import load_configure_preset
 
 LOG_FILE = None
 
@@ -55,16 +60,16 @@ def close_log():
 
 
 def resolve_runtime_output(arg, platform_dir):
-    path = arg if arg else 'out'
+    path = arg if arg else os.path.join('out', platform_dir)
     if not os.path.isabs(path):
-        path = os.path.join(platform_dir, path)
+        path = os.path.join(ROOT_DIR, path)
     return os.path.abspath(path)
 
 
 def create_assets_link(build_dir):
     import platform
 
-    assets_src = os.path.abspath('./assets')
+    assets_src = os.path.join(ROOT_DIR, 'assets')
     assets_dest = os.path.abspath(os.path.join(build_dir, 'assets'))
 
     if not os.path.exists(assets_src):
@@ -84,7 +89,7 @@ def create_assets_link(build_dir):
         print(f"Warning: Failed to create assets link: {e}")
 
 
-def ensure_environment(platform_arg, skip_setup, render_sdks=None, graphics_backends=(), generator='Visual Studio 17 2022', use_lua=True, use_ikigai_script=True):
+def ensure_environment(platform_arg, skip_setup, render_sdks, graphics_backends, generator, use_lua, use_ikigai_script):
     if skip_setup:
         return
     scripting_deps = []
@@ -104,6 +109,44 @@ def ensure_environment(platform_arg, skip_setup, render_sdks=None, graphics_back
     print("Environment is not ready. Running utils/setup_env.py...")
     setup_environment(platform_arg, render_sdks=render_sdks, graphics_backends=graphics_backends,
                       generator=generator, use_lua=use_lua, use_ikigai_script=use_ikigai_script)
+
+
+def ensure_windows_openssl(architecture, values, environment):
+    if (cmake_bool(values.get('CMAKE_TOOLCHAIN_FILE', '')) or environment.get('CMAKE_TOOLCHAIN_FILE')
+            or 'OPENSSL_ROOT_DIR' in environment or cmake_bool(values.get('OpenSSL_DIR', ''))):
+        return
+
+    target = architecture.lower()
+    triplet = f'{target}-windows-static-md'
+    vcpkg = Path(ROOT_DIR) / 'utils' / '.pack' / 'vcpkg'
+    package_dir = vcpkg / 'installed' / triplet
+    configured_dir = values.get('OPENSSL_ROOT_DIR', '')
+    if cmake_bool(configured_dir) and Path(configured_dir).resolve() != package_dir.resolve():
+        return
+    if target not in ('x86', 'x64', 'arm64'):
+        raise ValueError(f'Automatic OpenSSL setup does not support {architecture}. Set OPENSSL_ROOT_DIR for that target.')
+
+    def package_ready():
+        return (package_dir / 'include/openssl/ssl.h').is_file() and all(
+            (package_dir / folder / library).is_file()
+            for folder in ('lib', 'debug/lib') for library in ('libssl.lib', 'libcrypto.lib')
+        )
+
+    if package_ready():
+        return
+    print(f'Preparing OpenSSL for {triplet} with vcpkg...')
+    bootstrap = vcpkg / 'bootstrap-vcpkg.bat'
+    if not bootstrap.is_file():
+        vcpkg.parent.mkdir(parents=True, exist_ok=True)
+        run_logged(['git', 'clone', '--depth', '1', '--branch', '2026.10.16',
+                    'https://github.com/microsoft/vcpkg.git', str(vcpkg)], cwd=ROOT_DIR, env=environment)
+    executable = vcpkg / 'vcpkg.exe'
+    if not executable.is_file():
+        run_logged(['cmd.exe', '/d', '/c', bootstrap.name, '-disableMetrics'], cwd=vcpkg, env=environment)
+    run_logged([str(executable), 'install', f'openssl:{triplet}', '--classic'],
+               cwd=vcpkg, env=environment)
+    if not package_ready():
+        raise RuntimeError(f'vcpkg did not provide both Debug and Release OpenSSL libraries in {package_dir}')
 
 
 def format_command(command):
@@ -134,10 +177,6 @@ def run_logged(command, env=None, shell=False, check=True, cwd=None):
     return returncode
 
 
-def run_cmake_build(build_dir, build_type, env=None):
-    run_logged(['cmake', '--build', build_dir, '--config', build_type], env=env, check=True)
-
-
 def _optional_bool(value):
     if value is True or value is False:
         return value
@@ -150,88 +189,267 @@ def _optional_bool(value):
     raise argparse.ArgumentTypeError(f'expected a boolean value, got {value!r}')
 
 
-def resolve_engine_features(platform, use_editor, use_file_watcher):
-    use_editor = True if use_editor is None else bool(use_editor)
-    if use_file_watcher is None:
-        if platform in ('web', 'android', 'ios'):
-            use_file_watcher = False
-        else:
-            use_file_watcher = use_editor
-    if not use_editor:
-        use_file_watcher = False
-    return use_editor, use_file_watcher
-
-
-def append_engine_feature_cmake_args(command, use_editor, use_file_watcher, use_lua=True, use_ikigai_script=True):
-    command.append(f'-DPython3_EXECUTABLE={sys.executable}')
-    command.append('-DUSE_LUA=' + ('ON' if use_lua else 'OFF'))
-    command.append('-DUSE_IKIGAI_SCRIPT=' + ('ON' if use_ikigai_script else 'OFF'))
-    command.append('-DUSE_EDITOR=' + ('ON' if use_editor else 'OFF'))
-    command.append('-DUSE_FILE_WATCHER=' + ('ON' if use_file_watcher else 'OFF'))
-
-
 def normalize_platform(name):
-    platform = (name or '').lower()
-    if platform in ('macos', 'osx', 'darwin'):
-        return 'mac'
+    name = (name or '').lower()
+    return {'windows': 'win', 'macos': 'mac', 'osx': 'mac', 'darwin': 'mac',
+            'emscripten': 'web'}.get(name, name)
+
+
+def cmake_value(value):
+    if isinstance(value, bool):
+        return 'ON' if value else 'OFF'
+    return str(value)
+
+
+def cmake_bool(value):
+    return str(value).upper() not in ('', '0', 'OFF', 'NO', 'FALSE', 'N', 'IGNORE', 'NOTFOUND') and not str(value).upper().endswith('-NOTFOUND')
+
+
+def read_cmake_cache(build_dir):
+    path = os.path.join(build_dir, 'CMakeCache.txt')
+    if not os.path.isfile(path):
+        return {}
+    values = {}
+    with open(path, encoding='utf-8') as stream:
+        for line in stream:
+            if line.startswith(('#', '//')) or '=' not in line or ':' not in line.split('=', 1)[0]:
+                continue
+            key, value = line.rstrip('\n').split('=', 1)
+            values[key.split(':', 1)[0]] = value
+    return values
+
+
+@contextmanager
+def setup_environment_variables(environment):
+    previous = dict(os.environ)
+    try:
+        os.environ.clear()
+        os.environ.update(environment)
+        yield
+    finally:
+        os.environ.clear()
+        os.environ.update(previous)
+
+
+def resolve_options(platform, values, environment):
+    # CMake owns defaults and capability validation, including pre-setup queries.
+    command = ['cmake', '-DIKIGAI_PLATFORM=' + platform]
+    command += [f'-D{key}={cmake_value(value)}' for key, value in values.items()
+                if key.startswith('USE_') or key in ('IKIGAI_BUILD_APPLICATION', 'IKIGAI_NETWORK_TLS')]
+    command += ['-P', os.path.join(ROOT_DIR, 'cmake', 'ResolveBuildOptions.cmake')]
+    result = subprocess.run(command, cwd=ROOT_DIR, env=environment, capture_output=True, text=True)
+    if result.returncode:
+        raise ValueError((result.stdout + result.stderr).strip())
+    for line in (result.stdout + result.stderr).splitlines():
+        if line.startswith('IKIGAI_OPTIONS_JSON='):
+            return json.loads(line.split('=', 1)[1])
+    raise RuntimeError('CMake did not return resolved build options')
+
+
+def select_preset(args):
+    if args.preset:
+        return args.preset
+    platform = normalize_platform(args.p or 'win')
+    if platform == 'win':
+        if args.c not in (None, 'vs22', 'vs19'):
+            raise ValueError('Windows generator must be vs22 or vs19')
+        return 'windows-vs2019' if args.c == 'vs19' else 'windows'
+    if platform == 'mac':
+        if args.c not in (None, 'vs22', 'vs19', 'xcode'):
+            raise ValueError('macOS generator must be xcode, or omitted for Unix Makefiles')
+        return 'mac-xcode' if args.c == 'xcode' else 'mac-' + (args.build_type or 'Release').lower()
+    if platform not in ('linux', 'ios', 'web', 'android', 'quest'):
+        raise ValueError(f'Unknown platform: {platform}')
+    if platform in ('linux', 'web'):
+        return platform + '-' + (args.build_type or 'Release').lower()
     return platform
 
 
-WIN_GRAPHICS_BACKENDS = ('opengl', 'vulkan', 'dx12')
-MAC_GRAPHICS_BACKENDS = ('opengl', 'vulkan', 'metal')
-LINUX_GRAPHICS_BACKENDS = ('opengl', 'vulkan')
-IOS_GRAPHICS_BACKENDS = ('opengl', 'metal')
+def configure_and_build(args):
+    preset_name = select_preset(args)
+    parent_environment = dict(os.environ)
+    preset = load_configure_preset(ROOT_DIR, preset_name, parent_environment)
+    environment = preset['_environment']
+    available = subprocess.run(['cmake', '--list-presets'], cwd=ROOT_DIR, env=parent_environment,
+                               capture_output=True, text=True, check=True)
+    if preset_name not in re.findall(r'^\s*"([^"]+)"', available.stdout, re.MULTILINE):
+        raise ValueError(f'Preset {preset_name!r} is not available on this host/environment')
+    metadata = preset.get('vendor', {}).get('ikigai.dev/launcher/1.0', {})
+    platform = normalize_platform(metadata.get('platform') or preset['_cache'].get('IKIGAI_PLATFORM', ''))
+    if not platform or platform == 'auto':
+        raise ValueError('Launcher presets must specify platform metadata or IKIGAI_PLATFORM')
+    if args.p and normalize_platform(args.p) != platform:
+        raise ValueError('-p conflicts with the selected preset platform')
+    if args.run and platform != 'web':
+        raise ValueError('--run is supported only for Web builds')
 
+    overrides = {}
+    for argument, key in ((args.use_lua, 'USE_LUA'), (args.use_ikigai_script, 'USE_IKIGAI_SCRIPT'),
+                          (args.use_editor, 'USE_EDITOR'), (args.use_file_watcher, 'USE_FILE_WATCHER')):
+        if argument is not None:
+            overrides[key] = cmake_value(argument)
+    if args.g is not None:
+        for backend in ('opengl', 'vulkan', 'dx12', 'metal'):
+            overrides['USE_' + backend.upper()] = cmake_value(backend in args.g)
+    if args.s is not None:
+        overrides['ENGINE_WIN_SUBSYSTEM'] = args.s
+    for flag, key in ((args.dlss_sr, 'USE_DLSS'), (args.fsr_sr, 'USE_FSR'),
+                      (args.dlss_fg, 'USE_DLSS_FRAME_GENERATION'), (args.fsr_fg, 'USE_FSR_FRAME_GENERATION')):
+        if flag is not None:
+            overrides[key] = cmake_value(flag)
+    if args.dlss_fg:
+        overrides['USE_STREAMLINE'] = 'ON'
+    for definition in args.define:
+        if '=' not in definition:
+            raise ValueError('-D expects NAME=VALUE')
+        key, value = definition.split('=', 1)
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z_0-9]*(?::[A-Za-z]+)?', key):
+            raise ValueError(f'Invalid CMake definition: {key}')
+        overrides[key.split(':', 1)[0]] = value
+    if 'IKIGAI_PLATFORM' in overrides and normalize_platform(overrides['IKIGAI_PLATFORM']) != platform:
+        raise ValueError('Choose a matching preset instead of overriding IKIGAI_PLATFORM')
 
-def resolve_graphics_backends(platform, names):
-    if isinstance(names, str):
-        names = [names]
-    ordered = []
-    for name in names:
-        lowered = name.lower()
-        if lowered not in ordered:
-            ordered.append(lowered)
-    if not ordered:
-        raise ValueError('At least one graphics backend is required (-g)')
-    if platform == 'mac':
-        allowed = MAC_GRAPHICS_BACKENDS
-    elif platform == 'win':
-        allowed = WIN_GRAPHICS_BACKENDS
-    elif platform == 'linux':
-        allowed = LINUX_GRAPHICS_BACKENDS
-    elif platform == 'ios':
-        allowed = IOS_GRAPHICS_BACKENDS
+    mobile = platform in ('android', 'quest')
+    platform_dir = {'win': 'windows'}.get(platform, platform)
+    if args.b:
+        build_dir = os.path.abspath(os.path.join(ROOT_DIR, args.b))
+    elif mobile:
+        build_dir = os.path.join(ROOT_DIR, 'build', platform_dir)
     else:
-        return set(ordered)
-    unknown = [name for name in ordered if name not in allowed]
-    if unknown:
-        raise ValueError(
-            f"Graphics backend(s) not available on {platform}: {', '.join(unknown)}. "
-            f"Allowed: {', '.join(allowed)}"
-        )
-    return set(ordered)
+        build_dir = preset['binaryDir']
+    cache = {} if mobile else read_cmake_cache(build_dir)
+    if cache.get('CMAKE_HOME_DIRECTORY') and os.path.normcase(os.path.abspath(cache['CMAKE_HOME_DIRECTORY'])) != os.path.normcase(ROOT_DIR):
+        raise ValueError(f'{build_dir} contains an older platform CMake cache. Use a new -b directory (for example build/{preset_name}); existing files were not changed.')
+    values = {**cache, **preset['_cache'], **{key.split(':', 1)[0]: value for key, value in overrides.items()}}
+    build_type = args.build_type or values.get('CMAKE_BUILD_TYPE') or 'Release'
+    if build_type not in ('Debug', 'Release', 'RelWithDebInfo', 'MinSizeRel'):
+        raise ValueError(f'Unsupported build configuration: {build_type}')
+    if args.build_type is not None or not args.preset:
+        overrides['CMAKE_BUILD_TYPE'] = build_type
+    application = cmake_bool(values.get('IKIGAI_BUILD_APPLICATION', 'ON'))
+    resolved = resolve_options(platform, values, environment)
+    graphics = {key[4:].lower() for key in ('USE_OPENGL', 'USE_VULKAN', 'USE_DX12', 'USE_METAL') if resolved[key]}
+    sdk = RenderSdkOptions(*(resolved[key] for key in
+                           ('USE_DLSS', 'USE_FSR', 'USE_DLSS_FRAME_GENERATION', 'USE_FSR_FRAME_GENERATION')),
+                           streamline_enabled=resolved['USE_STREAMLINE'])
+    architecture = args.a or preset.get('architecture', 'x64')
+    if isinstance(architecture, dict):
+        architecture = architecture.get('value', 'x64')
+    architecture = 'x86' if architecture == 'Win32' else architecture
+    generator = preset.get('generator', '')
+    generator_override = None
+    if args.preset and args.c:
+        if platform == 'win' and args.c in ('vs22', 'vs19'):
+            generator_override = load_configure_preset(ROOT_DIR, 'windows' if args.c == 'vs22' else 'windows-vs2019', parent_environment)['generator']
+        elif platform == 'mac' and args.c in ('xcode', 'vs22', 'vs19'):
+            generator_override = load_configure_preset(ROOT_DIR, 'mac-xcode' if args.c == 'xcode' else 'mac', parent_environment)['generator']
+        else:
+            raise ValueError('-c conflicts with the selected preset')
+    generator = generator_override or generator
+    if args.a is not None and platform == 'win' and not generator.startswith('Visual Studio '):
+        raise ValueError('-a requires a Visual Studio preset; use a toolchain for other generators')
+    print(f'Configure preset: {preset_name}; platform: {platform}; configuration: {build_type}')
+    print('Effective CMake features: ' + ', '.join(f'{key}={cmake_value(value)}' for key, value in resolved.items() if key.startswith('USE_')))
+    if application:
+        sdk.validate(platform, graphics, architecture)
+        if (platform == 'win' and not args.skip_setup and not preset.get('toolchainFile')
+                and resolved['USE_NETWORK'] and resolved['IKIGAI_NETWORK_TLS']):
+            ensure_windows_openssl(architecture, values, environment)
+        with setup_environment_variables(environment):
+            ensure_environment(platform, args.skip_setup, sdk, graphics, generator,
+                               resolved['USE_LUA'], resolved['USE_IKIGAI_SCRIPT'])
+        if platform == 'web':
+            with setup_environment_variables(parent_environment):
+                parent_environment = ensure_emsdk(ROOT_DIR)
+            environment = load_configure_preset(ROOT_DIR, preset_name, parent_environment)['_environment']
+    if application:
+        overrides.setdefault('Python3_EXECUTABLE', values.get('Python3_EXECUTABLE', sys.executable))
+    if (sdk.fsr_sr or sdk.fsr_fg) and 'vulkan' in graphics and 'IKIGAI_FSR_VULKAN_RUNTIME' not in values:
+        from utils.build.fidelityfx_vulkan import runtime_path
+        overrides['IKIGAI_FSR_VULKAN_RUNTIME'] = runtime_path()
 
+    if mobile:
+        if not application:
+            raise ValueError('Android/Quest Gradle packaging requires IKIGAI_BUILD_APPLICATION=ON')
+        if build_type not in ('Debug', 'Release'):
+            raise ValueError('Gradle packaging supports only Debug and Release')
+        abi_value = args.abi or overrides.get('ANDROID_ABI') or (values.get('ANDROID_ABI') if args.preset else None)
+        abis = [part.strip() for part in re.split('[,;]', abi_value) if part.strip()] if abi_value else None
+        mobile_options = {**preset['_cache'], **overrides}
+        artifact_output_dir = resolve_runtime_output(args.o, platform_dir)
+        with setup_environment_variables(environment):
+            if platform == 'android':
+                from utils.build.generate_android import generate_android, ES_VERSIONS
+                android_arguments = {}
+                if args.es_ver:
+                    android_arguments['es_ver'] = args.es_ver
+                elif 'IKIGAI_GLES_VERSION' in values:
+                    version = next((name for name, spec in ES_VERSIONS.items()
+                                    if str(spec['cmake']) == str(values['IKIGAI_GLES_VERSION'])), None)
+                    if version is None:
+                        raise ValueError('Invalid IKIGAI_GLES_VERSION in selected preset')
+                    android_arguments['es_ver'] = version
+                generate_android(ROOT_DIR, build_dir, abis=abis,
+                                 cmake_cache_variables=mobile_options, artifact_output_dir=artifact_output_dir, **android_arguments)
+            else:
+                from utils.build.generate_quest import generate_quest
+                generate_quest(ROOT_DIR, build_dir, abis=abis, cmake_cache_variables=mobile_options,
+                               artifact_output_dir=artifact_output_dir)
+        if args.build:
+            wrapper = os.path.join(build_dir, 'gradlew.bat' if os.name == 'nt' else 'gradlew')
+            run_logged([wrapper, ':app:assemble' + build_type], cwd=build_dir, env=environment)
+        return
 
-def append_graphics_cmake_args(command, platform, backends):
-    command.append('-DUSE_OPENGL=' + ('ON' if 'opengl' in backends else 'OFF'))
-    command.append('-DUSE_VULKAN=' + ('ON' if 'vulkan' in backends else 'OFF'))
-    if platform == 'win':
-        command.append('-DUSE_DX12=' + ('ON' if 'dx12' in backends else 'OFF'))
-    elif platform in ('mac', 'ios'):
-        command.append('-DUSE_METAL=' + ('ON' if 'metal' in backends else 'OFF'))
+    if args.o:
+        overrides['ENGINE_RUNTIME_OUTPUT_DIRECTORY'] = resolve_runtime_output(args.o, platform_dir)
+    command = ['cmake', '--preset', preset_name, '-S', ROOT_DIR, '-B', build_dir]
+    if generator_override:
+        command += ['-G', generator_override]
+    if args.a is not None and platform == 'win':
+        command += ['-A', 'Win32' if args.a == 'x86' else args.a]
+    command += [f'-D{key}={value}' for key, value in overrides.items()]
+    if args.build or not args.run:
+        run_logged(command, cwd=ROOT_DIR, env=parent_environment)
+    actual_cache = read_cmake_cache(build_dir)
+    output_dir = (overrides.get('ENGINE_RUNTIME_OUTPUT_DIRECTORY') if args.run and not args.build else None)
+    output_dir = output_dir or actual_cache.get('ENGINE_RUNTIME_OUTPUT_DIRECTORY') or values.get('ENGINE_RUNTIME_OUTPUT_DIRECTORY')
+    if output_dir:
+        output_dir = os.path.abspath(os.path.join(ROOT_DIR, output_dir, build_type))
+    if application and output_dir:
+        create_assets_link(build_dir)
+        create_assets_link(output_dir)
+    if args.build:
+        command = ['cmake', '--build', build_dir, '--config', build_type]
+        if args.target:
+            command += ['--target', *args.target]
+        if args.parallel:
+            command += ['--parallel', str(args.parallel)]
+        run_logged(command, cwd=ROOT_DIR, env=environment)
+    if generator == 'Xcode':
+        print('Xcode project: ' + os.path.join(build_dir, 'IkigaiEngine.xcodeproj'))
+    if args.run:
+        html_path = os.path.join(output_dir or build_dir, 'IkigaiEngine.html')
+        if not os.path.isfile(html_path):
+            raise FileNotFoundError(f'Web build not found: {html_path}. Run with --build first.')
+        run_logged([emrun_path(ROOT_DIR), html_path], cwd=ROOT_DIR, env=environment)
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--use-lua", type=_optional_bool, nargs="?", const=True, default=True)
-    parser.add_argument("--use-ikigai-script", type=_optional_bool, nargs="?", const=True, default=True)
+    parser = argparse.ArgumentParser(description='Configure an engine preset; legacy arguments override its settings.')
+    parser.add_argument('--preset', help='Configure preset from CMakePresets.json or CMakeUserPresets.json')
+    parser.add_argument('--list-presets', action='store_true', help='List available CMake configure presets')
+    parser.add_argument('-D', dest='define', action='append', default=[], metavar='NAME=VALUE', help='Override a CMake cache variable')
+    parser.add_argument('--target', nargs='+', help='CMake build targets (default: all)')
+    parser.add_argument('-j', '--parallel', type=int, help='Parallel build jobs')
+    parser.add_argument("--use-lua", type=_optional_bool, nargs="?", const=True, default=None)
+    parser.add_argument("--use-ikigai-script", type=_optional_bool, nargs="?", const=True, default=None)
     parser.add_argument(
-        '-c', type=str, default="vs22",
+        '-c', type=str, default=None,
         help='Generator: vs22, vs19 (Windows); xcode (macOS, default on mac is Unix Makefiles)',
     )
-    parser.add_argument('-a', type=str, default="x64", help='Architecture: x86, x64 (default: x64)')
+    parser.add_argument('-a', type=str, choices=['x86', 'x64'], default=None, help='Architecture: x86, x64 (default: x64)')
     parser.add_argument(
-        '-p', type=str, default="win",
+        '-p', type=str, default=None,
         help='Platform: win, mac/macos, linux, android, quest, web, ios (default: win)',
     )
     parser.add_argument(
@@ -239,7 +457,7 @@ def main():
         dest='use_editor',
         nargs='?',
         const=True,
-        default=True,
+        default=None,
         type=_optional_bool,
         metavar='BOOL',
         help='Editor UI (default: on). --use-editor or --use-editor 1; --use-editor 0 / false to disable.',
@@ -257,7 +475,7 @@ def main():
     parser.add_argument(
         '-g',
         nargs='+',
-        default=['opengl'],
+        default=None,
         choices=['opengl', 'vulkan', 'dx12', 'metal'],
         metavar='API',
         help=(
@@ -269,208 +487,45 @@ def main():
             'A binary with one API uses it if the asset config requests an unavailable API.'
         ),
     )
-    parser.add_argument('--esVer', dest='es_ver', type=str, default='3.2', choices=['3', '3.1', '3.2'],
+    parser.add_argument('--esVer', dest='es_ver', type=str, default=None, choices=['3', '3.1', '3.2'],
                         help='Android OpenGL ES version (default: 3.2)')
-    parser.add_argument('--abi', type=str, default='arm64-v8a,armeabi-v7a',
+    parser.add_argument('--abi', type=str, default=None,
                         help='Comma-separated Android/Quest ABIs (android default: arm64-v8a,armeabi-v7a; quest default: arm64-v8a)')
-    parser.add_argument('-b', type=str, default=None, help='CMake generate directory (default: <platform>/build)')
-    parser.add_argument('-o', type=str, default=None, help='Runtime output directory for the executable (default: <platform>/out)')
-    parser.add_argument('-s', type=str, default='windows', choices=['windows', 'console'],
+    parser.add_argument('-b', type=str, default=None, help='Build directory (default: build/<platform>, with preset variants in subdirectories)')
+    parser.add_argument('-o', type=str, default=None, help='Output base directory (default: out/<platform>; configuration is appended)')
+    parser.add_argument('-s', type=str, default=None, choices=['windows', 'console'],
                         help='Windows subsystem: windows (no console) or console (default: windows)')
-    parser.add_argument('-t', '--build-type', type=str, default='Release', choices=['Debug', 'Release'],
+    parser.add_argument('-t', '--build-type', type=str, default=None, choices=['Debug', 'Release'],
                         help='CMake build type: Debug or Release (default: Release)')
     parser.add_argument('--build', action='store_true', help='Build the project after CMake configure')
     add_render_sdk_arguments(parser)
+    parser.set_defaults(dlss_sr=None, fsr_sr=None, dlss_fg=None, fsr_fg=None)
     parser.add_argument('--run', action='store_true', help='Run the web build with emrun from 3rd/emsdk')
     parser.add_argument('-S', '--skip-setup', action='store_true', help='Skip automatic environment setup')
-    parser.add_argument('--log', type=str, default='run_vs.log',
-                        help='Log file path (default: run_vs.log in the repo root)')
+    logging = parser.add_mutually_exclusive_group()
+    logging.add_argument('--log', default='run_vs.log',
+                         help='Log file path (default: run_vs.log in the repo root)')
+    logging.add_argument('--no-log', dest='log', action='store_const', const=None,
+                         help='Print output to the terminal without writing a log file')
     args = parser.parse_args()
+    if args.list_presets:
+        raise SystemExit(subprocess.call(['cmake', '--list-presets'], cwd=ROOT_DIR))
+    if args.parallel is not None and args.parallel < 1:
+        parser.error('--parallel must be positive')
 
     log_path = args.log
-    if not os.path.isabs(log_path):
+    if log_path is not None and not os.path.isabs(log_path):
         log_path = os.path.join(ROOT_DIR, log_path)
 
     abort_code = 0
     try:
-        abs_log = open_log(log_path)
-        print(f"Logging to {abs_log}")
+        if log_path is not None:
+            print(f"Logging to {open_log(log_path)}")
         print(f"Started: {datetime.now().isoformat(timespec='seconds')}")
         print(f"Args: {' '.join(sys.argv)}")
         print(f"Cwd: {os.getcwd()}")
 
-        platform_arg = normalize_platform(args.p)
-        build_type = args.build_type
-        use_editor, use_file_watcher = resolve_engine_features(
-            platform_arg, args.use_editor, args.use_file_watcher
-        )
-        graphics_backends = None
-        if platform_arg in ('win', 'mac', 'linux', 'ios'):
-            graphics_backends = resolve_graphics_backends(platform_arg, args.g)
-            print('Graphics backends: ' + ', '.join(sorted(graphics_backends)))
-        render_sdks = render_sdk_options(args)
-        render_sdks.validate(platform_arg, graphics_backends or (), args.a)
-        sdk_generator = 'Visual Studio 16 2019' if args.c == 'vs19' else 'Visual Studio 17 2022'
-        if platform_arg == 'quest' and (args.use_editor is False or args.use_file_watcher is not None):
-            print('Note: Quest build has no editor or file watcher; --use-editor / --use_file_watcher are ignored.')
-        ensure_environment(platform_arg, args.skip_setup, render_sdks, graphics_backends or (), sdk_generator, args.use_lua, args.use_ikigai_script)
-
-        if platform_arg == 'win':
-            build_dir = args.b if args.b else './windows/build'
-            output_dir = resolve_runtime_output(args.o, './windows')
-            command = [
-                'cmake', './windows', f'-B{build_dir}',
-                f'-DENGINE_RUNTIME_OUTPUT_DIRECTORY={output_dir}',
-                f'-DCMAKE_BUILD_TYPE={build_type}',
-            ]
-            if (args.c == 'vs22'):
-                command.extend(['-G', 'Visual Studio 17 2022', '-T', 'host=x64'])
-            elif (args.c == 'vs19'):
-                command.extend(['-G', 'Visual Studio 16 2019', '-T', 'host=x64'])
-
-            if (args.a == 'x64'):
-                command.extend(['-A', 'x64'])
-
-            append_graphics_cmake_args(command, platform_arg, graphics_backends)
-            command.append(f'-DENGINE_WIN_SUBSYSTEM={args.s}')
-            append_engine_feature_cmake_args(command, use_editor, use_file_watcher, args.use_lua, args.use_ikigai_script)
-            command.extend(render_sdks.cmake_flags())
-            if (render_sdks.fsr_sr or render_sdks.fsr_fg) and 'vulkan' in graphics_backends:
-                from utils.build.fidelityfx_vulkan import runtime_path
-                command.append(f'-DIKIGAI_FSR_VULKAN_RUNTIME={runtime_path()}')
-
-            run_logged(command, check=True)
-            create_assets_link(build_dir)
-            create_assets_link(output_dir)
-            if args.build:
-                run_cmake_build(build_dir, build_type)
-
-        elif platform_arg == 'mac':
-            compiler = args.c.lower()
-            use_xcode = compiler == 'xcode'
-            if compiler not in ('xcode', 'vs22', 'vs19'):
-                raise ValueError(
-                    f"Unknown macOS generator {args.c!r}. Use -c xcode, or omit -c for Unix Makefiles."
-                )
-            build_dir = args.b if args.b else ('./mac/build_xcode' if use_xcode else './mac/build')
-            output_dir = resolve_runtime_output(args.o, './mac')
-            command = [
-                'cmake', './mac', f'-B{build_dir}',
-                f'-DENGINE_RUNTIME_OUTPUT_DIRECTORY={output_dir}',
-                f'-DCMAKE_BUILD_TYPE={build_type}',
-            ]
-            if use_xcode:
-                command.extend(['-G', 'Xcode'])
-            append_graphics_cmake_args(command, platform_arg, graphics_backends)
-            append_engine_feature_cmake_args(command, use_editor, use_file_watcher, args.use_lua, args.use_ikigai_script)
-            run_logged(command, check=True)
-            create_assets_link(build_dir)
-            create_assets_link(output_dir)
-            if use_xcode:
-                project = os.path.abspath(os.path.join(build_dir, 'IkigaiEngine.xcodeproj'))
-                print(f"Xcode project: {project}")
-                print(f"Open with: open {project}")
-            if args.build:
-                run_cmake_build(build_dir, build_type)
-
-        elif platform_arg == 'linux':
-            build_dir = args.b if args.b else './linux/build'
-            output_dir = resolve_runtime_output(args.o, './linux')
-            command = [
-                'cmake', './linux', f'-B{build_dir}',
-                f'-DENGINE_RUNTIME_OUTPUT_DIRECTORY={output_dir}',
-                f'-DCMAKE_BUILD_TYPE={build_type}',
-            ]
-            append_graphics_cmake_args(command, platform_arg, graphics_backends)
-            append_engine_feature_cmake_args(command, use_editor, use_file_watcher, args.use_lua, args.use_ikigai_script)
-            run_logged(command, check=True)
-            create_assets_link(build_dir)
-            create_assets_link(output_dir)
-            if args.build:
-                run_cmake_build(build_dir, build_type)
-
-        elif platform_arg == 'ios':
-            build_dir = args.b if args.b else './ios/build_xcode'
-            output_dir = resolve_runtime_output(args.o, './ios')
-            command = [
-                'cmake', './ios', f'-B{build_dir}',
-                '-G', 'Xcode',
-                f'-DENGINE_RUNTIME_OUTPUT_DIRECTORY={output_dir}',
-                f'-DCMAKE_BUILD_TYPE={build_type}',
-                '-DCMAKE_SYSTEM_NAME=iOS',
-            ]
-            append_graphics_cmake_args(command, platform_arg, graphics_backends)
-            append_engine_feature_cmake_args(command, use_editor, use_file_watcher, args.use_lua, args.use_ikigai_script)
-            run_logged(command, check=True)
-            project = os.path.abspath(os.path.join(build_dir, 'IkigaiEngine.xcodeproj'))
-            print(f"Xcode project: {project}")
-            print(f"Open with: open {project}")
-            if args.build:
-                run_cmake_build(build_dir, build_type)
-
-        elif platform_arg == 'web':
-            emsdk_env = ensure_emsdk(ROOT_DIR)
-            build_dir = args.b if args.b else './emscripten/build'
-            output_dir = resolve_runtime_output(args.o, './emscripten')
-            if args.build or not args.run:
-                command = [
-                    'emcmake', 'cmake', './emscripten', f'-B{build_dir}',
-                    '-G', 'Ninja',
-                    f'-DENGINE_RUNTIME_OUTPUT_DIRECTORY={output_dir}',
-                    f'-DCMAKE_BUILD_TYPE={build_type}',
-                ]
-                append_engine_feature_cmake_args(command, use_editor, use_file_watcher, args.use_lua, args.use_ikigai_script)
-                run_logged(command, env=emsdk_env, check=True, shell=(os.name == 'nt'))
-                create_assets_link(build_dir)
-                create_assets_link(output_dir)
-                if args.build:
-                    run_cmake_build(build_dir, build_type, env=emsdk_env)
-            if args.run:
-                html_path = os.path.join(output_dir, 'IkigaiEngine.html')
-                if not os.path.isfile(html_path):
-                    raise FileNotFoundError(f"Web build not found: {html_path}. Run with --build first.")
-                run_logged([emrun_path(ROOT_DIR), html_path], env=emsdk_env, check=True)
-
-        elif platform_arg == 'android':
-            from utils.build.generate_android import generate_android
-
-            output_dir = args.b if args.b else os.path.join(ROOT_DIR, 'android', 'out')
-            if not os.path.isabs(output_dir):
-                output_dir = os.path.abspath(os.path.join(ROOT_DIR, output_dir))
-            abis = [part.strip() for part in args.abi.split(',') if part.strip()]
-            generate_android(
-                ROOT_DIR,
-                output_dir,
-                es_ver=args.es_ver,
-                abis=abis,
-                use_lua=args.use_lua,
-                use_ikigai_script=args.use_ikigai_script,
-                use_editor=use_editor,
-                use_file_watcher=use_file_watcher,
-            )
-            if args.build:
-                gradlew_name = 'gradlew.bat' if os.name == 'nt' else 'gradlew'
-                gradlew = os.path.join(output_dir, gradlew_name)
-                run_logged([gradlew, ':app:assembleDebug'], cwd=output_dir, check=True)
-
-        elif platform_arg == 'quest':
-            from utils.build.generate_quest import generate_quest
-
-            output_dir = args.b if args.b else os.path.join(ROOT_DIR, 'quest', 'out')
-            if not os.path.isabs(output_dir):
-                output_dir = os.path.abspath(os.path.join(ROOT_DIR, output_dir))
-            default_abi = 'arm64-v8a,armeabi-v7a'
-            abi_arg = args.abi if args.abi != default_abi else 'arm64-v8a'
-            abis = [part.strip() for part in abi_arg.split(',') if part.strip()]
-            generate_quest(ROOT_DIR, output_dir, abis=abis, use_lua=args.use_lua, use_ikigai_script=args.use_ikigai_script)
-            if args.build:
-                gradlew_name = 'gradlew.bat' if os.name == 'nt' else 'gradlew'
-                gradlew = os.path.join(output_dir, gradlew_name)
-                run_logged([gradlew, ':app:assembleDebug'], cwd=output_dir, check=True)
-
-        else:
-            print(f"Unknown platform: {platform_arg}")
-            abort_code = 1
+        configure_and_build(args)
 
         print(f"Finished: {datetime.now().isoformat(timespec='seconds')}")
     except subprocess.CalledProcessError as exc:
@@ -482,7 +537,7 @@ def main():
     finally:
         if LOG_FILE is not None:
             print(f"Log saved to {os.path.abspath(log_path)}")
-        close_log()
+            close_log()
 
     if abort_code:
         sys.exit(abort_code)

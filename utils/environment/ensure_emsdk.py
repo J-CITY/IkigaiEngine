@@ -17,7 +17,7 @@ def _repo_root():
 
 def read_emsdk_version(root_dir=None):
     root_dir = root_dir or _repo_root()
-    version_file = os.path.join(root_dir, "emscripten", "emsdk.version")
+    version_file = os.path.join(root_dir, "platform", "web", "emsdk.version")
     with open(version_file, "r", encoding="utf-8") as f:
         return f.read().strip()
 

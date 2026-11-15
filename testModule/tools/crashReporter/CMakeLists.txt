@@ -1,0 +1,17 @@
+# Builds the optional Windows dump writer independently of the engine and tests.
+# Install the crash-reporter component beside IkigaiEngine.exe to enable reports.
+cmake_minimum_required(VERSION 3.20)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    project(IkigaiCrashReporter LANGUAGES CXX)
+endif()
+if(NOT WIN32)
+    message(FATAL_ERROR "IkigaiCrashReporter requires Windows")
+endif()
+get_filename_component(engine_root "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+add_executable(ikigai_crash_reporter main.cpp)
+set_target_properties(ikigai_crash_reporter PROPERTIES OUTPUT_NAME IkigaiCrashReporter)
+target_compile_features(ikigai_crash_reporter PRIVATE cxx_std_20)
+target_compile_definitions(ikigai_crash_reporter PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_include_directories(ikigai_crash_reporter PRIVATE "${engine_root}/src/engine")
+target_link_libraries(ikigai_crash_reporter PRIVATE dbghelp)
+install(TARGETS ikigai_crash_reporter RUNTIME DESTINATION . COMPONENT crash-reporter)

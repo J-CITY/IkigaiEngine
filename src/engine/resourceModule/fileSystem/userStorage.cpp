@@ -228,7 +228,8 @@ std::shared_future<void> CommitPersistent() {
 				_ikigai_storage_commit_done(pointer, 1);
 				return;
 			}
-			Module['ikigaiStorageCommit']().then(() = > _ikigai_storage_commit_done(pointer, 0), () = > _ikigai_storage_commit_done(pointer, 1));
+			Module['ikigaiStorageCommit']().then(
+				function() { _ikigai_storage_commit_done(pointer, 0); }, function() { _ikigai_storage_commit_done(pointer, 1); });
 		},
 		promise.release());
 	return result;

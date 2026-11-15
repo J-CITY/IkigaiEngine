@@ -29,6 +29,10 @@ void GameRenderer::runRayTracingStage(PipelineStage&) {
 	rayTracingNotCompiled();
 }
 
+RayTracingDispatch GameRenderer::buildProgramDispatch(PipelineStage&) {
+	rayTracingNotCompiled();
+}
+
 #ifdef VULKAN_BACKEND
 void DriverVk::configureRayTracing(std::vector<const char*>&) { }
 

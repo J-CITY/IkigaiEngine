@@ -554,9 +554,19 @@ ThreadPoolExecutor::ThreadPoolExecutor(int threadCount) {
 	}
 }
 
+std::shared_ptr<PoolState> ThreadPoolExecutor::loadPoolState() const {
+	std::lock_guard lock { mPoolStateMutex };
+	return mPoolState;
+}
+
+void ThreadPoolExecutor::storePoolState(std::shared_ptr<PoolState> pool) {
+	std::lock_guard lock { mPoolStateMutex };
+	mPoolState.swap(pool);
+}
+
 bool ThreadPoolExecutor::setup(std::optional<unsigned> threadCount) {
 	std::lock_guard lock { mLifecycleMutex };
-	if (mPoolState.load() || mStoppingThread != std::thread::id {}) {
+	if (loadPoolState() || mStoppingThread != std::thread::id {}) {
 		return false;
 	}
 #if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
@@ -581,7 +591,7 @@ bool ThreadPoolExecutor::setup(std::optional<unsigned> threadCount) {
 			thread->start();
 		}
 		mThreads = std::move(threads);
-		mPoolState.store(std::move(pool));
+		storePoolState(std::move(pool));
 		return true;
 	} catch (...) {
 		for (auto& thread : threads) {
@@ -609,7 +619,7 @@ ThreadPoolExecutor::~ThreadPoolExecutor() {
 }
 
 bool ThreadPoolExecutor::isExecutingOnThisThread() const {
-	if (const auto pool = mPoolState.load()) {
+	if (const auto pool = loadPoolState()) {
 		if (gWorkerPool == pool.get()) {
 			return true;
 		}
@@ -623,18 +633,18 @@ bool ThreadPoolExecutor::isExecutingOnThisThread() const {
 }
 
 bool ThreadPoolExecutor::isReady() const {
-	const auto pool = mPoolState.load();
+	const auto pool = loadPoolState();
 	return pool && pool->mAcceptingTasks.load();
 }
 
 void ThreadPoolExecutor::closeAdmission() {
-	if (auto pool = mPoolState.load()) {
+	if (auto pool = loadPoolState()) {
 		pool->closeAdmission();
 	}
 }
 
 void ThreadPoolExecutor::cancelWaitingTasks() {
-	if (auto pool = mPoolState.load()) {
+	if (auto pool = loadPoolState()) {
 		pool->cancelWaitingTasks();
 	}
 }
@@ -651,7 +661,7 @@ bool ThreadPoolExecutor::terminate() {
 		mLifecycleCondition.wait(lock, [this]() { return mStoppingThread == std::thread::id {}; });
 		return true;
 	}
-	const auto pool = mPoolState.load();
+	const auto pool = loadPoolState();
 	if (!pool) {
 		return true;
 	}
@@ -673,7 +683,7 @@ bool ThreadPoolExecutor::terminate() {
 	mInflightCounter->waitUntilIdle();
 	mThreads.clear();
 	lock.lock();
-	mPoolState.store(nullptr);
+	storePoolState(nullptr);
 	mStoppingThread = {};
 	lock.unlock();
 	mLifecycleCondition.notify_all();
@@ -681,7 +691,7 @@ bool ThreadPoolExecutor::terminate() {
 }
 
 void ThreadPoolExecutor::waitSync() {
-	if (!mPoolState.load()) {
+	if (!loadPoolState()) {
 		return;
 	}
 	if (isExecutingOnThisThread()) {
@@ -692,7 +702,7 @@ void ThreadPoolExecutor::waitSync() {
 
 JobBatch ThreadPoolExecutor::createJobBatch() {
 	JobBatch batch;
-	if (auto pool = mPoolState.load()) {
+	if (auto pool = loadPoolState()) {
 		std::lock_guard lock { pool->mJobMutex };
 		if (pool->mAcceptingJobs) {
 			batch.mState = std::make_shared<JobBatchState>();
@@ -733,12 +743,12 @@ JobBatchResult ThreadPoolExecutor::wait(JobBatch& batch) {
 }
 
 std::shared_ptr<ITask> ThreadPoolExecutor::addTask(std::unique_ptr<ITask>&& task, int32_t threadID) {
-	auto pool = mPoolState.load();
+	auto pool = loadPoolState();
 	return pool ? pool->schedule(std::move(task), threadID, false) : nullptr;
 }
 
 std::shared_ptr<ITask> ThreadPoolExecutor::addTaskFront(std::unique_ptr<ITask>&& task, int32_t threadID) {
-	auto pool = mPoolState.load();
+	auto pool = loadPoolState();
 	return pool ? pool->schedule(std::move(task), threadID, true) : nullptr;
 }
 
@@ -847,7 +857,7 @@ void PoolState::cancelTask(ITask& task) {
 }
 
 size_t ThreadPoolExecutor::getThreadCounts() const {
-	const auto pool = mPoolState.load();
+	const auto pool = loadPoolState();
 	return pool && pool->mAcceptingTasks.load() ? pool->mWorkers.size() : 0;
 }
 

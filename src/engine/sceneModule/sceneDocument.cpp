@@ -6,10 +6,36 @@ namespace IKIGAI::SCENE_SYSTEM::DOCUMENT {
 namespace {
 	constexpr std::size_t MaxPrefabDepth = 64;
 
+	struct SceneDescriptor {
+		std::vector<Json> Objects = {};
+		template <class Context> constexpr static void serde(Context& context, SceneDescriptor& value) {
+			serde::serde_struct(context, value).field(&SceneDescriptor::Objects, "Objects");
+		}
+	};
+	struct ObjectDescriptor {
+		int Id = 0;
+		int ParentId = -1;
+		std::string Name = {};
+		std::string Tag = {};
+		bool IsActive = true;
+		bool IsVisible = true;
+		std::vector<Json> Components = {};
+		template <class Context> constexpr static void serde(Context& context, ObjectDescriptor& value) {
+			using serde::attribute::default_;
+			serde::serde_struct(context, value)
+				.field(&ObjectDescriptor::Id, "Id")
+				.field(&ObjectDescriptor::ParentId, "ParentId", default_ { -1 })
+				.field(&ObjectDescriptor::Name, "Name", default_ { std::string {} })
+				.field(&ObjectDescriptor::Tag, "Tag", default_ { std::string {} })
+				.field(&ObjectDescriptor::IsActive, "IsActive", default_ { true })
+				.field(&ObjectDescriptor::IsVisible, "IsVisible", default_ { true })
+				.field(&ObjectDescriptor::Components, "Components");
+		}
+	};
 	struct PrefabDescriptor {
-		int PrefabVersion = 1;
+		int PrefabVersion = 2;
 		int RootId = 0;
-		std::vector<Json> Objects;
+		std::vector<Json> Objects = {};
 
 		template <class Context> constexpr static void serde(Context& context, PrefabDescriptor& value) {
 			serde::serde_struct(context, value)
@@ -20,7 +46,7 @@ namespace {
 	};
 
 	struct ReferenceDescriptor {
-		std::string Prefab;
+		std::string Prefab = {};
 		int Id = 0;
 		int ParentId = -1;
 
@@ -110,7 +136,18 @@ namespace {
 		if (!asset.at("Objects").is_array()) {
 			throw std::runtime_error("Objects must be an array");
 		}
-		return serde::deserialize<PrefabDescriptor>(asset);
+		auto descriptor = serde::deserialize<PrefabDescriptor>(asset);
+		// v2 adds nested references; v1 flat objects retain their exact payload.
+		// Validate the old schema before upgrading so v1 cannot smuggle v2 fields.
+		if (descriptor.PrefabVersion == 1) {
+			for (const auto& object : descriptor.Objects) {
+				if (IsPrefabRef(object)) {
+					throw std::runtime_error("Nested prefabs require PrefabVersion 2");
+				}
+			}
+			descriptor.PrefabVersion = 2;
+		}
+		return descriptor;
 	}
 
 	void ValidateAssetObjects(const std::vector<Json>& objects, int root, int version) {
@@ -133,6 +170,7 @@ namespace {
 				}
 			}
 			else {
+				ValidateObject(object);
 				const auto& components = object.at("Components");
 				if (!components.is_array() || std::count_if(components.begin(), components.end(), [](const Json& component) {
 						return Component(component, "TransformComponentType");
@@ -319,6 +357,25 @@ namespace {
 		}
 		entry["Overrides"] = std::move(overrides);
 		entry.erase("RootOverrides");
+	}
+}
+
+void ValidateObject(const Json& object) {
+	Id(object.at("Id"));
+	if (object.contains("ParentId")
+		&& (!object.at("ParentId").is_number_integer() || object.at("ParentId") < -1 || object.at("ParentId") >= std::numeric_limits<int>::max())) {
+		throw std::runtime_error("Invalid ParentId");
+	}
+	if (!object.at("Components").is_array()) {
+		throw std::runtime_error("Components must be an array");
+	}
+	auto source = object;
+	const auto descriptor = serde::deserialize<ObjectDescriptor>(source);
+	for (const auto& component : descriptor.Components) {
+		if (!component.is_object()) {
+			throw std::runtime_error("Component must be an object");
+		}
+		ComponentTypeKey(component);
 	}
 }
 
@@ -521,9 +578,14 @@ Expanded Resolver::Expand(Json entry, const ReadFn& read) {
 }
 
 Expanded Expand(const Json& document, const ReadFn& read) {
-	Resolver resolver(document.at("Objects"));
+	if (!document.at("Objects").is_array()) {
+		throw std::runtime_error("Scene Objects must be an array");
+	}
+	auto source = document;
+	const auto descriptor = serde::deserialize<SceneDescriptor>(source);
+	Resolver resolver(descriptor.Objects);
 	Expanded result;
-	for (auto entry : document.at("Objects")) {
+	for (auto entry : descriptor.Objects) {
 		auto expanded = resolver.Expand(std::move(entry), read);
 		for (auto& object : expanded.objects) {
 			result.objects.push_back(std::move(object));
@@ -614,6 +676,10 @@ Json Compact(const Json& objects, const std::vector<Instance>& instances) {
 			result.push_back(object);
 		}
 	}
-	return Json { { "Objects", result } };
+	auto document = serde::serialize<Json>(SceneDescriptor { result.get<std::vector<Json>>() });
+	if (result.empty()) {
+		document["Objects"] = Json::array();
+	}
+	return document;
 }
 }

@@ -1,4 +1,4 @@
-"""Generate a Gradle Meta Quest / OpenXR project under quest/out."""
+"""Generate a Gradle Meta Quest / OpenXR project under build/quest."""
 
 # Support direct CLI invocation from any working directory.
 if __package__ in (None, ""):
@@ -13,6 +13,7 @@ import re
 import shutil
 import subprocess
 from datetime import datetime, timezone
+from utils.build.gradle_cmake import gradle_cmake_arguments
 
 from utils.environment.fetch_meta_openxr import fetch as fetch_meta_openxr, load_spec
 
@@ -97,21 +98,27 @@ def _find_sdk():
     return None
 
 
-def _link_assets(repo_root, output_dir):
-    src = os.path.abspath(os.path.join(repo_root, "assets"))
-    dest = os.path.abspath(os.path.join(output_dir, "app", "src", "main", "assets"))
-    if not os.path.isdir(src) or os.path.lexists(dest):
+def _remove_asset_link(dest):
+    if not os.path.lexists(dest):
         return
-    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    if os.path.islink(dest):
+        os.unlink(dest)
+        return
     if os.name == "nt":
-        subprocess.run(
-            ["cmd", "/c", "mklink", "/J", dest, src],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-        )
-    else:
-        os.symlink(src, dest, target_is_directory=True)
+        subprocess.run(["cmd", "/c", "rmdir", dest], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        if not os.path.lexists(dest):
+            return
+    shutil.rmtree(dest)
+
+
+def _link_assets(repo_root, output_dir):
+    # Stage the content packs selected for Quest.
+    import sys
+    dest = os.path.abspath(os.path.join(output_dir, "app", "src", "main", "assets"))
+    _remove_asset_link(dest)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    script = os.path.join(repo_root, "utils", "assets", "content_packs.py")
+    subprocess.run([sys.executable, script, "stage", "--platform", "quest", "--layout", "apk", "--dest", dest], check=True)
 
 
 def _copy_placeholder_icon(res_dst):
@@ -126,12 +133,17 @@ def generate_quest(
     output_dir=None,
     app_id=DEFAULT_APP_ID,
     abis=None,
-    use_lua=True, use_ikigai_script=True,
+    use_lua=None, use_ikigai_script=None,
+    cmake_cache_variables=None,
+    artifact_output_dir=None,
 ):
     repo_root = os.path.abspath(repo_root)
     if output_dir is None:
-        output_dir = os.path.join(repo_root, "quest", "out")
-    output_dir = os.path.abspath(output_dir)
+        output_dir = os.path.join(repo_root, "build", "quest")
+    output_dir = os.path.abspath(os.path.join(repo_root, output_dir))
+    artifact_output_dir = os.path.abspath(os.path.join(
+        repo_root, artifact_output_dir or os.path.join("out", "quest")))
+    artifact_path = artifact_output_dir.replace("\\", "/").replace("'", "\\'")
 
     if abis is None:
         abis = ["arm64-v8a"]
@@ -156,7 +168,7 @@ def generate_quest(
         )
 
     cmake_rel = os.path.relpath(
-        os.path.join(repo_root, "cmake", "quest", "CMakeLists.txt"),
+        os.path.join(repo_root, "CMakeLists.txt"),
         os.path.join(output_dir, "app"),
     ).replace("\\", "/")
     jni_libs = os.path.relpath(
@@ -175,8 +187,10 @@ def generate_quest(
         "GLES_HEX": GLES_HEX,
         "ABI_FILTERS": abi_filters,
         "CMAKE_PATH": cmake_rel,
-        "USE_LUA": "ON" if use_lua else "OFF",
-        "USE_IKIGAI_SCRIPT": "ON" if use_ikigai_script else "OFF",
+        "ARTIFACT_OUTPUT": artifact_path,
+        "CMAKE_ARGUMENTS": gradle_cmake_arguments(
+            "quest", MIN_SDK, GLES_CMAKE, cmake_cache_variables,
+            USE_LUA=use_lua, USE_IKIGAI_SCRIPT=use_ikigai_script),
         "JNI_LIBS": jni_libs,
         "OPENXR_LOADER_VERSION": spec["loader"]["version"],
     }
@@ -258,7 +272,7 @@ def generate_quest(
         sdk_escaped = sdk.replace("\\", "\\\\")
         _write(os.path.join(output_dir, "local.properties"), "sdk.dir=%s\n" % sdk_escaped)
     else:
-        print("Warning: Android SDK not found. Set ANDROID_HOME or create quest/out/local.properties.")
+        print("Warning: Android SDK not found. Set ANDROID_HOME or create %s." % os.path.join(output_dir, "local.properties"))
 
     _link_assets(repo_root, output_dir)
 
@@ -283,13 +297,15 @@ def generate_quest(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Generate quest/out from the IkigaiEngine Quest templates.")
+    parser = argparse.ArgumentParser(description="Generate build/quest from the IkigaiEngine Quest templates.")
     parser.add_argument("--abi", default="arm64-v8a")
-    parser.add_argument("-o", "--output", default=None)
+    parser.add_argument("-o", "--output", default=None, help="Generated Gradle project directory")
+    parser.add_argument("--artifacts-output", default=None, help="APK output base directory (configuration is appended)")
     args = parser.parse_args()
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     generate_quest(
         root,
         args.output,
+        artifact_output_dir=args.artifacts_output,
         abis=[part.strip() for part in args.abi.split(",") if part.strip()],
     )
