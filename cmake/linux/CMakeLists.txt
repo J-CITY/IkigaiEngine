@@ -1,3 +1,4 @@
+# Builds the linux application and its platform dependencies.
 cmake_minimum_required(VERSION 3.20)
 
 include(CMakeDependentOption)
@@ -6,37 +7,16 @@ set(APP_NAME "IkigaiEngine")
 project(${APP_NAME} LANGUAGES C CXX)
 
 # --- Configuration Options ---
-option(USE_SDL      "Use SDL window backend" ON)
-option(USE_OPENGL   "Use OpenGL rendering backend" ON)
-option(USE_VULKAN   "Use Vulkan rendering backend" OFF)
-option(USE_METAL    "Use Metal rendering backend" OFF)
-option(USE_MIMALLOC "Use mimalloc override" OFF)
-option(USE_EDITOR "Build with in-engine editor UI" ON)
-cmake_dependent_option(USE_FILE_WATCHER "Watch asset files for hot reload" ON "USE_EDITOR" OFF)
+include("${CMAKE_CURRENT_LIST_DIR}/../EngineOptions.cmake")
+ikigai_configure_engine_options(linux)
 
-if(NOT USE_OPENGL AND NOT USE_VULKAN AND NOT USE_METAL)
-    message(FATAL_ERROR "At least one render backend must be enabled (USE_OPENGL, USE_VULKAN, USE_METAL)")
-endif()
-
-if(USE_METAL)
-    enable_language(OBJCXX)
-    set(CMAKE_OBJCXX_STANDARD 20)
-    set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
-endif()
-
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum OS X deployment version")
 
 # --- Directory Setup ---
-set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../3rd")
-set(MAIN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../src")
-set(ENGINE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/out" CACHE PATH "Directory for the built executable")
-if(NOT IS_ABSOLUTE "${ENGINE_RUNTIME_OUTPUT_DIRECTORY}")
-    get_filename_component(ENGINE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${ENGINE_RUNTIME_OUTPUT_DIRECTORY}" ABSOLUTE)
-endif()
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${ENGINE_RUNTIME_OUTPUT_DIRECTORY}")
-
-# Add Homebrew paths to CMake prefix paths for searching
-list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew" "/usr/local")
+get_filename_component(IKIGAI_PLATFORM_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+set(THIRD_PARTY_DIR "${IKIGAI_PLATFORM_ROOT}/3rd")
+set(MAIN_SOURCE_DIR "${IKIGAI_PLATFORM_ROOT}/src")
+include("${CMAKE_CURRENT_LIST_DIR}/../OutputDirectories.cmake")
+ikigai_configure_output_directories(linux)
 
 # --- Dependencies ---
 
@@ -45,10 +25,6 @@ set(ASSIMP_BUILD_ZLIB OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
 set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
-
-# Fix for new Apple Clang treating nontrivial-memaccess as an error
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-nontrivial-memaccess -Wno-error=nontrivial-memaccess")
-
 add_subdirectory(${THIRD_PARTY_DIR}/assimp ./3rd/assimp/build)
 
 # 2. Freetype
@@ -118,13 +94,6 @@ if(USE_VULKAN)
     )
 endif()
 
-if(USE_METAL)
-    list(APPEND IMGUI_SOURCES 
-        "${IMGUI_DIR}/imgui/backends/imgui_impl_metal.h"
-        "${IMGUI_DIR}/imgui/backends/imgui_impl_metal.mm"
-    )
-endif()
-
 add_library(imgui STATIC ${IMGUI_SOURCES})
 target_include_directories(imgui PUBLIC 
     "${IMGUI_DIR}/imgui" 
@@ -147,7 +116,7 @@ target_include_directories(spine PUBLIC "${THIRD_PARTY_DIR}/spine")
 target_compile_definitions(spine PUBLIC SPINE_USE_STD_FUNCTION)
 
 # 8. Lua
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Scripting.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../Scripting.cmake")
 if(USE_LUA)
 file(GLOB_RECURSE LUA_FILES "${THIRD_PARTY_DIR}/lua/*.c")
 list(FILTER LUA_FILES EXCLUDE REGEX "lua\\.c$")
@@ -186,69 +155,32 @@ target_compile_definitions(soloud PUBLIC WITH_MINIAUDIO)
 # --- Main Application ---
 
 # Sources
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Python.cmake")
-# Populate/prune generated sources before globbing; PRE_BUILD runs after compilation.
-execute_process(
-    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../utils/build/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
-    COMMAND_ERROR_IS_FATAL ANY
-)
-file(GLOB_RECURSE PROJECT_ABSOLUTE_HEADERS "${MAIN_SOURCE_DIR}/*.hpp" "${MAIN_SOURCE_DIR}/*.h")
-file(GLOB_RECURSE PROJECT_ABSOLUTE_SOURCES "${MAIN_SOURCE_DIR}/*.cpp" "${MAIN_SOURCE_DIR}/*.c" "${MAIN_SOURCE_DIR}/*.cxx" "${MAIN_SOURCE_DIR}/*.mm" "${MAIN_SOURCE_DIR}/*.m")
+include("${CMAKE_CURRENT_LIST_DIR}/../EngineSources.cmake")
+ikigai_collect_engine_sources("${MAIN_SOURCE_DIR}" PROJECT_ABSOLUTE_HEADERS PROJECT_ABSOLUTE_SOURCES)
 
-if(NOT USE_OPENGL)
-    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]gl[/\\\\]")
-    list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]gl[/\\\\]")
-    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendGl\\.cpp$")
-endif()
-if(NOT USE_VULKAN)
-    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
-    list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
-    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendVk\\.cpp$")
-endif()
-if(NOT USE_METAL)
-    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
-    list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
-    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendMetal\\.mm$")
-endif()
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
-list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendDx12\\.cpp$")
-# Quest / Android (OCULUS) — separate Gradle target, not desktop macOS
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]platform[/\\\\]quest[/\\\\]")
-list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]platform[/\\\\]quest[/\\\\]")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "androidAssetFileSystem\\.cpp$")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "androidAssetFileSystem\\.h$")
-list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "androidAssetFileSystem\\.h$")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "oxrInput\\.cpp$")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "oxrInput\\.h$")
-list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "oxrInput\\.h$")
+include("${CMAKE_CURRENT_LIST_DIR}/../PlatformSources.cmake")
+ikigai_filter_platform_sources(PROJECT_ABSOLUTE_HEADERS PROJECT_ABSOLUTE_SOURCES linux)
 
 # Source Groups for IDE
 source_group(TREE ${MAIN_SOURCE_DIR} FILES ${PROJECT_ABSOLUTE_HEADERS} ${PROJECT_ABSOLUTE_SOURCES})
 
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/VectorGraphics.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Coroutines.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Task.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/EngineFeatures.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../VectorGraphics.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../EngineCore.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../EngineFeatures.cmake")
 
-add_executable(${APP_NAME} MACOSX_BUNDLE
+add_executable(${APP_NAME}
     ${PROJECT_ABSOLUTE_HEADERS}
     ${PROJECT_ABSOLUTE_SOURCES}
 )
 
 # --- Generate Reflection Headers ---
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Materials.cmake")
-ikigai_attach_material_assets(${APP_NAME})
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Python.cmake")
-add_custom_command(
-    TARGET ${APP_NAME} PRE_BUILD
-    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../utils/build/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
-    COMMENT "Running IkigaiHeaderTool to generate reflection headers..."
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../Python.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../Codegen.cmake")
+ikigai_configure_reflection(${APP_NAME})
 
 # Properties
 set_target_properties(${APP_NAME} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-target_compile_options(${APP_NAME} PRIVATE -Wall -Wextra)
+target_compile_options(${APP_NAME} PRIVATE -Wall -Wextra -fpermissive)
 
 # Definitions
 target_compile_definitions(${APP_NAME} PRIVATE SOL_EXCEPTIONS_SAFE_PROPAGATION=1 SOL_NO_LUA_HPP=1)
@@ -263,15 +195,6 @@ endif()
 
 if(USE_VULKAN)
     target_compile_definitions(${APP_NAME} PRIVATE IKIGAI_HAS_VULKAN VULKAN_BACKEND)
-endif()
-
-if(USE_METAL)
-    target_compile_definitions(${APP_NAME} PRIVATE IKIGAI_HAS_METAL METAL_BACKEND)
-    foreach(src ${PROJECT_ABSOLUTE_SOURCES})
-        if(src MATCHES "\\.(mm|m)$")
-            set_source_files_properties(${src} PROPERTIES COMPILE_FLAGS "-fobjc-arc")
-        endif()
-    endforeach()
 endif()
 
 # Additional definitions
@@ -343,43 +266,28 @@ if(USE_VULKAN)
     target_link_libraries(${APP_NAME} PRIVATE volk)
 endif()
 
-# System frameworks
-find_library(COCOA_FRAMEWORK Cocoa)
-find_library(IOKIT_FRAMEWORK IOKit)
-find_library(COREVIDEO_FRAMEWORK CoreVideo)
-find_library(COREAUDIO_FRAMEWORK CoreAudio)
-find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox)
-find_library(METAL_FRAMEWORK Metal)
-find_library(METALKIT_FRAMEWORK MetalKit)
-find_library(QUARTZCORE_FRAMEWORK QuartzCore)
-
+# System libraries for Linux
 target_link_libraries(${APP_NAME} PRIVATE 
     ${LIBS_TO_LINK}
-    ${COCOA_FRAMEWORK} 
-    ${IOKIT_FRAMEWORK} 
-    ${COREVIDEO_FRAMEWORK} 
-    ${COREAUDIO_FRAMEWORK}
-    ${AUDIOTOOLBOX_FRAMEWORK}
+    dl
+    pthread
+    m
 )
-
-if(USE_METAL)
-    target_link_libraries(${APP_NAME} PRIVATE ${METAL_FRAMEWORK} ${METALKIT_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
-    # Tell CMake to compile core.cpp as Objective-C++ since it includes Metal headers
-    set_source_files_properties(${MAIN_SOURCE_DIR}/engine/coreModule/core/core.cpp PROPERTIES COMPILE_FLAGS "-x objective-c++")
-endif()
 
 # Independent vector geometry and SDF font module
 target_link_libraries(${APP_NAME} PRIVATE ikigai_vector)
-target_link_libraries(${APP_NAME} PRIVATE ikigai_coroutines ikigai_task)
 
 ikigai_configure_scripting(${APP_NAME})
 if(COMMAND ikigai_add_scripting_tests)
     ikigai_add_scripting_tests(${APP_NAME})
 endif()
 
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Networking.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../Networking.cmake")
 ikigai_configure_network(${APP_NAME})
 
 # Shared application startup and optional local diagnostics.
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Application.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../Application.cmake")
 ikigai_configure_application(${APP_NAME})
+
+# Link independent libraries and build the remaining shared module targets.
+ikigai_link_engine_core(${APP_NAME})

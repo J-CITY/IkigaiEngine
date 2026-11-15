@@ -1,4 +1,5 @@
 include_guard(GLOBAL)
+include("${CMAKE_CURRENT_LIST_DIR}/SourceSelection.cmake")
 
 # Ray tracing stays in the engine target. The flag only chooses which
 # translation units are compiled. Android, Quest and Emscripten have no
@@ -13,15 +14,20 @@ if(USE_RAY_TRACING AND (ANDROID OR EMSCRIPTEN))
     message(FATAL_ERROR "USE_RAY_TRACING cannot be enabled on Android, Quest, or Emscripten")
 endif()
 
-# Included after the engine source glob. list(FILTER) runs in that scope.
+# Select explicit implementation alternatives in the application source lists.
 foreach(ikigai_source_list PROJECT_ABSOLUTE_SOURCES PROJECT_SOURCES)
-    list(FILTER ${ikigai_source_list} EXCLUDE REGEX "(^|[/\\\\])EcsDemo\\.cpp$")
+    ikigai_exclude_sources(${ikigai_source_list}
+        "EcsDemo.cpp")
     if(USE_RAY_TRACING)
-        list(FILTER ${ikigai_source_list} EXCLUDE REGEX "(^|[/\\\\])gameRayTracingStub\\.cpp$")
+        ikigai_exclude_sources(${ikigai_source_list}
+            "engine/renderModule/gameRayTracingStub.cpp")
     else()
-        list(FILTER ${ikigai_source_list} EXCLUDE REGEX "(^|[/\\\\])gameRayTracing\\.cpp$")
-        list(FILTER ${ikigai_source_list} EXCLUDE REGEX "(^|[/\\\\])rayTracingVk\\.cpp$")
-        list(FILTER ${ikigai_source_list} EXCLUDE REGEX "(^|[/\\\\])rayTracingDx12\\.cpp$")
+        ikigai_exclude_sources(${ikigai_source_list}
+            "engine/renderModule/gameRayTracing.cpp")
+        ikigai_exclude_sources(${ikigai_source_list}
+            "engine/renderModule/backends/vk/rayTracingVk.cpp")
+        ikigai_exclude_sources(${ikigai_source_list}
+            "engine/renderModule/backends/dx12/rayTracingDx12.cpp")
     endif()
 endforeach()
 

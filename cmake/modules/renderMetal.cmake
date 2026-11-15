@@ -1,0 +1,26 @@
+# Explicit metal renderer backend sources shared by ownership and platform selection.
+# Add backend files here; unsupported platforms exclude this same manifest.
+set(IKIGAI_MANIFEST_renderMetal
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/bufferMetal.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/bufferMetal.mm"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/deviceMetal.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/driverMetal.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/driverMetal.mm"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/frameBufferMetal.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/frameBufferMetal.mm"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/gpuMemoryMetal.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/gpuMemoryMetal.mm"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/materialMetal.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/materialMetal.mm"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/meshMetal.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/meshMetal.mm"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/metalBindings.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/metalVertexLayout.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/modelMetal.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/modelMetal.mm"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/shaderMetal.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/shaderMetal.mm"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/textureMetal.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/textureMetal.mm"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/vertexFormatsMetal.h"
+)

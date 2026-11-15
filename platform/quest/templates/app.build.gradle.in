@@ -15,7 +15,7 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments "-DUSE_LUA={{USE_LUA}}", "-DUSE_IKIGAI_SCRIPT={{USE_IKIGAI_SCRIPT}}", "-DANDROID_STL=c++_shared", "-DANDROID_PLATFORM={{ANDROID_PLATFORM}}", "-DIKIGAI_GLES_VERSION={{GLES_CMAKE}}"
+                arguments {{CMAKE_ARGUMENTS}}
                 abiFilters {{ABI_FILTERS}}
             }
         }
@@ -51,4 +51,19 @@ android {
 
 dependencies {
     implementation 'org.khronos.openxr:openxr_loader_for_android:{{OPENXR_LOADER_VERSION}}'
+}
+
+// Publish the APKs through the artifact provider, preserving AGP task dependencies.
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def configuration = variant.name.capitalize()
+        def publishApk = tasks.register("publish${configuration}Apk", Copy) {
+            from(variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.APK.INSTANCE))
+            include '*.apk', 'output-metadata.json'
+            into(new File('{{ARTIFACT_OUTPUT}}', configuration))
+        }
+        tasks.matching { it.name == "assemble${configuration}" }.configureEach {
+            dependsOn(publishApk)
+        }
+    }
 }

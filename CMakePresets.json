@@ -1,0 +1,460 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "engine-base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "windows",
+      "inherits": "engine-base",
+      "displayName": "windows",
+      "generator": "Visual Studio 17 2022",
+      "vendor": {
+        "ikigai.dev/launcher/1.0": {
+          "platform": "win"
+        }
+      },
+      "cacheVariables": {
+        "IKIGAI_PLATFORM": "windows",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/windows"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "architecture": "x64",
+      "toolset": "host=x64",
+      "binaryDir": "${sourceDir}/build/windows"
+    },
+    {
+      "name": "windows-vs2019",
+      "inherits": "windows",
+      "generator": "Visual Studio 16 2019",
+      "binaryDir": "${sourceDir}/build/windows/vs2019",
+      "cacheVariables": {
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/windows"
+      }
+    },
+    {
+      "name": "mac",
+      "inherits": "engine-base",
+      "displayName": "mac",
+      "generator": "Unix Makefiles",
+      "vendor": {
+        "ikigai.dev/launcher/1.0": {
+          "platform": "mac"
+        }
+      },
+      "cacheVariables": {
+        "IKIGAI_PLATFORM": "mac",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/mac"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "binaryDir": "${sourceDir}/build/mac"
+    },
+    {
+      "name": "mac-xcode",
+      "inherits": "mac",
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/build/mac/xcode",
+      "cacheVariables": {
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/mac"
+      }
+    },
+    {
+      "name": "linux",
+      "inherits": "engine-base",
+      "displayName": "linux",
+      "generator": "Ninja",
+      "vendor": {
+        "ikigai.dev/launcher/1.0": {
+          "platform": "linux"
+        }
+      },
+      "cacheVariables": {
+        "IKIGAI_PLATFORM": "linux",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/linux"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "binaryDir": "${sourceDir}/build/linux"
+    },
+    {
+      "name": "ios",
+      "inherits": "engine-base",
+      "displayName": "ios",
+      "generator": "Xcode",
+      "vendor": {
+        "ikigai.dev/launcher/1.0": {
+          "platform": "ios"
+        }
+      },
+      "cacheVariables": {
+        "IKIGAI_PLATFORM": "ios",
+        "CMAKE_SYSTEM_NAME": "iOS",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/ios"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "binaryDir": "${sourceDir}/build/ios"
+    },
+    {
+      "name": "web",
+      "inherits": "engine-base",
+      "displayName": "web",
+      "generator": "Ninja",
+      "vendor": {
+        "ikigai.dev/launcher/1.0": {
+          "platform": "web"
+        }
+      },
+      "cacheVariables": {
+        "IKIGAI_PLATFORM": "web",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/web"
+      },
+      "toolchainFile": "${sourceDir}/3rd/emsdk/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+      "binaryDir": "${sourceDir}/build/web"
+    },
+    {
+      "name": "android",
+      "inherits": "engine-base",
+      "displayName": "android",
+      "generator": "Ninja",
+      "vendor": {
+        "ikigai.dev/launcher/1.0": {
+          "platform": "android"
+        }
+      },
+      "cacheVariables": {
+        "IKIGAI_PLATFORM": "android",
+        "ANDROID_ABI": "arm64-v8a",
+        "ANDROID_PLATFORM": "android-24",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/android"
+      },
+      "toolchainFile": "$env{ANDROID_NDK_ROOT}/build/cmake/android.toolchain.cmake",
+      "binaryDir": "${sourceDir}/build/android/native"
+    },
+    {
+      "name": "quest",
+      "inherits": "engine-base",
+      "displayName": "quest",
+      "generator": "Ninja",
+      "vendor": {
+        "ikigai.dev/launcher/1.0": {
+          "platform": "quest"
+        }
+      },
+      "cacheVariables": {
+        "IKIGAI_PLATFORM": "quest",
+        "ANDROID_ABI": "arm64-v8a",
+        "ANDROID_PLATFORM": "android-24",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/quest"
+      },
+      "toolchainFile": "$env{ANDROID_NDK_ROOT}/build/cmake/android.toolchain.cmake",
+      "binaryDir": "${sourceDir}/build/quest/native"
+    },
+    {
+      "name": "core-windows",
+      "inherits": "engine-base",
+      "displayName": "core-windows",
+      "generator": "Visual Studio 17 2022",
+      "vendor": {
+        "ikigai.dev/launcher/1.0": {
+          "platform": "win"
+        }
+      },
+      "cacheVariables": {
+        "IKIGAI_PLATFORM": "windows",
+        "IKIGAI_BUILD_APPLICATION": false,
+        "CMAKE_BUILD_TYPE": null,
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": null
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "architecture": "x64",
+      "toolset": "host=x64",
+      "binaryDir": "${sourceDir}/build/windows/core"
+    },
+    {
+      "name": "core-linux",
+      "inherits": "engine-base",
+      "displayName": "core-linux",
+      "generator": "Ninja Multi-Config",
+      "vendor": {
+        "ikigai.dev/launcher/1.0": {
+          "platform": "linux"
+        }
+      },
+      "cacheVariables": {
+        "IKIGAI_PLATFORM": "linux",
+        "IKIGAI_BUILD_APPLICATION": false,
+        "CMAKE_BUILD_TYPE": null,
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": null
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "binaryDir": "${sourceDir}/build/linux/core"
+    },
+    {
+      "name": "core-mac",
+      "inherits": "engine-base",
+      "displayName": "core-mac",
+      "generator": "Ninja Multi-Config",
+      "vendor": {
+        "ikigai.dev/launcher/1.0": {
+          "platform": "mac"
+        }
+      },
+      "cacheVariables": {
+        "IKIGAI_PLATFORM": "mac",
+        "IKIGAI_BUILD_APPLICATION": false,
+        "CMAKE_BUILD_TYPE": null,
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": null
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "binaryDir": "${sourceDir}/build/mac/core"
+    },
+    {
+      "name": "mac-debug",
+      "inherits": "mac",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/mac"
+      },
+      "binaryDir": "${sourceDir}/build/mac/Debug"
+    },
+    {
+      "name": "mac-release",
+      "inherits": "mac",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/mac"
+      },
+      "binaryDir": "${sourceDir}/build/mac/Release"
+    },
+    {
+      "name": "linux-debug",
+      "inherits": "linux",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/linux"
+      },
+      "binaryDir": "${sourceDir}/build/linux/Debug"
+    },
+    {
+      "name": "linux-release",
+      "inherits": "linux",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/linux"
+      },
+      "binaryDir": "${sourceDir}/build/linux/Release"
+    },
+    {
+      "name": "web-debug",
+      "inherits": "web",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/web"
+      },
+      "binaryDir": "${sourceDir}/build/web/Debug"
+    },
+    {
+      "name": "web-release",
+      "inherits": "web",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/web"
+      },
+      "binaryDir": "${sourceDir}/build/web/Release"
+    },
+    {
+      "name": "android-debug",
+      "inherits": "android",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/android"
+      },
+      "binaryDir": "${sourceDir}/build/android/Debug"
+    },
+    {
+      "name": "android-release",
+      "inherits": "android",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/android"
+      },
+      "binaryDir": "${sourceDir}/build/android/Release"
+    },
+    {
+      "name": "quest-debug",
+      "inherits": "quest",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/quest"
+      },
+      "binaryDir": "${sourceDir}/build/quest/Debug"
+    },
+    {
+      "name": "quest-release",
+      "inherits": "quest",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENGINE_RUNTIME_OUTPUT_DIRECTORY": "${sourceDir}/out/quest"
+      },
+      "binaryDir": "${sourceDir}/build/quest/Release"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-debug",
+      "configurePreset": "windows",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-release",
+      "configurePreset": "windows",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-vs2019-debug",
+      "configurePreset": "windows-vs2019",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-vs2019-release",
+      "configurePreset": "windows-vs2019",
+      "configuration": "Release"
+    },
+    {
+      "name": "mac-debug",
+      "configurePreset": "mac-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "mac-release",
+      "configurePreset": "mac-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "mac-xcode-debug",
+      "configurePreset": "mac-xcode",
+      "configuration": "Debug"
+    },
+    {
+      "name": "mac-xcode-release",
+      "configurePreset": "mac-xcode",
+      "configuration": "Release"
+    },
+    {
+      "name": "linux-debug",
+      "configurePreset": "linux-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "linux-release",
+      "configurePreset": "linux-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "ios-debug",
+      "configurePreset": "ios",
+      "configuration": "Debug"
+    },
+    {
+      "name": "ios-release",
+      "configurePreset": "ios",
+      "configuration": "Release"
+    },
+    {
+      "name": "web-debug",
+      "configurePreset": "web-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "web-release",
+      "configurePreset": "web-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "android-debug",
+      "configurePreset": "android-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "android-release",
+      "configurePreset": "android-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "quest-debug",
+      "configurePreset": "quest-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "quest-release",
+      "configurePreset": "quest-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "core-windows-debug",
+      "configurePreset": "core-windows",
+      "configuration": "Debug"
+    },
+    {
+      "name": "core-windows-release",
+      "configurePreset": "core-windows",
+      "configuration": "Release"
+    },
+    {
+      "name": "core-linux-debug",
+      "configurePreset": "core-linux",
+      "configuration": "Debug"
+    },
+    {
+      "name": "core-linux-release",
+      "configurePreset": "core-linux",
+      "configuration": "Release"
+    },
+    {
+      "name": "core-mac-debug",
+      "configurePreset": "core-mac",
+      "configuration": "Debug"
+    },
+    {
+      "name": "core-mac-release",
+      "configurePreset": "core-mac",
+      "configuration": "Release"
+    }
+  ]
+}

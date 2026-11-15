@@ -747,6 +747,9 @@ oxr_is_session_running ()
     return s_session_running;
 }
 
+bool oxr_is_session_focused() {
+	return s_session_state == XR_SESSION_STATE_FOCUSED;
+}
 
 static XrEventDataBuffer s_evDataBuf;
 
@@ -1010,4 +1013,3 @@ oxr_check_errors (XrResult ret, const char *func, const char *fname, int line)
         LOGE ("[OXR ERROR] %s(%d):%s: %s\n", fname, line, func, errbuf);
     }
 }
- 

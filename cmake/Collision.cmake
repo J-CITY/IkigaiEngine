@@ -1,4 +1,6 @@
+# Builds spatial/collision libraries using the public math target requirements.
 include_guard(GLOBAL)
+include("${CMAKE_CURRENT_LIST_DIR}/Math.cmake")
 get_filename_component(IKIGAI_COLLISION_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 function(ikigai_add_spatial_library)
     if(NOT TARGET ikigai_spatial)
@@ -14,17 +16,13 @@ function(ikigai_add_collision_library dimension)
         return()
     endif()
     add_library(${target} STATIC "${IKIGAI_COLLISION_ROOT}/src/engine/collisionModule/collision${dimension}d.cpp")
-    target_link_libraries(${target} PUBLIC ikigai_spatial)
+    target_link_libraries(${target} PUBLIC ikigai_spatial ikigai_math)
     set_target_properties(${target} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     if(dimension EQUAL 3)
         target_sources(${target} PRIVATE "${IKIGAI_COLLISION_ROOT}/src/engine/collisionModule/convexPolyhedron.cpp"
             "${IKIGAI_COLLISION_ROOT}/src/engine/collisionModule/closedSurfaceMesh.cpp"
             "${IKIGAI_COLLISION_ROOT}/src/engine/collisionModule/compoundCollider.cpp"
             "${IKIGAI_COLLISION_ROOT}/src/engine/collisionModule/convexCollision.cpp")
-        # Dependencies of the engine's math types, independent of physics/ECS.
-        target_include_directories(${target} PUBLIC "${IKIGAI_COLLISION_ROOT}/3rd/serdepp/include"
-            "${IKIGAI_COLLISION_ROOT}/3rd/json/include" "${IKIGAI_COLLISION_ROOT}/3rd/nameof/include"
-            "${IKIGAI_COLLISION_ROOT}/3rd/magic_enum/include/magic_enum")
     endif()
     if(MSVC)
         target_compile_options(${target} PRIVATE /W4 /utf-8)

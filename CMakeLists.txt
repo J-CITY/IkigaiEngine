@@ -1,0 +1,47 @@
+# Builds the engine application, or only SDK-independent production libraries.
+# Platform entry points are grouped below cmake/.
+cmake_minimum_required(VERSION 3.22)
+set(IKIGAI_PLATFORM "auto" CACHE STRING "Target platform: auto, windows, linux, mac, ios, web, android, quest")
+set_property(CACHE IKIGAI_PLATFORM PROPERTY STRINGS auto windows linux mac ios web android quest)
+# Apply Apple toolchain defaults before the first compiler detection.
+if(IKIGAI_PLATFORM STREQUAL "ios" OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    include(cmake/AppleToolchain.cmake)
+    ikigai_configure_apple_toolchain(ios)
+elseif(IKIGAI_PLATFORM STREQUAL "mac" OR CMAKE_SYSTEM_NAME STREQUAL "Darwin" OR
+        (IKIGAI_PLATFORM STREQUAL "auto" AND CMAKE_HOST_APPLE AND
+         NOT DEFINED CMAKE_SYSTEM_NAME AND NOT DEFINED CMAKE_TOOLCHAIN_FILE))
+    include(cmake/AppleToolchain.cmake)
+    ikigai_configure_apple_toolchain(mac)
+endif()
+project(IkigaiEngine LANGUAGES C CXX)
+option(IKIGAI_BUILD_APPLICATION "Build the platform engine application" ON)
+
+if(NOT IKIGAI_BUILD_APPLICATION)
+    add_subdirectory(cmake/core)
+    return()
+endif()
+
+set(platform "${IKIGAI_PLATFORM}")
+if(platform STREQUAL "auto")
+    if(EMSCRIPTEN)
+        set(platform web)
+    elseif(ANDROID)
+        set(platform android)
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+        set(platform ios)
+    elseif(WIN32)
+        set(platform windows)
+    elseif(APPLE)
+        set(platform mac)
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        set(platform linux)
+    else()
+        message(FATAL_ERROR "Unsupported target system: ${CMAKE_SYSTEM_NAME}")
+    endif()
+endif()
+
+if(platform MATCHES "^(windows|linux|mac|ios|web|android|quest)$")
+    add_subdirectory("cmake/${platform}")
+else()
+    message(FATAL_ERROR "Unknown IKIGAI_PLATFORM: ${platform}")
+endif()

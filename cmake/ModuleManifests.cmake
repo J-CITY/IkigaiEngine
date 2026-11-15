@@ -1,0 +1,42 @@
+# Loads explicit production source manifests; IKIGAI_SOURCE_ROOT is the absolute src directory.
+# Source selection and target ownership are handled by the shared engine build.
+set(IKIGAI_MODULE_MANIFEST_NAMES
+    aiModule
+    application
+    audioModule
+    captureModule
+    cheatModule
+    collisionModule
+    coreModule
+    coroutineModule
+    destructionModule
+    ecsModule
+    editorModule
+    environmentModule
+    mathModule
+    networkModule
+    particleModule
+    physics2dModule
+    physicsCommon
+    physicsModule
+    profilerModule
+    renderModule
+    renderGl
+    renderVk
+    renderDx12
+    renderMetal
+    resourceModule
+    sceneModule
+    scriptModule
+    skeletalModule
+    surfaceModule
+    taskModule
+    uiModule
+    utilsModule
+    vectorGraphicsModule
+    virtualGeometryModule
+    windowModule
+)
+foreach(module IN LISTS IKIGAI_MODULE_MANIFEST_NAMES)
+    include("${CMAKE_CURRENT_LIST_DIR}/modules/${module}.cmake")
+endforeach()

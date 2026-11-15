@@ -1,17 +1,9 @@
+# Configures production crash metadata and debug symbols, without test dependencies.
+# The optional reporter executable is built separately in testModule/tools/crashReporter.
 include_guard(GLOBAL)
 
 function(ikigai_configure_crash_reporting target)
     get_filename_component(root "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/.." ABSOLUTE)
-    if(NOT TARGET ikigai_crash_reporter)
-        add_executable(ikigai_crash_reporter "${root}/utils/crashReporter/main.cpp")
-        set_target_properties(ikigai_crash_reporter PROPERTIES OUTPUT_NAME IkigaiCrashReporter)
-        target_compile_features(ikigai_crash_reporter PRIVATE cxx_std_20)
-        target_compile_definitions(ikigai_crash_reporter PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-        target_include_directories(ikigai_crash_reporter PRIVATE "${root}/src/engine")
-        target_link_libraries(ikigai_crash_reporter PRIVATE dbghelp)
-    endif()
-    add_dependencies(${target} ikigai_crash_reporter)
-
     set(revision unknown)
     find_package(Git QUIET)
     if(Git_FOUND)

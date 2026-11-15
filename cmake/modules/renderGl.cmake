@@ -1,0 +1,28 @@
+# Explicit gl renderer backend sources shared by ownership and platform selection.
+# Add backend files here; unsupported platforms exclude this same manifest.
+set(IKIGAI_MANIFEST_renderGl
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/driverGl.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/driverGl.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/frameBufferGl.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/frameBufferGl.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/gpuMemoryGl.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/gpuMemoryGl.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/indexBufferGl.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/indexBufferGl.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/materialGl.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/materialGl.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/meshGl.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/meshGl.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/modelGl.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/modelGl.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/shaderGl.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/shaderGl.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/storageBufferGl.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/storageBufferGl.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/textureGl.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/textureGl.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/uniformBufferGl.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/uniformBufferGl.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/vertexBufferGl.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/vertexBufferGl.h"
+)

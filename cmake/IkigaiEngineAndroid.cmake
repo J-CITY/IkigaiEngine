@@ -1,13 +1,14 @@
+# Builds the cmake application and its platform dependencies.
 # Android shared library for IkigaiEngine.
 # Included from cmake/android/CMakeLists.txt. Gradle passes -DIKIGAI_GLES_VERSION=300|310|320.
 
 get_filename_component(REPO_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+include("${CMAKE_CURRENT_LIST_DIR}/EngineOptions.cmake")
+ikigai_configure_engine_options(android)
 include("${CMAKE_CURRENT_LIST_DIR}/Python.cmake")
 set(THIRD_PARTY_DIR "${REPO_ROOT}/3rd")
 set(MAIN_SOURCE_DIR "${REPO_ROOT}/src")
 
-option(USE_EDITOR "Build with in-engine editor UI" ON)
-cmake_dependent_option(USE_FILE_WATCHER "Watch asset files for hot reload" OFF "USE_EDITOR" OFF)
 
 set(IKIGAI_GLES_VERSION "320" CACHE STRING "OpenGL ES version: 300, 310, or 320")
 set_property(CACHE IKIGAI_GLES_VERSION PROPERTY STRINGS 300 310 320)
@@ -145,20 +146,14 @@ endif()
 
 # --- Engine shared library (SDL loads it as "main") ---
 
-file(GLOB_RECURSE PROJECT_HEADERS CONFIGURE_DEPENDS "${MAIN_SOURCE_DIR}/*.hpp" "${MAIN_SOURCE_DIR}/*.h")
-file(GLOB_RECURSE PROJECT_SOURCES CONFIGURE_DEPENDS "${MAIN_SOURCE_DIR}/*.cpp" "${MAIN_SOURCE_DIR}/*.c" "${MAIN_SOURCE_DIR}/*.cxx")
+include("${CMAKE_CURRENT_LIST_DIR}/EngineSources.cmake")
+ikigai_collect_engine_sources("${MAIN_SOURCE_DIR}" PROJECT_HEADERS PROJECT_SOURCES)
 
-foreach(backend vk dx12 metal)
-    list(FILTER PROJECT_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]${backend}[/\\\\]")
-    list(FILTER PROJECT_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]${backend}[/\\\\]")
-endforeach()
-list(FILTER PROJECT_SOURCES EXCLUDE REGEX "imguiBackendVk\\.cpp$")
-list(FILTER PROJECT_SOURCES EXCLUDE REGEX "imguiBackendDx12\\.cpp$")
-list(FILTER PROJECT_SOURCES EXCLUDE REGEX "imguiBackendMetal\\.mm$")
+include("${CMAKE_CURRENT_LIST_DIR}/PlatformSources.cmake")
+ikigai_filter_platform_sources(PROJECT_HEADERS PROJECT_SOURCES android)
 
 include("${CMAKE_CURRENT_LIST_DIR}/VectorGraphics.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/Coroutines.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/Task.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/EngineCore.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/EngineFeatures.cmake")
 
 add_library(main SHARED ${PROJECT_HEADERS} ${PROJECT_SOURCES})
@@ -166,12 +161,8 @@ set_target_properties(main PROPERTIES DEBUG_POSTFIX "")
 # NDK enables -Werror=format-security. Editor/ImGui helpers pass non-literal format strings.
 target_compile_options(main PRIVATE -Wno-error=format-security)
 
-add_custom_command(
-    TARGET main PRE_BUILD
-    COMMAND "${Python3_EXECUTABLE}" "${REPO_ROOT}/utils/build/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
-    COMMENT "Running IkigaiHeaderTool to generate reflection headers..."
-    VERBATIM
-)
+include("${CMAKE_CURRENT_LIST_DIR}/Codegen.cmake")
+ikigai_configure_reflection(main)
 
 target_compile_definitions(main PRIVATE
     NOMINMAX
@@ -238,7 +229,6 @@ message(STATUS "IkigaiEngine Android OpenGL ES IKIGAI_GLES_VERSION=${IKIGAI_GLES
 # Independent vector geometry and SDF font module
 target_link_libraries(main PRIVATE ikigai_vector)
 ikigai_apply_feature_definitions(main)
-target_link_libraries(main PRIVATE ikigai_coroutines ikigai_task)
 
 ikigai_configure_scripting(main)
 if(COMMAND ikigai_add_scripting_tests)
@@ -251,3 +241,6 @@ ikigai_configure_network(main)
 # Shared application startup and optional local diagnostics.
 include("${CMAKE_CURRENT_LIST_DIR}/Application.cmake")
 ikigai_configure_application(main)
+
+# Link independent libraries and build the remaining shared module targets.
+ikigai_link_engine_core(main)

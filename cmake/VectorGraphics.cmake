@@ -1,10 +1,13 @@
 # CPU vector graphics library; intentionally independent of ECS and render APIs.
+include("${CMAKE_CURRENT_LIST_DIR}/SourceSelection.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/Math.cmake")
 set(IKIGAI_VECTOR_DIR "${CMAKE_CURRENT_LIST_DIR}/../src/engine/vectorGraphicsModule")
 add_library(ikigai_vector STATIC
     "${IKIGAI_VECTOR_DIR}/geometry.cpp"
     "${IKIGAI_VECTOR_DIR}/vectorContext.cpp"
     "${IKIGAI_VECTOR_DIR}/text/fontResource.cpp")
 target_compile_features(ikigai_vector PUBLIC cxx_std_20)
+target_link_libraries(ikigai_vector PUBLIC ikigai_math)
 set_target_properties(ikigai_vector PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(ikigai_vector PUBLIC "${CMAKE_CURRENT_LIST_DIR}/../src/engine")
 if(TARGET freetype)
@@ -17,7 +20,10 @@ if(MSVC)
     target_compile_options(ikigai_vector PRIVATE /utf-8)
 endif()
 foreach(vector_source_list PROJECT_ABSOLUTE_SOURCES PROJECT_SOURCES)
-    list(FILTER ${vector_source_list} EXCLUDE REGEX "vectorGraphicsModule/(geometry|vectorContext)\\.cpp$|vectorGraphicsModule/text/fontResource\\.cpp$")
+    ikigai_exclude_sources(${vector_source_list}
+        "engine/vectorGraphicsModule/geometry.cpp"
+        "engine/vectorGraphicsModule/text/fontResource.cpp"
+        "engine/vectorGraphicsModule/vectorContext.cpp")
 endforeach()
 option(IKIGAI_VECTOR_TESTS "Build vector graphics CPU regression tests" OFF)
 if(IKIGAI_VECTOR_TESTS)

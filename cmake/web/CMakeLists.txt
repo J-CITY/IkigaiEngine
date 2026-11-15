@@ -1,3 +1,4 @@
+# Builds the emscripten application and its platform dependencies.
 cmake_minimum_required(VERSION 3.20)
 
 set(APP_NAME "IkigaiEngine")
@@ -8,32 +9,18 @@ if(NOT EMSCRIPTEN)
 endif()
 
 # --- Configuration Options ---
-option(USE_SDL      "Use SDL window backend" ON)
-option(USE_OPENGL   "Use OpenGL rendering backend" ON)
-option(USE_VULKAN   "Use Vulkan rendering backend" OFF)
-option(USE_DX12     "Use DX12 rendering backend" OFF)
-option(USE_METAL    "Use Metal rendering backend" OFF)
-option(USE_MIMALLOC "Use mimalloc override" OFF)
-option(USE_EDITOR "Build with in-engine editor UI" ON)
-cmake_dependent_option(USE_FILE_WATCHER "Watch asset files for hot reload" OFF "USE_EDITOR" OFF)
+include("${CMAKE_CURRENT_LIST_DIR}/../EngineOptions.cmake")
+ikigai_configure_engine_options(web)
 
-set(USE_VULKAN OFF CACHE BOOL "Vulkan is not supported on Emscripten" FORCE)
-set(USE_DX12 OFF CACHE BOOL "DX12 is not supported on Emscripten" FORCE)
-set(USE_METAL OFF CACHE BOOL "Metal is not supported on Emscripten" FORCE)
 
-if(NOT USE_OPENGL)
-    message(FATAL_ERROR "Emscripten build requires USE_OPENGL=ON")
-endif()
 
 # --- Directory Setup ---
-set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../3rd")
-set(MAIN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../src")
+get_filename_component(IKIGAI_PLATFORM_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+set(THIRD_PARTY_DIR "${IKIGAI_PLATFORM_ROOT}/3rd")
+set(MAIN_SOURCE_DIR "${IKIGAI_PLATFORM_ROOT}/src")
 
-set(ENGINE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/out" CACHE PATH "Directory for the built executable")
-if(NOT IS_ABSOLUTE "${ENGINE_RUNTIME_OUTPUT_DIRECTORY}")
-    get_filename_component(ENGINE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${ENGINE_RUNTIME_OUTPUT_DIRECTORY}" ABSOLUTE)
-endif()
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${ENGINE_RUNTIME_OUTPUT_DIRECTORY}")
+include("${CMAKE_CURRENT_LIST_DIR}/../OutputDirectories.cmake")
+ikigai_configure_output_directories(web)
 set(CMAKE_EXECUTABLE_SUFFIX ".html")
 
 # --- Dependencies ---
@@ -130,7 +117,7 @@ target_include_directories(spine PUBLIC "${THIRD_PARTY_DIR}/spine")
 target_compile_definitions(spine PUBLIC SPINE_USE_STD_FUNCTION)
 
 # 8. Lua
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Scripting.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../Scripting.cmake")
 if(USE_LUA)
 file(GLOB_RECURSE LUA_FILES "${THIRD_PARTY_DIR}/lua/*.c")
 list(FILTER LUA_FILES EXCLUDE REGEX "lua\\.c$")
@@ -156,39 +143,23 @@ target_compile_definitions(soloud PRIVATE NOMINMAX)
 
 # --- Main Application ---
 
-file(GLOB_RECURSE PROJECT_ABSOLUTE_HEADERS "${MAIN_SOURCE_DIR}/*.hpp" "${MAIN_SOURCE_DIR}/*.h")
-file(GLOB_RECURSE PROJECT_ABSOLUTE_SOURCES "${MAIN_SOURCE_DIR}/*.cpp" "${MAIN_SOURCE_DIR}/*.c" "${MAIN_SOURCE_DIR}/*.cxx")
+include("${CMAKE_CURRENT_LIST_DIR}/../EngineSources.cmake")
+ikigai_collect_engine_sources("${MAIN_SOURCE_DIR}" PROJECT_ABSOLUTE_HEADERS PROJECT_ABSOLUTE_SOURCES)
 
-if(NOT USE_OPENGL)
-    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]gl[/\\\\]")
-    list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]gl[/\\\\]")
-    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendGl\\.cpp$")
-endif()
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
-list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendVk\\.cpp$")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
-list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendDx12\\.cpp$")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
-list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendMetal\\.mm$")
+include("${CMAKE_CURRENT_LIST_DIR}/../PlatformSources.cmake")
+ikigai_filter_platform_sources(PROJECT_ABSOLUTE_HEADERS PROJECT_ABSOLUTE_SOURCES web)
 
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/VectorGraphics.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Coroutines.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Task.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/EngineFeatures.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../VectorGraphics.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../EngineCore.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../EngineFeatures.cmake")
 
 add_executable(${APP_NAME}
     ${PROJECT_ABSOLUTE_HEADERS}
     ${PROJECT_ABSOLUTE_SOURCES}
 )
 
-add_custom_command(
-    TARGET ${APP_NAME} PRE_BUILD
-    COMMAND python "${CMAKE_CURRENT_SOURCE_DIR}/../utils/build/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
-    COMMENT "Running IkigaiHeaderTool to generate reflection headers..."
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../Codegen.cmake")
+ikigai_configure_reflection(${APP_NAME})
 
 set_target_properties(${APP_NAME} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
 
@@ -248,7 +219,17 @@ set(LIBS_TO_LINK
 target_link_libraries(${APP_NAME} PRIVATE ${LIBS_TO_LINK})
 
 # --- Emscripten compile / link ---
-set(ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../assets")
+set(ASSETS_DIR "${CMAKE_CURRENT_BINARY_DIR}/content/assets")
+set(CONTENT_PACKS_DIR "${CMAKE_CURRENT_BINARY_DIR}/content/assets_packs")
+find_package(Python3 3.9 REQUIRED COMPONENTS Interpreter)
+add_custom_target(${APP_NAME}_content
+    COMMAND "${Python3_EXECUTABLE}"
+        "${IKIGAI_PLATFORM_ROOT}/utils/assets/content_packs.py"
+        stage --platform web --layout repo
+        --dest "${CMAKE_CURRENT_BINARY_DIR}/content"
+    COMMENT "Staging Web assets and content packs..."
+    VERBATIM)
+add_dependencies(${APP_NAME} ${APP_NAME}_content)
 set(EMSCRIPTEN_PORT_OPTIONS
     "SHELL:-sUSE_SDL=3"
     "SHELL:-sUSE_FREETYPE=1"
@@ -260,7 +241,7 @@ set(EMSCRIPTEN_COMPILE_OPTIONS
 set(EMSCRIPTEN_LINK_OPTIONS
     -fexceptions
     "SHELL:-lidbfs.js"
-    "SHELL:--pre-js ${CMAKE_CURRENT_SOURCE_DIR}/user_storage.js"
+    "SHELL:--pre-js ${IKIGAI_PLATFORM_ROOT}/platform/web/user_storage.js"
     ${EMSCRIPTEN_PORT_OPTIONS}
     "SHELL:-sWASM=1"
     "SHELL:-sUSE_WEBGL2=1"
@@ -273,7 +254,8 @@ set(EMSCRIPTEN_LINK_OPTIONS
     "SHELL:-sEXPORTED_FUNCTIONS=_main,_malloc,_free"
     "SHELL:-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,HEAPF32,HEAPU8,wasmMemory"
     "SHELL:--preload-file ${ASSETS_DIR}@/assets"
-    "SHELL:--shell-file ${CMAKE_CURRENT_SOURCE_DIR}/template.html"
+    "SHELL:--preload-file ${CONTENT_PACKS_DIR}@/assets_packs"
+    "SHELL:--shell-file ${IKIGAI_PLATFORM_ROOT}/platform/web/template.html"
     $<$<CONFIG:Debug>:SHELL:-sASSERTIONS=1>
     $<$<CONFIG:Release>:-O2>
 )
@@ -284,16 +266,18 @@ target_link_options(${APP_NAME} PRIVATE ${EMSCRIPTEN_LINK_OPTIONS})
 
 # Independent vector geometry and SDF font module
 target_link_libraries(${APP_NAME} PRIVATE ikigai_vector)
-target_link_libraries(${APP_NAME} PRIVATE ikigai_coroutines ikigai_task)
 
 ikigai_configure_scripting(${APP_NAME})
 if(COMMAND ikigai_add_scripting_tests)
     ikigai_add_scripting_tests(${APP_NAME})
 endif()
 
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Networking.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../Networking.cmake")
 ikigai_configure_network(${APP_NAME})
 
 # Shared application startup and optional local diagnostics.
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Application.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../Application.cmake")
 ikigai_configure_application(${APP_NAME})
+
+# Link independent libraries and build the remaining shared module targets.
+ikigai_link_engine_core(${APP_NAME})

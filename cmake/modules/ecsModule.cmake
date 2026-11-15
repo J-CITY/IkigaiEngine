@@ -1,0 +1,26 @@
+# Explicit source manifest for ecsModule.
+# Add new production files here; generated reflection files are owned by Codegen.cmake.
+set(IKIGAI_MANIFEST_ecsModule
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/access.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/commandBuffer.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/commandBuffer.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/componentArray.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/componentArrayInterface.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/componentHandle.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/componentManager.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/componentManager.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/entityManager.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/entityManager.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/events.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/relationManager.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/signature.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemAccessConflict.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemAccessScope.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemBuilder.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemManager.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemManager.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/utils.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/utils.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/world.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/world.h"
+)

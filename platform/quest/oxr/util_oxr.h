@@ -101,6 +101,7 @@ int         oxr_begin_session (XrSession session);
 int         oxr_handle_session_state_changed (XrSession session, XrEventDataSessionStateChanged &ev,
                                               bool *exitLoop, bool *reqRestart);
 bool        oxr_is_session_running ();
+bool oxr_is_session_focused();
 
 int         oxr_poll_events (XrInstance instance, XrSession session, bool *exit_loop, bool *req_restart);
 

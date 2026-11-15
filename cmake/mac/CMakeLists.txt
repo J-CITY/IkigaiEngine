@@ -1,40 +1,18 @@
+# Builds the mac application and its platform dependencies.
 cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_SYSTEM_NAME iOS)
-set(CMAKE_OSX_SYSROOT iphoneos CACHE STRING "iOS SDK (iphoneos or iphonesimulator)")
-set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum iOS deployment version")
+include("${CMAKE_CURRENT_LIST_DIR}/../AppleToolchain.cmake")
+ikigai_configure_apple_toolchain(mac)
 
 include(CMakeDependentOption)
 
 set(APP_NAME "IkigaiEngine")
-set(IOS_BUNDLE_IDENTIFIER "com.yourcompany.IkigaiEngine" CACHE STRING "iOS application bundle identifier")
-set(IOS_DEVELOPMENT_TEAM "" CACHE STRING "Apple development team for device signing")
 project(${APP_NAME} LANGUAGES C CXX)
 
-# Disable code signing by default for all 3rd party targets (static libs)
-set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO")
-set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO")
-set(CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "")
-
 # --- Configuration Options ---
-option(USE_SDL      "Use SDL window backend" ON)
-option(USE_OPENGL   "Use OpenGL rendering backend" OFF)
-option(USE_VULKAN   "Use Vulkan rendering backend" OFF)
-option(USE_METAL    "Use Metal rendering backend" ON)
-option(USE_MIMALLOC "Use mimalloc override" OFF)
-option(USE_EDITOR "Build with in-engine editor UI" OFF)
-cmake_dependent_option(USE_FILE_WATCHER "Watch asset files for hot reload" OFF "USE_EDITOR" OFF)
+include("${CMAKE_CURRENT_LIST_DIR}/../EngineOptions.cmake")
+ikigai_configure_engine_options(mac)
 
-if(NOT USE_OPENGL AND NOT USE_VULKAN AND NOT USE_METAL)
-    message(FATAL_ERROR "At least one render backend must be enabled (USE_OPENGL, USE_VULKAN, USE_METAL)")
-endif()
-
-if(USE_VULKAN)
-    message(FATAL_ERROR "The iOS target supports OpenGL ES and Metal; Vulkan requires MoltenVK integration")
-endif()
-if(NOT USE_SDL)
-    message(FATAL_ERROR "The iOS target requires the SDL window backend")
-endif()
 
 if(USE_METAL)
     enable_language(OBJCXX)
@@ -42,29 +20,27 @@ if(USE_METAL)
     set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
 endif()
 
-# Silence availability errors for std::to_chars (used by fmt/spdlog via json/format)
-add_compile_definitions(_LIBCPP_DISABLE_AVAILABILITY)
-
-
 # --- Directory Setup ---
-set(THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../3rd")
-set(MAIN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../src")
-set(ENGINE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/out" CACHE PATH "Directory for the built executable")
-if(NOT IS_ABSOLUTE "${ENGINE_RUNTIME_OUTPUT_DIRECTORY}")
-    get_filename_component(ENGINE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${ENGINE_RUNTIME_OUTPUT_DIRECTORY}" ABSOLUTE)
-endif()
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${ENGINE_RUNTIME_OUTPUT_DIRECTORY}")
+get_filename_component(IKIGAI_PLATFORM_ROOT "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+set(THIRD_PARTY_DIR "${IKIGAI_PLATFORM_ROOT}/3rd")
+set(MAIN_SOURCE_DIR "${IKIGAI_PLATFORM_ROOT}/src")
+include("${CMAKE_CURRENT_LIST_DIR}/../OutputDirectories.cmake")
+ikigai_configure_output_directories(mac)
+
+# Add Homebrew paths to CMake prefix paths for searching
+list(APPEND CMAKE_PREFIX_PATH "/opt/homebrew" "/usr/local")
 
 # --- Dependencies ---
 
 # 1. Assimp
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ZLIB OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
 set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
+
+# Fix for new Apple Clang treating nontrivial-memaccess as an error
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-nontrivial-memaccess -Wno-error=nontrivial-memaccess")
+
 add_subdirectory(${THIRD_PARTY_DIR}/assimp ./3rd/assimp/build)
 
 # 2. Freetype
@@ -142,7 +118,6 @@ if(USE_METAL)
 endif()
 
 add_library(imgui STATIC ${IMGUI_SOURCES})
-target_compile_options(imgui PRIVATE -Wno-deprecated-declarations -Wno-error=deprecated-declarations -Wno-error=format -Wno-error=format-security -Wno-format-security -w)
 target_include_directories(imgui PUBLIC 
     "${IMGUI_DIR}/imgui" 
     "${IMGUI_DIR}/IconFont"
@@ -164,14 +139,13 @@ target_include_directories(spine PUBLIC "${THIRD_PARTY_DIR}/spine")
 target_compile_definitions(spine PUBLIC SPINE_USE_STD_FUNCTION)
 
 # 8. Lua
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Scripting.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../Scripting.cmake")
 if(USE_LUA)
 file(GLOB_RECURSE LUA_FILES "${THIRD_PARTY_DIR}/lua/*.c")
 list(FILTER LUA_FILES EXCLUDE REGEX "lua\\.c$")
 list(FILTER LUA_FILES EXCLUDE REGEX "luac\\.c$")
 add_library(lua STATIC ${LUA_FILES})
 target_include_directories(lua PUBLIC "${THIRD_PARTY_DIR}/lua")
-target_compile_definitions(lua PRIVATE LUA_USE_IOS)
 endif()
 
 # 9. Volk
@@ -200,82 +174,38 @@ list(APPEND SOLOUD_SOURCES "${THIRD_PARTY_DIR}/soloud/src/backend/miniaudio/solo
 add_library(soloud STATIC ${SOLOUD_SOURCES})
 target_include_directories(soloud PUBLIC "${THIRD_PARTY_DIR}/soloud/include")
 target_compile_definitions(soloud PUBLIC WITH_MINIAUDIO)
-set_source_files_properties("${THIRD_PARTY_DIR}/soloud/src/backend/miniaudio/soloud_miniaudio.cpp" PROPERTIES COMPILE_FLAGS "-x objective-c++")
-
 
 # --- Main Application ---
-file(GLOB_RECURSE PROJECT_ABSOLUTE_HEADERS "${MAIN_SOURCE_DIR}/*.hpp" "${MAIN_SOURCE_DIR}/*.h")
-file(GLOB_RECURSE PROJECT_ABSOLUTE_SOURCES "${MAIN_SOURCE_DIR}/*.cpp" "${MAIN_SOURCE_DIR}/*.c" "${MAIN_SOURCE_DIR}/*.cxx" "${MAIN_SOURCE_DIR}/*.mm" "${MAIN_SOURCE_DIR}/*.m")
 
-if(NOT USE_OPENGL)
-    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]gl[/\\\\]")
-    list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]gl[/\\\\]")
-    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendGl\\.cpp$")
-endif()
-if(NOT USE_VULKAN)
-    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
-    list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]vk[/\\\\]")
-    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendVk\\.cpp$")
-endif()
-if(NOT USE_METAL)
-    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
-    list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]metal[/\\\\]")
-    list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendMetal\\.mm$")
-endif()
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
-list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]backends[/\\\\]dx12[/\\\\]")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "imguiBackendDx12\\.cpp$")
+# Sources
+include("${CMAKE_CURRENT_LIST_DIR}/../Python.cmake")
 
-# Quest / Android
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "[/\\\\]platform[/\\\\]quest[/\\\\]")
-list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "[/\\\\]platform[/\\\\]quest[/\\\\]")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "androidAssetFileSystem\\.cpp$")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "androidAssetFileSystem\\.h$")
-list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "androidAssetFileSystem\\.h$")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "oxrInput\\.cpp$")
-list(FILTER PROJECT_ABSOLUTE_SOURCES EXCLUDE REGEX "oxrInput\\.h$")
-list(FILTER PROJECT_ABSOLUTE_HEADERS EXCLUDE REGEX "oxrInput\\.h$")
+include("${CMAKE_CURRENT_LIST_DIR}/../EngineSources.cmake")
+ikigai_collect_engine_sources("${MAIN_SOURCE_DIR}" PROJECT_ABSOLUTE_HEADERS PROJECT_ABSOLUTE_SOURCES OBJC)
 
-# Get assets
-set(ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../assets")
-set_source_files_properties(${ASSETS_DIR} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+include("${CMAKE_CURRENT_LIST_DIR}/../PlatformSources.cmake")
+ikigai_filter_platform_sources(PROJECT_ABSOLUTE_HEADERS PROJECT_ABSOLUTE_SOURCES mac)
 
+# Source Groups for IDE
 source_group(TREE ${MAIN_SOURCE_DIR} FILES ${PROJECT_ABSOLUTE_HEADERS} ${PROJECT_ABSOLUTE_SOURCES})
 
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/VectorGraphics.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Coroutines.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Task.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/EngineFeatures.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../VectorGraphics.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../EngineCore.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../EngineFeatures.cmake")
 
 add_executable(${APP_NAME} MACOSX_BUNDLE
     ${PROJECT_ABSOLUTE_HEADERS}
     ${PROJECT_ABSOLUTE_SOURCES}
-    ${ASSETS_DIR}
 )
-
-set_target_properties(${APP_NAME} PROPERTIES 
-    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist.in"
-    XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2" # iPhone and iPad
-    XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "YES"
-    XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "YES"
-    XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "Apple Development"
-    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${IOS_BUNDLE_IDENTIFIER}"
-)
-if(IOS_DEVELOPMENT_TEAM)
-    set_target_properties(${APP_NAME} PROPERTIES XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "${IOS_DEVELOPMENT_TEAM}")
-endif()
 
 # --- Generate Reflection Headers ---
-find_package(Python3 COMPONENTS Interpreter REQUIRED)
-add_custom_command(
-    TARGET ${APP_NAME} PRE_BUILD
-    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/../utils/build/IkigaiHeaderTool.py" "${MAIN_SOURCE_DIR}" "${MAIN_SOURCE_DIR}/engine/generated"
-    COMMENT "Running IkigaiHeaderTool to generate reflection headers..."
-)
+include("${CMAKE_CURRENT_LIST_DIR}/../Python.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../Codegen.cmake")
+ikigai_configure_reflection(${APP_NAME})
 
 # Properties
 set_target_properties(${APP_NAME} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-target_compile_options(${APP_NAME} PRIVATE -Wall -Wextra -Wno-deprecated-declarations -Wno-error=deprecated-declarations -Wno-error=format -Wno-error=format-security -Wno-format-security)
+target_compile_options(${APP_NAME} PRIVATE -Wall -Wextra)
 
 # Definitions
 target_compile_definitions(${APP_NAME} PRIVATE SOL_EXCEPTIONS_SAFE_PROPAGATION=1 SOL_NO_LUA_HPP=1)
@@ -302,7 +232,6 @@ if(USE_METAL)
 endif()
 
 # Additional definitions
-target_compile_definitions(${APP_NAME} PRIVATE JSON_HAS_STD_FORMAT=0)
 ikigai_apply_feature_definitions(${APP_NAME})
 if(USE_EDITOR)
     target_compile_definitions(${APP_NAME} PRIVATE USE_EDITOR)
@@ -312,6 +241,7 @@ if(USE_EDITOR AND USE_FILE_WATCHER)
 endif()
 
 # --- Includes and Linking ---
+
 target_include_directories(${APP_NAME} PRIVATE
     ${MAIN_SOURCE_DIR}/engine
     ${THIRD_PARTY_DIR}/glm
@@ -357,7 +287,12 @@ if(USE_SDL)
 endif()
 
 if(USE_OPENGL)
-    target_link_libraries(${APP_NAME} PRIVATE "-framework OpenGLES")
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(${APP_NAME} PRIVATE OpenGL::GL)
+    
+    find_package(GLEW REQUIRED)
+    target_include_directories(${APP_NAME} PRIVATE ${GLEW_INCLUDE_DIRS})
+    target_link_libraries(${APP_NAME} PRIVATE GLEW::GLEW)
 endif()
 
 if(USE_VULKAN)
@@ -365,36 +300,45 @@ if(USE_VULKAN)
     target_link_libraries(${APP_NAME} PRIVATE volk)
 endif()
 
-# iOS System frameworks
+# System frameworks
+find_library(COCOA_FRAMEWORK Cocoa)
+find_library(IOKIT_FRAMEWORK IOKit)
+find_library(COREVIDEO_FRAMEWORK CoreVideo)
+find_library(COREAUDIO_FRAMEWORK CoreAudio)
+find_library(AUDIOTOOLBOX_FRAMEWORK AudioToolbox)
+find_library(METAL_FRAMEWORK Metal)
+find_library(METALKIT_FRAMEWORK MetalKit)
+find_library(QUARTZCORE_FRAMEWORK QuartzCore)
+
 target_link_libraries(${APP_NAME} PRIVATE 
     ${LIBS_TO_LINK}
-    "-framework UIKit"
-    "-framework QuartzCore"
-    "-framework Foundation"
-    "-framework CoreVideo"
-    "-framework CoreAudio"
-    "-framework AudioToolbox"
-    "-framework AVFoundation"
+    ${COCOA_FRAMEWORK} 
+    ${IOKIT_FRAMEWORK} 
+    ${COREVIDEO_FRAMEWORK} 
+    ${COREAUDIO_FRAMEWORK}
+    ${AUDIOTOOLBOX_FRAMEWORK}
 )
 
 if(USE_METAL)
-    target_link_libraries(${APP_NAME} PRIVATE "-framework Metal" "-framework MetalKit")
+    target_link_libraries(${APP_NAME} PRIVATE ${METAL_FRAMEWORK} ${METALKIT_FRAMEWORK} ${QUARTZCORE_FRAMEWORK})
     # Tell CMake to compile core.cpp as Objective-C++ since it includes Metal headers
     set_source_files_properties(${MAIN_SOURCE_DIR}/engine/coreModule/core/core.cpp PROPERTIES COMPILE_FLAGS "-x objective-c++")
 endif()
 
 # Independent vector geometry and SDF font module
 target_link_libraries(${APP_NAME} PRIVATE ikigai_vector)
-target_link_libraries(${APP_NAME} PRIVATE ikigai_coroutines ikigai_task)
 
 ikigai_configure_scripting(${APP_NAME})
 if(COMMAND ikigai_add_scripting_tests)
     ikigai_add_scripting_tests(${APP_NAME})
 endif()
 
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Networking.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../Networking.cmake")
 ikigai_configure_network(${APP_NAME})
 
 # Shared application startup and optional local diagnostics.
-include("${CMAKE_CURRENT_LIST_DIR}/../cmake/Application.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../Application.cmake")
 ikigai_configure_application(${APP_NAME})
+
+# Link independent libraries and build the remaining shared module targets.
+ikigai_link_engine_core(${APP_NAME})

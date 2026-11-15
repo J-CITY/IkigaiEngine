@@ -1,4 +1,6 @@
+# Builds the 2D physics library and configures its application integration.
 include_guard(GLOBAL)
+include("${CMAKE_CURRENT_LIST_DIR}/SourceSelection.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/PhysicsReflection.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/Collision.cmake")
 option(USE_PHYSICS_2D "Enable educational 2D rigid/soft/fluid physics" OFF)
@@ -8,11 +10,30 @@ get_filename_component(IKIGAI_PHYSICS_2D_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABS
 function(ikigai_configure_physics2d target)
     target_compile_definitions(${target} PRIVATE USE_PHYSICS_2D=$<BOOL:${USE_PHYSICS_2D}>)
     get_target_property(sources ${target} SOURCES)
-    # Platform projects glob the engine: the kernel is compiled only once.
-    list(FILTER sources EXCLUDE REGEX "physics2dModule/.*\\.cpp$")
-    list(FILTER sources EXCLUDE REGEX "collisionModule/.*\\.cpp$")
+    # Kernel translation units belong to their libraries, never the application.
+    ikigai_exclude_sources(sources
+        "engine/physics2dModule/collision.cpp"
+        "engine/physics2dModule/particles.cpp"
+        "engine/physics2dModule/world2d.cpp")
+    ikigai_exclude_sources(sources
+        "engine/collisionModule/closedSurfaceMesh.cpp"
+        "engine/collisionModule/collision2d.cpp"
+        "engine/collisionModule/collision3d.cpp"
+        "engine/collisionModule/compoundCollider.cpp"
+        "engine/collisionModule/convexCollision.cpp"
+        "engine/collisionModule/convexPolyhedron.cpp")
     if(NOT USE_PHYSICS_2D)
-        list(FILTER sources EXCLUDE REGEX "(physics2dComponent|forceField2dComponent|cloth2dComponent|physics2dSystem)(\\.generated)?\\.cpp$")
+        ikigai_exclude_sources(sources
+            "engine/coreModule/ecs/components/cloth2dComponent.cpp"
+            "engine/coreModule/ecs/components/forceField2dComponent.cpp"
+            "engine/coreModule/ecs/components/physics2dComponent.cpp"
+            "engine/coreModule/ecs/systems/physics2dSystem.cpp"
+            "engine/generated/cloth2dComponent.generated.cpp"
+            "engine/generated/forceField2dComponent.generated.cpp"
+            "engine/generated/physics2dComponent.generated.cpp"
+            "${CMAKE_BINARY_DIR}/generated/cloth2dComponent.generated.cpp"
+            "${CMAKE_BINARY_DIR}/generated/forceField2dComponent.generated.cpp"
+            "${CMAKE_BINARY_DIR}/generated/physics2dComponent.generated.cpp")
     endif()
     set_property(TARGET ${target} PROPERTY SOURCES "${sources}")
     if(USE_PHYSICS_2D)
@@ -23,16 +44,6 @@ function(ikigai_configure_physics2d target)
             # with default 4 KiB pages. 8 KiB pages allow a larger Debug database.
             target_link_options(${target} PRIVATE $<$<CONFIG:Debug>:/PDBPAGESIZE:8192>)
         endif()
-        # Explicit outputs support a clean first build, before the glob can see
-        # generated files. The header tool's generated registration is guarded too.
-        ikigai_add_physics_reflection()
-        add_dependencies(${target} ikigai_physics_reflection)
-        set(generated "${IKIGAI_PHYSICS_2D_ROOT}/src/engine/generated/physics2dComponent.generated")
-        target_sources(${target} PRIVATE "${generated}.cpp")
-        set(field_generated "${IKIGAI_PHYSICS_2D_ROOT}/src/engine/generated/forceField2dComponent.generated")
-        target_sources(${target} PRIVATE "${field_generated}.cpp")
-        set(cloth_generated "${IKIGAI_PHYSICS_2D_ROOT}/src/engine/generated/cloth2dComponent.generated")
-        target_sources(${target} PRIVATE "${cloth_generated}.cpp")
     endif()
     if(IKIGAI_PHYSICS_2D_TESTS)
         ikigai_configure_physics2d_tests(${target})

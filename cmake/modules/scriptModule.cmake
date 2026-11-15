@@ -1,0 +1,28 @@
+# Explicit source manifest for scriptModule.
+# Add new production files here; generated reflection files are owned by Codegen.cmake.
+set(IKIGAI_MANIFEST_scriptModule
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/contextPredicate.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/contextPredicate.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/ikigaiScriptBinder.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/ikigaiScriptBinder.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/ikigaiScriptMathsBinder.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/ikigaiScriptRuntime.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/ikigaiScriptRuntime.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/luaActorBinder.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/luaActorBinder.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/luaBinder.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/luaBinder.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/luaComponentBinder.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/luaComponentBinder.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/luaGlobalsBinder.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/luaGlobalsBinder.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/luaMathsBinder.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/luaMathsBinder.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptFeatures.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptFileWatcher.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptFileWatcher.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptInterpreter.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptInterpreter.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptSource.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptVfsPath.h"
+)
