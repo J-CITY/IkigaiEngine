@@ -10,6 +10,7 @@
 #include <SDL3/SDL.h>
 #include <algorithm>
 #include <cstring>
+#include <unordered_map>
 
 namespace IKIGAI::IMGUI {
 void ConfigureImGuiContext();
@@ -19,6 +20,7 @@ namespace {
 class ImGuiBackendVulkan final : public IKIGAI::IMGUI::IImGuiBackend {
 	int mPlatformFrame = -1;
 	ImGui_ImplVulkan_PipelineInfo mPipelineInfo {};
+	std::unordered_map<ImTextureID, IKIGAI::RENDER::TextureVk*> mTextures;
 	VkFormat mColorFormat = VK_FORMAT_B8G8R8A8_UNORM, mDepthFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
 
 public:
@@ -48,6 +50,7 @@ public:
 		initInfo.Device = *driverVk->mDevice;
 		initInfo.QueueFamily = driverVk->mQueueFamilyIndex;
 		initInfo.Queue = *driverVk->mQueue;
+		initInfo.CheckVkResultFn = [](VkResult result) { IKIGAI::RENDER::UtilityVk::GetDriver()->checkFrameResult(result, "ImGui Vulkan"); };
 		initInfo.DescriptorPool = driverVk->mImguiPool;
 		initInfo.PipelineInfoMain.Subpass = 0;
 		initInfo.MinImageCount = 3;
@@ -109,6 +112,24 @@ public:
 		if (!driverVk || !ImGui::GetDrawData()) {
 			return;
 		}
+		// Editor draw lists are built before scene rendering, which may change
+		// attachment layouts again. Prepare the actual sampled images at consumption.
+		driverVk->joinGraphCompute();
+		driverVk->deactivateRenderPass();
+		for (const auto* viewport : ImGui::GetPlatformIO().Viewports) {
+			if (!viewport->DrawData) {
+				continue;
+			}
+			for (const auto* list : viewport->DrawData->CmdLists) {
+				for (const auto& command : list->CmdBuffer) {
+					const auto texture = mTextures.find(command.GetTexID());
+					if (texture != mTextures.end()) {
+						texture->second->setState(driverVk->getCurrentFrame().mCommandBuffer, vk::ImageLayout::eGeneral);
+					}
+				}
+			}
+		}
+		driverVk->renderGraphBarrier(false);
 		const auto format = target ? VK_FORMAT_R8G8B8A8_UNORM : static_cast<VkFormat>(driverVk->mSurfaceFormat.format);
 		const auto depth = target && !target->getDepth() ? VK_FORMAT_UNDEFINED : VK_FORMAT_D32_SFLOAT_S8_UINT;
 		if (format != mColorFormat || depth != mDepthFormat) {
@@ -134,7 +155,16 @@ public:
 		if ((io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) && mPlatformFrame != imguiFrame) {
 			mPlatformFrame = imguiFrame;
 			ImGui::UpdatePlatformWindows();
+			if (ImGui::GetPlatformIO().Viewports.Size > 1) {
+				// Detached windows sample engine textures. Their layout transitions and
+				// producers must reach the shared queue before ImGui submits its draws.
+				driverVk->joinGraphCompute();
+				driverVk->renderGraphBarrier(false);
+				driverVk->splitGraphGraphics(0);
+			}
 			ImGui::RenderPlatformWindowsDefault();
+			// The final engine submission follows the platform windows, so its fence
+			// also protects textures and descriptors referenced by those windows.
 		}
 	}
 
@@ -143,7 +173,12 @@ public:
 		if (!textureVk.mDescriptorSet) {
 			textureVk.mDescriptorSet = ImGui_ImplVulkan_AddTexture(*textureVk.mSampler, *textureVk.mImageView, VK_IMAGE_LAYOUT_GENERAL);
 		}
+		mTextures[reinterpret_cast<ImTextureID>(textureVk.mDescriptorSet)] = &textureVk;
 		return reinterpret_cast<void*>(textureVk.mDescriptorSet);
+	}
+	void unregisterGpuTexture(IKIGAI::RENDER::TextureInterface& texture) override {
+		const auto& textureVk = static_cast<IKIGAI::RENDER::TextureVk&>(texture);
+		mTextures.erase(reinterpret_cast<ImTextureID>(textureVk.mDescriptorSet));
 	}
 
 	void invalidateDeviceObjects() override { }

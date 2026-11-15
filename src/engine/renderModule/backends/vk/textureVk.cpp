@@ -318,8 +318,13 @@ IKIGAI::RENDER::TextureVk::~TextureVk() {
 }
 
 void IKIGAI::RENDER::TextureVk::releaseResources() {
-    for(auto& [key,view]:mAttachmentViews) UtilityVk::GetDriver()->destroyDeferred(std::move(view));
-    mAttachmentViews.clear();
+	if (auto* imgui = IKIGAI::IMGUI::Get()) {
+		imgui->unregisterGpuTexture(*this);
+	}
+	for (auto& [key, view] : mAttachmentViews) {
+		UtilityVk::GetDriver()->destroyDeferred(std::move(view));
+	}
+	mAttachmentViews.clear();
 	auto* driver = UtilityVk::GetDriver();
 	// Editor draw data can still reference a texture replaced during resize.
 	// Keep its descriptors, views and sampler alive until the frame fence.
@@ -411,10 +416,8 @@ void IKIGAI::RENDER::TextureVk::recreate(const TextureResource& descriptor, cons
 }
 
 void* IKIGAI::RENDER::TextureVk::getImguiId() {
-	if (!mDescriptorSet) {
-		if (auto* imgui = IKIGAI::IMGUI::Get()) {
-			imgui->registerGpuTexture(*this);
-		}
+	if (auto* imgui = IKIGAI::IMGUI::Get()) {
+		imgui->registerGpuTexture(*this);
 	}
 	auto* driver = UtilityVk::GetDriver();
 	if (!isInState(vk::ImageLayout::eGeneral)) {
@@ -423,8 +426,6 @@ void* IKIGAI::RENDER::TextureVk::getImguiId() {
 	setState(driver->getCurrentFrame().mCommandBuffer, vk::ImageLayout::eGeneral);
 	return (void*)mDescriptorSet;
 }
-
-
 
 std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(const std::string& path, UTILS::IAllocator* allocator, TextureDeleter deleter) {
 	IKIGAI::RENDER::TextureResource res;

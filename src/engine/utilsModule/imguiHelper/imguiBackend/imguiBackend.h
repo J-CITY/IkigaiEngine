@@ -22,8 +22,11 @@ namespace IKIGAI::IMGUI {
 		virtual void newFrame() = 0;
 		virtual void endFrame() = 0;
 		virtual void renderDrawData() = 0;
-        virtual void renderDrawDataTo(std::shared_ptr<RENDER::FrameBufferInterface>) {renderDrawData();}
+		virtual void renderDrawDataTo(std::shared_ptr<RENDER::FrameBufferInterface>) {
+			renderDrawData();
+		}
 		virtual void* registerGpuTexture(RENDER::TextureInterface& texture) = 0;
+		virtual void unregisterGpuTexture(RENDER::TextureInterface&) { }
 		virtual void invalidateDeviceObjects() = 0;
 		virtual void processEvent(const void* sdlEvent) = 0;
 	};

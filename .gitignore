@@ -24,6 +24,10 @@ CMakeCache.txt
 *.fbx
 *.gltf
 *.png
+!/screenshots/logo.png
+!/screenshots/1.png
+!/screenshots/2.png
+!/screenshots/3.png
 *.jpeg
 *.jpg
 *.ppm
