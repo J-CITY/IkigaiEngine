@@ -1,6 +1,0 @@
-{
-  "Paths": {
-    "VERTEX": "/shaders/render/portable/fullscreen.vert.glsl",
-    "FRAGMENT": "/shaders/render/portable/compose.frag.glsl"
-  }
-}

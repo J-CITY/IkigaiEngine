@@ -1,7 +1,0 @@
-{
-  "ShaderPath": "/shaders/indirectLighting/screenProbes/spPlace.shader",
-  "DepthTest": false,
-  "DepthWriting": false,
-  "BackfaceCulling": false,
-  "Uniforms": {}
-}

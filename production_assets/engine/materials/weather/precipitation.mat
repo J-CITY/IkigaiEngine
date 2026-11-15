@@ -1,7 +1,0 @@
-{
-  "ShaderPath": "/shaders/weather/precipitation.shader",
-  "Blendable": true,
-  "BackfaceCulling": false,
-  "DepthWriting": false,
-  "Uniforms": {}
-}

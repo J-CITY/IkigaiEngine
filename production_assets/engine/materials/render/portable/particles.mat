@@ -1,9 +1,0 @@
-{
-  "ShaderPath": "/shaders/render/portable/particles.shader",
-  "DepthTest": true,
-  "DepthWriting": false,
-  "BackfaceCulling": false,
-  "Blendable": true,
-  "GpuInstances": 1,
-  "Uniforms": {}
-}
