@@ -15,6 +15,8 @@ set(IKIGAI_MANIFEST_editorModule
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/editorWindow.h"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/environmentEditor.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/environmentEditor.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/editorModule/environmentWindow.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/editorModule/environmentWindow.h"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/fileBrowser.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/fileBrowser.h"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/guizmoWindow.cpp"

@@ -1,4 +1,5 @@
 #include "editorRender.h"
+#include "environmentWindow.h"
 #include "prefabEditor.h"
 #include "surfaceBrushWindow.h"
 
@@ -34,6 +35,7 @@ struct EditorRender::Internal {
 	std::unique_ptr<MenuBar> mMenu;
 	ProfillerWindow mProfiler;
 	SurfaceBrushWindow mSurfaceBrushes;
+	EnvironmentWindow mEnvironment;
 	TimelineAnimationWindow* mTimelineAnimation = nullptr;
 
 	std::list<std::unique_ptr<EditorWindow>> mWindows;
@@ -150,6 +152,10 @@ void EditorRender::draw() {
 			if (ImGui::MenuItem("Surface Brushes", nullptr, &surfaceOpen)) {
 				mData->mSurfaceBrushes.setOpen(surfaceOpen);
 			}
+			bool environmentOpen = mData->mEnvironment.isOpen();
+			if (ImGui::MenuItem("Environment", nullptr, &environmentOpen)) {
+				mData->mEnvironment.setOpen(environmentOpen);
+			}
 			ImGui::EndMenu();
 		}
 		ImGui::Separator();
@@ -159,6 +165,7 @@ void EditorRender::draw() {
 	}
 	mData->mProfiler.draw();
 	mData->mSurfaceBrushes.draw();
+	mData->mEnvironment.draw();
 	for (auto& win : mData->mWindows) {
 		win->draw();
 	}

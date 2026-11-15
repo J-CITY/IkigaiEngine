@@ -37,7 +37,10 @@ std::shared_ptr<IKIGAI::ECS::Object> recursiveDraw(IKIGAI::SCENE_SYSTEM::Scene& 
 			continue;
 		}
 		ImGui::PushID(("node_" + std::to_string(i)).c_str());
-		ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_OpenOnArrow;
+		ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_OpenOnArrow;
+		if (EditorRender::GlobalState.mSelectObject == node) {
+			nodeFlags |= ImGuiTreeNodeFlags_Selected;
+		}
 
 		bool isParent = node->getChildren().size();
 
@@ -87,6 +90,10 @@ std::shared_ptr<IKIGAI::ECS::Object> recursiveDraw(IKIGAI::SCENE_SYSTEM::Scene& 
 		}
 		else {
 			nodeIsOpen = ImGui::TreeNodeBehavior(static_cast<int>(node->getID().getUniqueId()), nodeFlags, name.c_str());
+			// Capture the row before popup/drag widgets replace its hover state.
+			if (ImGui::IsItemClicked()) {
+				selectedNode = node;
+			}
 			if (!PREFABS::Locked(*node) && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
 				editNodeId = node->getID().getUniqueId();
 				editBuffer = node->getName();
@@ -181,9 +188,6 @@ std::shared_ptr<IKIGAI::ECS::Object> recursiveDraw(IKIGAI::SCENE_SYSTEM::Scene& 
 			ImGui::EndDragDropTarget();
 		}
 
-		if (ImGui::IsItemClicked()) {
-			selectedNode = node;
-		}
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0.0f, 0.0f });
 		ImGui::InvisibleButton("__NODE_ORDER_SE_TREE_WINT__", { -1, 5 });
 		ImGui::PopStyleVar();

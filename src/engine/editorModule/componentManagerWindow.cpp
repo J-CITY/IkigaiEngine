@@ -20,6 +20,8 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <type_traits>
+#include <variant>
 
 #include "IconsFontAwesome5.h"
 #include "commandHistory.h"
@@ -197,116 +199,7 @@ void ComponentManagerWindow::draw() {
 				auto& field = typeInfo->mFields.at("materials");
 				auto materials = field.get<ECS::MaterialRenderer::MaterialList>(component.get());
 
-				for (auto& material : materials) {
-					if (!material) {
-						break;
-					}
-					auto shader = material->getShader();
-					if (!shader) {
-						continue;
-					}
-					const auto& refl = shader->getReflection();
-
-					for (auto& data : refl.mUniforms) {
-						auto& name = data.mName;
-						if (material->isEngineUniform(name)) {
-							continue;
-						}
-						if (data.mType == RENDER::ShaderReflection::UniformType::SAMPLER_2D) {
-							auto val = std::get<std::shared_ptr<RENDER::TextureInterface>>(material->get(name));
-							ImGui::PushID(("##" + name).c_str());
-
-							// auto size = RESOURCES::ServiceManager::Get<WINDOW_SYSTEM::Window>().getSize();
-							if (ImGui::Selectable(("##" + name).c_str(), false, 0, ImVec2(100, 100))) { }
-							auto pos = ImGui::GetCursorPos();
-							ImGui::SetCursorPos(ImVec2(pos.x, pos.y - 100));
-
-							if (val) {
-								ImGui::Image(reinterpret_cast<ImTextureID>(val->getImguiId()), ImVec2(100, 100), ImVec2(0, 1), ImVec2(1, 0));
-							}
-							ImGui::PopID();
-						}
-						else if (data.mType == RENDER::ShaderReflection::UniformType::UNIFORM_BUFFER) {
-							for (const auto& mamber : data.mMembers) {
-								auto _name = mamber.mName;
-								switch (mamber.mType) {
-								case RENDER::ShaderReflection::UniformType::MAT4:
-									break;
-								case RENDER::ShaderReflection::UniformType::MAT3:
-									break;
-								case RENDER::ShaderReflection::UniformType::VEC4: {
-									if (!IMGUI::CombineVecEdit::Data.count(_name)) {
-										IMGUI::CombineVecEdit::Data.insert({ _name, IMGUI::CombineVecEdit(_name, 4) });
-									}
-									auto val = std::get<MATH::Vector4f>(material->get(name + _name));
-									if (IMGUI::CombineVecEdit::Data.at(_name).draw(val)) {
-										material->set(name + _name, val);
-									}
-									break;
-								}
-								case RENDER::ShaderReflection::UniformType::VEC3: {
-									if (!IMGUI::CombineVecEdit::Data.count(_name)) {
-										IMGUI::CombineVecEdit::Data.insert({ _name, IMGUI::CombineVecEdit(_name, 3) });
-									}
-									auto val = std::get<MATH::Vector3f>(material->get(name + _name));
-									if (IMGUI::CombineVecEdit::Data.at(_name).draw(val)) {
-										material->set(name + _name, val);
-									}
-									break;
-								}
-								case RENDER::ShaderReflection::UniformType::VEC2: {
-									if (!IMGUI::CombineVecEdit::Data.count(_name)) {
-										IMGUI::CombineVecEdit::Data.insert({ _name, IMGUI::CombineVecEdit(_name, 2) });
-									}
-									auto val = std::get<MATH::Vector2f>(material->get(name + _name));
-									if (IMGUI::CombineVecEdit::Data.at(_name).draw(val)) {
-										material->set(name + _name, val);
-									}
-									break;
-								}
-								case RENDER::ShaderReflection::UniformType::INT: {
-									if (!IMGUI::ScalarEdit::Data.count(_name)) {
-										IMGUI::ScalarEdit::Data.insert({ _name, IMGUI::ScalarEdit(_name, IMGUI::ScalarEdit::TYPE::INT) });
-									}
-									auto val = std::get<int>(material->get(name + _name));
-									if (IMGUI::ScalarEdit::Data.at(_name).draw(val)) {
-										material->set(name + _name, val);
-									}
-									break;
-								}
-								case RENDER::ShaderReflection::UniformType::FLOAT: {
-									if (!IMGUI::ScalarEdit::Data.count(_name)) {
-										IMGUI::ScalarEdit::Data.insert({ _name, IMGUI::ScalarEdit(_name, IMGUI::ScalarEdit::TYPE::FLOAT) });
-									}
-									auto val = std::get<float>(material->get(name + _name));
-									if (IMGUI::ScalarEdit::Data.at(_name).draw(val)) {
-										material->set(name + _name, val);
-									}
-									break;
-								}
-								case RENDER::ShaderReflection::UniformType::BOOL: {
-									if (!IMGUI::ScalarEdit::Data.count(_name)) {
-										IMGUI::ScalarEdit::Data.insert({ _name, IMGUI::ScalarEdit(_name, IMGUI::ScalarEdit::TYPE::BOOL) });
-									}
-									auto val = std::get<bool>(material->get(name + _name));
-									if (IMGUI::ScalarEdit::Data.at(_name).draw(val)) {
-										material->set(name + _name, val);
-									}
-									break;
-								}
-								case RENDER::ShaderReflection::UniformType::SAMPLER_2D:
-									break;
-								case RENDER::ShaderReflection::UniformType::SAMPLER_3D:
-									break;
-								case RENDER::ShaderReflection::UniformType::SAMPLER_CUBE:
-									break;
-								default:
-									break;
-								}
-							}
-						}
-					}
-				}
+				DrawMaterialWidget(materials);
 			}
 			else {
 				getProps(component);
@@ -317,115 +210,77 @@ void ComponentManagerWindow::draw() {
 }
 
 void IKIGAI::EDITOR::DrawMaterialWidget(ECS::MaterialRenderer::MaterialList& materials) {
-	for (auto& material : materials) {
-		if (!material) {
-			break;
-		}
-		auto shader = material->getShader();
-		if (!shader) {
+	for (size_t materialIndex = 0; materialIndex < materials.size(); ++materialIndex) {
+		auto& material = materials[materialIndex];
+		if (!material || !material->getShader()) {
 			continue;
 		}
-		const auto& refl = shader->getReflection();
-
-		for (auto& data : refl.mUniforms) {
-			auto& name = data.mName;
-			if (material->isEngineUniform(name)) {
+		ImGui::PushID(static_cast<int>(materialIndex));
+		const auto drawUniform = [&](const std::string& name) {
+			const auto* stored = material->findUniform(name);
+			// Bindless and engine-owned parameters need not have a material slot.
+			if (!stored) {
+				return;
+			}
+			auto edited = *stored;
+			ImGui::PushID(name.c_str());
+			// Shader reflection can lower a GLSL bool to an integer. Edit the
+			// material's actual typed value instead of std::get on that guess.
+			const bool changed = std::visit(
+				[&](auto& value) -> bool {
+					using Value = std::decay_t<decltype(value)>;
+					if constexpr (std::is_same_v<Value, float>) {
+						return ImGui::DragFloat(name.c_str(), &value, 0.01f);
+					}
+					else if constexpr (std::is_same_v<Value, int>) {
+						return ImGui::DragInt(name.c_str(), &value);
+					}
+					else if constexpr (std::is_same_v<Value, bool>) {
+						return ImGui::Checkbox(name.c_str(), &value);
+					}
+					else if constexpr (std::is_same_v<Value, MATH::Vector2f>) {
+						return ImGui::DragFloat2(name.c_str(), &value.x, 0.01f);
+					}
+					else if constexpr (std::is_same_v<Value, MATH::Vector3f>) {
+						return ImGui::DragFloat3(name.c_str(), &value.x, 0.01f);
+					}
+					else if constexpr (std::is_same_v<Value, MATH::Vector4f>) {
+						return ImGui::DragFloat4(name.c_str(), &value.x, 0.01f);
+					}
+					else if constexpr (std::is_same_v<Value, std::shared_ptr<RENDER::TextureInterface>>) {
+						ImGui::TextUnformatted(name.c_str());
+						if (value) {
+							ImGui::Image(reinterpret_cast<ImTextureID>(value->getImguiId()), ImVec2(100, 100), ImVec2(0, 1), ImVec2(1, 0));
+						}
+						else {
+							ImGui::TextDisabled("No texture assigned");
+						}
+					}
+					else {
+						ImGui::TextDisabled("%s (matrix)", name.c_str());
+					}
+					return false;
+				},
+				edited);
+			if (changed) {
+				material->set(name, edited);
+			}
+			ImGui::PopID();
+		};
+		for (const auto& uniform : material->getShader()->getReflection().mUniforms) {
+			if (material->isEngineUniform(uniform.mName)) {
 				continue;
 			}
-			if (data.mType == RENDER::ShaderReflection::UniformType::SAMPLER_2D) {
-				auto val = std::get<std::shared_ptr<RENDER::TextureInterface>>(material->get(name));
-				ImGui::PushID(("##" + name).c_str());
-
-				// auto size = RESOURCES::ServiceManager::Get<WINDOW_SYSTEM::Window>().getSize();
-				if (ImGui::Selectable(("##" + name).c_str(), false, 0, ImVec2(100, 100))) { }
-				auto pos = ImGui::GetCursorPos();
-				ImGui::SetCursorPos(ImVec2(pos.x, pos.y - 100));
-
-				if (val) {
-					ImGui::Image(reinterpret_cast<ImTextureID>(val->getImguiId()), ImVec2(100, 100), ImVec2(0, 1), ImVec2(1, 0));
+			if (uniform.mType == RENDER::ShaderReflection::UniformType::UNIFORM_BUFFER) {
+				for (const auto& member : uniform.mMembers) {
+					drawUniform(uniform.mName + member.mName);
 				}
-				ImGui::PopID();
 			}
-			else if (data.mType == RENDER::ShaderReflection::UniformType::UNIFORM_BUFFER) {
-				for (const auto& mamber : data.mMembers) {
-					auto _name = mamber.mName;
-					switch (mamber.mType) {
-					case RENDER::ShaderReflection::UniformType::MAT4:
-						break;
-					case RENDER::ShaderReflection::UniformType::MAT3:
-						break;
-					case RENDER::ShaderReflection::UniformType::VEC4: {
-						if (!IMGUI::CombineVecEdit::Data.count(_name)) {
-							IMGUI::CombineVecEdit::Data.insert({ _name, IMGUI::CombineVecEdit(_name, 4) });
-						}
-						auto val = std::get<MATH::Vector4f>(material->get(name + _name));
-						if (IMGUI::CombineVecEdit::Data.at(_name).draw(val)) {
-							material->set(name + _name, val);
-						}
-						break;
-					}
-					case RENDER::ShaderReflection::UniformType::VEC3: {
-						if (!IMGUI::CombineVecEdit::Data.count(_name)) {
-							IMGUI::CombineVecEdit::Data.insert({ _name, IMGUI::CombineVecEdit(_name, 3) });
-						}
-						auto val = std::get<MATH::Vector3f>(material->get(name + _name));
-						if (IMGUI::CombineVecEdit::Data.at(_name).draw(val)) {
-							material->set(name + _name, val);
-						}
-						break;
-					}
-					case RENDER::ShaderReflection::UniformType::VEC2: {
-						if (!IMGUI::CombineVecEdit::Data.count(_name)) {
-							IMGUI::CombineVecEdit::Data.insert({ _name, IMGUI::CombineVecEdit(_name, 2) });
-						}
-						auto val = std::get<MATH::Vector2f>(material->get(name + _name));
-						if (IMGUI::CombineVecEdit::Data.at(_name).draw(val)) {
-							material->set(name + _name, val);
-						}
-						break;
-					}
-					case RENDER::ShaderReflection::UniformType::INT: {
-						if (!IMGUI::ScalarEdit::Data.count(_name)) {
-							IMGUI::ScalarEdit::Data.insert({ _name, IMGUI::ScalarEdit(_name, IMGUI::ScalarEdit::TYPE::INT) });
-						}
-						auto val = std::get<int>(material->get(name + _name));
-						if (IMGUI::ScalarEdit::Data.at(_name).draw(val)) {
-							material->set(name + _name, val);
-						}
-						break;
-					}
-					case RENDER::ShaderReflection::UniformType::FLOAT: {
-						if (!IMGUI::ScalarEdit::Data.count(_name)) {
-							IMGUI::ScalarEdit::Data.insert({ _name, IMGUI::ScalarEdit(_name, IMGUI::ScalarEdit::TYPE::FLOAT) });
-						}
-						auto val = std::get<float>(material->get(name + _name));
-						if (IMGUI::ScalarEdit::Data.at(_name).draw(val)) {
-							material->set(name + _name, val);
-						}
-						break;
-					}
-					case RENDER::ShaderReflection::UniformType::BOOL: {
-						if (!IMGUI::ScalarEdit::Data.count(_name)) {
-							IMGUI::ScalarEdit::Data.insert({ _name, IMGUI::ScalarEdit(_name, IMGUI::ScalarEdit::TYPE::BOOL) });
-						}
-						auto val = std::get<bool>(material->get(name + _name));
-						if (IMGUI::ScalarEdit::Data.at(_name).draw(val)) {
-							material->set(name + _name, val);
-						}
-						break;
-					}
-					case RENDER::ShaderReflection::UniformType::SAMPLER_2D:
-						break;
-					case RENDER::ShaderReflection::UniformType::SAMPLER_3D:
-						break;
-					case RENDER::ShaderReflection::UniformType::SAMPLER_CUBE:
-						break;
-					default:
-						break;
-					}
-				}
+			else {
+				drawUniform(uniform.mName);
 			}
 		}
+		ImGui::PopID();
 	}
 }
 
