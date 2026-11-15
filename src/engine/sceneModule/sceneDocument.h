@@ -14,6 +14,10 @@ using Json = nlohmann::json;
 using IdMap = std::map<int, int>;
 using ReadFn = std::function<Json(const std::string&)>;
 
+// Scene metadata is read before GPU startup and by both scene loading paths.
+std::string ReadRenderPipeline(const Json& document);
+void WriteRenderPipeline(Json& document, const std::string& pipeline);
+
 struct Instance {
 	Json entry;
 	// Default expanded objects (asset + nested prefabs, before instance Overrides).
@@ -79,20 +83,7 @@ inline bool IsPrefabRef(const Json& object) {
 	return object.contains("Prefab");
 }
 
-inline std::string ComponentTypeKey(const Json& component) {
-	static const char* const kKnown[] = { "TransformComponentType", "RenderTargetComponentType", "Joint2DComponentType" };
-	for (const char* key : kKnown) {
-		if (component.contains(key)) {
-			return key;
-		}
-	}
-	for (auto it = component.begin(); it != component.end(); ++it) {
-		if (it.key().ends_with("ComponentType")) {
-			return it.key();
-		}
-	}
-	throw std::runtime_error("Component has no type tag");
-}
+std::string ComponentTypeKey(const Json& component);
 
 inline IdMap ReadMap(const Json& entry) {
 	IdMap ids;
@@ -384,7 +375,7 @@ inline Json DiffObject(const Json& baseline, const Json& current) {
 		const auto& baseComponent = baseByType.at(type);
 		Json fields = Json::object();
 		for (auto it = component.begin(); it != component.end(); ++it) {
-			if (it.key().ends_with("ComponentType")) {
+			if (it.key() == type) {
 				continue;
 			}
 			const bool baseHas = baseComponent.contains(it.key());

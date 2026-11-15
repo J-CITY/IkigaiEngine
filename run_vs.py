@@ -66,27 +66,28 @@ def resolve_runtime_output(arg, platform_dir):
     return os.path.abspath(path)
 
 
-def create_assets_link(build_dir):
-    import platform
-
-    assets_src = os.path.join(ROOT_DIR, 'assets')
-    assets_dest = os.path.abspath(os.path.join(build_dir, 'assets'))
-
-    if not os.path.exists(assets_src):
-        return
-
-    if os.path.exists(assets_dest):
-        return
-
+def create_content_links(directory):
+    assets = Path(ROOT_DIR) / 'assets'
+    destination = Path(directory) / 'assets'
     try:
-        os.makedirs(build_dir, exist_ok=True)
-        if platform.system() == 'Windows':
-            subprocess.run(['cmd', '/c', 'mklink', '/J', assets_dest, assets_src], stdout=subprocess.DEVNULL, check=True)
-        else:
-            os.symlink(assets_src, assets_dest, target_is_directory=True)
-        print(f"Created assets link in {build_dir}")
-    except Exception as e:
-        print(f"Warning: Failed to create assets link: {e}")
+        if not assets.is_dir() or (destination.exists() and not destination.samefile(assets)):
+            return
+        Path(directory).mkdir(parents=True, exist_ok=True)
+        # The runtime mounts packs beside assets. Link packs first to avoid
+        # exposing a partially prepared content root on a new build.
+        for name in ('assets_packs', 'assets'):
+            source = Path(ROOT_DIR) / name
+            link = Path(directory) / name
+            if not source.is_dir() or link.exists():
+                continue
+            if os.name == 'nt':
+                subprocess.run(['cmd', '/c', 'mklink', '/J', str(link), str(source)],
+                               stdout=subprocess.DEVNULL, check=True)
+            else:
+                link.symlink_to(source, target_is_directory=True)
+            print(f"Created {name} link in {directory}")
+    except (OSError, subprocess.CalledProcessError) as error:
+        print(f"Warning: Failed to prepare content links in {directory}: {error}")
 
 
 def ensure_environment(platform_arg, skip_setup, render_sdks, graphics_backends, generator, use_lua, use_ikigai_script):
@@ -416,8 +417,8 @@ def configure_and_build(args):
     if output_dir:
         output_dir = os.path.abspath(os.path.join(ROOT_DIR, output_dir, build_type))
     if application and output_dir:
-        create_assets_link(build_dir)
-        create_assets_link(output_dir)
+        create_content_links(build_dir)
+        create_content_links(output_dir)
     if args.build:
         command = ['cmake', '--build', build_dir, '--config', build_type]
         if args.target:

@@ -81,8 +81,8 @@ struct App::RenderTransformStaging {
 	std::vector<Sample> mSamples;
 };
 
-App::App(const PlatformStartup& platform)
-	: core(platform) {
+App::App(const PlatformStartup& platform, const std::string& initialScene)
+	: core(platform, initialScene) {
 	if (Config::RENDER_CPU_OVERLAP) {
 		if (!core.render->supportsCpuReplayOverlap()) {
 			throw std::invalid_argument("--render-cpu-overlap requires pipelined Vulkan or DirectX 12 with upscaling and frame generation off");

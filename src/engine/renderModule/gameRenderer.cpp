@@ -221,7 +221,9 @@ void GameRenderer::renderScene() {
 	auto& render = mContext.render;
 
 	auto camera = scene.findMainCamera();
-	const auto asset = scene.renderPipelineAsset.empty() || HasCliRenderPipelineOverride() ? mStartupPipelineAsset : scene.renderPipelineAsset;
+	const auto asset = HasCliRenderPipelineOverride() ? mStartupPipelineAsset
+		: scene.renderPipelineAsset.empty()			  ? DriverInterface::settings.defaultPipeline
+													  : scene.renderPipelineAsset;
 	if (asset != mActivePipelineAsset) {
 		RenderGraphPipeline::Descriptor descriptor;
 		if (asset.empty()) {

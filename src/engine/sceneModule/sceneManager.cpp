@@ -92,7 +92,7 @@ void SceneManager::loadFromFile(const std::string& sceneFilePath) {
 		return nlohmann::json::parse(file->readStr());
 	};
 	const auto document = read(sceneFilePath);
-	const auto pipeline = document.value("RenderPipeline", std::string {});
+	const auto pipeline = DOCUMENT::ReadRenderPipeline(document);
 #if USE_PHYSICS_3D
 	const auto destruction = DATA::readDescriptor<DESTRUCTION::RuntimeSettings>(document.value("Destruction", nlohmann::json::object()));
 	destruction.validate();
@@ -127,9 +127,7 @@ nlohmann::json SceneManager::serializeScene() const {
 		throw std::runtime_error("No current scene");
 	}
 	auto document = DOCUMENT::Compact(m_currentScene->serializeObjects(), m_currentScene->prefabInstances);
-	if (!m_currentScene->renderPipelineAsset.empty()) {
-		document["RenderPipeline"] = m_currentScene->renderPipelineAsset;
-	}
+	DOCUMENT::WriteRenderPipeline(document, m_currentScene->renderPipelineAsset);
 #if USE_PHYSICS_3D
 	document["Destruction"] = serde::serialize<nlohmann::json>(m_currentScene->destructionSettings);
 #endif

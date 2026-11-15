@@ -131,7 +131,7 @@ int RunApplication(int argc, char* argv[], PlatformContext platform) {
 			throw std::invalid_argument("Android application context is required");
 		}
 #endif
-		App application(startup);
+		App application(startup, options.scene);
 		if (!options.loadingScene.empty()) {
 			application.getCore()->sceneManager->prepareLoadingScene(options.loadingScene);
 		}

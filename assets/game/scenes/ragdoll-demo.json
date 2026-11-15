@@ -1,0 +1,501 @@
+{
+  "RenderPipeline": "/renderPipeline/migrated-lite.json",
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 8,
+            "Y": 7,
+            "Z": -12
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 18,
+            "Y": -32,
+            "Z": 0
+          }
+        },
+        {
+          "CameraComponentType": "CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 55,
+          "Near": 0.1,
+          "Far": 100,
+          "Size": 6,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Sun",
+      "Id": 2,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 45,
+            "Y": -30,
+            "Z": 0
+          }
+        },
+        {
+          "DirectionalLightType": "DirectionalLight",
+          "Color": {
+            "X": 1,
+            "Y": 0.94,
+            "Z": 0.85
+          },
+          "Intensity": 3,
+          "Distance": 100,
+          "CastShadows": true,
+          "ShadowNear": 0.1,
+          "ShadowFar": 60
+        }
+      ]
+    },
+    {
+      "Name": "Floor",
+      "Id": 3,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": -0.3,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 0,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 6,
+            "Y": 0.3,
+            "Z": 4
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Floor mesh",
+      "Id": 4,
+      "ParentId": 3,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 12,
+            "Y": 0.6,
+            "Z": 8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Step 0",
+      "Id": 5,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0.2,
+            "Z": 1.0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 0,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 1.5,
+            "Y": 0.2,
+            "Z": 0.35
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Step 0 mesh",
+      "Id": 6,
+      "ParentId": 5,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 3.0,
+            "Y": 0.4,
+            "Z": 0.7
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Step 1",
+      "Id": 7,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0.55,
+            "Z": 1.7
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 0,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 1.5,
+            "Y": 0.55,
+            "Z": 0.35
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Step 1 mesh",
+      "Id": 8,
+      "ParentId": 7,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 3.0,
+            "Y": 1.1,
+            "Z": 0.7
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Step 2",
+      "Id": 9,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0.8999999999999999,
+            "Z": 2.4
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 0,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 1.5,
+            "Y": 0.8999999999999999,
+            "Z": 0.35
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Step 2 mesh",
+      "Id": 10,
+      "ParentId": 9,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 3.0,
+            "Y": 1.7999999999999998,
+            "Z": 0.7
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Simulated articulated mannequin",
+      "Id": 11,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -1.5,
+            "Y": 3,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 18
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/mannequin.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/amber.mat"
+          ]
+        },
+        {
+          "SkeletalComponentType": "SkeletalComponent",
+          "SkeletalPath": "/models/physics-demo/mannequin.gltf"
+        },
+        {
+          "RagdollComponentType": "RagdollComponent",
+          "Definition": "/ragdolls/demo-mannequin.json",
+          "StartSimulated": true
+        }
+      ]
+    },
+    {
+      "Name": "Simulated articulated mannequin",
+      "Id": 12,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 1.5,
+            "Y": 3,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 10,
+            "Y": 0,
+            "Z": -20
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/mannequin.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        },
+        {
+          "SkeletalComponentType": "SkeletalComponent",
+          "SkeletalPath": "/models/physics-demo/mannequin.gltf"
+        },
+        {
+          "RagdollComponentType": "RagdollComponent",
+          "Definition": "/ragdolls/demo-mannequin.json",
+          "StartSimulated": true
+        }
+      ]
+    }
+  ]
+}

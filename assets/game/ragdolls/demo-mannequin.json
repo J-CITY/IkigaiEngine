@@ -1,0 +1,342 @@
+{
+  "Version": 1,
+  "Skeleton": "/models/physics-demo/mannequin.gltf",
+  "Pelvis": "Pelvis",
+  "UnitsToMeters": 1,
+  "Segments": [
+    {
+      "Name": "Pelvis",
+      "Bone": "Pelvis",
+      "Shape": "Box",
+      "HalfSize": {
+        "X": 0.22,
+        "Y": 0.16,
+        "Z": 0.14
+      },
+      "Mass": 6,
+      "Friction": 0.7
+    },
+    {
+      "Name": "Chest",
+      "Bone": "Chest",
+      "Shape": "Box",
+      "HalfSize": {
+        "X": 0.28,
+        "Y": 0.18,
+        "Z": 0.14
+      },
+      "Mass": 6,
+      "Friction": 0.7
+    },
+    {
+      "Name": "Head",
+      "Bone": "Head",
+      "Shape": "Box",
+      "HalfSize": {
+        "X": 0.14,
+        "Y": 0.16,
+        "Z": 0.14
+      },
+      "Mass": 1,
+      "Friction": 0.7
+    },
+    {
+      "Name": "UpperArmL",
+      "Bone": "UpperArmL",
+      "Shape": "Box",
+      "HalfSize": {
+        "X": 0.16,
+        "Y": 0.09,
+        "Z": 0.09
+      },
+      "Mass": 1,
+      "Friction": 0.7
+    },
+    {
+      "Name": "ForearmL",
+      "Bone": "ForearmL",
+      "Shape": "Box",
+      "HalfSize": {
+        "X": 0.16,
+        "Y": 0.075,
+        "Z": 0.075
+      },
+      "Mass": 1,
+      "Friction": 0.7
+    },
+    {
+      "Name": "UpperArmR",
+      "Bone": "UpperArmR",
+      "Shape": "Box",
+      "HalfSize": {
+        "X": 0.16,
+        "Y": 0.09,
+        "Z": 0.09
+      },
+      "Mass": 1,
+      "Friction": 0.7
+    },
+    {
+      "Name": "ForearmR",
+      "Bone": "ForearmR",
+      "Shape": "Box",
+      "HalfSize": {
+        "X": 0.16,
+        "Y": 0.075,
+        "Z": 0.075
+      },
+      "Mass": 1,
+      "Friction": 0.7
+    },
+    {
+      "Name": "ThighL",
+      "Bone": "ThighL",
+      "Shape": "Box",
+      "HalfSize": {
+        "X": 0.095,
+        "Y": 0.17,
+        "Z": 0.1
+      },
+      "Mass": 1,
+      "Friction": 0.7
+    },
+    {
+      "Name": "ShinL",
+      "Bone": "ShinL",
+      "Shape": "Box",
+      "HalfSize": {
+        "X": 0.085,
+        "Y": 0.19,
+        "Z": 0.09
+      },
+      "Mass": 1,
+      "Friction": 0.7
+    },
+    {
+      "Name": "ThighR",
+      "Bone": "ThighR",
+      "Shape": "Box",
+      "HalfSize": {
+        "X": 0.095,
+        "Y": 0.17,
+        "Z": 0.1
+      },
+      "Mass": 1,
+      "Friction": 0.7
+    },
+    {
+      "Name": "ShinR",
+      "Bone": "ShinR",
+      "Shape": "Box",
+      "HalfSize": {
+        "X": 0.085,
+        "Y": 0.19,
+        "Z": 0.09
+      },
+      "Mass": 1,
+      "Friction": 0.7
+    }
+  ],
+  "Joints": [
+    {
+      "Parent": "Pelvis",
+      "Child": "Chest",
+      "Kind": "ConeTwist",
+      "AnchorA": {
+        "X": 0.0,
+        "Y": 0.17500000000000004,
+        "Z": 0.0
+      },
+      "AnchorB": {
+        "X": 0.0,
+        "Y": -0.17499999999999982,
+        "Z": 0.0
+      },
+      "SwingLimit": 0.8,
+      "TwistMin": -0.5,
+      "TwistMax": 0.5,
+      "Damping": 0.12,
+      "CollideConnected": false
+    },
+    {
+      "Parent": "Chest",
+      "Child": "Head",
+      "Kind": "ConeTwist",
+      "AnchorA": {
+        "X": 0.0,
+        "Y": 0.20000000000000018,
+        "Z": 0.0
+      },
+      "AnchorB": {
+        "X": 0.0,
+        "Y": -0.19999999999999996,
+        "Z": 0.0
+      },
+      "SwingLimit": 0.8,
+      "TwistMin": -0.5,
+      "TwistMax": 0.5,
+      "Damping": 0.12,
+      "CollideConnected": false
+    },
+    {
+      "Parent": "Chest",
+      "Child": "UpperArmL",
+      "Kind": "ConeTwist",
+      "AnchorA": {
+        "X": -0.23,
+        "Y": 0.0,
+        "Z": 0.0
+      },
+      "AnchorB": {
+        "X": 0.23,
+        "Y": 0.0,
+        "Z": 0.0
+      },
+      "SwingLimit": 0.8,
+      "TwistMin": -0.5,
+      "TwistMax": 0.5,
+      "Damping": 0.12,
+      "CollideConnected": false
+    },
+    {
+      "Parent": "UpperArmL",
+      "Child": "ForearmL",
+      "Kind": "ConeTwist",
+      "AnchorA": {
+        "X": -0.175,
+        "Y": 0.0,
+        "Z": 0.0
+      },
+      "AnchorB": {
+        "X": 0.17500000000000004,
+        "Y": 0.0,
+        "Z": 0.0
+      },
+      "SwingLimit": 0.8,
+      "TwistMin": -0.5,
+      "TwistMax": 0.5,
+      "Damping": 0.12,
+      "CollideConnected": false
+    },
+    {
+      "Parent": "Chest",
+      "Child": "UpperArmR",
+      "Kind": "ConeTwist",
+      "AnchorA": {
+        "X": 0.23,
+        "Y": 0.0,
+        "Z": 0.0
+      },
+      "AnchorB": {
+        "X": -0.23,
+        "Y": 0.0,
+        "Z": 0.0
+      },
+      "SwingLimit": 0.8,
+      "TwistMin": -0.5,
+      "TwistMax": 0.5,
+      "Damping": 0.12,
+      "CollideConnected": false
+    },
+    {
+      "Parent": "UpperArmR",
+      "Child": "ForearmR",
+      "Kind": "ConeTwist",
+      "AnchorA": {
+        "X": 0.175,
+        "Y": 0.0,
+        "Z": 0.0
+      },
+      "AnchorB": {
+        "X": -0.17500000000000004,
+        "Y": 0.0,
+        "Z": 0.0
+      },
+      "SwingLimit": 0.8,
+      "TwistMin": -0.5,
+      "TwistMax": 0.5,
+      "Damping": 0.12,
+      "CollideConnected": false
+    },
+    {
+      "Parent": "Pelvis",
+      "Child": "ThighL",
+      "Kind": "ConeTwist",
+      "AnchorA": {
+        "X": -0.065,
+        "Y": -0.17500000000000004,
+        "Z": 0.0
+      },
+      "AnchorB": {
+        "X": 0.065,
+        "Y": 0.17500000000000004,
+        "Z": 0.0
+      },
+      "SwingLimit": 0.8,
+      "TwistMin": -0.5,
+      "TwistMax": 0.5,
+      "Damping": 0.12,
+      "CollideConnected": false
+    },
+    {
+      "Parent": "ThighL",
+      "Child": "ShinL",
+      "Kind": "ConeTwist",
+      "AnchorA": {
+        "X": 0.0,
+        "Y": -0.19999999999999996,
+        "Z": 0.0
+      },
+      "AnchorB": {
+        "X": 0.0,
+        "Y": 0.2,
+        "Z": 0.0
+      },
+      "SwingLimit": 0.8,
+      "TwistMin": -0.5,
+      "TwistMax": 0.5,
+      "Damping": 0.12,
+      "CollideConnected": false
+    },
+    {
+      "Parent": "Pelvis",
+      "Child": "ThighR",
+      "Kind": "ConeTwist",
+      "AnchorA": {
+        "X": 0.065,
+        "Y": -0.17500000000000004,
+        "Z": 0.0
+      },
+      "AnchorB": {
+        "X": -0.065,
+        "Y": 0.17500000000000004,
+        "Z": 0.0
+      },
+      "SwingLimit": 0.8,
+      "TwistMin": -0.5,
+      "TwistMax": 0.5,
+      "Damping": 0.12,
+      "CollideConnected": false
+    },
+    {
+      "Parent": "ThighR",
+      "Child": "ShinR",
+      "Kind": "ConeTwist",
+      "AnchorA": {
+        "X": 0.0,
+        "Y": -0.19999999999999996,
+        "Z": 0.0
+      },
+      "AnchorB": {
+        "X": 0.0,
+        "Y": 0.2,
+        "Z": 0.0
+      },
+      "SwingLimit": 0.8,
+      "TwistMin": -0.5,
+      "TwistMax": 0.5,
+      "Damping": 0.12,
+      "CollideConnected": false
+    }
+  ]
+}

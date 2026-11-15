@@ -4,6 +4,7 @@
 #include "resourceModule/fileSystem/storage.h"
 
 #include <algorithm>
+#include <fstream>
 #include <stdexcept>
 
 namespace IKIGAI::RENDER::PIPELINE_CACHE {
@@ -28,8 +29,20 @@ namespace {
 
 std::vector<uint8_t> Read(Backend backend, std::string_view deviceKey) noexcept {
 	try {
-		auto file = Storage::Read(CachePath(backend, deviceKey), MaxBlobBytes + HeaderBytes);
-		if (file.size() <= HeaderBytes || !std::equal(Magic.begin(), Magic.end(), file.begin())) {
+		// A missing cache is normal. Size and read the same open file so
+		// replacement by another process cannot race a separate file_size call.
+		std::ifstream input(CachePath(backend, deviceKey), std::ios::binary | std::ios::ate);
+		if (!input) {
+			return {};
+		}
+		const std::streamoff size = input.tellg();
+		if (size <= static_cast<std::streamoff>(HeaderBytes) || size > static_cast<std::streamoff>(MaxBlobBytes + HeaderBytes)) {
+			return {};
+		}
+		std::vector<uint8_t> file(static_cast<std::size_t>(size));
+		input.seekg(0);
+		input.read(reinterpret_cast<char*>(file.data()), static_cast<std::streamsize>(size));
+		if (!input || !std::equal(Magic.begin(), Magic.end(), file.begin())) {
 			return {};
 		}
 		const auto payload = std::span<const uint8_t>(file).subspan(HeaderBytes);

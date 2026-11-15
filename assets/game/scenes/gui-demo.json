@@ -1,4 +1,5 @@
 {
+  "RenderPipeline": "/renderPipeline/vector-sdf.json",
   "Objects": [
     {
       "Name": "Camera",
@@ -36,14 +37,15 @@
       ]
     },
     {
-      "Name": "Panel",
+      "Name": "Dashboard",
       "Id": 2,
+      "IsActive": true,
       "Components": [
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 18,
-            "Y": 18,
+            "X": 16,
+            "Y": 16,
             "Z": 0
           },
           "LocalRotation": {
@@ -61,38 +63,33 @@
           "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
           "Shape": 1,
           "Size": {
-            "X": 764,
-            "Y": 560
+            "X": 768,
+            "Y": 568
           },
           "Radii": {
-            "X": 22,
-            "Y": 22
+            "X": 14,
+            "Y": 14
           },
           "Color": {
-            "X": 0.04,
-            "Y": 0.065,
-            "Z": 0.1,
+            "X": 0.025,
+            "Y": 0.04,
+            "Z": 0.07,
             "W": 1
           },
-          "StrokeWidth": 1,
-          "StrokeColor": {
-            "X": 0.2,
-            "Y": 0.35,
-            "Z": 0.5,
-            "W": 1
-          }
+          "Order": -10
         }
       ]
     },
     {
       "Name": "Title",
       "Id": 3,
+      "IsActive": true,
       "Components": [
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 42,
-            "Y": 33,
+            "X": 38,
+            "Y": 30,
             "Z": 0
           },
           "LocalRotation": {
@@ -108,11 +105,12 @@
         },
         {
           "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
-          "Text": "SDF / Vector Graphics",
-          "Size": 42,
+          "Text": "GUI / CURVES / SDF",
+          "Size": 34,
+          "Order": 10,
           "Color": {
             "X": 0.85,
-            "Y": 0.95,
+            "Y": 0.92,
             "Z": 1,
             "W": 1
           }
@@ -120,14 +118,15 @@
       ]
     },
     {
-      "Name": "Cyrillic",
+      "Name": "Subtitle",
       "Id": 4,
+      "IsActive": true,
       "Components": [
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 44,
-            "Y": 92,
+            "X": 40,
+            "Y": 76,
             "Z": 0
           },
           "LocalRotation": {
@@ -143,11 +142,12 @@
         },
         {
           "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
-          "Text": "Сглаженные шрифты, формы и кривые",
-          "Size": 26,
+          "Text": "Resolution-independent text and vector paths",
+          "Size": 17,
+          "Order": 10,
           "Color": {
-            "X": 0.4,
-            "Y": 0.8,
+            "X": 0.85,
+            "Y": 0.92,
             "Z": 1,
             "W": 1
           }
@@ -155,14 +155,59 @@
       ]
     },
     {
-      "Name": "Outline",
+      "Name": "Typography panel",
       "Id": 5,
+      "IsActive": true,
       "Components": [
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 44,
-            "Y": 136,
+            "X": 34,
+            "Y": 115,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 350,
+            "Y": 185
+          },
+          "Radii": {
+            "X": 14,
+            "Y": 14
+          },
+          "Color": {
+            "X": 0.065,
+            "Y": 0.1,
+            "Z": 0.16,
+            "W": 1
+          },
+          "Order": -10
+        }
+      ]
+    },
+    {
+      "Name": "Typography heading",
+      "Id": 6,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 50,
+            "Y": 127,
             "Z": 0
           },
           "LocalRotation": {
@@ -178,11 +223,55 @@
         },
         {
           "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
-          "Text": "Outline + shadow",
-          "Size": 36,
-          "OutlineWidth": 2,
+          "Text": "01 / TYPOGRAPHY",
+          "Size": 18,
+          "Order": 10,
+          "Color": {
+            "X": 0.85,
+            "Y": 0.92,
+            "Z": 1,
+            "W": 1
+          }
+        }
+      ]
+    },
+    {
+      "Name": "SDF outline",
+      "Id": 7,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 50,
+            "Y": 165,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Signed distance",
+          "Size": 32,
+          "Order": 10,
+          "Color": {
+            "X": 0.85,
+            "Y": 0.92,
+            "Z": 1,
+            "W": 1
+          },
+          "OutlineWidth": 1.5,
           "OutlineColor": {
-            "X": 0.1,
+            "X": 0.12,
             "Y": 0.5,
             "Z": 0.9,
             "W": 1
@@ -195,20 +284,21 @@
             "X": 0,
             "Y": 0,
             "Z": 0,
-            "W": 0.7
+            "W": 0.8
           }
         }
       ]
     },
     {
-      "Name": "Wrap",
-      "Id": 6,
+      "Name": "UTF8",
+      "Id": 8,
+      "IsActive": true,
       "Components": [
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 450,
-            "Y": 135,
+            "X": 50,
+            "Y": 216,
             "Z": 0
           },
           "LocalRotation": {
@@ -224,28 +314,28 @@
         },
         {
           "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
-          "Text": "UTF-8 text with wrapping\nLatin / Кириллица",
+          "Text": "Latin / Кириллица",
           "Size": 24,
-          "WrapWidth": 260,
-          "Alignment": 1,
+          "Order": 10,
           "Color": {
-            "X": 0.9,
-            "Y": 0.75,
-            "Z": 0.4,
+            "X": 0.85,
+            "Y": 0.92,
+            "Z": 1,
             "W": 1
           }
         }
       ]
     },
     {
-      "Name": "Shape 0",
-      "Id": 7,
+      "Name": "Small type",
+      "Id": 9,
+      "IsActive": true,
       "Components": [
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 44,
-            "Y": 250,
+            "X": 50,
+            "Y": 260,
             "Z": 0
           },
           "LocalRotation": {
@@ -260,40 +350,13 @@
           }
         },
         {
-          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
-          "Shape": 0,
-          "Size": {
-            "X": 88,
-            "Y": 66
-          },
-          "Radii": {
-            "X": 18,
-            "Y": 18
-          },
-          "StartAngle": 20,
-          "EndAngle": 290,
-          "Points": "M 0 0 L 85 0 L 85 25 L 40 25 L 40 65 L 0 65 Z",
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "14 px / crisp scalable glyphs",
+          "Size": 14,
+          "Order": 10,
           "Color": {
-            "X": 0.15,
-            "Y": 0.75,
-            "Z": 0.85,
-            "W": 0.85
-          },
-          "Gradient": true,
-          "GradientColor": {
-            "X": 0.65,
-            "Y": 0.3,
-            "Z": 0.8,
-            "W": 0.85
-          },
-          "GradientEnd": {
-            "X": 88,
-            "Y": 66
-          },
-          "StrokeWidth": 2,
-          "StrokeColor": {
-            "X": 0.75,
-            "Y": 0.9,
+            "X": 0.85,
+            "Y": 0.92,
             "Z": 1,
             "W": 1
           }
@@ -301,14 +364,15 @@
       ]
     },
     {
-      "Name": "Shape 1",
-      "Id": 8,
+      "Name": "Curve panel",
+      "Id": 10,
+      "IsActive": true,
       "Components": [
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 162,
-            "Y": 250,
+            "X": 402,
+            "Y": 115,
             "Z": 0
           },
           "LocalRotation": {
@@ -326,36 +390,271 @@
           "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
           "Shape": 1,
           "Size": {
-            "X": 88,
-            "Y": 66
+            "X": 364,
+            "Y": 185
           },
           "Radii": {
-            "X": 18,
-            "Y": 18
+            "X": 14,
+            "Y": 14
           },
-          "StartAngle": 20,
-          "EndAngle": 290,
-          "Points": "M 0 0 L 85 0 L 85 25 L 40 25 L 40 65 L 0 65 Z",
           "Color": {
-            "X": 0.15,
+            "X": 0.065,
+            "Y": 0.1,
+            "Z": 0.16,
+            "W": 1
+          },
+          "Order": -10
+        }
+      ]
+    },
+    {
+      "Name": "Curve heading",
+      "Id": 11,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 420,
+            "Y": 127,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "02 / CUBIC + QUADRATIC",
+          "Size": 18,
+          "Order": 10,
+          "Color": {
+            "X": 0.85,
+            "Y": 0.92,
+            "Z": 1,
+            "W": 1
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Bezier curve",
+      "Id": 12,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 424,
+            "Y": 171,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorPathComponentType": "class IKIGAI::ECS::VectorPathComponent",
+          "Commands": "M 0 55 C 70 -60 140 170 210 55 Q 265 -15 310 55",
+          "StrokeWidth": 7,
+          "Cap": 2,
+          "Join": 2,
+          "StrokeColor": {
+            "X": 0.2,
+            "Y": 0.9,
+            "Z": 0.7,
+            "W": 1
+          },
+          "Order": 5
+        }
+      ]
+    },
+    {
+      "Name": "Curve caption",
+      "Id": 13,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 420,
+            "Y": 267,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Round caps / adaptive tessellation",
+          "Size": 14,
+          "Order": 10,
+          "Color": {
+            "X": 0.85,
+            "Y": 0.92,
+            "Z": 1,
+            "W": 1
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Shapes panel",
+      "Id": 14,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 34,
+            "Y": 318,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 350,
+            "Y": 158
+          },
+          "Radii": {
+            "X": 14,
+            "Y": 14
+          },
+          "Color": {
+            "X": 0.065,
+            "Y": 0.1,
+            "Z": 0.16,
+            "W": 1
+          },
+          "Order": -10
+        }
+      ]
+    },
+    {
+      "Name": "Shapes heading",
+      "Id": 15,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 50,
+            "Y": 330,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "03 / GRADIENT + STROKE",
+          "Size": 18,
+          "Order": 10,
+          "Color": {
+            "X": 0.85,
+            "Y": 0.92,
+            "Z": 1,
+            "W": 1
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Gradient shape 1",
+      "Id": 16,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 54,
+            "Y": 372,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 80,
+            "Y": 70
+          },
+          "Radii": {
+            "X": 16,
+            "Y": 16
+          },
+          "Color": {
+            "X": 0.12,
             "Y": 0.75,
             "Z": 0.85,
-            "W": 0.85
+            "W": 1
           },
           "Gradient": true,
           "GradientColor": {
-            "X": 0.65,
-            "Y": 0.3,
-            "Z": 0.8,
-            "W": 0.85
+            "X": 0.7,
+            "Y": 0.25,
+            "Z": 0.85,
+            "W": 1
           },
           "GradientEnd": {
-            "X": 88,
-            "Y": 66
+            "X": 80,
+            "Y": 70
           },
           "StrokeWidth": 2,
           "StrokeColor": {
-            "X": 0.75,
+            "X": 0.8,
             "Y": 0.9,
             "Z": 1,
             "W": 1
@@ -364,14 +663,15 @@
       ]
     },
     {
-      "Name": "Shape 2",
-      "Id": 9,
+      "Name": "Gradient shape 2",
+      "Id": 17,
+      "IsActive": true,
       "Components": [
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 280,
-            "Y": 250,
+            "X": 162,
+            "Y": 372,
             "Z": 0
           },
           "LocalRotation": {
@@ -389,36 +689,33 @@
           "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
           "Shape": 2,
           "Size": {
-            "X": 88,
-            "Y": 66
+            "X": 80,
+            "Y": 70
           },
           "Radii": {
-            "X": 18,
-            "Y": 18
+            "X": 16,
+            "Y": 16
           },
-          "StartAngle": 20,
-          "EndAngle": 290,
-          "Points": "M 0 0 L 85 0 L 85 25 L 40 25 L 40 65 L 0 65 Z",
           "Color": {
-            "X": 0.15,
+            "X": 0.12,
             "Y": 0.75,
             "Z": 0.85,
-            "W": 0.85
+            "W": 1
           },
           "Gradient": true,
           "GradientColor": {
-            "X": 0.65,
-            "Y": 0.3,
-            "Z": 0.8,
-            "W": 0.85
+            "X": 0.7,
+            "Y": 0.25,
+            "Z": 0.85,
+            "W": 1
           },
           "GradientEnd": {
-            "X": 88,
-            "Y": 66
+            "X": 80,
+            "Y": 70
           },
           "StrokeWidth": 2,
           "StrokeColor": {
-            "X": 0.75,
+            "X": 0.8,
             "Y": 0.9,
             "Z": 1,
             "W": 1
@@ -427,14 +724,15 @@
       ]
     },
     {
-      "Name": "Shape 3",
-      "Id": 10,
+      "Name": "Gradient shape 3",
+      "Id": 18,
+      "IsActive": true,
       "Components": [
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 398,
-            "Y": 250,
+            "X": 270,
+            "Y": 372,
             "Z": 0
           },
           "LocalRotation": {
@@ -452,36 +750,33 @@
           "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
           "Shape": 3,
           "Size": {
-            "X": 88,
-            "Y": 66
+            "X": 80,
+            "Y": 70
           },
           "Radii": {
-            "X": 18,
-            "Y": 18
+            "X": 16,
+            "Y": 16
           },
-          "StartAngle": 20,
-          "EndAngle": 290,
-          "Points": "M 0 0 L 85 0 L 85 25 L 40 25 L 40 65 L 0 65 Z",
           "Color": {
-            "X": 0.15,
+            "X": 0.12,
             "Y": 0.75,
             "Z": 0.85,
-            "W": 0.85
+            "W": 1
           },
           "Gradient": true,
           "GradientColor": {
-            "X": 0.65,
-            "Y": 0.3,
-            "Z": 0.8,
-            "W": 0.85
+            "X": 0.7,
+            "Y": 0.25,
+            "Z": 0.85,
+            "W": 1
           },
           "GradientEnd": {
-            "X": 88,
-            "Y": 66
+            "X": 80,
+            "Y": 70
           },
           "StrokeWidth": 2,
           "StrokeColor": {
-            "X": 0.75,
+            "X": 0.8,
             "Y": 0.9,
             "Z": 1,
             "W": 1
@@ -490,14 +785,15 @@
       ]
     },
     {
-      "Name": "Shape 4",
-      "Id": 11,
+      "Name": "Clip panel",
+      "Id": 19,
+      "IsActive": true,
       "Components": [
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 516,
-            "Y": 250,
+            "X": 402,
+            "Y": 318,
             "Z": 0
           },
           "LocalRotation": {
@@ -513,228 +809,35 @@
         },
         {
           "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
-          "Shape": 4,
+          "Shape": 1,
           "Size": {
-            "X": 88,
-            "Y": 66
+            "X": 364,
+            "Y": 158
           },
           "Radii": {
-            "X": 18,
-            "Y": 18
+            "X": 14,
+            "Y": 14
           },
-          "StartAngle": 20,
-          "EndAngle": 290,
-          "Points": "M 0 0 L 85 0 L 85 25 L 40 25 L 40 65 L 0 65 Z",
           "Color": {
-            "X": 0.15,
-            "Y": 0.75,
-            "Z": 0.85,
-            "W": 0.85
-          },
-          "Gradient": true,
-          "GradientColor": {
-            "X": 0.65,
-            "Y": 0.3,
-            "Z": 0.8,
-            "W": 0.85
-          },
-          "GradientEnd": {
-            "X": 88,
-            "Y": 66
-          },
-          "StrokeWidth": 2,
-          "StrokeColor": {
-            "X": 0.75,
-            "Y": 0.9,
-            "Z": 1,
+            "X": 0.065,
+            "Y": 0.1,
+            "Z": 0.16,
             "W": 1
-          }
+          },
+          "Order": -10
         }
       ]
     },
     {
-      "Name": "Shape 5",
-      "Id": 12,
+      "Name": "Clip heading",
+      "Id": 20,
+      "IsActive": true,
       "Components": [
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 634,
-            "Y": 250,
-            "Z": 0
-          },
-          "LocalRotation": {
-            "X": 0,
-            "Y": 0,
-            "Z": 0
-          },
-          "LocalScale": {
-            "X": 1,
-            "Y": 1,
-            "Z": 1
-          }
-        },
-        {
-          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
-          "Shape": 5,
-          "Size": {
-            "X": 88,
-            "Y": 66
-          },
-          "Radii": {
-            "X": 18,
-            "Y": 18
-          },
-          "StartAngle": 20,
-          "EndAngle": 290,
-          "Points": "M 0 0 L 85 0 L 85 25 L 40 25 L 40 65 L 0 65 Z",
-          "Color": {
-            "X": 0.15,
-            "Y": 0.75,
-            "Z": 0.85,
-            "W": 0.85
-          },
-          "Gradient": true,
-          "GradientColor": {
-            "X": 0.65,
-            "Y": 0.3,
-            "Z": 0.8,
-            "W": 0.85
-          },
-          "GradientEnd": {
-            "X": 88,
-            "Y": 66
-          },
-          "StrokeWidth": 2,
-          "StrokeColor": {
-            "X": 0.75,
-            "Y": 0.9,
-            "Z": 1,
-            "W": 1
-          }
-        }
-      ]
-    },
-    {
-      "Name": "Curve 0",
-      "Id": 13,
-      "Components": [
-        {
-          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
-          "LocalPosition": {
-            "X": 44,
-            "Y": 358,
-            "Z": 0
-          },
-          "LocalRotation": {
-            "X": 0,
-            "Y": 0,
-            "Z": 0
-          },
-          "LocalScale": {
-            "X": 1,
-            "Y": 1,
-            "Z": 1
-          }
-        },
-        {
-          "VectorPathComponentType": "class IKIGAI::ECS::VectorPathComponent",
-          "Commands": "M 0 45 C 40 -45 100 135 150 45 Q 175 0 200 45",
-          "StrokeWidth": 9,
-          "Cap": 0,
-          "Join": 0,
-          "StrokeColor": {
-            "X": 0.3,
-            "Y": 0.85,
-            "Z": 0.55,
-            "W": 1
-          }
-        }
-      ]
-    },
-    {
-      "Name": "Curve 1",
-      "Id": 14,
-      "Components": [
-        {
-          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
-          "LocalPosition": {
-            "X": 279,
-            "Y": 358,
-            "Z": 0
-          },
-          "LocalRotation": {
-            "X": 0,
-            "Y": 0,
-            "Z": 0
-          },
-          "LocalScale": {
-            "X": 1,
-            "Y": 1,
-            "Z": 1
-          }
-        },
-        {
-          "VectorPathComponentType": "class IKIGAI::ECS::VectorPathComponent",
-          "Commands": "M 0 45 C 40 -45 100 135 150 45 Q 175 0 200 45",
-          "StrokeWidth": 9,
-          "Cap": 1,
-          "Join": 1,
-          "StrokeColor": {
-            "X": 0.3,
-            "Y": 0.85,
-            "Z": 0.55,
-            "W": 1
-          }
-        }
-      ]
-    },
-    {
-      "Name": "Curve 2",
-      "Id": 15,
-      "Components": [
-        {
-          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
-          "LocalPosition": {
-            "X": 514,
-            "Y": 358,
-            "Z": 0
-          },
-          "LocalRotation": {
-            "X": 0,
-            "Y": 0,
-            "Z": 0
-          },
-          "LocalScale": {
-            "X": 1,
-            "Y": 1,
-            "Z": 1
-          }
-        },
-        {
-          "VectorPathComponentType": "class IKIGAI::ECS::VectorPathComponent",
-          "Commands": "M 0 45 C 40 -45 100 135 150 45 Q 175 0 200 45",
-          "StrokeWidth": 9,
-          "Cap": 2,
-          "Join": 2,
-          "StrokeColor": {
-            "X": 0.3,
-            "Y": 0.85,
-            "Z": 0.55,
-            "W": 1
-          }
-        }
-      ]
-    },
-    {
-      "Name": "Small text",
-      "Id": 16,
-      "Components": [
-        {
-          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
-          "LocalPosition": {
-            "X": 44,
-            "Y": 442,
+            "X": 420,
+            "Y": 330,
             "Z": 0
           },
           "LocalRotation": {
@@ -750,26 +853,28 @@
         },
         {
           "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
-          "Text": "14 px: crisp text / Чёткий текст",
-          "Size": 14,
+          "Text": "04 / HIERARCHICAL CLIPPING",
+          "Size": 18,
+          "Order": 10,
           "Color": {
-            "X": 0.95,
-            "Y": 0.95,
-            "Z": 0.95,
+            "X": 0.85,
+            "Y": 0.92,
+            "Z": 1,
             "W": 1
           }
         }
       ]
     },
     {
-      "Name": "Clip",
-      "Id": 17,
+      "Name": "Clip region",
+      "Id": 21,
+      "IsActive": true,
       "Components": [
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 450,
-            "Y": 430,
+            "X": 424,
+            "Y": 371,
             "Z": 0
           },
           "LocalRotation": {
@@ -785,14 +890,15 @@
         },
         {
           "ClipComponentType": "class IKIGAI::ECS::ClipComponent",
-          "Width": 250,
-          "Height": 84
+          "Width": 318,
+          "Height": 72
         }
       ]
     },
     {
-      "Name": "Clipped curve",
-      "Id": 18,
+      "Name": "Clipped ribbon",
+      "Id": 22,
+      "IsActive": true,
       "Components": [
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
@@ -814,56 +920,91 @@
         },
         {
           "VectorPathComponentType": "class IKIGAI::ECS::VectorPathComponent",
-          "Commands": "M -30 10 C 100 180 220 -80 300 70",
-          "StrokeWidth": 12,
+          "Commands": "M -80 35 C 40 -100 250 180 400 35",
+          "StrokeWidth": 16,
           "Cap": 2,
           "StrokeColor": {
             "X": 1,
-            "Y": 0.6,
-            "Z": 0.3,
-            "W": 0.8
-          }
+            "Y": 0.55,
+            "Z": 0.25,
+            "W": 1
+          },
+          "Order": 5
         }
       ],
-      "ParentId": 17
+      "ParentId": 21
     },
     {
-      "Name": "World text",
-      "Id": 19,
+      "Name": "Footer",
+      "Id": 23,
+      "IsActive": true,
       "Components": [
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 2.5,
-            "Y": 2,
+            "X": 40,
+            "Y": 508,
             "Z": 0
           },
           "LocalRotation": {
             "X": 0,
-            "Y": 180,
+            "Y": 0,
             "Z": 0
           },
           "LocalScale": {
-            "X": 0.015,
-            "Y": 0.015,
-            "Z": 0.015
+            "X": 1,
+            "Y": 1,
+            "Z": 1
           }
         },
         {
           "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
-          "Text": "WORLD SDF",
-          "Size": 42,
+          "Text": "All panels are serialized scene components.",
+          "Size": 18,
+          "Order": 10,
           "Color": {
-            "X": 0.8,
-            "Y": 0.3,
-            "Z": 0.2,
+            "X": 0.85,
+            "Y": 0.92,
+            "Z": 1,
             "W": 1
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Footer detail",
+      "Id": 24,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 40,
+            "Y": 544,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
           }
         },
         {
-          "VectorCanvasComponentType": "class IKIGAI::ECS::VectorCanvasComponent",
-          "WorldSpace": true,
-          "DepthTest": true
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Inspect objects to edit text, outline, paths and gradients.",
+          "Size": 14,
+          "Order": 10,
+          "Color": {
+            "X": 0.85,
+            "Y": 0.92,
+            "Z": 1,
+            "W": 1
+          }
         }
       ]
     }

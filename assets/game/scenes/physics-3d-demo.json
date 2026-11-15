@@ -1,0 +1,1213 @@
+{
+  "RenderPipeline": "/renderPipeline/migrated-lite.json",
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 8,
+            "Y": 7,
+            "Z": -12
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 18,
+            "Y": -32,
+            "Z": 0
+          }
+        },
+        {
+          "CameraComponentType": "CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 55,
+          "Near": 0.1,
+          "Far": 100,
+          "Size": 6,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Sun",
+      "Id": 2,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 45,
+            "Y": -30,
+            "Z": 0
+          }
+        },
+        {
+          "DirectionalLightType": "DirectionalLight",
+          "Color": {
+            "X": 1,
+            "Y": 0.94,
+            "Z": 0.85
+          },
+          "Intensity": 3,
+          "Distance": 100,
+          "CastShadows": true,
+          "ShadowNear": 0.1,
+          "ShadowFar": 60
+        }
+      ]
+    },
+    {
+      "Name": "Floor",
+      "Id": 3,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": -0.35,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 0,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 6,
+            "Y": 0.35,
+            "Z": 5
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Floor mesh",
+      "Id": 4,
+      "ParentId": 3,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 12,
+            "Y": 0.7,
+            "Z": 10
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Stack 0 0",
+      "Id": 5,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -1.8,
+            "Y": 0.5,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.48,
+            "Y": 0.48,
+            "Z": 0.48
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Stack 0 0 mesh",
+      "Id": 6,
+      "ParentId": 5,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.96,
+            "Y": 0.96,
+            "Z": 0.96
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Stack 0 1",
+      "Id": 7,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -0.75,
+            "Y": 0.5,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.48,
+            "Y": 0.48,
+            "Z": 0.48
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Stack 0 1 mesh",
+      "Id": 8,
+      "ParentId": 7,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.96,
+            "Y": 0.96,
+            "Z": 0.96
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Stack 0 2",
+      "Id": 9,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0.30000000000000004,
+            "Y": 0.5,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.48,
+            "Y": 0.48,
+            "Z": 0.48
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Stack 0 2 mesh",
+      "Id": 10,
+      "ParentId": 9,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.96,
+            "Y": 0.96,
+            "Z": 0.96
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Stack 0 3",
+      "Id": 11,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 1.3500000000000003,
+            "Y": 0.5,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.48,
+            "Y": 0.48,
+            "Z": 0.48
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Stack 0 3 mesh",
+      "Id": 12,
+      "ParentId": 11,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.96,
+            "Y": 0.96,
+            "Z": 0.96
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Stack 1 0",
+      "Id": 13,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -1.275,
+            "Y": 1.52,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.48,
+            "Y": 0.48,
+            "Z": 0.48
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Stack 1 0 mesh",
+      "Id": 14,
+      "ParentId": 13,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.96,
+            "Y": 0.96,
+            "Z": 0.96
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/amber.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Stack 1 1",
+      "Id": 15,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -0.22499999999999998,
+            "Y": 1.52,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.48,
+            "Y": 0.48,
+            "Z": 0.48
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Stack 1 1 mesh",
+      "Id": 16,
+      "ParentId": 15,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.96,
+            "Y": 0.96,
+            "Z": 0.96
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/amber.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Stack 1 2",
+      "Id": 17,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0.8250000000000001,
+            "Y": 1.52,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.48,
+            "Y": 0.48,
+            "Z": 0.48
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Stack 1 2 mesh",
+      "Id": 18,
+      "ParentId": 17,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.96,
+            "Y": 0.96,
+            "Z": 0.96
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/amber.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Stack 2 0",
+      "Id": 19,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -0.75,
+            "Y": 2.54,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.48,
+            "Y": 0.48,
+            "Z": 0.48
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Stack 2 0 mesh",
+      "Id": 20,
+      "ParentId": 19,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.96,
+            "Y": 0.96,
+            "Z": 0.96
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Stack 2 1",
+      "Id": 21,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0.30000000000000004,
+            "Y": 2.54,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.48,
+            "Y": 0.48,
+            "Z": 0.48
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Stack 2 1 mesh",
+      "Id": 22,
+      "ParentId": 21,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.96,
+            "Y": 0.96,
+            "Z": 0.96
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Stack 3 0",
+      "Id": 23,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -0.22499999999999987,
+            "Y": 3.56,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.48,
+            "Y": 0.48,
+            "Z": 0.48
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Stack 3 0 mesh",
+      "Id": 24,
+      "ParentId": 23,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.96,
+            "Y": 0.96,
+            "Z": 0.96
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/amber.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Incoming tumbling box",
+      "Id": 25,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -4,
+            "Y": 3,
+            "Z": -1
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.5,
+            "Y": 0.5,
+            "Z": 0.5
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15,
+          "Velocity": {
+            "X": 5,
+            "Y": 0,
+            "Z": 1
+          },
+          "AngularVelocity": {
+            "X": 1,
+            "Y": 2,
+            "Z": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Incoming tumbling box mesh",
+      "Id": 26,
+      "ParentId": 25,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1.0,
+            "Y": 1.0,
+            "Z": 1.0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Ramp",
+      "Id": 27,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 3,
+            "Y": 0.5,
+            "Z": 1
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": -18
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 0,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 1.8,
+            "Y": 0.18,
+            "Z": 1.2
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Ramp mesh",
+      "Id": 28,
+      "ParentId": 27,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 3.6,
+            "Y": 0.36,
+            "Z": 2.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Ramp slider",
+      "Id": 29,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 3,
+            "Y": 3,
+            "Z": 1
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.4,
+            "Y": 0.4,
+            "Z": 0.4
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Ramp slider mesh",
+      "Id": 30,
+      "ParentId": 29,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 0.8,
+            "Z": 0.8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/amber.mat"
+          ]
+        }
+      ]
+    }
+  ]
+}

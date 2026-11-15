@@ -1,10 +1,19 @@
 #include "sceneDocument.h"
 #include "utilsModule/serialization/jsonValueAdaptor.h"
 #include <serdepp/serde.hpp>
+#include <string_view>
 
 namespace IKIGAI::SCENE_SYSTEM::DOCUMENT {
 namespace {
 	constexpr std::size_t MaxPrefabDepth = 64;
+
+	struct RenderDescriptor {
+		std::string RenderPipeline = {};
+		template <class Context> constexpr static void serde(Context& context, RenderDescriptor& value) {
+			serde::serde_struct(context, value)
+				.field(&RenderDescriptor::RenderPipeline, "RenderPipeline", serde::attribute::default_ { std::string {} });
+		}
+	};
 
 	struct SceneDescriptor {
 		std::vector<Json> Objects = {};
@@ -358,6 +367,55 @@ namespace {
 		entry["Overrides"] = std::move(overrides);
 		entry.erase("RootOverrides");
 	}
+}
+
+std::string ReadRenderPipeline(const Json& document) {
+	if (!document.is_object()) {
+		throw std::runtime_error("Scene document must be an object");
+	}
+	Json metadata = Json::object();
+	if (const auto pipeline = document.find("RenderPipeline"); pipeline != document.end()) {
+		if (!pipeline->is_string()) {
+			throw std::runtime_error("Scene RenderPipeline must be a string");
+		}
+		metadata["RenderPipeline"] = *pipeline;
+	}
+	return serde::deserialize<RenderDescriptor>(metadata).RenderPipeline;
+}
+
+void WriteRenderPipeline(Json& document, const std::string& pipeline) {
+	if (pipeline.empty()) {
+		document.erase("RenderPipeline");
+		return;
+	}
+	document.update(serde::serialize<Json>(RenderDescriptor { pipeline }));
+}
+
+std::string ComponentTypeKey(const Json& component) {
+	constexpr std::string_view suffix = "Type";
+	const std::string* typeKey = nullptr;
+	for (auto it = component.begin(); it != component.end(); ++it) {
+		const std::string_view key = it.key();
+		if (key.size() <= suffix.size() || !key.ends_with(suffix) || !it->is_string()) {
+			continue;
+		}
+		const std::string_view identifier = it->get_ref<const std::string&>();
+		const auto qualifier = identifier.rfind("::");
+		const auto name = qualifier == std::string_view::npos ? identifier : identifier.substr(qualifier + 2);
+		// ComponentCatalog writes <name>Type with either the stable name or
+		// its legacy qualified identifier. Other fields may also end in Type.
+		if (name != key.substr(0, key.size() - suffix.size())) {
+			continue;
+		}
+		if (typeKey) {
+			throw std::runtime_error("Component has multiple type tags");
+		}
+		typeKey = &it.key();
+	}
+	if (!typeKey) {
+		throw std::runtime_error("Component has no type tag");
+	}
+	return *typeKey;
 }
 
 void ValidateObject(const Json& object) {

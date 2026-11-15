@@ -188,7 +188,7 @@ public:
 	void cancelTasks();
 	std::vector<DOCUMENT::Instance> prefabInstances;
 	std::shared_ptr<void> lifetime = std::make_shared<int>(0);
-	// Empty means the renderer's startup pipeline. Environment is supplied
+	// Empty means render.json's default pipeline (or built-in forward). Environment is supplied
 	// by the selected pipeline's SettingsAsset.
 	std::string renderPipelineAsset;
 	std::uint64_t renderTopologyRevision = 0;

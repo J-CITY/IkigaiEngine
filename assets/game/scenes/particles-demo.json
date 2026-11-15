@@ -1,4 +1,5 @@
 {
+  "RenderPipeline": "/renderPipeline/particles-demo.json",
   "Objects": [
     {
       "Name": "Camera",
@@ -291,6 +292,222 @@
           "EffectPath": "/particles/shards3d.particle.json",
           "Seed": 16,
           "AutoPlay": true
+        }
+      ]
+    },
+    {
+      "Name": "PARTICLES / 2D + 3D",
+      "Id": 100,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 24,
+            "Y": 24,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "PARTICLES / 2D + 3D",
+          "Size": 24,
+          "Order": 100,
+          "Color": {
+            "X": 0.8,
+            "Y": 0.9,
+            "Z": 1,
+            "W": 1
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Smoke",
+      "Id": 101,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 70,
+            "Y": 300,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Smoke",
+          "Size": 17,
+          "Order": 100,
+          "Color": {
+            "X": 0.8,
+            "Y": 0.9,
+            "Z": 1,
+            "W": 1
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Snow",
+      "Id": 102,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 300,
+            "Y": 72,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Snow",
+          "Size": 17,
+          "Order": 100,
+          "Color": {
+            "X": 0.8,
+            "Y": 0.9,
+            "Z": 1,
+            "W": 1
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Curve motion",
+      "Id": 103,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 320,
+            "Y": 420,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Curve motion",
+          "Size": 17,
+          "Order": 100,
+          "Color": {
+            "X": 0.8,
+            "Y": 0.9,
+            "Z": 1,
+            "W": 1
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Legacy emitter",
+      "Id": 104,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 640,
+            "Y": 250,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Legacy emitter",
+          "Size": 17,
+          "Order": 100,
+          "Color": {
+            "X": 0.8,
+            "Y": 0.9,
+            "Z": 1,
+            "W": 1
+          }
+        }
+      ]
+    },
+    {
+      "Name": "World: sparks / fountain / mesh shards",
+      "Id": 105,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 24,
+            "Y": 540,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "World: sparks / fountain / mesh shards",
+          "Size": 17,
+          "Order": 100,
+          "Color": {
+            "X": 0.8,
+            "Y": 0.9,
+            "Z": 1,
+            "W": 1
+          }
         }
       ]
     }

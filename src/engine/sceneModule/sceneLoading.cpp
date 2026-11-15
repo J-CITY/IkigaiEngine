@@ -227,7 +227,9 @@ void EnsureComponentPreparers() {
 const ECS::ComponentCatalog::Record& ComponentRecord(const nlohmann::json& component) {
 	const auto* record = ECS::ComponentCatalog::instance().findInJson(component);
 	if (!record) {
-		throw std::runtime_error("Component descriptor has no supported type key");
+		const auto key = DOCUMENT::ComponentTypeKey(component);
+		throw std::runtime_error("Unsupported scene component: " + key + " = " + component.at(key).get<std::string>()
+			+ ". Check that the component is registered and its feature is enabled in this build.");
 	}
 	return *record;
 }
@@ -303,7 +305,7 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 	auto bytes = co_await file->readAllTask(state->control);
 	state->control->check();
 	auto json = nlohmann::json::parse(bytes);
-	const auto pipeline = json.value("RenderPipeline", std::string {});
+	const auto pipeline = DOCUMENT::ReadRenderPipeline(json);
 #if USE_PHYSICS_3D
 	const auto destruction = DATA::readDescriptor<DESTRUCTION::RuntimeSettings>(json.value("Destruction", nlohmann::json::object()));
 	destruction.validate();
@@ -536,7 +538,12 @@ Task<> SceneManager::transition(std::shared_ptr<SceneLoadState> state) {
 			mLoadingCache->scene->cancelTasks();
 		}
 		if (!state->error.empty()) {
-			LOG_ERROR << "Scene loading failed: " << state->path << ": " << state->error;
+			if (Config::PROFILE_LOADING) {
+				IKIGAI_COUT("Scene loading failed: " << state->path << ": " << state->error);
+			}
+			else {
+				LOG_ERROR << "Scene loading failed: " << state->path << ": " << state->error;
+			}
 		}
 	}
 	else {
@@ -545,6 +552,9 @@ Task<> SceneManager::transition(std::shared_ptr<SceneLoadState> state) {
 		state->progress = 1.0;
 		state->phase = "Completed";
 		mTransitionState = SceneTransitionState::Idle;
+		if (Config::PROFILE_LOADING) {
+			IKIGAI_COUT("Scene loaded: " << state->path << "; objects=" << m_currentScene->getObjects().size());
+		}
 		sceneLoadEvent.run();
 		surrentSceneSourcePathChangedEvent.run(m_currentSceneSourcePath);
 	}

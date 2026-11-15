@@ -42,6 +42,20 @@ void MenuBar::draw() {
 			}
 			if (ImGui::BeginMenu("Scenes")) {
 				auto& manager = RESOURCES::ServiceManager::Get<SCENE_SYSTEM::SceneManager>();
+				const auto demo = [&](const char* label, const char* path, bool available = true) {
+					const auto& current = manager.getCurrentSceneSourcePath();
+					if (ImGui::MenuItem(label, nullptr, current == path || current == path + 1, available && !manager.isEditingLocked())) {
+						PREFABS::Try([&] { manager.loadFromFileAsync(path); });
+					}
+				};
+				demo("Startup - Cube", "/scenes/scene.json");
+				demo("Ragdoll", "/scenes/ragdoll-demo.json", USE_PHYSICS_3D);
+				demo("Environment - Landscape and Weather", "/scenes/environment-demo.json");
+				demo("3D Physics", "/scenes/physics-3d-demo.json", USE_PHYSICS_3D);
+				demo("2D Physics", "/scenes/physics-2d-demo.json", USE_PHYSICS_2D);
+				demo("GUI - Curves and SDF", "/scenes/gui-demo.json");
+				demo("Particles - 2D and 3D", "/scenes/particles-demo.json");
+				ImGui::Separator();
 #if USE_PHYSICS_3D
 				if (ImGui::MenuItem("Third Person - Parkour Playground", nullptr,
 						manager.getCurrentSceneSourcePath() == "/third-person-traversal-demo.json"

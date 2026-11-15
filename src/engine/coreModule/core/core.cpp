@@ -55,6 +55,7 @@
 #include <renderModule/backends/interface/driverInterface.h>
 #include <renderModule/gameRendererInterface.h>
 #include <resourceModule/fileSystem/fileSystem.h>
+#include <sceneModule/sceneDocument.h>
 #include <sceneModule/sceneManager.h>
 #include <taskModule/taskSystem.h>
 #include <utilsModule/pathGetter.h>
@@ -87,7 +88,7 @@
 using namespace IKIGAI;
 using namespace IKIGAI::CORE;
 
-Core::Core(const PlatformStartup& platform)
+Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 	: nativeInstance(platform.nativeInstance)
 	, androidApp(platform.android) {
 	UTILS::RegisterGeneratedReflection();
@@ -172,6 +173,19 @@ Core::Core(const PlatformStartup& platform)
 	}
 	else {
 		RENDER::DriverInterface::settings = renderSettings.unwrap();
+	}
+	RENDER::DriverInterface::settings.defaultPipeline = RENDER::DriverInterface::settings.pipeline;
+	// Resolve scene execution requirements before the driver allocates frame slots.
+	// ResolveRenderBackend applies the explicit CLI pipeline override afterwards.
+	if (!initialScene.empty()) {
+		auto sceneFile = fileSystem->getFile(initialScene);
+		if (!sceneFile || !sceneFile->isValid()) {
+			throw std::runtime_error("Initial scene file not found: " + initialScene);
+		}
+		const auto scenePipeline = SCENE_SYSTEM::DOCUMENT::ReadRenderPipeline(nlohmann::json::parse(sceneFile->readStr()));
+		if (!scenePipeline.empty()) {
+			RENDER::DriverInterface::settings.pipeline = scenePipeline;
+		}
 	}
 	const auto configuredBackend = RENDER::DriverInterface::settings.backend;
 	RENDER::ResolveRenderBackend(RENDER::DriverInterface::settings);

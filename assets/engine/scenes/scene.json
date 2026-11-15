@@ -1,4 +1,5 @@
 {
+  "RenderPipeline": "/renderPipeline/environment-clouds.json",
   "Objects": [
     {
       "Name": "Camera",

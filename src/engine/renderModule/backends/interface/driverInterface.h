@@ -81,7 +81,10 @@ struct RenderSettings {
 	[[nodiscard]] bool pipelined() const noexcept {
 		return execution == Execution::PIPELINED;
 	}
+	// Loaded from render.json, then resolved against the initial scene and --pipeline.
 	std::string pipeline;
+	// Runtime-only: preserve the configured fallback when the initial scene overrides it.
+	std::string defaultPipeline;
 	UpscalerSettings upscaler;
 	FrameGenerationSettings frameGeneration;
 

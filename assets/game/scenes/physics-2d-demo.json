@@ -1,0 +1,1603 @@
+{
+  "RenderPipeline": "/renderPipeline/migrated-lite.json",
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 3.5,
+            "Z": -16
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "CameraComponentType": "CameraComponent",
+          "Mode": "ORTHOGRAPHIC",
+          "Fov": 55,
+          "Near": 0.1,
+          "Far": 100,
+          "Size": 6,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Sun",
+      "Id": 2,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 45,
+            "Y": -30,
+            "Z": 0
+          }
+        },
+        {
+          "DirectionalLightType": "DirectionalLight",
+          "Color": {
+            "X": 1,
+            "Y": 0.94,
+            "Z": 0.85
+          },
+          "Intensity": 3,
+          "Distance": 100,
+          "CastShadows": true,
+          "ShadowNear": 0.1,
+          "ShadowFar": 60
+        }
+      ]
+    },
+    {
+      "Name": "Floor",
+      "Id": 3,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": -0.3,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 0,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 7,
+            "Y": 0.3
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Floor mesh",
+      "Id": 4,
+      "ParentId": 3,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 14,
+            "Y": 0.6,
+            "Z": 0.5
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Left wall",
+      "Id": 5,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -7,
+            "Y": 2.5,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 0,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.2,
+            "Y": 2.5
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Left wall mesh",
+      "Id": 6,
+      "ParentId": 5,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.4,
+            "Y": 5.0,
+            "Z": 0.5
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Right wall",
+      "Id": 7,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 7,
+            "Y": 2.5,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 0,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.2,
+            "Y": 2.5
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Right wall mesh",
+      "Id": 8,
+      "ParentId": 7,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.4,
+            "Y": 5.0,
+            "Z": 0.5
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 0 0",
+      "Id": 9,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -4.0,
+            "Y": 1.0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.38,
+            "Y": 0.38
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 0 0 mesh",
+      "Id": 10,
+      "ParentId": 9,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.76,
+            "Y": 0.76,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 0 1",
+      "Id": 11,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -3.15,
+            "Y": 1.0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.38,
+            "Y": 0.38
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 0 1 mesh",
+      "Id": 12,
+      "ParentId": 11,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.76,
+            "Y": 0.76,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 0 2",
+      "Id": 13,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -2.3,
+            "Y": 1.0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.38,
+            "Y": 0.38
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 0 2 mesh",
+      "Id": 14,
+      "ParentId": 13,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.76,
+            "Y": 0.76,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 1 0",
+      "Id": 15,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -4.0,
+            "Y": 1.85,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.38,
+            "Y": 0.38
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 1 0 mesh",
+      "Id": 16,
+      "ParentId": 15,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.76,
+            "Y": 0.76,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/amber.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 1 1",
+      "Id": 17,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -3.15,
+            "Y": 1.85,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.38,
+            "Y": 0.38
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 1 1 mesh",
+      "Id": 18,
+      "ParentId": 17,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.76,
+            "Y": 0.76,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/amber.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 1 2",
+      "Id": 19,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -2.3,
+            "Y": 1.85,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.38,
+            "Y": 0.38
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 1 2 mesh",
+      "Id": 20,
+      "ParentId": 19,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.76,
+            "Y": 0.76,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/amber.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 2 0",
+      "Id": 21,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -4.0,
+            "Y": 2.7,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.38,
+            "Y": 0.38
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 2 0 mesh",
+      "Id": 22,
+      "ParentId": 21,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.76,
+            "Y": 0.76,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 2 1",
+      "Id": 23,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -3.15,
+            "Y": 2.7,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.38,
+            "Y": 0.38
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 2 1 mesh",
+      "Id": 24,
+      "ParentId": 23,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.76,
+            "Y": 0.76,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 2 2",
+      "Id": 25,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -2.3,
+            "Y": 2.7,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.38,
+            "Y": 0.38
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 2 2 mesh",
+      "Id": 26,
+      "ParentId": 25,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.76,
+            "Y": 0.76,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 3 0",
+      "Id": 27,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -4.0,
+            "Y": 3.55,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.38,
+            "Y": 0.38
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 3 0 mesh",
+      "Id": 28,
+      "ParentId": 27,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.76,
+            "Y": 0.76,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/amber.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 3 1",
+      "Id": 29,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -3.15,
+            "Y": 3.55,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.38,
+            "Y": 0.38
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 3 1 mesh",
+      "Id": 30,
+      "ParentId": 29,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.76,
+            "Y": 0.76,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/amber.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 3 2",
+      "Id": 31,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -2.3,
+            "Y": 3.55,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.38,
+            "Y": 0.38
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Falling block 3 2 mesh",
+      "Id": 32,
+      "ParentId": 31,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.76,
+            "Y": 0.76,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/amber.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Pendulum anchor",
+      "Id": 33,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 2,
+            "Y": 5,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 0,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.12,
+            "Y": 0.12
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Pendulum anchor mesh",
+      "Id": 34,
+      "ParentId": 33,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.24,
+            "Y": 0.24,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Pendulum bob",
+      "Id": 35,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 2,
+            "Y": 2.5,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.4,
+            "Y": 0.4
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15,
+          "Velocity": {
+            "X": 3,
+            "Y": 0
+          }
+        },
+        {
+          "Joint2DComponentType": "Joint2DComponent",
+          "PhysicsTargetId": 33,
+          "JointKind": 0,
+          "AnchorA": {
+            "X": 0,
+            "Y": 0
+          },
+          "AnchorB": {
+            "X": 0,
+            "Y": 0
+          },
+          "Distance": 2.5,
+          "CollideConnected": false
+        }
+      ]
+    },
+    {
+      "Name": "Pendulum bob mesh",
+      "Id": 36,
+      "ParentId": 35,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 0.8,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/blue.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Sloped platform",
+      "Id": 37,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 4,
+            "Y": 1,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": -15
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 0,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 1.5,
+            "Y": 0.15
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Sloped platform mesh",
+      "Id": 38,
+      "ParentId": 37,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 3.0,
+            "Y": 0.3,
+            "Z": 0.5
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Slider",
+      "Id": 39,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 4,
+            "Y": 3,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics2DComponentType": "Physics2DComponent",
+          "BodyMode": 1,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.4,
+            "Y": 0.4
+          },
+          "Mass": 1,
+          "Friction": 0.6,
+          "Restitution": 0.15
+        }
+      ]
+    },
+    {
+      "Name": "Slider mesh",
+      "Id": 40,
+      "ParentId": 39,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 0.8,
+            "Z": 0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/physics-demo/amber.mat"
+          ]
+        }
+      ]
+    }
+  ]
+}

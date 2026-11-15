@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 #endif
 #include <memory>
+#include <string>
 
 namespace IKIGAI::UI {
 class ViewHost;
@@ -126,7 +127,7 @@ namespace CORE {
 	public:
 		void* nativeInstance = nullptr;
 		android_app* androidApp = nullptr;
-		explicit Core(const PlatformStartup& platform);
+		explicit Core(const PlatformStartup& platform, const std::string& initialScene = {});
 		~Core();
 
 		std::unique_ptr<WINDOW::WindowManager> windowManager;

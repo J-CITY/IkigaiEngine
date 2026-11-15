@@ -9,7 +9,7 @@ namespace IKIGAI {
 namespace CORE {
 	class App {
 	public:
-		explicit App(const PlatformStartup& platform);
+		explicit App(const PlatformStartup& platform, const std::string& initialScene = {});
 		~App();
 		void run();
 		bool runMainLoop();
