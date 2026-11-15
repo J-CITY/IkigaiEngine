@@ -133,6 +133,8 @@ cmake --build --preset windows-release --target IkigaiEngine
 
 [Демо окружения](assets/game/scenes/environment-demo.json) · [Модуль поверхностей](src/engine/surfaceModule)
 
+![Terrain, atmosphere, and weather](screenshots/8.png)
+
 </details>
 
 <details>

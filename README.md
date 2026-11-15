@@ -133,6 +133,8 @@ Generate tiled terrain with level of detail and instanced grass. The environment
 
 [Environment demo scene](assets/game/scenes/environment-demo.json) · [Surface module](src/engine/surfaceModule)
 
+![Terrain, atmosphere, and weather](screenshots/8.png)
+
 </details>
 
 <details>
