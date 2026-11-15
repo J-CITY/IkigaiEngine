@@ -1,0 +1,377 @@
+{
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 3,
+            "Z": -12
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "ORTHOGRAPHIC",
+          "Fov": 60,
+          "Near": 0.1,
+          "Far": 100,
+          "Size": 8,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Static floor",
+      "Id": 2,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": -0.3,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics2DComponentType": "class IKIGAI::ECS::Physics2DComponent",
+          "BodyMode": 0,
+          "HalfSize": {
+            "X": 7,
+            "Y": 0.3
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Circle",
+      "Id": 3,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -4,
+            "Y": 3,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics2DComponentType": "class IKIGAI::ECS::Physics2DComponent",
+          "ShapeKind": 0,
+          "Radius": 0.4,
+          "Restitution": 0.6
+        }
+      ]
+    },
+    {
+      "Name": "Box",
+      "Id": 4,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -3,
+            "Y": 2,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics2DComponentType": "class IKIGAI::ECS::Physics2DComponent",
+          "HalfSize": {
+            "X": 0.4,
+            "Y": 0.4
+          },
+          "Friction": 0.8
+        }
+      ]
+    },
+    {
+      "Name": "Static pendulum anchor",
+      "Id": 5,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -1,
+            "Y": 4,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics2DComponentType": "class IKIGAI::ECS::Physics2DComponent",
+          "BodyMode": 0,
+          "ShapeKind": 0,
+          "Radius": 0.12
+        }
+      ]
+    },
+    {
+      "Name": "Pendulum",
+      "Id": 6,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -1,
+            "Y": 2,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics2DComponentType": "class IKIGAI::ECS::Physics2DComponent",
+          "ShapeKind": 0,
+          "Radius": 0.3,
+          "Velocity": {
+            "X": 1.5,
+            "Y": 0
+          }
+        },
+        {
+          "Joint2DComponentType": "class IKIGAI::ECS::Joint2DComponent",
+          "PhysicsTargetId": 5,
+          "Distance": 2
+        }
+      ]
+    },
+    {
+      "Name": "Soft square",
+      "Id": 7,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -4,
+            "Y": 5,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SoftBody2DComponentType": "class IKIGAI::ECS::SoftBody2DComponent",
+          "Width": 4,
+          "Height": 4,
+          "Spacing": 0.25,
+          "Radius": 0.07,
+          "ParticleMass": 0.1,
+          "PreserveArea": true
+        }
+      ]
+    },
+    {
+      "Name": "Tank left",
+      "Id": 8,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 1,
+            "Y": 0.8,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics2DComponentType": "class IKIGAI::ECS::Physics2DComponent",
+          "BodyMode": 0,
+          "HalfSize": {
+            "X": 0.1,
+            "Y": 0.8
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Tank right",
+      "Id": 9,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 3,
+            "Y": 0.8,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics2DComponentType": "class IKIGAI::ECS::Physics2DComponent",
+          "BodyMode": 0,
+          "HalfSize": {
+            "X": 0.1,
+            "Y": 0.8
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Fluid",
+      "Id": 10,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 1.25,
+            "Y": 0.25,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Fluid2DComponentType": "class IKIGAI::ECS::Fluid2DComponent",
+          "Width": 12,
+          "Height": 10,
+          "Spacing": 0.1,
+          "Radius": 0.04,
+          "SmoothingRadius": 0.25,
+          "ParticleMass": 0.01,
+          "RestDensity": 1,
+          "Viscosity": 0.1
+        }
+      ]
+    },
+    {
+      "Name": "Floating box",
+      "Id": 11,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 2,
+            "Y": 2,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics2DComponentType": "class IKIGAI::ECS::Physics2DComponent",
+          "HalfSize": {
+            "X": 0.2,
+            "Y": 0.2
+          },
+          "Mass": 0.08,
+          "Friction": 0.3
+        }
+      ]
+    }
+  ]
+}

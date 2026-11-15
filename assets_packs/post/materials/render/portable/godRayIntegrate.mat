@@ -1,0 +1,13 @@
+{
+  "ShaderPath": "/shaders/render/portable/godRayIntegrate.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBODecay": 0.985,
+    "data_UBODensity": 1.0,
+    "data_UBOSamples": 48
+  }
+}

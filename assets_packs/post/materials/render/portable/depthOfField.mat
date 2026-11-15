@@ -1,0 +1,13 @@
+{
+  "ShaderPath": "/shaders/render/portable/depthOfField.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOFocusDistance": 7.0,
+    "data_UBOFocusRange": 4.0,
+    "data_UBORadius": 5.0
+  }
+}

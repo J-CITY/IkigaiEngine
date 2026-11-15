@@ -1,0 +1,181 @@
+{
+  "Version": 1,
+  "SkeletonPath": "/third-person/guy.fbx",
+  "Rig": {
+    "Root": "Hips",
+    "Feet": [
+      "LeftFoot",
+      "RightFoot",
+      "LeftToeBase",
+      "RightToeBase"
+    ],
+    "Hands": [
+      "LeftHand",
+      "RightHand"
+    ],
+    "UnitsToMeters": 0.01,
+    "RootHeight": 96.35,
+    "SoleOffset": 0.03
+  },
+  "Actions": [
+    {
+      "Id": 1,
+      "Name": "VaultLow",
+      "Clip": "/third-person/animations/VaultLow.animation",
+      "Rate": 1,
+      "When": {
+        "Operation": "And",
+        "Arguments": [
+          {
+            "Operation": "Variable",
+            "Variable": "Vault"
+          },
+          {
+            "Operation": "LessEqual",
+            "Arguments": [
+              {
+                "Operation": "Variable",
+                "Variable": "ObstacleHeight"
+              },
+              {
+                "Operation": "Constant",
+                "Constant": {
+                  "Type": "Float",
+                  "Float": 0.75
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "Priority": 30,
+      "Motion": {
+        "Contact": true,
+        "SingleHand": true,
+        "Plant": 0.36,
+        "Release": 0.57
+      }
+    },
+    {
+      "Id": 2,
+      "Name": "Vault",
+      "Clip": "/third-person/animations/Vault.animation",
+      "Rate": 1,
+      "When": {
+        "Operation": "Variable",
+        "Variable": "Vault"
+      },
+      "Priority": 20,
+      "Motion": {}
+    },
+    {
+      "Id": 3,
+      "Name": "Mantle",
+      "Clip": "/third-person/animations/Mantle.animation",
+      "Rate": 1,
+      "When": {
+        "Operation": "Not",
+        "Arguments": [
+          {
+            "Operation": "Variable",
+            "Variable": "Vault"
+          }
+        ]
+      },
+      "Priority": 10,
+      "Motion": {
+        "Contact": true,
+        "Plant": 0.14,
+        "Release": 0.55
+      }
+    },
+    {
+      "Id": 4,
+      "Name": "MantleHigh",
+      "Clip": "/third-person/animations/MantleHigh.animation",
+      "Rate": 1,
+      "When": {
+        "Operation": "And",
+        "Arguments": [
+          {
+            "Operation": "Not",
+            "Arguments": [
+              {
+                "Operation": "Variable",
+                "Variable": "Vault"
+              }
+            ]
+          },
+          {
+            "Operation": "Greater",
+            "Arguments": [
+              {
+                "Operation": "Variable",
+                "Variable": "ObstacleHeight"
+              },
+              {
+                "Operation": "Constant",
+                "Constant": {
+                  "Type": "Float",
+                  "Float": 1.85
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "Priority": 20,
+      "Motion": {
+        "Contact": true,
+        "Plant": 0.14,
+        "Release": 0.48
+      }
+    },
+    {
+      "Id": 5,
+      "Name": "MantleSprint",
+      "Clip": "/third-person/animations/MantleSprint.animation",
+      "Rate": 1,
+      "When": {
+        "Operation": "And",
+        "Arguments": [
+          {
+            "Operation": "Not",
+            "Arguments": [
+              {
+                "Operation": "Variable",
+                "Variable": "Vault"
+              }
+            ]
+          },
+          {
+            "Operation": "Greater",
+            "Arguments": [
+              {
+                "Operation": "Variable",
+                "Variable": "ObstacleHeight"
+              },
+              {
+                "Operation": "Constant",
+                "Constant": {
+                  "Type": "Float",
+                  "Float": 1.85
+                }
+              }
+            ]
+          },
+          {
+            "Operation": "Variable",
+            "Variable": "Sprint"
+          }
+        ]
+      },
+      "Priority": 30,
+      "Motion": {
+        "Contact": true,
+        "Plant": 0.39,
+        "Release": 0.59
+      }
+    }
+  ]
+}

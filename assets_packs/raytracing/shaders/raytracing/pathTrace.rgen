@@ -1,0 +1,56 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : require
+#include "surface.glsl"
+#include "frame.glsl"
+layout(location=0) rayPayloadEXT SurfacePayload hit;
+layout(location=1) rayPayloadEXT float visibility;
+layout(set=1,binding=0) uniform accelerationStructureEXT SceneAS;
+layout(set=2,binding=0,rgba32f) uniform image2D OutputRadiance;
+struct Light {vec3 pos;float cutoff;vec3 forward;float outerCutoff;vec3 color;float constant;int type;float linear;float quadratic;float intensity;float radius,pad0,pad1,pad2;};
+layout(std430,set=0,binding=3) readonly buffer Lights {Light lights[];} engine_Lights;
+layout(push_constant) uniform Options {uint Bounces;uint Mode;float RayLength;float Bias;} settings;
+
+float visible(vec3 p,vec3 n,vec3 l,float distance) {
+    visibility=0;
+    traceRayEXT(SceneAS,gl_RayFlagsTerminateOnFirstHitEXT|gl_RayFlagsSkipClosestHitShaderEXT,255,0,0,1,p+n*settings.Bias,.001,l,distance,1);
+    return visibility;
+}
+vec3 directLight(vec3 p,vec3 n,vec3 v,vec3 albedo,float metal,float rough) {
+    vec3 result=vec3(0),f0=mix(vec3(.04),albedo,metal);
+    for(int i=0;i<engine_Lights.lights.length();++i) {
+        Light light=engine_Lights.lights[i];if(light.type<0||light.type>2||light.intensity<=0)continue;
+        vec3 delta=light.pos-p;float d=max(length(delta),.001);
+        vec3 l=light.type==1?normalize(-light.forward):delta/d;
+        float attenuation=light.type==1?1:1/max(light.constant+light.linear*d+light.quadratic*d*d,.001);
+        if(light.type==2){float outer=cos(radians(light.outerCutoff)),inner=cos(radians(light.cutoff));attenuation*=clamp((dot(-l,normalize(light.forward))-outer)/max(inner-outer,.0001),0,1);}
+        float nl=max(dot(n,l),0),nv=max(dot(n,v),.0001);if(nl<=0||attenuation<=0)continue;
+        vec3 h=normalize(l+v),f=f0+(1-f0)*pow(1-max(dot(h,v),0),5);
+        float a2=pow(rough,4),nh=max(dot(n,h),0),den=nh*nh*(a2-1)+1;
+        float distribution=a2/max(3.14159265*den*den,.00001),k=(rough+1)*(rough+1)/8;
+        float g=nv/(nv*(1-k)+k)*nl/(nl*(1-k)+k);
+        result+=((1-f)*albedo*(1-metal)/3.14159265+distribution*g*f/(4*nv*max(nl,.0001)))*light.color*light.intensity*attenuation*nl*visible(p,n,l,light.type==1?10000:max(d-.002,.002));
+    }
+    return result;
+}
+void main() {
+    ivec2 pixel=ivec2(gl_LaunchIDEXT.xy);ivec2 size=imageSize(OutputRadiance);
+    if(any(greaterThanEqual(pixel,size)))return;
+    rngState=uint(pixel.x)+uint(pixel.y)*uint(size.x)+uint(engine_RayFrame.State.x)*9781u+17u;
+    vec2 jitter=settings.Mode==0u?vec2(.5):vec2(randomFloat(),randomFloat());
+    vec2 uv=(vec2(pixel)+jitter)/vec2(size);
+    vec3 origin=engine_UBO.ViewPos,direction=normalize(worldPosition(uv,1)-origin);
+    vec3 radiance=vec3(0),throughput=vec3(1);
+    for(uint bounce=0u;bounce<clamp(settings.Bounces,1u,16u);++bounce) {
+        hit.T=-1;
+        traceRayEXT(SceneAS,gl_RayFlagsNoneEXT,255,0,0,0,origin,.001,direction,10000,0);
+        if(hit.T<0){radiance+=throughput*environment(direction);break;}
+        if(settings.Mode==0u){radiance=hit.Albedo*(hit.N*.35+.65);break;}
+        radiance+=throughput*(hit.Emissive+directLight(hit.P,hit.N,-direction,hit.Albedo,hit.Metallic,hit.Roughness));
+        origin=hit.P+hit.N*settings.Bias;
+        if(randomFloat()<hit.Metallic){direction=reflect(direction,hit.N);throughput*=hit.Albedo;}
+        else {direction=cosineDirection(hit.N);throughput*=hit.Albedo;}
+        if(bounce>=2u){float survival=clamp(max(throughput.r,max(throughput.g,throughput.b)),.1,.95);if(randomFloat()>survival)break;throughput/=survival;}
+    }
+    imageStore(OutputRadiance,pixel,vec4(max(radiance,vec3(0)),1));
+}

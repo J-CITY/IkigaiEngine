@@ -1,0 +1,138 @@
+{
+  "Version": 1,
+  "Dimension": "2D",
+  "Emitters": [
+    {
+      "Id": "path",
+      "SimulationSpace": "world",
+      "Capacity": 32,
+      "Timing": {
+        "Duration": 2.0,
+        "Loops": 0,
+        "Delay": 0.0
+      },
+      "Emission": {
+        "Rate": {
+          "Mode": "constant",
+          "Value": 60.0
+        }
+      },
+      "Spawn": [
+        {
+          "Id": "area",
+          "Type": "Shape",
+          "Shape": "point"
+        },
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "uniform",
+            "Min": 1.0,
+            "Max": 2.5
+          },
+          "Velocity": {
+            "Mode": "uniform",
+            "Min": [
+              -10.0,
+              -50.0
+            ],
+            "Max": [
+              10.0,
+              -30.0
+            ],
+            "RandomChannels": "independent"
+          },
+          "Size": {
+            "Mode": "constant",
+            "Value": [
+              8,
+              8
+            ]
+          },
+          "Color": {
+            "Mode": "constant",
+            "Value": [
+              0.1,
+              0.8,
+              1,
+              1
+            ]
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "path",
+          "Type": "PositionOverLife",
+          "Value": {
+            "Mode": "curve",
+            "Keys": [
+              {
+                "Time": 0,
+                "Value": [
+                  0,
+                  0
+                ],
+                "Interpolation": "bezier",
+                "OutControl": [
+                  0.2,
+                  0
+                ],
+                "InControl": [
+                  0.8,
+                  1
+                ]
+              },
+              {
+                "Time": 0.5,
+                "Value": [
+                  150,
+                  -90
+                ]
+              },
+              {
+                "Time": 1,
+                "Value": [
+                  300,
+                  0
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "Id": "fade",
+          "Type": "AlphaOverLife",
+          "Operation": "multiplyBase",
+          "Value": {
+            "Mode": "curve",
+            "Domain": "particleNormalizedAge",
+            "Keys": [
+              {
+                "Time": 0.0,
+                "Value": 0.0,
+                "Interpolation": "linear"
+              },
+              {
+                "Time": 0.15,
+                "Value": 0.7,
+                "Interpolation": "linear"
+              },
+              {
+                "Time": 1.0,
+                "Value": 0.0
+              }
+            ]
+          }
+        }
+      ],
+      "Renderer": {
+        "Type": "sprite2D",
+        "RenderSpace": "screen",
+        "Blend": "alpha",
+        "Layer": 10
+      }
+    }
+  ]
+}

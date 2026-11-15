@@ -1,0 +1,430 @@
+{
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 30,
+            "Z": -62
+          },
+          "LocalRotation": {
+            "X": 22,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 60.0,
+          "Near": 0.1,
+          "Far": 2000.0,
+          "Size": 5.0,
+          "GeometryCulling": true,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Sun",
+      "Id": 2,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 45,
+            "Y": -30,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "DirectionalLightType": "class IKIGAI::ECS::DirectionalLight",
+          "Color": {
+            "X": 1.0,
+            "Y": 0.9,
+            "Z": 0.75
+          },
+          "Intensity": 2.0,
+          "Distance": 100.0,
+          "CastShadows": true
+        }
+      ]
+    },
+    {
+      "Name": "Environment",
+      "Id": 20,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "EnvironmentComponentType": "class IKIGAI::ECS::EnvironmentComponent",
+          "Sun": {
+            "ObjectId": 2,
+            "Component": "DirectionalLight"
+          },
+          "Environment": {
+            "TimeOfDay": 13.0,
+            "DayDuration": 180.0,
+            "AnimateTime": false,
+            "SunAzimuth": 25.0,
+            "Clouds": "Cumulus",
+            "CloudCoverage": 0.3,
+            "CloudDarkness": 0.15,
+            "Precipitation": "Clear",
+            "PrecipitationIntensity": 0.0,
+            "MaxParticles": 0,
+            "CollisionBudget": 64,
+            "WindDirection": {
+              "X": 1.0,
+              "Y": 0.2
+            },
+            "WindSpeed": 2.0
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Generated surface",
+      "Id": 200,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SurfaceComponentType": "class IKIGAI::ECS::SurfaceComponent",
+          "Surface": {
+            "TilesX": 4,
+            "TilesZ": 4,
+            "TileSize": 24.0,
+            "Resolution": 32,
+            "Noise": {
+              "Seed": 87,
+              "BaseHeight": 3.0,
+              "Amplitude": 8.0,
+              "Frequency": 0.022,
+              "Octaves": 5,
+              "Persistence": 0.48,
+              "Ridge": 0.15,
+              "Warp": 12.0
+            },
+            "Layers": [
+              {
+                "Name": "Ground",
+                "Material": "/materials/surface/ground.mat",
+                "TextureScale": 0.12
+              },
+              {
+                "Name": "Forest",
+                "Material": "/materials/surface/forest.mat",
+                "MinHeight": 2.8,
+                "MaxHeight": 5.2,
+                "MaxSlope": 30.0
+              },
+              {
+                "Name": "Sand",
+                "Material": "/materials/surface/sand.mat",
+                "MaxHeight": 2.8
+              },
+              {
+                "Name": "Rock",
+                "Material": "/materials/surface/rock.mat",
+                "MinSlope": 31.0
+              },
+              {
+                "Name": "Snow",
+                "Material": "/materials/surface/snow.mat",
+                "MinHeight": 5.7
+              }
+            ],
+            "Water": {
+              "Enabled": true,
+              "Level": 2.0,
+              "Material": "/materials/surface/water.mat"
+            },
+            "LodDistances": [
+              55.0,
+              110.0,
+              220.0
+            ],
+            "ViewDistance": 500.0,
+            "SkirtDepth": 8.0,
+            "BuildBudget": 4,
+            "CacheMegabytes": 128
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Surface foliage",
+      "Id": 201,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "FoliageComponentType": "class IKIGAI::ECS::FoliageComponent",
+          "Surface": {
+            "ObjectId": 200,
+            "Component": "SurfaceComponent"
+          },
+          "Species": [
+            {
+              "Name": "Grass",
+              "Seed": 34,
+              "Layers": [
+                "Ground",
+                "Forest"
+              ],
+              "Density": 0.16,
+              "MaxInstances": 1200,
+              "MaxSlope": 30.0,
+              "MinScale": 0.45,
+              "MaxScale": 1.05,
+              "ViewDistance": 85.0,
+              "Lods": [
+                {
+                  "Distance": 45.0,
+                  "Model": "/models/weather/grass.obj",
+                  "Material": "/materials/weather/grass.mat"
+                },
+                {
+                  "Distance": 85.0,
+                  "Model": "/models/weather/grass.obj",
+                  "Material": "/materials/weather/grass.mat",
+                  "Billboard": true
+                }
+              ]
+            },
+            {
+              "Name": "Pines",
+              "Seed": 903,
+              "Layers": [
+                "Forest"
+              ],
+              "Density": 0.012,
+              "MaxInstances": 100,
+              "MaxSlope": 25.0,
+              "MinScale": 0.7,
+              "MaxScale": 1.35,
+              "ViewDistance": 250.0,
+              "Materials": [
+                "/materials/surface/bark.mat",
+                "/materials/surface/bark.mat",
+                "/materials/surface/leaves.mat"
+              ],
+              "Lods": [
+                {
+                  "Distance": 65.0,
+                  "Model": "/models/surface/pine.obj"
+                },
+                {
+                  "Distance": 250.0,
+                  "Model": "/models/surface/pine-low.obj"
+                }
+              ]
+            },
+            {
+              "Name": "Rocks",
+              "Seed": 127,
+              "Layers": [
+                "Ground",
+                "Forest",
+                "Sand",
+                "Rock"
+              ],
+              "Density": 0.008,
+              "MaxInstances": 60,
+              "MaxSlope": 65.0,
+              "MinScale": 0.3,
+              "MaxScale": 1.2,
+              "Offset": -0.2,
+              "AlignToNormal": true,
+              "ViewDistance": 180.0,
+              "Lods": [
+                {
+                  "Distance": 180.0,
+                  "Model": "/models/weather/sphere.obj",
+                  "Material": "/materials/surface/rock.mat"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Voxel island",
+      "Id": 202,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 53,
+            "Y": 0,
+            "Z": 15
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "ChunkModelRendererType": "class IKIGAI::ECS::ChunkModelRenderer",
+          "Voxels": {
+            "ChunksX": 2,
+            "ChunksY": 2,
+            "ChunksZ": 2,
+            "ChunkSize": 8,
+            "Noise": {
+              "Seed": 87,
+              "Amplitude": 5.0,
+              "BaseHeight": 0.0,
+              "Frequency": 0.04
+            },
+            "BuildBudget": 4
+          }
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "Ground",
+            "Rock",
+            "Sand",
+            "Snow",
+            "Water"
+          ],
+          "Materials": [
+            "/materials/surface/ground.mat",
+            "/materials/surface/rock.mat",
+            "/materials/surface/sand.mat",
+            "/materials/surface/snow.mat",
+            "/materials/surface/water.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "LOD pine",
+      "Id": 203,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -16,
+            "Y": 3,
+            "Z": -15
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "ModelLODRendererType": "class IKIGAI::ECS::ModelLODRenderer",
+          "Paths": [
+            {
+              "Distance": 50.0,
+              "Path": "/models/surface/pine.obj"
+            },
+            {
+              "Distance": 200.0,
+              "Path": "/models/surface/pine-low.obj"
+            }
+          ]
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "DefaultMaterial",
+            "bark",
+            "leaves"
+          ],
+          "Materials": [
+            "/materials/surface/bark.mat",
+            "/materials/surface/bark.mat",
+            "/materials/surface/leaves.mat"
+          ]
+        }
+      ]
+    }
+  ],
+  "RenderPipeline": "/renderPipeline/weather.json"
+}

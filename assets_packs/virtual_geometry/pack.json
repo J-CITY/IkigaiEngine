@@ -1,0 +1,11 @@
+{
+  "id": "virtual_geometry",
+  "platforms": [
+    "windows",
+    "linux",
+    "macos"
+  ],
+  "requires": [
+    "gpu_cull"
+  ]
+}

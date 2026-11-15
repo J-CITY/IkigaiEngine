@@ -178,8 +178,11 @@ LEGACY_DEMO_PATHS = {
     ),
     "demo_third_person": ("third-person",),
     "demo_pica_pica": ("models/pica_pica", "materials/pica-pica-demo", "shaders/pica-pica-demo", "textures/pica-pica-demo"),
-    "demo_meshes": ("models/dancing_vampire.dae", "models/dragon.obj", "models/RunForward.dae", "models/utah_teapot.obj"),
+    "demo_meshes": ("models/dancing_vampire.dae", "models/dragon.obj", "models/utah_teapot.obj"),
 }
+
+STARTUP_MODEL = Path("models/RunForward.dae")
+LOCAL_ARCHIVE = Path("local/asset-archive")
 
 
 def merge_drive_payload(payload, root_dir, mirror=False):
@@ -208,8 +211,14 @@ def merge_drive_payload(payload, root_dir, mirror=False):
             continue
         pack = packs / name
         for file in asset_files(pack):
-            if file != pack / "pack.json":
-                incoming[name][file.relative_to(pack)] = file
+            relative = file.relative_to(pack)
+            if relative == Path("pack.json"):
+                continue
+            # Older Drive snapshots stored the startup model in a desktop-only pack.
+            if name == "demo_meshes" and relative == STARTUP_MODEL:
+                incoming["game"].setdefault(relative, file)
+            else:
+                incoming[name][relative] = file
     if not any(incoming.values()):
         raise ValueError(f"Drive payload contains no game or demo content: {payload}")
     for name, files in incoming.items():
@@ -221,6 +230,11 @@ def merge_drive_payload(payload, root_dir, mirror=False):
         existing = list(asset_files(target))
         for relative, source in files.items():
             destination = target / relative
+            # Leave locally archived assets out of loose mounts and build stages.
+            # Copying an asset back to its original path opts it in again.
+            archived = root / LOCAL_ARCHIVE / destination.relative_to(root)
+            if archived.is_file() and not destination.exists():
+                continue
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
         if mirror:

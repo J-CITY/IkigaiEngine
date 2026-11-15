@@ -1,0 +1,12 @@
+{
+  "id": "raytracing",
+  "platforms": [
+    "windows",
+    "linux",
+    "macos"
+  ],
+  "requires": [
+    "shading_shared",
+    "screen_probes"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "screen_probes",
+  "platforms": [
+    "windows",
+    "linux",
+    "macos"
+  ],
+  "requires": [
+    "shading_shared"
+  ]
+}

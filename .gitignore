@@ -1,5 +1,6 @@
 .vs/
 build/
+out/
 CMakeFiles/
 *.dll
 3rd/glew/
@@ -9,24 +10,6 @@ CMakeFiles/
 3rd/SDL/
 3rd/SDL2_windows/
 3rd/VulkanSDK/
-android/out
-quest/out
-windows/out
-CMakeCache.txt
-/windows/buildGl
-/windows/buildVk
-/windows/buildDx
-/windows/buildRT
-/windows/outVk
-/windows/outDx
-/windows/outRT
-/windows/outGl
-assets/
-assetses/
-emscripten/out
-emscripten/build
-emscripten/lib
-emscripten/include
 3rd/emsdk/upstream
 3rd/emsdk/downloads
 3rd/emsdk/node
@@ -36,42 +19,37 @@ emscripten/include
 3rd/emsdk/.emscripten_cache
 3rd/emsdk/.emscripten_sanity
 3rd/emsdk/.emscripten_cache.lock
+CMakeCache.txt
+*.obj
+*.fbx
+*.png
+*.jpeg
+*.jpg
+*.ppm
+*.mtl
+*.hdr
+local/
 src/engine/generated
-mac/out
-mac/build_xcode
 .DS_Store
-mac/.DS_Store
 run_vs.log
 run_vs-*.log
-utils/assets.remote.json
 utils/.pack/
-ios/build_xcode
-ios/build
-ios/out
 *.pyc
-/screenshots/
 graphify-out/
 __pycache__/
 utils/__pycache__
+utils/tests
 imgui.ini
 nodeEditor.json
 
 # uncomment, docs
 docs/
-utils/tests/*
-utils/README.md
-utils/run_third_person_demo.cmd
-utils/tools/audit_code_usage.py
 utils/tools/graphify.ps1
-render_assets/*
-cmake/tests/*
-script_assets/*
-testModule/
-material_assets/
 
 # Recreated by run.cmd / run.sh; only manifests and uv.lock belong in Git.
 /.venv/
 /.python/
 
-# Build/setup tools are source files; their fixtures belong in utils/tests/.
-!/utils/assets/
+# Machine-specific CMake overrides are not shared project configuration.
+/CMakeUserPresets.json
+

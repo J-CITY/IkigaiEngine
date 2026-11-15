@@ -1,0 +1,18 @@
+{
+  "SkeletonPath": "/third-person/guy.fbx",
+  "Nodes": [
+    {
+      "Value": 0,
+      "Nodes": [
+        [
+          -1,
+          "/third-person/animations/Left.animation"
+        ],
+        [
+          1,
+          "/third-person/animations/Right.animation"
+        ]
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "id": "demo_third_person",
+  "platforms": [
+    "windows",
+    "linux",
+    "macos"
+  ],
+  "requires": []
+}

@@ -1,0 +1,9 @@
+{
+  "id": "demo_pica_pica",
+  "platforms": [
+    "windows",
+    "linux",
+    "macos"
+  ],
+  "requires": []
+}

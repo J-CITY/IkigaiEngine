@@ -1,0 +1,9 @@
+{
+  "id": "gpu_cull",
+  "platforms": [
+    "windows",
+    "linux",
+    "macos"
+  ],
+  "requires": []
+}

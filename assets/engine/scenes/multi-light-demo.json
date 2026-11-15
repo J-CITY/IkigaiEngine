@@ -1,0 +1,1299 @@
+{
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 3,
+            "Z": -12
+          },
+          "LocalRotation": {
+            "X": 8,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 65.0,
+          "Near": 0.1,
+          "Far": 100.0,
+          "Size": 5.0,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Sun",
+      "Id": 2,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 6,
+            "Y": 175,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "DirectionalLightType": "class IKIGAI::ECS::DirectionalLight",
+          "Color": {
+            "X": 1.0,
+            "Y": 0.88,
+            "Z": 0.65
+          },
+          "Intensity": 4.0,
+          "Distance": 100.0
+        }
+      ]
+    },
+    {
+      "Name": "OmniLamp",
+      "Id": 3,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -2,
+            "Y": 2.5,
+            "Z": 3
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "PointLightType": "class IKIGAI::ECS::PointLight",
+          "Color": {
+            "X": 0.25,
+            "Y": 0.55,
+            "Z": 1.0
+          },
+          "Intensity": 24.0,
+          "Constant": 1.0,
+          "Linear": 0.05,
+          "Quadratic": 0.12
+        }
+      ]
+    },
+    {
+      "Name": "Spot",
+      "Id": 4,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 3,
+            "Y": 5,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 48,
+            "Y": -20,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SpotLightType": "class IKIGAI::ECS::SpotLight",
+          "Color": {
+            "X": 1.0,
+            "Y": 0.32,
+            "Z": 0.1
+          },
+          "Intensity": 32.0,
+          "Constant": 1.0,
+          "Linear": 0.05,
+          "Quadratic": 0.1,
+          "Cutoff": 15.0,
+          "OuterCutoff": 23.0
+        }
+      ]
+    },
+    {
+      "Name": "Courtyard",
+      "Id": 5,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": -0.25,
+            "Z": 5
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 8,
+            "Y": 0.25,
+            "Z": 12
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Left wall",
+      "Id": 6,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -7,
+            "Y": 3,
+            "Z": 6
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.2,
+            "Y": 3,
+            "Z": 9
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Right wall",
+      "Id": 7,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 7,
+            "Y": 3,
+            "Z": 6
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.2,
+            "Y": 3,
+            "Z": 9
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Slotted wall pillar -6",
+      "Id": 8,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -6,
+            "Y": 3,
+            "Z": 12
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.38,
+            "Y": 3,
+            "Z": 0.4
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Gallery column -6",
+      "Id": 9,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -6,
+            "Y": 2.5,
+            "Z": 6
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.28,
+            "Y": 2.5,
+            "Z": 0.28
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Roof beam -6",
+      "Id": 10,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -6,
+            "Y": 6,
+            "Z": 8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.25,
+            "Y": 0.2,
+            "Z": 4
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Slotted wall pillar -3",
+      "Id": 11,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -3,
+            "Y": 3,
+            "Z": 12
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.38,
+            "Y": 3,
+            "Z": 0.4
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Gallery column -3",
+      "Id": 12,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -3,
+            "Y": 2.5,
+            "Z": 6
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.28,
+            "Y": 2.5,
+            "Z": 0.28
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Roof beam -3",
+      "Id": 13,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -3,
+            "Y": 6,
+            "Z": 8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.25,
+            "Y": 0.2,
+            "Z": 4
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Slotted wall pillar 0",
+      "Id": 14,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 3,
+            "Z": 12
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.38,
+            "Y": 3,
+            "Z": 0.4
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Gallery column 0",
+      "Id": 15,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 2.5,
+            "Z": 6
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.28,
+            "Y": 2.5,
+            "Z": 0.28
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Roof beam 0",
+      "Id": 16,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 6,
+            "Z": 8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.25,
+            "Y": 0.2,
+            "Z": 4
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Slotted wall pillar 3",
+      "Id": 17,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 3,
+            "Y": 3,
+            "Z": 12
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.38,
+            "Y": 3,
+            "Z": 0.4
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Gallery column 3",
+      "Id": 18,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 3,
+            "Y": 2.5,
+            "Z": 6
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.28,
+            "Y": 2.5,
+            "Z": 0.28
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Roof beam 3",
+      "Id": 19,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 3,
+            "Y": 6,
+            "Z": 8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.25,
+            "Y": 0.2,
+            "Z": 4
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Slotted wall pillar 6",
+      "Id": 20,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 6,
+            "Y": 3,
+            "Z": 12
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.38,
+            "Y": 3,
+            "Z": 0.4
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Gallery column 6",
+      "Id": 21,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 6,
+            "Y": 2.5,
+            "Z": 6
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.28,
+            "Y": 2.5,
+            "Z": 0.28
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Roof beam 6",
+      "Id": 22,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 6,
+            "Y": 6,
+            "Z": 8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.25,
+            "Y": 0.2,
+            "Z": 4
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Upper lintel",
+      "Id": 23,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 6,
+            "Z": 12
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 7,
+            "Y": 0.3,
+            "Z": 0.4
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Lamp blocker",
+      "Id": 24,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -2,
+            "Y": 2.5,
+            "Z": 5
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.45,
+            "Y": 1.4,
+            "Z": 0.35
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Ochre.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Pedestal",
+      "Id": 25,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -4,
+            "Y": 0.7,
+            "Z": 3
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 0.7,
+            "Z": 1
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Stone.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Metal sculpture",
+      "Id": 26,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 2,
+            "Y": 1.4,
+            "Z": 7
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 25,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.6,
+            "Y": 1.4,
+            "Z": 0.6
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Metal.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Cutout lattice",
+      "Id": 27,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 1.5,
+            "Y": 3,
+            "Z": 11
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.9,
+            "Y": 2,
+            "Z": 0.1
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/render-smoke/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Cutout.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Legend panel",
+      "Id": 28,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 15,
+            "Y": 255,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 590,
+            "Y": 95,
+            "Z": 1
+          }
+        },
+        {
+          "SpriteComponentType": "class IKIGAI::ECS::SpriteComponent",
+          "TexturePath": "/textures/lighting-demo/legend.texture",
+          "Is3D": false
+        }
+      ]
+    },
+    {
+      "Name": "Label 0",
+      "Id": 29,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 25,
+            "Y": 276,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.45,
+            "Y": 0.45,
+            "Z": 1
+          }
+        },
+        {
+          "LabelComponentType": "class IKIGAI::ECS::LabelComponent",
+          "Label": "Omnidirectional point shadows",
+          "Font": "/fonts/a_AlternaSw.TTF",
+          "Is3D": false
+        }
+      ]
+    },
+    {
+      "Name": "Label 1",
+      "Id": 30,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 25,
+            "Y": 304,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.45,
+            "Y": 0.45,
+            "Z": 1
+          }
+        },
+        {
+          "LabelComponentType": "class IKIGAI::ECS::LabelComponent",
+          "Label": "God rays: sunlight through the gallery",
+          "Font": "/fonts/a_AlternaSw.TTF",
+          "Is3D": false
+        }
+      ]
+    },
+    {
+      "Name": "Label 2",
+      "Id": 31,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 25,
+            "Y": 332,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.45,
+            "Y": 0.45,
+            "Z": 1
+          }
+        },
+        {
+          "LabelComponentType": "class IKIGAI::ECS::LabelComponent",
+          "Label": "Volumetric: blue point / orange spot",
+          "Font": "/fonts/a_AlternaSw.TTF",
+          "Is3D": false
+        }
+      ]
+    },
+    {
+      "Name": "SunSecondary",
+      "Id": 32,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 6,
+            "Y": 175,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "DirectionalLightType": "class IKIGAI::ECS::DirectionalLight",
+          "Color": {
+            "X": 1.0,
+            "Y": 0.4,
+            "Z": 0.2
+          },
+          "Intensity": 1.0,
+          "Distance": 100.0
+        }
+      ]
+    },
+    {
+      "Name": "OmniLampSecondary",
+      "Id": 33,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 3,
+            "Y": 2.5,
+            "Z": 6
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "PointLightType": "class IKIGAI::ECS::PointLight",
+          "Color": {
+            "X": 1.0,
+            "Y": 0.35,
+            "Z": 0.15
+          },
+          "Intensity": 16.0,
+          "Constant": 1.0,
+          "Linear": 0.05,
+          "Quadratic": 0.12
+        }
+      ]
+    },
+    {
+      "Name": "SpotSecondary",
+      "Id": 34,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 5,
+            "Z": 7
+          },
+          "LocalRotation": {
+            "X": 48,
+            "Y": -20,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SpotLightType": "class IKIGAI::ECS::SpotLight",
+          "Color": {
+            "X": 0.2,
+            "Y": 1.0,
+            "Z": 0.4
+          },
+          "Intensity": 20.0,
+          "Constant": 1.0,
+          "Linear": 0.05,
+          "Quadratic": 0.1,
+          "Cutoff": 15.0,
+          "OuterCutoff": 23.0
+        }
+      ]
+    },
+    {
+      "Name": "GlassPane0",
+      "Id": 35,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0.0,
+            "Y": 2,
+            "Z": 2
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.7,
+            "Y": 0.7,
+            "Z": 1
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/lighting-demo/pane.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Glass.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "GlassPane1",
+      "Id": 36,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0.1,
+            "Y": 2,
+            "Z": 3
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.7,
+            "Y": 0.7,
+            "Z": 1
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/lighting-demo/pane.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/lighting-demo/Glass.mat"
+          ]
+        }
+      ]
+    }
+  ]
+}

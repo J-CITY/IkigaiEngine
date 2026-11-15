@@ -1,0 +1,4 @@
+{
+  "backend": "VULKAN",
+  "pipeline": "/renderPipeline/environment-clouds.json"
+}

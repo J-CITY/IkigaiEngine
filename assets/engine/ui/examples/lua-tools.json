@@ -1,0 +1,30 @@
+{
+  "$schema": "../view.schema.json",
+  "version": 1,
+  "id": "lua_tools",
+  "title": "Lua Tools",
+  "initialSize": [360, 250],
+  "initialPosition": [20, 60],
+  "controller": {
+    "backend": "lua",
+    "path": "/scripts/ui/tools.lua",
+    "host": "camera",
+    "properties": {
+      "count": { "type": "integer", "get": "GetCount", "set": "SetCount" },
+      "message": { "type": "string", "get": "GetMessage", "set": "SetMessage" },
+      "canMove": { "type": "boolean", "get": "CanMove" }
+    },
+    "commands": {
+      "increment": { "call": "Increment", "args": { "amount": "integer" } },
+      "moveUp": { "call": "MoveUp" },
+      "log": { "call": "Log" }
+    }
+  },
+  "children": [
+    { "type": "sliderInt", "id": "count", "label": "Count", "min": 0, "max": 100, "value": { "bind": "count" } },
+    { "type": "button", "id": "increment", "label": "+1", "onClick": { "command": "increment", "args": { "amount": 1 } } },
+    { "type": "inputText", "id": "message", "label": "Message", "value": { "bind": "message" } },
+    { "type": "button", "id": "log", "label": "Log", "onClick": { "command": "log" } },
+    { "type": "button", "id": "move", "label": "Move camera up", "enabled": { "bind": "canMove" }, "onClick": { "command": "moveUp" } }
+  ]
+}

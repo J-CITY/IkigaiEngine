@@ -1,0 +1,36 @@
+{
+  "$schema": "../view.schema.json",
+  "version": 1,
+  "id": "camera_tools",
+  "title": "Camera Tools",
+  "initialSize": [360, 250],
+  "initialPosition": [20, 330],
+  "controller": { "backend": "native", "name": "camera" },
+  "children": [
+    { "type": "text", "id": "status", "value": { "bind": "camera.status" } },
+    { "type": "sliderFloat", "id": "speed", "label": "Step", "value": { "bind": "camera.speed" }, "min": 0.01, "max": 10.0 },
+    {
+      "type": "column", "id": "controls", "enabled": { "bind": "camera.canMove" },
+      "children": [
+        { "type": "row", "id": "forward_row", "children": [
+          { "type": "button", "id": "up", "label": "UP", "onClick": { "command": "camera.move", "args": { "x": 0, "y": 1, "z": 0 } } },
+          { "type": "button", "id": "forward", "label": "FORWARD", "onClick": { "command": "camera.move", "args": { "x": 0, "y": 0, "z": 1 } } },
+          { "type": "button", "id": "down", "label": "DOWN", "onClick": { "command": "camera.move", "args": { "x": 0, "y": -1, "z": 0 } } }
+        ] },
+        { "type": "row", "id": "back_row", "children": [
+          { "type": "button", "id": "left", "label": "LEFT", "onClick": { "command": "camera.move", "args": { "x": 1, "y": 0, "z": 0 } } },
+          { "type": "button", "id": "back", "label": "BACKWARD", "onClick": { "command": "camera.move", "args": { "x": 0, "y": 0, "z": -1 } } },
+          { "type": "button", "id": "right", "label": "RIGHT", "onClick": { "command": "camera.move", "args": { "x": -1, "y": 0, "z": 0 } } }
+        ] },
+        { "type": "row", "id": "yaw_row", "children": [
+          { "type": "button", "id": "yaw_left", "label": "R LEFT", "onClick": { "command": "camera.rotate", "args": { "x": 0, "y": 10, "z": 0 } } },
+          { "type": "button", "id": "yaw_right", "label": "R RIGHT", "onClick": { "command": "camera.rotate", "args": { "x": 0, "y": -10, "z": 0 } } }
+        ] },
+        { "type": "row", "id": "pitch_row", "children": [
+          { "type": "button", "id": "pitch_up", "label": "R UP", "onClick": { "command": "camera.rotate", "args": { "x": -10, "y": 0, "z": 0 } } },
+          { "type": "button", "id": "pitch_down", "label": "R DOWN", "onClick": { "command": "camera.rotate", "args": { "x": 10, "y": 0, "z": 0 } } }
+        ] }
+      ]
+    }
+  ]
+}

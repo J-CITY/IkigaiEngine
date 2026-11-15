@@ -1,0 +1,1026 @@
+{
+  "type": "object",
+  "properties": {
+    "Version": {
+      "const": 1
+    },
+    "Dimension": {
+      "enum": [
+        "2D",
+        "3D"
+      ]
+    },
+    "Parameters": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "Type": {
+            "enum": [
+              "float",
+              "vec2",
+              "vec3",
+              "vec4",
+              "color"
+            ]
+          },
+          "Default": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 4,
+                "maxItems": 4
+              }
+            ]
+          }
+        },
+        "required": [
+          "Type",
+          "Default"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "Emitters": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/$defs/emitter"
+      }
+    },
+    "EventLimits": {
+      "$ref": "#/$defs/eventLimits"
+    }
+  },
+  "required": [
+    "Version",
+    "Dimension",
+    "Emitters"
+  ],
+  "additionalProperties": false,
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "key": {
+      "type": "object",
+      "properties": {
+        "Time": {
+          "type": "number"
+        },
+        "Value": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            }
+          ]
+        },
+        "Interpolation": {
+          "enum": [
+            "step",
+            "linear",
+            "bezier",
+            "easing"
+          ]
+        },
+        "OutControl": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "InControl": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "Easing": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30
+        }
+      },
+      "required": [
+        "Time",
+        "Value"
+      ],
+      "additionalProperties": false
+    },
+    "curve": {
+      "type": "object",
+      "properties": {
+        "Keys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/key"
+          },
+          "minItems": 1,
+          "maxItems": 4096
+        }
+      },
+      "required": [
+        "Keys"
+      ],
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "Mode": {
+          "enum": [
+            "constant",
+            "uniform",
+            "curve",
+            "curveRange",
+            "parameter"
+          ]
+        },
+        "Value": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            }
+          ]
+        },
+        "Min": {
+          "oneOf": [
+            {
+              "oneOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 4,
+                  "maxItems": 4
+                }
+              ]
+            },
+            {
+              "$ref": "#/$defs/curve"
+            }
+          ]
+        },
+        "Max": {
+          "oneOf": [
+            {
+              "oneOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 4,
+                  "maxItems": 4
+                }
+              ]
+            },
+            {
+              "$ref": "#/$defs/curve"
+            }
+          ]
+        },
+        "Domain": {
+          "enum": [
+            "particleNormalizedAge",
+            "particleAge",
+            "emitterNormalizedAge",
+            "emitterAge"
+          ]
+        },
+        "RandomChannels": {
+          "enum": [
+            "linked",
+            "independent"
+          ]
+        },
+        "Parameter": {
+          "type": "string"
+        },
+        "Keys": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/key"
+          },
+          "minItems": 1,
+          "maxItems": 4096
+        }
+      },
+      "required": [
+        "Mode"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "Mode": {
+                "const": "constant"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "Value"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "Mode": {
+                "const": "uniform"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "Min",
+              "Max"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "Mode": {
+                "const": "curve"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "Keys"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "Mode": {
+                "const": "curveRange"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "Min",
+              "Max"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "Mode": {
+                "const": "parameter"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "Parameter"
+            ]
+          }
+        }
+      ]
+    },
+    "module": {
+      "type": "object",
+      "properties": {
+        "Id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "Type": {
+          "enum": [
+            "Shape",
+            "Initialize",
+            "RadialVelocity",
+            "DirectionalVelocity",
+            "Acceleration",
+            "Drag",
+            "VelocityOverLife",
+            "IntegrateMotion",
+            "SizeOverLife",
+            "ColorOverLife",
+            "AlphaOverLife",
+            "RotationOverLife",
+            "AngularVelocity",
+            "PositionOffsetOverLife",
+            "PositionOverLife",
+            "Flipbook",
+            "OrientationOverLife",
+            "AngularVelocity3D"
+          ]
+        },
+        "Shape": {
+          "enum": [
+            "point",
+            "segment",
+            "rectangle",
+            "circle",
+            "ring",
+            "box",
+            "sphere",
+            "cone",
+            "cylinder"
+          ]
+        },
+        "Sampling": {
+          "enum": [
+            "surface",
+            "volume"
+          ]
+        },
+        "Offset": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            }
+          ]
+        },
+        "Rotation": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/source"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          ]
+        },
+        "Size": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/source"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          ]
+        },
+        "Radius": {
+          "type": "number"
+        },
+        "InnerRadius": {
+          "type": "number"
+        },
+        "Height": {
+          "type": "number"
+        },
+        "Lifetime": {
+          "$ref": "#/$defs/source"
+        },
+        "Velocity": {
+          "$ref": "#/$defs/source"
+        },
+        "Color": {
+          "$ref": "#/$defs/source"
+        },
+        "Speed": {
+          "$ref": "#/$defs/source"
+        },
+        "Angle": {
+          "$ref": "#/$defs/source"
+        },
+        "Value": {
+          "$ref": "#/$defs/source"
+        },
+        "Operation": {
+          "enum": [
+            "multiplyBase",
+            "set"
+          ]
+        },
+        "Orientation": {
+          "$ref": "#/$defs/source"
+        }
+      },
+      "required": [
+        "Id",
+        "Type"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "Type": {
+                "const": "Shape"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "Shape"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "Type": {
+                "const": "Initialize"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "Lifetime",
+              "Size"
+            ]
+          }
+        }
+      ]
+    },
+    "renderer": {
+      "type": "object",
+      "properties": {
+        "Type": {
+          "enum": [
+            "sprite2D",
+            "billboard3D",
+            "mesh3D"
+          ]
+        },
+        "RenderSpace": {
+          "enum": [
+            "screen",
+            "world"
+          ]
+        },
+        "Texture": {
+          "type": "string"
+        },
+        "Atlas": {
+          "type": "string"
+        },
+        "Piece": {
+          "type": "string"
+        },
+        "Material": {
+          "type": "string"
+        },
+        "Blend": {
+          "enum": [
+            "alpha",
+            "additive",
+            "premultiplied"
+          ]
+        },
+        "Alignment": {
+          "enum": [
+            "camera",
+            "velocity",
+            "axisLocked"
+          ]
+        },
+        "Layer": {
+          "type": "integer"
+        },
+        "Order": {
+          "type": "integer"
+        },
+        "DepthTest": {
+          "type": "boolean"
+        },
+        "Pivot": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "Columns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "Rows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "Mesh": {
+          "type": "string",
+          "minLength": 1
+        },
+        "MeshIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535
+        }
+      },
+      "required": [
+        "Type"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "Type": {
+                "const": "mesh3D"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "Mesh"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "Alignment"
+                  ]
+                },
+                {
+                  "required": [
+                    "Pivot"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "Mesh"
+                  ]
+                },
+                {
+                  "required": [
+                    "MeshIndex"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "emitter": {
+      "type": "object",
+      "properties": {
+        "Id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "Capacity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "SimulationSpace": {
+          "enum": [
+            "local",
+            "world"
+          ]
+        },
+        "ScalePolicy": {
+          "enum": [
+            "inherit",
+            "ignore"
+          ]
+        },
+        "InheritVelocity": {
+          "type": "number"
+        },
+        "Timing": {
+          "type": "object",
+          "properties": {
+            "Duration": {
+              "type": "number",
+              "minimum": 0.001
+            },
+            "Loops": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "Delay": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "Emission": {
+          "type": "object",
+          "properties": {
+            "Rate": {
+              "$ref": "#/$defs/source"
+            },
+            "Bursts": {
+              "type": "array",
+              "maxItems": 1024,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "Time": {
+                    "type": "number"
+                  },
+                  "Count": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 65536
+                  },
+                  "Interval": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "Count"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "Mode": {
+              "enum": [
+                "automatic",
+                "eventsOnly"
+              ]
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "Mode": {
+                    "const": "eventsOnly"
+                  }
+                },
+                "required": [
+                  "Mode"
+                ]
+              },
+              "then": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "Rate"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "Bursts"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "Spawn": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/module"
+              },
+              {
+                "properties": {
+                  "Type": {
+                    "enum": [
+                      "Shape",
+                      "Initialize",
+                      "RadialVelocity",
+                      "DirectionalVelocity"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "Update": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/module"
+              },
+              {
+                "properties": {
+                  "Type": {
+                    "enum": [
+                      "Acceleration",
+                      "Drag",
+                      "VelocityOverLife",
+                      "IntegrateMotion",
+                      "SizeOverLife",
+                      "ColorOverLife",
+                      "AlphaOverLife",
+                      "RotationOverLife",
+                      "AngularVelocity",
+                      "PositionOffsetOverLife",
+                      "PositionOverLife",
+                      "Flipbook",
+                      "OrientationOverLife",
+                      "AngularVelocity3D"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "Renderer": {
+          "$ref": "#/$defs/renderer"
+        },
+        "Events": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/eventRoute"
+          }
+        }
+      },
+      "required": [
+        "Id",
+        "Spawn",
+        "Update",
+        "Renderer"
+      ],
+      "additionalProperties": false
+    },
+    "eventLimits": {
+      "type": "object",
+      "properties": {
+        "MaxEventsPerStep": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65536
+        },
+        "MaxChildParticlesPerStep": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65536
+        },
+        "MaxDepth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32
+        }
+      },
+      "additionalProperties": false
+    },
+    "eventRoute": {
+      "type": "object",
+      "properties": {
+        "Id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "On": {
+          "enum": [
+            "birth",
+            "death"
+          ]
+        },
+        "Emitter": {
+          "type": "string",
+          "minLength": 1
+        },
+        "Count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "Probability": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "InheritVelocity": {
+          "type": "number"
+        },
+        "InheritColor": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "Id",
+        "On",
+        "Emitter"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "Dimension": {
+            "const": "2D"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "Emitters": {
+            "items": {
+              "properties": {
+                "Renderer": {
+                  "properties": {
+                    "Type": {
+                      "const": "sprite2D"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "Emitters": {
+            "items": {
+              "properties": {
+                "Renderer": {
+                  "properties": {
+                    "Type": {
+                      "enum": [
+                        "billboard3D",
+                        "mesh3D"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "backend": "OPENGL",
+  "pipeline": "/renderPipeline/environment-clouds.json"
+}

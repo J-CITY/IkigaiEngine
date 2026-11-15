@@ -1,0 +1,9 @@
+{
+  "id": "shading_shared",
+  "platforms": [
+    "windows",
+    "linux",
+    "macos"
+  ],
+  "requires": []
+}

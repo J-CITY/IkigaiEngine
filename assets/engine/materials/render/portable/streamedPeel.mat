@@ -1,0 +1,28 @@
+{
+  "ShaderPath": "/shaders/render/portable/streamedPeel.shader",
+  "DepthTest": true,
+  "DepthWriting": true,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOu_Albedo": {
+      "X": 1,
+      "Y": 1,
+      "Z": 1,
+      "W": 1
+    },
+    "data_UBOu_TextureTiling": {
+      "X": 1,
+      "Y": 1
+    },
+    "data_UBOu_TextureOffset": {
+      "X": 0,
+      "Y": 0
+    },
+    "data_UBOu_Metallic": 0.0,
+    "data_UBOu_Roughness": 0.6,
+    "data_UBOu_EnableNormalMapping": false,
+    "data_UBOLayer": 0
+  }
+}

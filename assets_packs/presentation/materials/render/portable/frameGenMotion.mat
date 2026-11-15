@@ -1,0 +1,14 @@
+{
+  "ShaderPath": "/shaders/render/portable/frameGenMotion.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOJitterDelta": {
+      "X": 0.0,
+      "Y": 0.0
+    }
+  }
+}

@@ -1,0 +1,1572 @@
+{
+  "Name": "MigratedDeferredUpscale",
+  "TemporalJitter": true,
+  "Textures": [
+    {
+      "Name": "Normals",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "Albedo",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "Roughness",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "Velocity",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "Depth",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "DEPTH",
+        "PixelType": "DEPTH32_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 1,
+        "MinFilter": "NEAREST",
+        "MagFilter": "NEAREST"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "DirectionalShadowColor",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 2048,
+        "Height": 2048,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "FIXED"
+    },
+    {
+      "Name": "DirectionalShadow",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 2048,
+        "Height": 2048,
+        "TexType": "DEPTH",
+        "PixelType": "DEPTH32_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 1,
+        "MinFilter": "NEAREST",
+        "MagFilter": "NEAREST"
+      },
+      "Size": "FIXED"
+    },
+    {
+      "Name": "SpotShadowColor",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 1024,
+        "Height": 1024,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "FIXED"
+    },
+    {
+      "Name": "SpotShadow",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 1024,
+        "Height": 1024,
+        "TexType": "DEPTH",
+        "PixelType": "DEPTH32_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 1,
+        "MinFilter": "NEAREST",
+        "MagFilter": "NEAREST"
+      },
+      "Size": "FIXED"
+    },
+    {
+      "Name": "PointShadowColor",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 1536,
+        "Height": 1024,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "FIXED"
+    },
+    {
+      "Name": "PointShadow",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 1536,
+        "Height": 1024,
+        "TexType": "DEPTH",
+        "PixelType": "DEPTH32_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 1,
+        "MinFilter": "NEAREST",
+        "MagFilter": "NEAREST"
+      },
+      "Size": "FIXED"
+    },
+    {
+      "Name": "AO",
+      "Scale": 0.5,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "ScreenShadow",
+      "Scale": 0.5,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "Lighting",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "Reflection",
+      "Scale": 0.5,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "Indirect",
+      "Scale": 0.5,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "Composed",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "Motion",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "Display",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "History",
+      "Scale": 1,
+      "History": true,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "DepthHistory",
+      "Scale": 1,
+      "History": true,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "Bright",
+      "Scale": 0.5,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "BloomX",
+      "Scale": 0.5,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "Bloom",
+      "Scale": 0.5,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "Optional_volumetricLight",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "Optional_godRays",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "Optional_depthOfField",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "Optional_fog",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "Optional_chromaticAbberation",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "Optional_colorGrading",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "Optional_vignette",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "Optional_sharpen",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "Optional_filmGrain",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "Optional_dilation",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "Optional_pixelize",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "Optional_posterize",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "Optional_outline",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "Optional_fxaa",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "LINEAR",
+        "MagFilter": "LINEAR"
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "Upscaled",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "NEAREST",
+        "MagFilter": "NEAREST",
+        "Storage": true
+      },
+      "Size": "DISPLAY"
+    },
+    {
+      "Name": "OpaqueForUpscale",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RGBA_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 4,
+        "MinFilter": "NEAREST",
+        "MagFilter": "NEAREST",
+        "Storage": false
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "UpscaleVelocity",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "RG_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 2,
+        "MinFilter": "NEAREST",
+        "MagFilter": "NEAREST",
+        "Storage": false
+      },
+      "Size": "RENDER"
+    },
+    {
+      "Name": "UpscaleReactive",
+      "Scale": 1,
+      "History": false,
+      "Resource": {
+        "Width": 0,
+        "Height": 0,
+        "TexType": "TEXTURE_2D",
+        "PixelType": "R_FLOAT",
+        "IsFloat": true,
+        "UseMipmap": false,
+        "Channels": 1,
+        "MinFilter": "NEAREST",
+        "MagFilter": "NEAREST",
+        "Storage": false
+      },
+      "Size": "RENDER"
+    }
+  ],
+  "FrameBuffers": [
+    {
+      "Name": "Geometry",
+      "Textures": [
+        "Velocity",
+        "Normals",
+        "Albedo",
+        "Roughness"
+      ],
+      "Depth": "Depth"
+    },
+    {
+      "Name": "DirectionalShadow",
+      "Textures": [
+        "DirectionalShadowColor"
+      ],
+      "Depth": "DirectionalShadow"
+    },
+    {
+      "Name": "SpotShadow",
+      "Textures": [
+        "SpotShadowColor"
+      ],
+      "Depth": "SpotShadow"
+    },
+    {
+      "Name": "PointShadow",
+      "Textures": [
+        "PointShadowColor"
+      ],
+      "Depth": "PointShadow"
+    },
+    {
+      "Name": "AO",
+      "Textures": [
+        "AO"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "ScreenShadow",
+      "Textures": [
+        "ScreenShadow"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Lighting",
+      "Textures": [
+        "Lighting"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Reflection",
+      "Textures": [
+        "Reflection"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Indirect",
+      "Textures": [
+        "Indirect"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Composed",
+      "Textures": [
+        "Composed"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Motion",
+      "Textures": [
+        "Motion"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Display",
+      "Textures": [
+        "Display"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "History",
+      "Textures": [
+        "History"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "DepthHistory",
+      "Textures": [
+        "DepthHistory"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Bright",
+      "Textures": [
+        "Bright"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "BloomX",
+      "Textures": [
+        "BloomX"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Bloom",
+      "Textures": [
+        "Bloom"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Transparent",
+      "Textures": [
+        "Composed"
+      ],
+      "Depth": "Depth"
+    },
+    {
+      "Name": "Optional_volumetricLight",
+      "Textures": [
+        "Optional_volumetricLight"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Optional_godRays",
+      "Textures": [
+        "Optional_godRays"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Optional_depthOfField",
+      "Textures": [
+        "Optional_depthOfField"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Optional_fog",
+      "Textures": [
+        "Optional_fog"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Optional_chromaticAbberation",
+      "Textures": [
+        "Optional_chromaticAbberation"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Optional_colorGrading",
+      "Textures": [
+        "Optional_colorGrading"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Optional_vignette",
+      "Textures": [
+        "Optional_vignette"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Optional_sharpen",
+      "Textures": [
+        "Optional_sharpen"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Optional_filmGrain",
+      "Textures": [
+        "Optional_filmGrain"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Optional_dilation",
+      "Textures": [
+        "Optional_dilation"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Optional_pixelize",
+      "Textures": [
+        "Optional_pixelize"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Optional_posterize",
+      "Textures": [
+        "Optional_posterize"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Optional_outline",
+      "Textures": [
+        "Optional_outline"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Optional_fxaa",
+      "Textures": [
+        "Optional_fxaa"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "Upscaled",
+      "Textures": [
+        "Upscaled"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "OpaqueForUpscale",
+      "Textures": [
+        "OpaqueForUpscale"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "UpscaleVelocity",
+      "Textures": [
+        "UpscaleVelocity"
+      ],
+      "Depth": ""
+    },
+    {
+      "Name": "UpscaleReactive",
+      "Textures": [
+        "UpscaleReactive"
+      ],
+      "Depth": ""
+    }
+  ],
+  "Buffers": [],
+  "Stages": [
+    {
+      "Name": "DirectionalShadow",
+      "Draw": "SHADOW",
+      "Material": "/materials/render/portable/shadow.mat",
+      "FrameBuffer": "DirectionalShadow",
+      "Uniforms": {},
+      "ClearColor": true,
+      "ClearDepth": true,
+      "OverrideMaterial": true,
+      "ShadowType": "directional",
+      "ShadowRange": 100.0,
+      "ClearValue": {
+        "X": 1,
+        "Y": 1,
+        "Z": 1,
+        "W": 1
+      }
+    },
+    {
+      "Name": "SpotShadow",
+      "Draw": "SHADOW",
+      "Material": "/materials/render/portable/shadow.mat",
+      "FrameBuffer": "SpotShadow",
+      "Uniforms": {},
+      "ClearColor": true,
+      "ClearDepth": true,
+      "OverrideMaterial": true,
+      "ShadowType": "spot",
+      "ShadowRange": 100.0,
+      "ClearValue": {
+        "X": 1,
+        "Y": 1,
+        "Z": 1,
+        "W": 1
+      }
+    },
+    {
+      "Name": "PointShadow",
+      "Draw": "SHADOW",
+      "Material": "/materials/render/portable/shadow.mat",
+      "FrameBuffer": "PointShadow",
+      "Uniforms": {},
+      "ClearColor": true,
+      "ClearDepth": true,
+      "OverrideMaterial": true,
+      "ShadowType": "point",
+      "ShadowRange": 100.0,
+      "ClearValue": {
+        "X": 1,
+        "Y": 1,
+        "Z": 1,
+        "W": 1
+      }
+    },
+    {
+      "Name": "Geometry",
+      "Draw": "DEFERRED",
+      "Material": "/materials/render/portable/gbuffer.mat",
+      "FrameBuffer": "Geometry",
+      "Uniforms": {},
+      "ClearColor": true,
+      "ClearDepth": true,
+      "OverrideMaterial": true,
+      "ClearValue": {
+        "X": 0,
+        "Y": 0,
+        "Z": 0,
+        "W": 0
+      }
+    },
+    {
+      "Name": "SSAO",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/ssao.mat",
+      "FrameBuffer": "AO",
+      "Uniforms": {
+        "Depth": "Depth",
+        "Normals": "Normals"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "ClearValue": {
+        "X": 1,
+        "Y": 1,
+        "Z": 1,
+        "W": 1
+      }
+    },
+    {
+      "Name": "ScreenSpaceShadows",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/sss.mat",
+      "FrameBuffer": "ScreenShadow",
+      "Uniforms": {
+        "Depth": "Depth"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "ClearValue": {
+        "X": 1,
+        "Y": 1,
+        "Z": 1,
+        "W": 1
+      }
+    },
+    {
+      "Name": "Lighting",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/lighting.mat",
+      "FrameBuffer": "Lighting",
+      "Uniforms": {
+        "Depth": "Depth",
+        "Normals": "Normals",
+        "Albedo": "Albedo",
+        "Roughness": "Roughness",
+        "AO": "AO",
+        "ScreenShadow": "ScreenShadow",
+        "DirectionalShadow": "DirectionalShadow",
+        "SpotShadow": "SpotShadow",
+        "PointShadow": "PointShadow"
+      },
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "SSR",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/ssr.mat",
+      "FrameBuffer": "Reflection",
+      "Uniforms": {
+        "Depth": "Depth",
+        "Normals": "Normals",
+        "Scene": "Lighting",
+        "Roughness": "Roughness"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "ClearValue": {
+        "X": 0,
+        "Y": 0,
+        "Z": 0,
+        "W": 0
+      }
+    },
+    {
+      "Name": "SSGI",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/ssgi.mat",
+      "FrameBuffer": "Indirect",
+      "Uniforms": {
+        "Depth": "Depth",
+        "Normals": "Normals",
+        "Scene": "Lighting"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "ClearValue": {
+        "X": 0,
+        "Y": 0,
+        "Z": 0,
+        "W": 0
+      }
+    },
+    {
+      "Name": "Compose",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/compose.mat",
+      "FrameBuffer": "Composed",
+      "Uniforms": {
+        "Scene": "Lighting",
+        "Reflection": "Reflection",
+        "Indirect": "Indirect"
+      },
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "SaveOpaqueForUpscale",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/copy.mat",
+      "FrameBuffer": "OpaqueForUpscale",
+      "Uniforms": {
+        "Scene": "Composed"
+      },
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "Transparent",
+      "Draw": "TRANSPARENT_GEOMETRY",
+      "Material": "/materials/render/portable/forwardTransparent.mat",
+      "FrameBuffer": "Transparent",
+      "Uniforms": {
+        "DirectionalShadow": "DirectionalShadow",
+        "SpotShadow": "SpotShadow",
+        "PointShadow": "PointShadow"
+      },
+      "ClearColor": false,
+      "ClearDepth": false,
+      "OverrideMaterial": true
+    },
+    {
+      "Name": "volumetricLight",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/volumetricLight.mat",
+      "FrameBuffer": "Optional_volumetricLight",
+      "Uniforms": {
+        "Scene": "Composed",
+        "Depth": "Depth",
+        "DirectionalShadow": "DirectionalShadow",
+        "SpotShadow": "SpotShadow",
+        "PointShadow": "PointShadow"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Enabled": false,
+      "Bypass": {
+        "Optional_volumetricLight": "Composed"
+      }
+    },
+    {
+      "Name": "godRays",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/godRays.mat",
+      "FrameBuffer": "Optional_godRays",
+      "Uniforms": {
+        "Scene": "Optional_volumetricLight",
+        "Depth": "Depth"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Enabled": false,
+      "Bypass": {
+        "Optional_godRays": "Optional_volumetricLight"
+      }
+    },
+    {
+      "Name": "depthOfField",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/depthOfField.mat",
+      "FrameBuffer": "Optional_depthOfField",
+      "Uniforms": {
+        "Scene": "Optional_godRays",
+        "Depth": "Depth"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Enabled": false,
+      "Bypass": {
+        "Optional_depthOfField": "Optional_godRays"
+      }
+    },
+    {
+      "Name": "fog",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/fog.mat",
+      "FrameBuffer": "Optional_fog",
+      "Uniforms": {
+        "Scene": "Optional_depthOfField",
+        "Depth": "Depth"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Enabled": false,
+      "Bypass": {
+        "Optional_fog": "Optional_depthOfField"
+      }
+    },
+    {
+      "Name": "TAA",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/taa.mat",
+      "FrameBuffer": "History",
+      "Uniforms": {
+        "Current": "Optional_fog",
+        "History": "HistoryPrevious",
+        "Velocity": "Velocity",
+        "Depth": "Depth",
+        "PreviousDepth": "DepthHistoryPrevious"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {
+        "History": "Optional_fog"
+      }
+    },
+    {
+      "Name": "SaveDepth",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/copyDepth.mat",
+      "FrameBuffer": "DepthHistory",
+      "Uniforms": {
+        "Depth": "Depth"
+      },
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrepareUpscaleVelocity",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/upscaleVelocity.mat",
+      "FrameBuffer": "UpscaleVelocity",
+      "Uniforms": {
+        "Velocity": "Velocity",
+        "Depth": "Depth"
+      },
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "PrepareUpscaleReactive",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/upscaleReactive.mat",
+      "FrameBuffer": "UpscaleReactive",
+      "Uniforms": {
+        "Opaque": "OpaqueForUpscale",
+        "Scene": "Optional_fog"
+      },
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "Upscale",
+      "Draw": "UPSCALE",
+      "Material": "/materials/render/portable/copy.mat",
+      "FrameBuffer": "Upscaled",
+      "Uniforms": {
+        "Scene": "History"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Unsupported": "BYPASS",
+      "Reads": [
+        "History",
+        "Depth",
+        "UpscaleVelocity",
+        "UpscaleReactive"
+      ],
+      "Writes": [
+        "Upscaled"
+      ],
+      "Bindings": {
+        "Color": "History",
+        "Depth": "Depth",
+        "MotionVectors": "UpscaleVelocity",
+        "Reactive": "UpscaleReactive",
+        "Output": "Upscaled"
+      }
+    },
+    {
+      "Name": "MotionBlur",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/motionBlur.mat",
+      "FrameBuffer": "Motion",
+      "Uniforms": {
+        "Scene": "Upscaled",
+        "Velocity": "Velocity"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Bypass": {
+        "Motion": "Upscaled"
+      }
+    },
+    {
+      "Name": "BloomExtract",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/bright.mat",
+      "FrameBuffer": "Bright",
+      "Uniforms": {
+        "Scene": "Motion"
+      },
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "BloomHorizontal",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/blur.mat",
+      "FrameBuffer": "BloomX",
+      "Uniforms": {
+        "Scene": "Bright",
+        "data_UBODirection": {
+          "X": 1.0,
+          "Y": 0.0
+        }
+      },
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "BloomVertical",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/blur.mat",
+      "FrameBuffer": "Bloom",
+      "Uniforms": {
+        "Scene": "BloomX",
+        "data_UBODirection": {
+          "X": 0.0,
+          "Y": 1.0
+        }
+      },
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "Tonemap",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/tonemap.mat",
+      "FrameBuffer": "Display",
+      "Uniforms": {
+        "Scene": "Motion",
+        "Bloom": "Bloom"
+      },
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "chromaticAbberation",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/chromaticAbberation.mat",
+      "FrameBuffer": "Optional_chromaticAbberation",
+      "Uniforms": {
+        "u_Scene": "Display"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Enabled": false,
+      "Bypass": {
+        "Optional_chromaticAbberation": "Display"
+      }
+    },
+    {
+      "Name": "colorGrading",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/colorGrading.mat",
+      "FrameBuffer": "Optional_colorGrading",
+      "Uniforms": {
+        "u_Scene": "Optional_chromaticAbberation"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Enabled": false,
+      "Bypass": {
+        "Optional_colorGrading": "Optional_chromaticAbberation"
+      }
+    },
+    {
+      "Name": "vignette",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/vignette.mat",
+      "FrameBuffer": "Optional_vignette",
+      "Uniforms": {
+        "u_Scene": "Optional_colorGrading"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Enabled": false,
+      "Bypass": {
+        "Optional_vignette": "Optional_colorGrading"
+      }
+    },
+    {
+      "Name": "sharpen",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/sharpen.mat",
+      "FrameBuffer": "Optional_sharpen",
+      "Uniforms": {
+        "u_Scene": "Optional_vignette"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Enabled": false,
+      "Bypass": {
+        "Optional_sharpen": "Optional_vignette"
+      }
+    },
+    {
+      "Name": "filmGrain",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/filmGrain.mat",
+      "FrameBuffer": "Optional_filmGrain",
+      "Uniforms": {
+        "u_Scene": "Optional_sharpen"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Enabled": false,
+      "Bypass": {
+        "Optional_filmGrain": "Optional_sharpen"
+      }
+    },
+    {
+      "Name": "dilation",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/dilation.mat",
+      "FrameBuffer": "Optional_dilation",
+      "Uniforms": {
+        "u_Scene": "Optional_filmGrain"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Enabled": false,
+      "Bypass": {
+        "Optional_dilation": "Optional_filmGrain"
+      }
+    },
+    {
+      "Name": "pixelize",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/pixelize.mat",
+      "FrameBuffer": "Optional_pixelize",
+      "Uniforms": {
+        "u_Scene": "Optional_dilation",
+        "positionTexture": "Depth"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Enabled": false,
+      "Bypass": {
+        "Optional_pixelize": "Optional_dilation"
+      }
+    },
+    {
+      "Name": "posterize",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/posterize.mat",
+      "FrameBuffer": "Optional_posterize",
+      "Uniforms": {
+        "u_Scene": "Optional_pixelize",
+        "positionTexture": "Depth"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Enabled": false,
+      "Bypass": {
+        "Optional_posterize": "Optional_pixelize"
+      }
+    },
+    {
+      "Name": "outline",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/outline.mat",
+      "FrameBuffer": "Optional_outline",
+      "Uniforms": {
+        "Scene": "Optional_posterize",
+        "Depth": "Depth",
+        "Normals": "Normals"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Enabled": false,
+      "Bypass": {
+        "Optional_outline": "Optional_posterize"
+      }
+    },
+    {
+      "Name": "fxaa",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/fxaa.mat",
+      "FrameBuffer": "Optional_fxaa",
+      "Uniforms": {
+        "Scene": "Optional_outline"
+      },
+      "ClearColor": true,
+      "ClearDepth": false,
+      "Enabled": false,
+      "Bypass": {
+        "Optional_fxaa": "Optional_outline"
+      }
+    },
+    {
+      "Name": "Present",
+      "Draw": "QUAD",
+      "Material": "/materials/render/portable/copy.mat",
+      "FrameBuffer": "",
+      "Uniforms": {
+        "Scene": "Optional_fxaa"
+      },
+      "ClearColor": true,
+      "ClearDepth": false
+    },
+    {
+      "Name": "GUI",
+      "Draw": "GUI",
+      "ClearColor": false,
+      "ClearDepth": false
+    }
+  ]
+}

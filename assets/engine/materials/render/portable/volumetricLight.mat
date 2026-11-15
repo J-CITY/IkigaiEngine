@@ -1,0 +1,15 @@
+{
+  "ShaderPath": "/shaders/render/portable/volumetricLight.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOMaxDistance": 40.0,
+    "data_UBODensity": 0.02,
+    "data_UBOAnisotropy": 0.4,
+    "data_UBOStrength": 1.0,
+    "data_UBOSamples": 24
+  }
+}

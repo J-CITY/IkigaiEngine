@@ -1,0 +1,97 @@
+{
+  "Version": 1,
+  "Dimension": "3D",
+  "Emitters": [
+    {
+      "Id": "fountain",
+      "SimulationSpace": "world",
+      "Capacity": 256,
+      "Timing": {
+        "Duration": 2,
+        "Loops": 0
+      },
+      "Emission": {
+        "Rate": {
+          "Mode": "constant",
+          "Value": 100
+        }
+      },
+      "Spawn": [
+        {
+          "Id": "area",
+          "Type": "Shape",
+          "Shape": "sphere",
+          "Radius": 0.15,
+          "Offset": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "uniform",
+            "Min": 0.4,
+            "Max": 1.2
+          },
+          "Size": {
+            "Mode": "constant",
+            "Value": [
+              0.03,
+              0.08
+            ]
+          },
+          "Color": {
+            "Mode": "constant",
+            "Value": [
+              0.1,
+              0.7,
+              1,
+              1
+            ]
+          },
+          "Velocity": {
+            "Mode": "uniform",
+            "Min": [
+              -0.7,
+              2,
+              -0.7
+            ],
+            "Max": [
+              0.7,
+              4,
+              0.7
+            ],
+            "RandomChannels": "independent"
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "gravity",
+          "Type": "Acceleration",
+          "Value": {
+            "Mode": "constant",
+            "Value": [
+              0.0,
+              -9.81,
+              0.0
+            ]
+          }
+        },
+        {
+          "Id": "motion",
+          "Type": "IntegrateMotion"
+        }
+      ],
+      "Renderer": {
+        "Type": "billboard3D",
+        "Alignment": "camera",
+        "Blend": "alpha",
+        "DepthTest": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "id": "demo_sponza",
+  "platforms": [
+    "windows",
+    "linux",
+    "macos"
+  ],
+  "requires": []
+}

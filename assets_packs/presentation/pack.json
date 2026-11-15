@@ -1,0 +1,9 @@
+{
+  "id": "presentation",
+  "platforms": [
+    "windows",
+    "linux",
+    "macos"
+  ],
+  "requires": []
+}

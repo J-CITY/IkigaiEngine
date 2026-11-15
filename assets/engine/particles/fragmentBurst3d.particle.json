@@ -1,0 +1,271 @@
+{
+  "Version": 1,
+  "Dimension": "3D",
+  "EventLimits": {
+    "MaxEventsPerStep": 2048,
+    "MaxChildParticlesPerStep": 2048,
+    "MaxDepth": 4
+  },
+  "Emitters": [
+    {
+      "Id": "sparks",
+      "Capacity": 1024,
+      "Timing": {
+        "Duration": 2,
+        "Loops": 0
+      },
+      "Emission": {
+        "Mode": "eventsOnly"
+      },
+      "Spawn": [
+        {
+          "Id": "area",
+          "Type": "Shape",
+          "Shape": "sphere",
+          "Radius": 0.03
+        },
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "uniform",
+            "Min": 0.3,
+            "Max": 0.65,
+            "RandomChannels": "independent"
+          },
+          "Size": {
+            "Mode": "constant",
+            "Value": [
+              0.025,
+              0.06
+            ]
+          },
+          "Color": {
+            "Mode": "uniform",
+            "Min": [
+              1,
+              0.2,
+              0.01,
+              1
+            ],
+            "Max": [
+              1,
+              0.8,
+              0.15,
+              1
+            ],
+            "RandomChannels": "independent"
+          },
+          "Velocity": {
+            "Mode": "constant",
+            "Value": [
+              0,
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "Id": "radial",
+          "Type": "RadialVelocity",
+          "Speed": {
+            "Mode": "uniform",
+            "Min": 1,
+            "Max": 2.5,
+            "RandomChannels": "independent"
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "gravity",
+          "Type": "Acceleration",
+          "Value": {
+            "Mode": "constant",
+            "Value": [
+              0,
+              -3,
+              0
+            ]
+          }
+        },
+        {
+          "Id": "motion",
+          "Type": "IntegrateMotion"
+        },
+        {
+          "Id": "fade",
+          "Type": "AlphaOverLife",
+          "Value": {
+            "Mode": "curve",
+            "Keys": [
+              {
+                "Time": 0,
+                "Value": 1
+              },
+              {
+                "Time": 0.5,
+                "Value": 1
+              },
+              {
+                "Time": 1,
+                "Value": 0
+              }
+            ]
+          }
+        }
+      ],
+      "Renderer": {
+        "Type": "billboard3D",
+        "Alignment": "velocity",
+        "Blend": "additive"
+      }
+    },
+    {
+      "Id": "fragment",
+      "SimulationSpace": "world",
+      "Capacity": 128,
+      "Timing": {
+        "Duration": 2,
+        "Loops": 0
+      },
+      "Emission": {
+        "Rate": {
+          "Mode": "constant",
+          "Value": 9
+        },
+        "Bursts": [
+          {
+            "Time": 0,
+            "Count": 2
+          }
+        ]
+      },
+      "Spawn": [
+        {
+          "Id": "area",
+          "Type": "Shape",
+          "Shape": "sphere",
+          "Radius": 0.15,
+          "Offset": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "uniform",
+            "Min": 0.12,
+            "Max": 0.2,
+            "RandomChannels": "independent"
+          },
+          "Size": {
+            "Mode": "uniform",
+            "Min": [
+              0.25,
+              0.4,
+              0.25
+            ],
+            "Max": [
+              0.5,
+              0.7,
+              0.5
+            ]
+          },
+          "Color": {
+            "Mode": "constant",
+            "Value": [
+              0.2,
+              1,
+              0.7,
+              1
+            ]
+          },
+          "Velocity": {
+            "Mode": "uniform",
+            "Min": [
+              -0.5,
+              2,
+              -0.5
+            ],
+            "Max": [
+              0.5,
+              4,
+              0.5
+            ],
+            "RandomChannels": "independent"
+          },
+          "Orientation": {
+            "Mode": "uniform",
+            "Min": [
+              -180,
+              -180,
+              -180
+            ],
+            "Max": [
+              180,
+              180,
+              180
+            ],
+            "RandomChannels": "independent"
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "gravity",
+          "Type": "Acceleration",
+          "Value": {
+            "Mode": "constant",
+            "Value": [
+              0,
+              -3,
+              0
+            ]
+          }
+        },
+        {
+          "Id": "motion",
+          "Type": "IntegrateMotion"
+        },
+        {
+          "Id": "spin",
+          "Type": "AngularVelocity3D",
+          "Value": {
+            "Mode": "uniform",
+            "Min": [
+              -180,
+              -240,
+              -120
+            ],
+            "Max": [
+              180,
+              240,
+              120
+            ],
+            "RandomChannels": "independent"
+          }
+        }
+      ],
+      "Renderer": {
+        "Type": "mesh3D",
+        "Mesh": "/particles/meshes/shard.obj",
+        "MeshIndex": 0,
+        "Blend": "alpha",
+        "DepthTest": true
+      },
+      "Events": [
+        {
+          "Id": "fragment-sparks",
+          "On": "death",
+          "Emitter": "sparks",
+          "Count": 14,
+          "InheritVelocity": 0.15
+        }
+      ]
+    }
+  ]
+}

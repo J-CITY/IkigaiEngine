@@ -1,0 +1,9 @@
+{
+  "Version": 1,
+  "Keys": [
+    { "Name": "Candidate", "Type": "EntityRef", "Access": "Input" },
+    { "Name": "Target", "Type": "EntityRef" },
+    { "Name": "PatrolA", "Type": "Vector3", "Default": { "Type": "Vector3", "Vector3": { "X": -3.0, "Y": 0.0, "Z": 0.0 } } },
+    { "Name": "PatrolB", "Type": "Vector3", "Default": { "Type": "Vector3", "Vector3": { "X": 3.0, "Y": 0.0, "Z": 0.0 } } }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "ShaderPath": "/shaders/render/portable/streamedCloudSurface.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "cloud_UBOLayer": {
+      "X": 6000.0,
+      "Y": 80.0,
+      "Z": 160.0,
+      "W": 2000.0
+    },
+    "cloud_UBODensity": {
+      "X": 0.6,
+      "Y": 0.025,
+      "Z": 0.007,
+      "W": 0.003
+    },
+    "cloud_UBOWind": {
+      "X": 1.0,
+      "Y": 0.2,
+      "Z": 1.5,
+      "W": 0.18
+    },
+    "cloud_UBOSunDirection": {
+      "X": 0.4,
+      "Y": 0.75,
+      "Z": 0.25,
+      "W": 8.0
+    },
+    "cloud_UBOSunColor": {
+      "X": 1.0,
+      "Y": 0.9,
+      "Z": 0.72,
+      "W": 0.5
+    },
+    "cloud_UBOLighting": {
+      "X": 0.25,
+      "Y": 1.0,
+      "Z": 16.0,
+      "W": 48.0
+    },
+    "cloud_UBOTurbulence": {
+      "X": 0.005,
+      "Y": 12.0,
+      "Z": 0.0,
+      "W": 0.0
+    }
+  }
+}

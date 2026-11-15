@@ -1,0 +1,63 @@
+#version 460
+#extension GL_EXT_ray_query : require
+#extension GL_EXT_nonuniform_qualifier : require
+#extension GL_GOOGLE_include_directive : require
+#include "../indirectLighting/screenProbes/spRayQueryVisibility.glsl"
+#include "../indirectLighting/screenProbes/spSurfaceCards.glsl"
+#include "rtLighting.glsl"
+#include "glossySurfaceDirections.glsl"
+
+layout(local_size_x=8,local_size_y=8,local_size_z=1) in;
+layout(set=2,binding=9,rgba16f) uniform writeonly image2D SurfaceRadiance;
+
+void main() {
+    ivec2 texel=ivec2(gl_GlobalInvocationID.xy);
+    int cardIndex=texel.y/SP_SURFACE_TILE;
+    if(texel.x>=SP_SURFACE_TILE||cardIndex>=SurfaceCache.State.x)return;
+    SurfaceCard card=SurfaceCache.Cards[cardIndex];
+    ivec2 spatial=ivec2(texel.x,texel.y%SP_SURFACE_TILE);
+    vec2 uv=(vec2(spatial)+0.5)/SP_SURFACE_TILE;
+    vec3 p=card.OriginTolerance.xyz+card.AxisU.xyz*uv.x+card.AxisV.xyz*uv.y;
+    vec3 u=normalize(card.AxisU.xyz),v=normalize(card.AxisV.xyz);
+    vec3 n=normalize(cross(u,v));
+
+    const int directionCount=GlossyAzimuthCount*GlossyElevationCount;
+    vec3 views[directionCount];
+    vec3 sums[directionCount];
+    for(int e=0;e<GlossyElevationCount;++e) {
+        float z=glossyViewCosine(e);
+        float radial=sqrt(max(1.0-z*z,0.0));
+        for(int a=0;a<GlossyAzimuthCount;++a) {
+            float phi=float(a)*GlossyAzimuthStep;
+            int index=e*GlossyAzimuthCount+a;
+            views[index]=n*z+radial*(u*cos(phi)+v*sin(phi));
+            sums[index]=card.Emissive.rgb;
+        }
+    }
+
+    // Visibility depends on the light and the surface sample, so every view bin shares one shadow query.
+    for(int i=0;i<engine_Lights.lights.length();++i) {
+        Light light=engine_Lights.lights[i];
+        if(light.type<0||light.type>2||light.intensity<=0)continue;
+        vec3 l;
+        float distance;
+        float attenuation=rtLightAttenuation(light,p,l,distance);
+        float nl=dot(n,l);
+        if(nl<=0.0||attenuation<=0.0)continue;
+        float shadow=light.shadows!=0?rtLightVisibility(p,n,l,light.type==1?10000.0:distance-0.002):1.0;
+        if(shadow<=0.0)continue;
+        vec3 energy=light.color*light.intensity*attenuation*nl*shadow;
+        for(int index=0;index<directionCount;++index) {
+            vec3 view=views[index];
+            float nv=glossyViewCosine(index/GlossyAzimuthCount);
+            sums[index]+=rtDirectBrdf(n,view,l,nl,nv,card.AlbedoRoughness.rgb,vec3(0.04),card.AlbedoRoughness.w,0.0)*energy;
+        }
+    }
+
+    for(int e=0;e<GlossyElevationCount;++e) {
+        for(int a=0;a<GlossyAzimuthCount;++a) {
+            vec3 radiance=sums[e*GlossyAzimuthCount+a];
+            imageStore(SurfaceRadiance,glossySurfaceTile(cardIndex,a,e)+spatial,vec4(clamp(radiance,vec3(0),vec3(65504)),1));
+        }
+    }
+}

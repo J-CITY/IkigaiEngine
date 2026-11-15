@@ -1,0 +1,52 @@
+{
+  "maps": [
+    {
+      "name": "Player",
+      "enabled": true,
+      "actions": [
+        {
+          "name": "Jump",
+          "type": "Button",
+          "bindings": [
+            { "path": "<Keyboard>/space", "interaction": "Press" },
+            { "path": "<Gamepad>/buttonSouth", "interaction": "Press" }
+          ]
+        },
+        {
+          "name": "Move",
+          "type": "Value",
+          "valueType": "Vector2",
+          "bindings": [
+            {
+              "composite": "2DVector",
+              "up": "<Keyboard>/w",
+              "down": "<Keyboard>/s",
+              "left": "<Keyboard>/a",
+              "right": "<Keyboard>/d"
+            },
+            {
+              "path": "<Gamepad>/leftStick",
+              "processors": [
+                { "type": "deadzone", "min": 0.2 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "UI",
+      "enabled": false,
+      "actions": [
+        {
+          "name": "Submit",
+          "type": "Button",
+          "bindings": [
+            { "path": "<Keyboard>/enter" },
+            { "path": "<Gamepad>/buttonSouth" }
+          ]
+        }
+      ]
+    }
+  ]
+}

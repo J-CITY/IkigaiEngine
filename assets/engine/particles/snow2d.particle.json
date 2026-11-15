@@ -1,0 +1,95 @@
+{
+  "Version": 1,
+  "Dimension": "2D",
+  "Emitters": [
+    {
+      "Id": "snow",
+      "SimulationSpace": "world",
+      "Capacity": 1024,
+      "Timing": {
+        "Duration": 2.0,
+        "Loops": 0,
+        "Delay": 0.0
+      },
+      "Emission": {
+        "Rate": {
+          "Mode": "constant",
+          "Value": 60.0
+        }
+      },
+      "Spawn": [
+        {
+          "Id": "area",
+          "Type": "Shape",
+          "Shape": "rectangle",
+          "Size": [
+            500,
+            15
+          ]
+        },
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "uniform",
+            "Min": 3,
+            "Max": 5
+          },
+          "Velocity": {
+            "Mode": "uniform",
+            "Min": [
+              -10,
+              30
+            ],
+            "Max": [
+              10,
+              60
+            ],
+            "RandomChannels": "independent"
+          },
+          "Size": {
+            "Mode": "uniform",
+            "Min": [
+              2,
+              2
+            ],
+            "Max": [
+              5,
+              5
+            ]
+          },
+          "Color": {
+            "Mode": "constant",
+            "Value": [
+              0.7,
+              0.85,
+              1,
+              1
+            ]
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "motion",
+          "Type": "IntegrateMotion"
+        },
+        {
+          "Id": "spin",
+          "Type": "AngularVelocity",
+          "Value": {
+            "Mode": "uniform",
+            "Min": -90,
+            "Max": 90
+          }
+        }
+      ],
+      "Renderer": {
+        "Type": "sprite2D",
+        "RenderSpace": "screen",
+        "Blend": "alpha",
+        "Layer": 10
+      }
+    }
+  ]
+}

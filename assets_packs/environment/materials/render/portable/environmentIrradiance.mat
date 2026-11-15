@@ -1,0 +1,12 @@
+{
+  "ShaderPath": "/shaders/render/portable/environmentIrradiance.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOFace": 0,
+    "data_UBOSamples": 128
+  }
+}

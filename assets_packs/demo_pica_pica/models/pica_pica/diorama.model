@@ -1,0 +1,10 @@
+{
+  "PathModel": "/models/pica_pica/scene.gltf",
+  "Flags": [
+    "TRIANGULATE",
+    "GEN_SMOOTH_NORMALS",
+    "FLIP_UVS",
+    "CALC_TANGENT_SPACE",
+    "PRE_TRANSFORM_VERTICES"
+  ]
+}

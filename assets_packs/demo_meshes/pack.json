@@ -1,0 +1,9 @@
+{
+  "id": "demo_meshes",
+  "platforms": [
+    "windows",
+    "linux",
+    "macos"
+  ],
+  "requires": []
+}

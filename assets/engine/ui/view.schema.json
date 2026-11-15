@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Ikigai JSON View v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "id", "title", "controller", "children"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "version": {"const": 1},
+    "id": {"type": "string", "minLength": 1},
+    "title": {"type": "string"},
+    "initialSize": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number", "minimum": 64}},
+    "initialPosition": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number"}},
+    "controller": {"$ref": "#/$defs/controller"},
+    "children": {"type": "array", "items": {"$ref": "#/$defs/node"}}
+  },
+  "$defs": {
+    "type": {"enum": ["boolean", "integer", "number", "string"]},
+    "binding": {
+      "type": "object", "additionalProperties": false, "required": ["bind"],
+      "properties": {"bind": {"type": "string", "minLength": 1}}
+    },
+    "booleanRef": {"oneOf": [{"type": "boolean"}, {"$ref": "#/$defs/binding"}]},
+    "action": {
+      "type": "object", "additionalProperties": false, "required": ["command"],
+      "properties": {
+        "command": {"type": "string", "minLength": 1},
+        "args": {"type": "object", "additionalProperties": {"type": ["boolean", "integer", "number", "string"]}}
+      }
+    },
+    "controller": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false, "required": ["backend", "name"],
+          "properties": {"backend": {"const": "native"}, "name": {"type": "string", "minLength": 1}}
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["backend", "path"],
+          "properties": {
+            "backend": {"enum": ["lua", "ikigai"]},
+            "path": {"type": "string", "pattern": "^/"},
+            "host": {"type": "string"},
+            "properties": {
+              "type": "object", "additionalProperties": {
+                "type": "object", "additionalProperties": false, "required": ["type", "get"],
+                "properties": {
+                  "type": {"$ref": "#/$defs/type"}, "get": {"type": "string", "minLength": 1},
+                  "set": {"type": "string"}, "commit": {"type": "string"}
+                }
+              }
+            },
+            "commands": {
+              "type": "object", "additionalProperties": {
+                "type": "object", "additionalProperties": false, "required": ["call"],
+                "properties": {
+                  "call": {"type": "string", "minLength": 1},
+                  "args": {"type": "object", "additionalProperties": {"$ref": "#/$defs/type"}}
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "node": {
+      "type": "object", "additionalProperties": false, "required": ["type", "id"],
+      "properties": {
+        "type": {"enum": ["text", "button", "checkbox", "inputText", "sliderFloat", "sliderInt", "combo", "column", "row", "group", "separator", "custom"]},
+        "id": {"type": "string", "minLength": 1}, "label": {"type": "string"},
+        "widget": {"type": "string", "minLength": 1},
+        "value": {"oneOf": [{"type": ["boolean", "number", "string"]}, {"$ref": "#/$defs/binding"}]},
+        "visible": {"$ref": "#/$defs/booleanRef"}, "enabled": {"$ref": "#/$defs/booleanRef"},
+        "min": {"type": "number"}, "max": {"type": "number"},
+        "items": {"type": "array", "items": {"type": "string"}},
+        "children": {"type": "array", "items": {"$ref": "#/$defs/node"}},
+        "onClick": {"$ref": "#/$defs/action"}, "onChange": {"$ref": "#/$defs/action"}, "onCommit": {"$ref": "#/$defs/action"}
+      },
+      "allOf": [
+        {"if": {"properties": {"type": {"enum": ["checkbox", "inputText", "sliderFloat", "sliderInt", "combo"]}}}, "then": {"required": ["value"], "properties": {"value": {"$ref": "#/$defs/binding"}}}},
+        {"if": {"properties": {"type": {"const": "custom"}}}, "then": {"required": ["widget"]}},
+        {"if": {"properties": {"type": {"const": "combo"}}}, "then": {"required": ["items"], "properties": {"items": {"minItems": 1}}}},
+        {"if": {"properties": {"type": {"not": {"enum": ["row", "column", "group"]}}}}, "then": {"not": {"required": ["children"]}}}
+      ]
+    }
+  }
+}

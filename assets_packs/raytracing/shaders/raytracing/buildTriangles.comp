@@ -1,0 +1,28 @@
+#version 450
+layout(local_size_x=64) in;
+struct DeformedVertex {vec4 Position,Normal,UV;};
+struct Triangle {vec4 P0,P1,P2,N0,N1,N2,Albedo,Properties,UV01,UV2;};
+layout(std430,set=0,binding=0) readonly buffer Vertices {DeformedVertex vertices[];} inputVertices;
+layout(std430,set=0,binding=1) readonly buffer Indices {uvec4 rows[];} indices;
+layout(std140,set=0,binding=2) uniform Instance {mat4 World;vec4 Albedo,Properties,UVTransform,Emissive;} instance;
+layout(std430,set=0,binding=3) writeonly buffer Triangles {Triangle triangles[];} outputTriangles;
+layout(push_constant) uniform Options {uvec4 Counts;} options;
+vec4 worldNormal(mat3 normalMatrix,vec3 n) {
+    n=normalMatrix*n;float square=dot(n,n);
+    return vec4(square>1e-10?n*inversesqrt(square):vec3(0),0);
+}
+void main() {
+    uint id=gl_GlobalInvocationID.x;if(id>=options.Counts.y)return;
+    uvec3 row=indices.rows[id].xyz;
+    DeformedVertex a=inputVertices.vertices[row.x],b=inputVertices.vertices[row.y],c=inputVertices.vertices[row.z];
+    mat3 normalMatrix=transpose(inverse(mat3(instance.World)));
+    vec2 ua=a.UV.xy*instance.UVTransform.xy+instance.UVTransform.zw;
+    vec2 ub=b.UV.xy*instance.UVTransform.xy+instance.UVTransform.zw;
+    vec2 uc=c.UV.xy*instance.UVTransform.xy+instance.UVTransform.zw;
+    Triangle t;
+    t.P0=instance.World*a.Position;t.P1=instance.World*b.Position;t.P2=instance.World*c.Position;
+    t.N0=worldNormal(normalMatrix,a.Normal.xyz);t.N1=worldNormal(normalMatrix,b.Normal.xyz);t.N2=worldNormal(normalMatrix,c.Normal.xyz);
+    // Emissive radiance rides in the lanes that were unused: Properties.zw = emissive.rg, UV2.z = emissive.b (stride unchanged).
+    t.Albedo=instance.Albedo;t.Properties=vec4(instance.Properties.xy,instance.Emissive.xy);t.UV01=vec4(ua,ub);t.UV2=vec4(uc,instance.Emissive.z,0);
+    outputTriangles.triangles[options.Counts.z+id]=t;
+}

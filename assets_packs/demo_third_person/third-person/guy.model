@@ -1,0 +1,9 @@
+{
+  "PathModel": "/third-person/guy.fbx",
+  "Flags": [
+    "TRIANGULATE",
+    "GEN_SMOOTH_NORMALS",
+    "CALC_TANGENT_SPACE",
+    "FLIP_UVS"
+  ]
+}

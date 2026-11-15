@@ -1,0 +1,137 @@
+{
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 3,
+            "Z": -12
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "ORTHOGRAPHIC",
+          "Fov": 60,
+          "Near": 0.1,
+          "Far": 100,
+          "Size": 8,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "2D Floor",
+      "Id": 2,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": -0.3,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics2DComponentType": "class IKIGAI::ECS::Physics2DComponent",
+          "BodyMode": 0,
+          "HalfSize": {
+            "X": 4,
+            "Y": 0.3
+          }
+        }
+      ]
+    },
+    {
+      "Name": "2D Cloth",
+      "Id": 3,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -0.5,
+            "Y": 3,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Cloth2DComponentType": "class IKIGAI::ECS::Cloth2DComponent",
+          "Width": 8,
+          "Height": 8
+        }
+      ]
+    },
+    {
+      "Name": "2D Wind",
+      "Id": 4,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "ForceField2DComponentType": "class IKIGAI::ECS::ForceField2DComponent",
+          "Vector": {
+            "X": 1,
+            "Y": 0
+          },
+          "Targets": 4,
+          "GustAmplitude": 0.25
+        }
+      ]
+    }
+  ]
+}

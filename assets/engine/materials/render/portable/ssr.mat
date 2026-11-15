@@ -1,0 +1,13 @@
+{
+  "ShaderPath": "/shaders/render/portable/ssr.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOStep": 0.15,
+    "data_UBOThickness": 0.2,
+    "data_UBOBias": 0.03
+  }
+}

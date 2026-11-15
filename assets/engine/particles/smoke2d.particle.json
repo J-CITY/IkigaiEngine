@@ -1,0 +1,153 @@
+{
+  "Version": 1,
+  "Dimension": "2D",
+  "Emitters": [
+    {
+      "Id": "smoke",
+      "SimulationSpace": "world",
+      "Capacity": 512,
+      "Timing": {
+        "Duration": 2.0,
+        "Loops": 0,
+        "Delay": 0.0
+      },
+      "Emission": {
+        "Rate": {
+          "Mode": "constant",
+          "Value": 60.0
+        }
+      },
+      "Spawn": [
+        {
+          "Id": "shape",
+          "Type": "Shape",
+          "Shape": "circle",
+          "Radius": 12.0,
+          "Sampling": "volume"
+        },
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "uniform",
+            "Min": 1.0,
+            "Max": 2.5
+          },
+          "Velocity": {
+            "Mode": "uniform",
+            "Min": [
+              -10.0,
+              -50.0
+            ],
+            "Max": [
+              10.0,
+              -30.0
+            ],
+            "RandomChannels": "independent"
+          },
+          "Size": {
+            "Mode": "constant",
+            "Value": [
+              8,
+              8
+            ]
+          },
+          "Color": {
+            "Mode": "constant",
+            "Value": [
+              0.6,
+              0.6,
+              0.6,
+              1.0
+            ]
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "motion",
+          "Type": "IntegrateMotion"
+        },
+        {
+          "Id": "grow",
+          "Type": "SizeOverLife",
+          "Operation": "multiplyBase",
+          "Value": {
+            "Mode": "curveRange",
+            "Domain": "particleNormalizedAge",
+            "RandomChannels": "linked",
+            "Min": {
+              "Keys": [
+                {
+                  "Time": 0.0,
+                  "Value": [
+                    0.5,
+                    0.5
+                  ],
+                  "Interpolation": "linear"
+                },
+                {
+                  "Time": 1.0,
+                  "Value": [
+                    1.5,
+                    1.5
+                  ]
+                }
+              ]
+            },
+            "Max": {
+              "Keys": [
+                {
+                  "Time": 0.0,
+                  "Value": [
+                    1.0,
+                    1.0
+                  ],
+                  "Interpolation": "linear"
+                },
+                {
+                  "Time": 1.0,
+                  "Value": [
+                    2.5,
+                    2.5
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "Id": "fade",
+          "Type": "AlphaOverLife",
+          "Operation": "multiplyBase",
+          "Value": {
+            "Mode": "curve",
+            "Domain": "particleNormalizedAge",
+            "Keys": [
+              {
+                "Time": 0.0,
+                "Value": 0.0,
+                "Interpolation": "linear"
+              },
+              {
+                "Time": 0.15,
+                "Value": 0.7,
+                "Interpolation": "linear"
+              },
+              {
+                "Time": 1.0,
+                "Value": 0.0
+              }
+            ]
+          }
+        }
+      ],
+      "Renderer": {
+        "Type": "sprite2D",
+        "RenderSpace": "screen",
+        "Blend": "alpha",
+        "Layer": 10
+      }
+    }
+  ]
+}

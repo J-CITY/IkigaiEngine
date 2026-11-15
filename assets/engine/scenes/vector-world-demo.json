@@ -1,0 +1,79 @@
+{
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": -7
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 60,
+          "Near": 0.1,
+          "Far": 100,
+          "Size": 5,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "World text",
+      "Id": 19,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 2.5,
+            "Y": 2,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 180,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.015,
+            "Y": 0.015,
+            "Z": 0.015
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "WORLD SDF",
+          "Size": 42,
+          "Color": {
+            "X": 0.8,
+            "Y": 0.3,
+            "Z": 0.2,
+            "W": 1
+          }
+        },
+        {
+          "VectorCanvasComponentType": "class IKIGAI::ECS::VectorCanvasComponent",
+          "WorldSpace": true,
+          "DepthTest": true
+        }
+      ]
+    }
+  ]
+}

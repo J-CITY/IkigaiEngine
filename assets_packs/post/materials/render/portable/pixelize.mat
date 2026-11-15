@@ -1,0 +1,14 @@
+{
+  "ShaderPath": "/shaders/render/portable/pixelize.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOparameters": {
+      "X": 8.0,
+      "Y": 0.0
+    }
+  }
+}

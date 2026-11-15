@@ -1,0 +1,29 @@
+{
+  "Version": 1,
+  "Blackboard": "/ai/patrol.blackboard",
+  "Root": "root",
+  "Mode": "Loop",
+  "Nodes": [
+    {
+      "Id": "root",
+      "Type": "Selector",
+      "Children": ["chase", "patrol"],
+      "Services": [
+        { "Type": "TargetInRange", "Interval": 0.2, "Parameters": { "Candidate": "Candidate", "Target": "Target", "Range": 8.0 } }
+      ]
+    },
+    {
+      "Id": "chase",
+      "Type": "MoveDirectlyTo",
+      "Parameters": { "Target": "Target", "Speed": 4.0, "AcceptanceRadius": 0.5, "Timeout": 20.0 },
+      "Decorators": [
+        { "Type": "BlackboardCondition", "Aborts": "Both", "Parameters": { "Key": "Target", "Test": "IsAlive" } }
+      ]
+    },
+    { "Id": "patrol", "Type": "Sequence", "Children": ["move-a", "wait-a", "move-b", "wait-b"] },
+    { "Id": "move-a", "Type": "MoveDirectlyTo", "Parameters": { "Target": "PatrolA", "Speed": 2.0, "Timeout": 15.0 } },
+    { "Id": "wait-a", "Type": "Wait", "Parameters": { "Duration": 1.0 } },
+    { "Id": "move-b", "Type": "MoveDirectlyTo", "Parameters": { "Target": "PatrolB", "Speed": 2.0, "Timeout": 15.0 } },
+    { "Id": "wait-b", "Type": "Wait", "Parameters": { "Duration": 1.0 } }
+  ]
+}

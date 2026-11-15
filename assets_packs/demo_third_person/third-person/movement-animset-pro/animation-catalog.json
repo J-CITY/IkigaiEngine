@@ -1,0 +1,2325 @@
+[
+  {
+    "file": "Assets/MovementAnimsetPro/Animations/MaskmanFace_anim.fbx",
+    "bone_count": 84,
+    "bones": [
+      "Root",
+      "Hips",
+      "Spine",
+      "Spine1",
+      "LeftShoulder",
+      "LeftArm",
+      "LeftArmRoll",
+      "LeftForeArm",
+      "LeftForeArmRoll",
+      "LeftHand",
+      "LeftHandIndex1",
+      "LeftHandIndex2",
+      "LeftHandIndex3",
+      "LeftHandIndex4",
+      "LeftHandMiddle1",
+      "LeftHandMiddle2",
+      "LeftHandMiddle3",
+      "LeftHandMiddle4",
+      "LeftHandPinky1",
+      "LeftHandPinky2",
+      "LeftHandPinky3",
+      "LeftHandPinky4",
+      "LeftHandProp",
+      "LeftHandRing1",
+      "LeftHandRing2",
+      "LeftHandRing3",
+      "LeftHandRing4",
+      "LeftHandThumb1",
+      "LeftHandThumb2",
+      "LeftHandThumb3",
+      "LeftHandThumb4",
+      "Neck",
+      "Head",
+      "LeftEye",
+      "LeftUpLid",
+      "LeftLowLid",
+      "LeftBrow1",
+      "LeftBrow2",
+      "RightEye",
+      "RightUpLid",
+      "RightLowLid",
+      "RightBrow1",
+      "RightBrow2",
+      "RightShoulder",
+      "RightArm",
+      "RightArmRoll",
+      "RightForeArm",
+      "RightForeArmRoll",
+      "RightHand",
+      "RightHandIndex1",
+      "RightHandIndex2",
+      "RightHandIndex3",
+      "RightHandIndex4",
+      "RightHandMiddle1",
+      "RightHandMiddle2",
+      "RightHandMiddle3",
+      "RightHandMiddle4",
+      "RightHandPinky1",
+      "RightHandPinky2",
+      "RightHandPinky3",
+      "RightHandPinky4",
+      "RightHandProp",
+      "RightHandRing1",
+      "RightHandRing2",
+      "RightHandRing3",
+      "RightHandRing4",
+      "RightHandThumb1",
+      "RightHandThumb2",
+      "RightHandThumb3",
+      "RightHandThumb4",
+      "LeftUpLeg",
+      "LeftLeg",
+      "LeftFoot",
+      "LeftToeBase",
+      "LeftToeBase_END",
+      "LeftLegRoll",
+      "LeftUpLegRoll",
+      "RightUpLeg",
+      "RightLeg",
+      "RightFoot",
+      "RightToeBase",
+      "RightToeBase_END",
+      "RightLegRoll",
+      "RightUpLegRoll"
+    ],
+    "animation_stacks": [
+      "FaceLoopNeutral"
+    ],
+    "unity_clips": [
+      {
+        "name": "FaceLoopNeutral",
+        "take": "FaceLoopNeutral",
+        "first_frame": 0.0,
+        "last_frame": 90.0
+      }
+    ]
+  },
+  {
+    "file": "Assets/MovementAnimsetPro/Animations/MovementAnimsetPro.fbx",
+    "bone_count": 74,
+    "bones": [
+      "Root",
+      "Hips",
+      "Spine",
+      "Spine1",
+      "LeftShoulder",
+      "LeftArm",
+      "LeftArmRoll",
+      "LeftForeArm",
+      "LeftForeArmRoll",
+      "LeftHand",
+      "LeftHandIndex1",
+      "LeftHandIndex2",
+      "LeftHandIndex3",
+      "LeftHandIndex4",
+      "LeftHandMiddle1",
+      "LeftHandMiddle2",
+      "LeftHandMiddle3",
+      "LeftHandMiddle4",
+      "LeftHandPinky1",
+      "LeftHandPinky2",
+      "LeftHandPinky3",
+      "LeftHandPinky4",
+      "LeftHandProp",
+      "LeftHandRing1",
+      "LeftHandRing2",
+      "LeftHandRing3",
+      "LeftHandRing4",
+      "LeftHandThumb1",
+      "LeftHandThumb2",
+      "LeftHandThumb3",
+      "LeftHandThumb4",
+      "Neck",
+      "Head",
+      "RightShoulder",
+      "RightArm",
+      "RightArmRoll",
+      "RightForeArm",
+      "RightForeArmRoll",
+      "RightHand",
+      "RightHandIndex1",
+      "RightHandIndex2",
+      "RightHandIndex3",
+      "RightHandIndex4",
+      "RightHandMiddle1",
+      "RightHandMiddle2",
+      "RightHandMiddle3",
+      "RightHandMiddle4",
+      "RightHandPinky1",
+      "RightHandPinky2",
+      "RightHandPinky3",
+      "RightHandPinky4",
+      "RightHandProp",
+      "RightHandRing1",
+      "RightHandRing2",
+      "RightHandRing3",
+      "RightHandRing4",
+      "RightHandThumb1",
+      "RightHandThumb2",
+      "RightHandThumb3",
+      "RightHandThumb4",
+      "LeftUpLeg",
+      "LeftLeg",
+      "LeftFoot",
+      "LeftToeBase",
+      "LeftToeBase_END",
+      "LeftLegRoll",
+      "LeftUpLegRoll",
+      "RightUpLeg",
+      "RightLeg",
+      "RightFoot",
+      "RightToeBase",
+      "RightToeBase_END",
+      "RightLegRoll",
+      "RightUpLegRoll"
+    ],
+    "animation_stacks": [
+      "BindPose",
+      "Idle",
+      "TurnRt90_Loop",
+      "TurnLt90_Loop",
+      "TurnRt180",
+      "TurnLt180",
+      "WalkFwdLoop",
+      "WalkFwdStart",
+      "WalkFwdStart180_R",
+      "WalkFwdStart180_L",
+      "WalkFwdStart90_L",
+      "WalkFwdStart90_R",
+      "WalkFwdStop_LU",
+      "WalkFwdStop_RU",
+      "WalkFwdLoop_LeanR",
+      "WalkArchLoop_R",
+      "WalkFwdLoop_LeanL",
+      "WalkArchLoop_L",
+      "RunFwdLoop",
+      "SprintFwdLoop",
+      "RunFwdStart",
+      "RunFwdStart180_R",
+      "RunFwdStart180_L",
+      "RunFwdStart90_R",
+      "RunFwdStart90_L",
+      "RunFwdStop_RU",
+      "RunFwdStop_LU",
+      "RunFwdTurn180_R_LU",
+      "RunFwdTurn180_R_RU",
+      "RunFwdTurn180_L_RU",
+      "RunFwdTurn180_L_LU",
+      "RunArchLoop_L",
+      "RunFwdLoop_LeanL",
+      "RunArchLoop_R",
+      "RunFwdLoop_LeanR",
+      "Jump_place_ALL",
+      "Jump_place_ALL_short",
+      "Jump_walk_ru_ALL",
+      "Jump_walk_lu_ALL",
+      "Jump_run_ru_ALL",
+      "Jump_run_lu_ALL",
+      "JumpIdleStart",
+      "JumpIdleLand",
+      "JumpIdleLand2Walk",
+      "JumpIdleLandHard",
+      "JumpWalkStart_RU",
+      "JumpWalk_RU_Land",
+      "JumpWalk_RU_Land2Walk",
+      "JumpWalkStart_LU",
+      "JumpWalk_LU_Land",
+      "JumpWalk_LU_Land2Walk",
+      "JumpRunStart_RU",
+      "JumpRun_RU_Land",
+      "JumpRun_RU_Land2Run",
+      "JumpRunStart_LU",
+      "JumpRun_LU_Land",
+      "JumpRun_LU_Land2Run",
+      "FallingLoop",
+      "FallingLoop_RootMotion",
+      "Idle2Crouch",
+      "Crouch_Idle",
+      "Crouch2Idle",
+      "Crouch_WalkFwdLoop",
+      "Crouch_WalkFwdStart",
+      "Crouch_WalkFwdStop_LU",
+      "Crouch_WalkFwdStop_RU",
+      "Crouch_WalkFwdStart180_R",
+      "Crouch_WalkFwdStart180_L",
+      "Crouch_WalkFwdStart90_R",
+      "Crouch_WalkFwdStart90_L",
+      "ButtonPush_RH",
+      "ButtonPush_RH_90",
+      "ButtonPush_LH",
+      "ButtonPush_LH_90",
+      "KeypadUse_RH",
+      "KeypadUse_RH_90",
+      "KeypadUse_LH",
+      "KeypadUse_LH_90",
+      "PickUp_RH",
+      "PickUp_RH_90",
+      "PickUp_LH",
+      "PickUp_LH_90",
+      "PullLever_RH",
+      "PullLever_RH_90",
+      "PullLever_LH",
+      "PullLever_LH_90",
+      "DontKnow",
+      "ThrowAway_RH",
+      "ThrowAway_LH",
+      "WalkThroughDoor_RH",
+      "WalkThroughDoor_LH"
+    ],
+    "unity_clips": [
+      {
+        "name": "BindPose",
+        "take": "BindPose",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "Idle",
+        "take": "Idle",
+        "first_frame": 0.0,
+        "last_frame": 200.0
+      },
+      {
+        "name": "TurnRt90_Loop",
+        "take": "TurnRt90_Loop",
+        "first_frame": 0.0,
+        "last_frame": 39.0
+      },
+      {
+        "name": "TurnLt90_Loop",
+        "take": "TurnLt90_Loop",
+        "first_frame": 0.0,
+        "last_frame": 39.0
+      },
+      {
+        "name": "TurnRt180",
+        "take": "TurnRt180",
+        "first_frame": 0.0,
+        "last_frame": 50.0
+      },
+      {
+        "name": "TurnLt180",
+        "take": "TurnLt180",
+        "first_frame": 0.0,
+        "last_frame": 50.0
+      },
+      {
+        "name": "WalkFwdLoop",
+        "take": "WalkFwdLoop",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "WalkFwdStart",
+        "take": "WalkFwdStart",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "WalkFwdStart180_R",
+        "take": "WalkFwdStart180_R",
+        "first_frame": 0.0,
+        "last_frame": 42.0
+      },
+      {
+        "name": "WalkFwdStart180_L",
+        "take": "WalkFwdStart180_L",
+        "first_frame": 0.0,
+        "last_frame": 27.0
+      },
+      {
+        "name": "WalkFwdStart90_L",
+        "take": "WalkFwdStart90_L",
+        "first_frame": 0.0,
+        "last_frame": 25.0
+      },
+      {
+        "name": "WalkFwdStart90_R",
+        "take": "WalkFwdStart90_R",
+        "first_frame": 0.0,
+        "last_frame": 38.0
+      },
+      {
+        "name": "WalkFwdStop_LU",
+        "take": "WalkFwdStop_LU",
+        "first_frame": 0.0,
+        "last_frame": 40.0
+      },
+      {
+        "name": "WalkFwdStop_RU",
+        "take": "WalkFwdStop_RU",
+        "first_frame": 0.0,
+        "last_frame": 46.0
+      },
+      {
+        "name": "WalkFwdLoop_LeanR",
+        "take": "WalkFwdLoop_LeanR",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "WalkArchLoop_R",
+        "take": "WalkArchLoop_R",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "WalkFwdLoop_LeanL",
+        "take": "WalkFwdLoop_LeanL",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "WalkArchLoop_L",
+        "take": "WalkArchLoop_L",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "RunFwdLoop",
+        "take": "RunFwdLoop",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "SprintFwdLoop",
+        "take": "SprintFwdLoop",
+        "first_frame": 0.0,
+        "last_frame": 19.0
+      },
+      {
+        "name": "RunFwdStart",
+        "take": "RunFwdStart",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "RunFwdStart180_R",
+        "take": "RunFwdStart180_R",
+        "first_frame": 0.0,
+        "last_frame": 34.0
+      },
+      {
+        "name": "RunFwdStart180_L",
+        "take": "RunFwdStart180_L",
+        "first_frame": 0.0,
+        "last_frame": 26.0
+      },
+      {
+        "name": "RunFwdStart90_R",
+        "take": "RunFwdStart90_R",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "RunFwdStart90_L",
+        "take": "RunFwdStart90_L",
+        "first_frame": 0.0,
+        "last_frame": 20.0
+      },
+      {
+        "name": "RunFwdStop_RU",
+        "take": "RunFwdStop_RU",
+        "first_frame": 0.0,
+        "last_frame": 45.0
+      },
+      {
+        "name": "RunFwdStop_LU",
+        "take": "RunFwdStop_LU",
+        "first_frame": 0.0,
+        "last_frame": 38.0
+      },
+      {
+        "name": "RunFwdTurn180_R_LU",
+        "take": "RunFwdTurn180_R_LU",
+        "first_frame": 12.0,
+        "last_frame": 55.0
+      },
+      {
+        "name": "RunFwdTurn180_R_RU",
+        "take": "RunFwdTurn180_R_RU",
+        "first_frame": 0.0,
+        "last_frame": 46.0
+      },
+      {
+        "name": "RunFwdTurn180_L_RU",
+        "take": "RunFwdTurn180_L_RU",
+        "first_frame": 6.0,
+        "last_frame": 38.0
+      },
+      {
+        "name": "RunFwdTurn180_L_LU",
+        "take": "RunFwdTurn180_L_LU",
+        "first_frame": 8.0,
+        "last_frame": 37.0
+      },
+      {
+        "name": "RunArchLoop_L",
+        "take": "RunArchLoop_L",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "RunFwdLoop_LeanL",
+        "take": "RunFwdLoop_LeanL",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "RunArchLoop_R",
+        "take": "RunArchLoop_R",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "RunFwdLoop_LeanR",
+        "take": "RunFwdLoop_LeanR",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "Jump_place_ALL",
+        "take": "Jump_place_ALL",
+        "first_frame": 0.0,
+        "last_frame": 68.0
+      },
+      {
+        "name": "Jump_place_ALL_short",
+        "take": "Jump_place_ALL_short",
+        "first_frame": 14.0,
+        "last_frame": 68.0
+      },
+      {
+        "name": "Jump_walk_ru_ALL",
+        "take": "Jump_walk_ru_ALL",
+        "first_frame": 0.0,
+        "last_frame": 35.0
+      },
+      {
+        "name": "Jump_walk_lu_ALL",
+        "take": "Jump_walk_lu_ALL",
+        "first_frame": 0.0,
+        "last_frame": 45.0
+      },
+      {
+        "name": "Jump_run_ru_ALL",
+        "take": "Jump_run_ru_ALL",
+        "first_frame": 0.0,
+        "last_frame": 59.0
+      },
+      {
+        "name": "Jump_run_lu_ALL",
+        "take": "Jump_run_lu_ALL",
+        "first_frame": 0.0,
+        "last_frame": 59.0
+      },
+      {
+        "name": "JumpIdleStart",
+        "take": "JumpIdleStart",
+        "first_frame": 14.0,
+        "last_frame": 120.0
+      },
+      {
+        "name": "JumpIdleLand",
+        "take": "JumpIdleLand",
+        "first_frame": 37.0,
+        "last_frame": 68.0
+      },
+      {
+        "name": "JumpIdleLand2Walk",
+        "take": "JumpIdleLand2Walk",
+        "first_frame": 0.0,
+        "last_frame": 39.0
+      },
+      {
+        "name": "JumpIdleLandHard",
+        "take": "JumpIdleLandHard",
+        "first_frame": 0.0,
+        "last_frame": 47.0
+      },
+      {
+        "name": "JumpWalkStart_RU",
+        "take": "JumpWalkStart_RU",
+        "first_frame": 0.0,
+        "last_frame": 120.0
+      },
+      {
+        "name": "JumpWalk_RU_Land",
+        "take": "JumpWalk_RU_Land",
+        "first_frame": 17.0,
+        "last_frame": 59.0
+      },
+      {
+        "name": "JumpWalk_RU_Land2Walk",
+        "take": "JumpWalk_RU_Land2Walk",
+        "first_frame": 18.0,
+        "last_frame": 35.0
+      },
+      {
+        "name": "JumpWalkStart_LU",
+        "take": "JumpWalkStart_LU",
+        "first_frame": 0.0,
+        "last_frame": 120.0
+      },
+      {
+        "name": "JumpWalk_LU_Land",
+        "take": "JumpWalk_LU_Land",
+        "first_frame": 21.0,
+        "last_frame": 59.0
+      },
+      {
+        "name": "JumpWalk_LU_Land2Walk",
+        "take": "JumpWalk_LU_Land2Walk",
+        "first_frame": 18.0,
+        "last_frame": 45.0
+      },
+      {
+        "name": "JumpRunStart_RU",
+        "take": "JumpRunStart_RU",
+        "first_frame": 0.0,
+        "last_frame": 120.0
+      },
+      {
+        "name": "JumpRun_RU_Land",
+        "take": "JumpRun_RU_Land",
+        "first_frame": 17.0,
+        "last_frame": 59.0
+      },
+      {
+        "name": "JumpRun_RU_Land2Run",
+        "take": "JumpRun_RU_Land2Run",
+        "first_frame": 0.0,
+        "last_frame": 13.0
+      },
+      {
+        "name": "JumpRunStart_LU",
+        "take": "JumpRunStart_LU",
+        "first_frame": 0.0,
+        "last_frame": 120.0
+      },
+      {
+        "name": "JumpRun_LU_Land",
+        "take": "JumpRun_LU_Land",
+        "first_frame": 21.0,
+        "last_frame": 59.0
+      },
+      {
+        "name": "JumpRun_LU_Land2Run",
+        "take": "JumpRun_LU_Land2Run",
+        "first_frame": 0.0,
+        "last_frame": 27.0
+      },
+      {
+        "name": "FallingLoop",
+        "take": "FallingLoop",
+        "first_frame": 70.0,
+        "last_frame": 170.0
+      },
+      {
+        "name": "FallingLoop_RootMotion",
+        "take": "FallingLoop_RootMotion",
+        "first_frame": 70.0,
+        "last_frame": 170.0
+      },
+      {
+        "name": "Idle2Crouch",
+        "take": "Idle2Crouch",
+        "first_frame": 0.0,
+        "last_frame": 17.0
+      },
+      {
+        "name": "Crouch_Idle",
+        "take": "Crouch_Idle",
+        "first_frame": 0.0,
+        "last_frame": 200.0
+      },
+      {
+        "name": "Crouch2Idle",
+        "take": "Crouch2Idle",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "Crouch_WalkFwdLoop",
+        "take": "Crouch_WalkFwdLoop",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "Crouch_WalkFwdStart",
+        "take": "Crouch_WalkFwdStart",
+        "first_frame": 0.0,
+        "last_frame": 22.0
+      },
+      {
+        "name": "Crouch_WalkFwdStop_LU",
+        "take": "Crouch_WalkFwdStop_LU",
+        "first_frame": 0.0,
+        "last_frame": 22.0
+      },
+      {
+        "name": "Crouch_WalkFwdStop_RU",
+        "take": "Crouch_WalkFwdStop_RU",
+        "first_frame": 0.0,
+        "last_frame": 20.0
+      },
+      {
+        "name": "Crouch_WalkFwdStart180_R",
+        "take": "Crouch_WalkFwdStart180_R",
+        "first_frame": 2.0,
+        "last_frame": 49.0
+      },
+      {
+        "name": "Crouch_WalkFwdStart180_L",
+        "take": "Crouch_WalkFwdStart180_L",
+        "first_frame": 0.0,
+        "last_frame": 26.0
+      },
+      {
+        "name": "Crouch_WalkFwdStart90_R",
+        "take": "Crouch_WalkFwdStart90_R",
+        "first_frame": 0.0,
+        "last_frame": 37.0
+      },
+      {
+        "name": "Crouch_WalkFwdStart90_L",
+        "take": "Crouch_WalkFwdStart90_L",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "ButtonPush_RH",
+        "take": "ButtonPush_RH",
+        "first_frame": 0.0,
+        "last_frame": 60.0
+      },
+      {
+        "name": "ButtonPush_RH_90",
+        "take": "ButtonPush_RH_90",
+        "first_frame": 0.0,
+        "last_frame": 60.0
+      },
+      {
+        "name": "ButtonPush_LH",
+        "take": "ButtonPush_LH",
+        "first_frame": 0.0,
+        "last_frame": 60.0
+      },
+      {
+        "name": "ButtonPush_LH_90",
+        "take": "ButtonPush_LH_90",
+        "first_frame": 0.0,
+        "last_frame": 60.0
+      },
+      {
+        "name": "KeypadUse_RH",
+        "take": "KeypadUse_RH",
+        "first_frame": 0.0,
+        "last_frame": 80.0
+      },
+      {
+        "name": "KeypadUse_RH_90",
+        "take": "KeypadUse_RH_90",
+        "first_frame": 0.0,
+        "last_frame": 80.0
+      },
+      {
+        "name": "KeypadUse_LH",
+        "take": "KeypadUse_LH",
+        "first_frame": 0.0,
+        "last_frame": 80.0
+      },
+      {
+        "name": "KeypadUse_LH_90",
+        "take": "KeypadUse_LH_90",
+        "first_frame": 0.0,
+        "last_frame": 80.0
+      },
+      {
+        "name": "PickUp_RH",
+        "take": "PickUp_RH",
+        "first_frame": 0.0,
+        "last_frame": 60.0
+      },
+      {
+        "name": "PickUp_RH_90",
+        "take": "PickUp_RH_90",
+        "first_frame": 0.0,
+        "last_frame": 60.0
+      },
+      {
+        "name": "PickUp_LH",
+        "take": "PickUp_LH",
+        "first_frame": 0.0,
+        "last_frame": 60.0
+      },
+      {
+        "name": "PickUp_LH_90",
+        "take": "PickUp_LH_90",
+        "first_frame": 0.0,
+        "last_frame": 60.0
+      },
+      {
+        "name": "PullLever_RH",
+        "take": "PullLever_RH",
+        "first_frame": 0.0,
+        "last_frame": 70.0
+      },
+      {
+        "name": "PullLever_RH_90",
+        "take": "PullLever_RH_90",
+        "first_frame": 0.0,
+        "last_frame": 70.0
+      },
+      {
+        "name": "PullLever_LH",
+        "take": "PullLever_LH",
+        "first_frame": 0.0,
+        "last_frame": 70.0
+      },
+      {
+        "name": "PullLever_LH_90",
+        "take": "PullLever_LH_90",
+        "first_frame": 0.0,
+        "last_frame": 70.0
+      },
+      {
+        "name": "DontKnow",
+        "take": "DontKnow",
+        "first_frame": 0.0,
+        "last_frame": 50.0
+      },
+      {
+        "name": "ThrowAway_RH",
+        "take": "ThrowAway_RH",
+        "first_frame": 0.0,
+        "last_frame": 50.0
+      },
+      {
+        "name": "ThrowAway_LH",
+        "take": "ThrowAway_LH",
+        "first_frame": 0.0,
+        "last_frame": 50.0
+      },
+      {
+        "name": "WalkThroughDoor_RH",
+        "take": "WalkThroughDoor_RH",
+        "first_frame": 0.0,
+        "last_frame": 86.0
+      },
+      {
+        "name": "WalkThroughDoor_LH",
+        "take": "WalkThroughDoor_LH",
+        "first_frame": 0.0,
+        "last_frame": 86.0
+      }
+    ]
+  },
+  {
+    "file": "Assets/MovementAnimsetPro/Animations/MovementAnimsetPro_Additionals.fbx",
+    "bone_count": 74,
+    "bones": [
+      "Root",
+      "Hips",
+      "Spine",
+      "Spine1",
+      "LeftShoulder",
+      "LeftArm",
+      "LeftArmRoll",
+      "LeftForeArm",
+      "LeftForeArmRoll",
+      "LeftHand",
+      "LeftHandIndex1",
+      "LeftHandIndex2",
+      "LeftHandIndex3",
+      "LeftHandIndex4",
+      "LeftHandMiddle1",
+      "LeftHandMiddle2",
+      "LeftHandMiddle3",
+      "LeftHandMiddle4",
+      "LeftHandPinky1",
+      "LeftHandPinky2",
+      "LeftHandPinky3",
+      "LeftHandPinky4",
+      "LeftHandProp",
+      "LeftHandRing1",
+      "LeftHandRing2",
+      "LeftHandRing3",
+      "LeftHandRing4",
+      "LeftHandThumb1",
+      "LeftHandThumb2",
+      "LeftHandThumb3",
+      "LeftHandThumb4",
+      "Neck",
+      "Head",
+      "RightShoulder",
+      "RightArm",
+      "RightArmRoll",
+      "RightForeArm",
+      "RightForeArmRoll",
+      "RightHand",
+      "RightHandIndex1",
+      "RightHandIndex2",
+      "RightHandIndex3",
+      "RightHandIndex4",
+      "RightHandMiddle1",
+      "RightHandMiddle2",
+      "RightHandMiddle3",
+      "RightHandMiddle4",
+      "RightHandPinky1",
+      "RightHandPinky2",
+      "RightHandPinky3",
+      "RightHandPinky4",
+      "RightHandProp",
+      "RightHandRing1",
+      "RightHandRing2",
+      "RightHandRing3",
+      "RightHandRing4",
+      "RightHandThumb1",
+      "RightHandThumb2",
+      "RightHandThumb3",
+      "RightHandThumb4",
+      "LeftUpLeg",
+      "LeftLeg",
+      "LeftFoot",
+      "LeftToeBase",
+      "LeftToeBase_END",
+      "LeftLegRoll",
+      "LeftUpLegRoll",
+      "RightUpLeg",
+      "RightLeg",
+      "RightFoot",
+      "RightToeBase",
+      "RightToeBase_END",
+      "RightLegRoll",
+      "RightUpLegRoll"
+    ],
+    "animation_stacks": [
+      "WalkFwdStart135_R",
+      "WalkFwdStart135_L",
+      "RunFwdStart135_R",
+      "RunFwdStart135_L",
+      "WalkBwdStart",
+      "WalkBwdLoop",
+      "WalkBwdStop_LU",
+      "WalkBwdStop_RU",
+      "StrafeRightStart",
+      "StrafeRightLoop",
+      "StrafeRightStop_RU",
+      "StrafeRightStop_LU",
+      "StrafeLeftStart",
+      "StrafeLeftLoop",
+      "StrafeLeftStop_LU",
+      "StrafeLeftStop_RU",
+      "StrafeRight135Loop",
+      "StrafeLeft45Loop"
+    ],
+    "unity_clips": [
+      {
+        "name": "WalkFwdStart135_R",
+        "take": "WalkFwdStart135_R",
+        "first_frame": 0.0,
+        "last_frame": 42.0
+      },
+      {
+        "name": "WalkFwdStart135_L",
+        "take": "WalkFwdStart135_L",
+        "first_frame": 0.0,
+        "last_frame": 27.0
+      },
+      {
+        "name": "RunFwdStart135_R",
+        "take": "RunFwdStart135_R",
+        "first_frame": 0.0,
+        "last_frame": 34.0
+      },
+      {
+        "name": "RunFwdStart135_L",
+        "take": "RunFwdStart135_L",
+        "first_frame": 0.0,
+        "last_frame": 26.0
+      },
+      {
+        "name": "WalkBwdStart",
+        "take": "WalkBwdStart",
+        "first_frame": 0.0,
+        "last_frame": 25.0
+      },
+      {
+        "name": "WalkBwdLoop",
+        "take": "WalkBwdLoop",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "WalkBwdStop_LU",
+        "take": "WalkBwdStop_LU",
+        "first_frame": 0.0,
+        "last_frame": 33.0
+      },
+      {
+        "name": "WalkBwdStop_RU",
+        "take": "WalkBwdStop_RU",
+        "first_frame": 0.0,
+        "last_frame": 36.0
+      },
+      {
+        "name": "StrafeRightStart",
+        "take": "StrafeRightStart",
+        "first_frame": 0.0,
+        "last_frame": 36.0
+      },
+      {
+        "name": "StrafeRightLoop",
+        "take": "StrafeRightLoop",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "StrafeRightStop_RU",
+        "take": "StrafeRightStop_RU",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "StrafeRightStop_LU",
+        "take": "StrafeRightStop_LU",
+        "first_frame": 0.0,
+        "last_frame": 35.0
+      },
+      {
+        "name": "StrafeLeftStart",
+        "take": "StrafeLeftStart",
+        "first_frame": 0.0,
+        "last_frame": 27.0
+      },
+      {
+        "name": "StrafeLeftLoop",
+        "take": "StrafeLeftLoop",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "StrafeLeftStop_LU",
+        "take": "StrafeLeftStop_LU",
+        "first_frame": 0.0,
+        "last_frame": 39.0
+      },
+      {
+        "name": "StrafeLeftStop_RU",
+        "take": "StrafeLeftStop_RU",
+        "first_frame": 0.0,
+        "last_frame": 48.0
+      },
+      {
+        "name": "StrafeRight135Loop",
+        "take": "StrafeRight135Loop",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "StrafeLeft45Loop",
+        "take": "StrafeLeft45Loop",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      }
+    ]
+  },
+  {
+    "file": "Assets/MovementAnimsetPro/Animations/MovementAnimsetPro_Fighting.fbx",
+    "bone_count": 74,
+    "bones": [
+      "Root",
+      "Hips",
+      "Spine",
+      "Spine1",
+      "LeftShoulder",
+      "LeftArm",
+      "LeftArmRoll",
+      "LeftForeArm",
+      "LeftForeArmRoll",
+      "LeftHand",
+      "LeftHandIndex1",
+      "LeftHandIndex2",
+      "LeftHandIndex3",
+      "LeftHandIndex4",
+      "LeftHandMiddle1",
+      "LeftHandMiddle2",
+      "LeftHandMiddle3",
+      "LeftHandMiddle4",
+      "LeftHandPinky1",
+      "LeftHandPinky2",
+      "LeftHandPinky3",
+      "LeftHandPinky4",
+      "LeftHandProp",
+      "LeftHandRing1",
+      "LeftHandRing2",
+      "LeftHandRing3",
+      "LeftHandRing4",
+      "LeftHandThumb1",
+      "LeftHandThumb2",
+      "LeftHandThumb3",
+      "LeftHandThumb4",
+      "Neck",
+      "Head",
+      "RightShoulder",
+      "RightArm",
+      "RightArmRoll",
+      "RightForeArm",
+      "RightForeArmRoll",
+      "RightHand",
+      "RightHandIndex1",
+      "RightHandIndex2",
+      "RightHandIndex3",
+      "RightHandIndex4",
+      "RightHandMiddle1",
+      "RightHandMiddle2",
+      "RightHandMiddle3",
+      "RightHandMiddle4",
+      "RightHandPinky1",
+      "RightHandPinky2",
+      "RightHandPinky3",
+      "RightHandPinky4",
+      "RightHandProp",
+      "RightHandRing1",
+      "RightHandRing2",
+      "RightHandRing3",
+      "RightHandRing4",
+      "RightHandThumb1",
+      "RightHandThumb2",
+      "RightHandThumb3",
+      "RightHandThumb4",
+      "LeftUpLeg",
+      "LeftLeg",
+      "LeftFoot",
+      "LeftToeBase",
+      "LeftToeBase_END",
+      "LeftLegRoll",
+      "LeftUpLegRoll",
+      "RightUpLeg",
+      "RightLeg",
+      "RightFoot",
+      "RightToeBase",
+      "RightToeBase_END",
+      "RightLegRoll",
+      "RightUpLegRoll"
+    ],
+    "animation_stacks": [
+      "Take 001",
+      "BindPose",
+      "Idle2Fists",
+      "Fists_Idle",
+      "Fists2Idle",
+      "Idle_Punch_Move_L",
+      "Fists_Punch_Move_L",
+      "Fists_Punch_Move_R",
+      "Fists_Punch_L",
+      "Fists_Punch_R",
+      "Fists_Kick_Front_Move_R",
+      "Fists_Kick_Front_L",
+      "Fists_Punch_Heavy2Idle",
+      "Fists_Hit_Left",
+      "Fists_Hit_Right",
+      "Idle_Hit_Strong_Left",
+      "Idle_Hit_Strong_Right",
+      "Idle_Knockdown_Front",
+      "Idle_Knockdown_Right",
+      "Idle_Knockdown_Left",
+      "Death_1",
+      "Death_2"
+    ],
+    "unity_clips": [
+      {
+        "name": "BindPose",
+        "take": "BindPose",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "Idle2Fists",
+        "take": "Idle2Fists",
+        "first_frame": 0.0,
+        "last_frame": 20.0
+      },
+      {
+        "name": "Fists_Idle",
+        "take": "Fists_Idle",
+        "first_frame": 0.0,
+        "last_frame": 114.0
+      },
+      {
+        "name": "Fists2Idle",
+        "take": "Fists2Idle",
+        "first_frame": 0.0,
+        "last_frame": 50.0
+      },
+      {
+        "name": "Idle_Punch_Move_L",
+        "take": "Idle_Punch_Move_L",
+        "first_frame": 0.0,
+        "last_frame": 40.0
+      },
+      {
+        "name": "Fists_Punch_Move_L",
+        "take": "Fists_Punch_Move_L",
+        "first_frame": 0.0,
+        "last_frame": 25.0
+      },
+      {
+        "name": "Fists_Punch_Move_R",
+        "take": "Fists_Punch_Move_R",
+        "first_frame": 0.0,
+        "last_frame": 25.0
+      },
+      {
+        "name": "Fists_Punch_L",
+        "take": "Fists_Punch_L",
+        "first_frame": 0.0,
+        "last_frame": 24.0
+      },
+      {
+        "name": "Fists_Punch_R",
+        "take": "Fists_Punch_R",
+        "first_frame": 0.0,
+        "last_frame": 24.0
+      },
+      {
+        "name": "Fists_Kick_Front_Move_R",
+        "take": "Fists_Kick_Front_Move_R",
+        "first_frame": 0.0,
+        "last_frame": 45.0
+      },
+      {
+        "name": "Fists_Kick_Front_L",
+        "take": "Fists_Kick_Front_L",
+        "first_frame": 0.0,
+        "last_frame": 24.0
+      },
+      {
+        "name": "Fists_Punch_Heavy2Idle",
+        "take": "Fists_Punch_Heavy2Idle",
+        "first_frame": 0.0,
+        "last_frame": 80.0
+      },
+      {
+        "name": "Fists_Hit_Left",
+        "take": "Fists_Hit_Left",
+        "first_frame": 0.0,
+        "last_frame": 35.0
+      },
+      {
+        "name": "Fists_Hit_Right",
+        "take": "Fists_Hit_Right",
+        "first_frame": 0.0,
+        "last_frame": 35.0
+      },
+      {
+        "name": "Idle_Hit_Strong_Left",
+        "take": "Idle_Hit_Strong_Left",
+        "first_frame": 0.0,
+        "last_frame": 123.0
+      },
+      {
+        "name": "Idle_Hit_Strong_Right",
+        "take": "Idle_Hit_Strong_Right",
+        "first_frame": 0.0,
+        "last_frame": 95.0
+      },
+      {
+        "name": "Idle_Knockdown_Front",
+        "take": "Idle_Knockdown_Front",
+        "first_frame": 0.0,
+        "last_frame": 65.0
+      },
+      {
+        "name": "Idle_Knockdown_Right",
+        "take": "Idle_Knockdown_Right",
+        "first_frame": 0.0,
+        "last_frame": 48.0
+      },
+      {
+        "name": "Idle_Knockdown_Left",
+        "take": "Idle_Knockdown_Left",
+        "first_frame": 0.0,
+        "last_frame": 85.0
+      },
+      {
+        "name": "Death_1",
+        "take": "Death_1",
+        "first_frame": 0.0,
+        "last_frame": 74.0
+      },
+      {
+        "name": "Death_2",
+        "take": "Death_2",
+        "first_frame": 0.0,
+        "last_frame": 103.0
+      }
+    ]
+  },
+  {
+    "file": "Assets/MovementAnimsetPro/Animations/MovementAnimsetPro_Idles.fbx",
+    "bone_count": 74,
+    "bones": [
+      "Root",
+      "Hips",
+      "Spine",
+      "Spine1",
+      "LeftShoulder",
+      "LeftArm",
+      "LeftArmRoll",
+      "LeftForeArm",
+      "LeftForeArmRoll",
+      "LeftHand",
+      "LeftHandIndex1",
+      "LeftHandIndex2",
+      "LeftHandIndex3",
+      "LeftHandIndex4",
+      "LeftHandMiddle1",
+      "LeftHandMiddle2",
+      "LeftHandMiddle3",
+      "LeftHandMiddle4",
+      "LeftHandPinky1",
+      "LeftHandPinky2",
+      "LeftHandPinky3",
+      "LeftHandPinky4",
+      "LeftHandProp",
+      "LeftHandRing1",
+      "LeftHandRing2",
+      "LeftHandRing3",
+      "LeftHandRing4",
+      "LeftHandThumb1",
+      "LeftHandThumb2",
+      "LeftHandThumb3",
+      "LeftHandThumb4",
+      "Neck",
+      "Head",
+      "RightShoulder",
+      "RightArm",
+      "RightArmRoll",
+      "RightForeArm",
+      "RightForeArmRoll",
+      "RightHand",
+      "RightHandIndex1",
+      "RightHandIndex2",
+      "RightHandIndex3",
+      "RightHandIndex4",
+      "RightHandMiddle1",
+      "RightHandMiddle2",
+      "RightHandMiddle3",
+      "RightHandMiddle4",
+      "RightHandPinky1",
+      "RightHandPinky2",
+      "RightHandPinky3",
+      "RightHandPinky4",
+      "RightHandProp",
+      "RightHandRing1",
+      "RightHandRing2",
+      "RightHandRing3",
+      "RightHandRing4",
+      "RightHandThumb1",
+      "RightHandThumb2",
+      "RightHandThumb3",
+      "RightHandThumb4",
+      "LeftUpLeg",
+      "LeftLeg",
+      "LeftFoot",
+      "LeftToeBase",
+      "LeftToeBase_END",
+      "LeftLegRoll",
+      "LeftUpLegRoll",
+      "RightUpLeg",
+      "RightLeg",
+      "RightFoot",
+      "RightToeBase",
+      "RightToeBase_END",
+      "RightLegRoll",
+      "RightUpLegRoll"
+    ],
+    "animation_stacks": [
+      "BindPose",
+      "Idle6",
+      "Idle2",
+      "Idle3",
+      "Idle4",
+      "Idle5"
+    ],
+    "unity_clips": [
+      {
+        "name": "BindPose",
+        "take": "BindPose",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "Idle6",
+        "take": "Idle6",
+        "first_frame": 0.0,
+        "last_frame": 300.0
+      },
+      {
+        "name": "Idle2",
+        "take": "Idle2",
+        "first_frame": 0.0,
+        "last_frame": 221.0
+      },
+      {
+        "name": "Idle3",
+        "take": "Idle3",
+        "first_frame": 0.0,
+        "last_frame": 214.0
+      },
+      {
+        "name": "Idle4",
+        "take": "Idle4",
+        "first_frame": 0.0,
+        "last_frame": 372.0
+      },
+      {
+        "name": "Idle5",
+        "take": "Idle5",
+        "first_frame": 0.0,
+        "last_frame": 474.0
+      }
+    ]
+  },
+  {
+    "file": "Assets/MovementAnimsetPro/Animations/MovementAnimsetPro_RunStrafeUpdate.fbx",
+    "bone_count": 74,
+    "bones": [
+      "Root",
+      "Hips",
+      "Spine",
+      "Spine1",
+      "LeftShoulder",
+      "LeftArm",
+      "LeftArmRoll",
+      "LeftForeArm",
+      "LeftForeArmRoll",
+      "LeftHand",
+      "LeftHandIndex1",
+      "LeftHandIndex2",
+      "LeftHandIndex3",
+      "LeftHandIndex4",
+      "LeftHandMiddle1",
+      "LeftHandMiddle2",
+      "LeftHandMiddle3",
+      "LeftHandMiddle4",
+      "LeftHandPinky1",
+      "LeftHandPinky2",
+      "LeftHandPinky3",
+      "LeftHandPinky4",
+      "LeftHandProp",
+      "LeftHandRing1",
+      "LeftHandRing2",
+      "LeftHandRing3",
+      "LeftHandRing4",
+      "LeftHandThumb1",
+      "LeftHandThumb2",
+      "LeftHandThumb3",
+      "LeftHandThumb4",
+      "Neck",
+      "Head",
+      "RightShoulder",
+      "RightArm",
+      "RightArmRoll",
+      "RightForeArm",
+      "RightForeArmRoll",
+      "RightHand",
+      "RightHandIndex1",
+      "RightHandIndex2",
+      "RightHandIndex3",
+      "RightHandIndex4",
+      "RightHandMiddle1",
+      "RightHandMiddle2",
+      "RightHandMiddle3",
+      "RightHandMiddle4",
+      "RightHandPinky1",
+      "RightHandPinky2",
+      "RightHandPinky3",
+      "RightHandPinky4",
+      "RightHandProp",
+      "RightHandRing1",
+      "RightHandRing2",
+      "RightHandRing3",
+      "RightHandRing4",
+      "RightHandThumb1",
+      "RightHandThumb2",
+      "RightHandThumb3",
+      "RightHandThumb4",
+      "LeftUpLeg",
+      "LeftLeg",
+      "LeftFoot",
+      "LeftToeBase",
+      "LeftToeBase_END",
+      "LeftLegRoll",
+      "LeftUpLegRoll",
+      "RightUpLeg",
+      "RightLeg",
+      "RightFoot",
+      "RightToeBase",
+      "RightToeBase_END",
+      "RightLegRoll",
+      "RightUpLegRoll"
+    ],
+    "animation_stacks": [
+      "Crouch_WalkLt135_new",
+      "Crouch_WalkLt45_new",
+      "Crouch_WalkRt135_new",
+      "Crouch_WalkRt45_new",
+      "Idle2Crouch_new",
+      "Crouch2Idle_new",
+      "CrouchLoop_new",
+      "Crouch_Turn90R_new",
+      "Crouch_Turn90L_new",
+      "Crouch_WalkFwdStart_new",
+      "Crouch_WalkFwd_new",
+      "Crouch_WalkFwdStop_LU_new",
+      "Crouch_WalkFwdStop_RU_new",
+      "Crouch_WalkBwdStart_new",
+      "Crouch_WalkBwd_new",
+      "Crouch_WalkBwdStop_LU_new",
+      "Crouch_WalkBwdStop_RU_new",
+      "Crouch_WalkRtStart_new",
+      "Crouch_WalkRt_new",
+      "Crouch_WalkRtStop_LU_new",
+      "Crouch_WalkRtStop_RU_new",
+      "Crouch_WalkLtStart_new",
+      "Crouch_WalkLt_new",
+      "Crouch_WalkLtStop_LU_new",
+      "Crouch_WalkLtStop_RU_new",
+      "RunBwdLoop",
+      "RunLtLoop",
+      "RunRtLoop",
+      "RunStrafeLeft45Loop",
+      "RunStrafeRight135Loop",
+      "RunStrafeRight45Loop",
+      "RunStrafeLeft135Loop",
+      "HiddenButton",
+      "KickTrashcan",
+      "Turn180Surprised",
+      "PatrolFullCycleLoop",
+      "PatrolLoop",
+      "Throw_Start",
+      "ThrowLoop",
+      "ThrowEndFar",
+      "ThrowEndClose",
+      "ThrowCancel",
+      "ThrowSingle1",
+      "ThrowSingle2",
+      "StrafeRight45Loop",
+      "StrafeLeft135Loop",
+      "Climb1m",
+      "SitChairStart",
+      "SitChairLoop",
+      "SitChairEnd",
+      "GetUpFromBack",
+      "GetUpFromFace"
+    ],
+    "unity_clips": [
+      {
+        "name": "Crouch_WalkLt135_new",
+        "take": "Crouch_WalkLt135_new",
+        "first_frame": 0.0,
+        "last_frame": 24.0
+      },
+      {
+        "name": "Crouch_WalkLt45_new",
+        "take": "Crouch_WalkLt45_new",
+        "first_frame": 0.0,
+        "last_frame": 27.0
+      },
+      {
+        "name": "Crouch_WalkRt135_new",
+        "take": "Crouch_WalkRt135_new",
+        "first_frame": 0.0,
+        "last_frame": 24.0
+      },
+      {
+        "name": "Crouch_WalkRt45_new",
+        "take": "Crouch_WalkRt45_new",
+        "first_frame": 0.0,
+        "last_frame": 27.0
+      },
+      {
+        "name": "Idle2Crouch_new",
+        "take": "Idle2Crouch_new",
+        "first_frame": 0.0,
+        "last_frame": 20.0
+      },
+      {
+        "name": "Crouch2Idle_new",
+        "take": "Crouch2Idle_new",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "CrouchLoop_new",
+        "take": "CrouchLoop_new",
+        "first_frame": 0.0,
+        "last_frame": 150.0
+      },
+      {
+        "name": "Crouch_Turn90R_new",
+        "take": "Crouch_Turn90R_new",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "Crouch_Turn90L_new",
+        "take": "Crouch_Turn90L_new",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "Crouch_WalkFwdStart_new",
+        "take": "Crouch_WalkFwdStart_new",
+        "first_frame": 0.0,
+        "last_frame": 18.0
+      },
+      {
+        "name": "Crouch_WalkFwd_new",
+        "take": "Crouch_WalkFwd_new",
+        "first_frame": 0.0,
+        "last_frame": 27.0
+      },
+      {
+        "name": "Crouch_WalkFwdStop_LU_new",
+        "take": "Crouch_WalkFwdStop_LU_new",
+        "first_frame": 0.0,
+        "last_frame": 28.0
+      },
+      {
+        "name": "Crouch_WalkFwdStop_RU_new",
+        "take": "Crouch_WalkFwdStop_RU_new",
+        "first_frame": 0.0,
+        "last_frame": 32.0
+      },
+      {
+        "name": "Crouch_WalkBwdStart_new",
+        "take": "Crouch_WalkBwdStart_new",
+        "first_frame": 0.0,
+        "last_frame": 31.0
+      },
+      {
+        "name": "Crouch_WalkBwd_new",
+        "take": "Crouch_WalkBwd_new",
+        "first_frame": 0.0,
+        "last_frame": 24.0
+      },
+      {
+        "name": "Crouch_WalkBwdStop_LU_new",
+        "take": "Crouch_WalkBwdStop_LU_new",
+        "first_frame": 0.0,
+        "last_frame": 28.0
+      },
+      {
+        "name": "Crouch_WalkBwdStop_RU_new",
+        "take": "Crouch_WalkBwdStop_RU_new",
+        "first_frame": 0.0,
+        "last_frame": 32.0
+      },
+      {
+        "name": "Crouch_WalkRtStart_new",
+        "take": "Crouch_WalkRtStart_new",
+        "first_frame": 0.0,
+        "last_frame": 36.0
+      },
+      {
+        "name": "Crouch_WalkRt_new",
+        "take": "Crouch_WalkRt_new",
+        "first_frame": 0.0,
+        "last_frame": 22.0
+      },
+      {
+        "name": "Crouch_WalkRtStop_LU_new",
+        "take": "Crouch_WalkRtStop_LU_new",
+        "first_frame": 0.0,
+        "last_frame": 28.0
+      },
+      {
+        "name": "Crouch_WalkRtStop_RU_new",
+        "take": "Crouch_WalkRtStop_RU_new",
+        "first_frame": 0.0,
+        "last_frame": 32.0
+      },
+      {
+        "name": "Crouch_WalkLtStart_new",
+        "take": "Crouch_WalkLtStart_new",
+        "first_frame": 0.0,
+        "last_frame": 28.0
+      },
+      {
+        "name": "Crouch_WalkLt_new",
+        "take": "Crouch_WalkLt_new",
+        "first_frame": 0.0,
+        "last_frame": 21.0
+      },
+      {
+        "name": "Crouch_WalkLtStop_LU_new",
+        "take": "Crouch_WalkLtStop_LU_new",
+        "first_frame": 0.0,
+        "last_frame": 28.0
+      },
+      {
+        "name": "Crouch_WalkLtStop_RU_new",
+        "take": "Crouch_WalkLtStop_RU_new",
+        "first_frame": 0.0,
+        "last_frame": 32.0
+      },
+      {
+        "name": "RunBwdLoop",
+        "take": "RunBwdLoop",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "RunLtLoop",
+        "take": "RunLtLoop",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "RunRtLoop",
+        "take": "RunRtLoop",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "RunStrafeLeft45Loop",
+        "take": "RunStrafeLeft45Loop",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "RunStrafeRight135Loop",
+        "take": "RunStrafeRight135Loop",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "RunStrafeRight45Loop",
+        "take": "RunStrafeRight45Loop",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "RunStrafeLeft135Loop",
+        "take": "RunStrafeLeft135Loop",
+        "first_frame": 0.0,
+        "last_frame": 23.0
+      },
+      {
+        "name": "HiddenButton",
+        "take": "HiddenButton",
+        "first_frame": 0.0,
+        "last_frame": 225.0
+      },
+      {
+        "name": "KickTrashcan",
+        "take": "KickTrashcan",
+        "first_frame": 0.0,
+        "last_frame": 92.0
+      },
+      {
+        "name": "Turn180Surprised",
+        "take": "Turn180Surprised",
+        "first_frame": 0.0,
+        "last_frame": 77.0
+      },
+      {
+        "name": "PatrolFullCycleLoop",
+        "take": "PatrolFullCycleLoop",
+        "first_frame": 0.0,
+        "last_frame": 407.0
+      },
+      {
+        "name": "PatrolLoop",
+        "take": "PatrolLoop",
+        "first_frame": 0.0,
+        "last_frame": 56.0
+      },
+      {
+        "name": "Throw_Start",
+        "take": "Throw_Start",
+        "first_frame": 0.0,
+        "last_frame": 27.0
+      },
+      {
+        "name": "ThrowLoop",
+        "take": "ThrowLoop",
+        "first_frame": 0.0,
+        "last_frame": 25.0
+      },
+      {
+        "name": "ThrowEndFar",
+        "take": "ThrowEndFar",
+        "first_frame": 0.0,
+        "last_frame": 87.0
+      },
+      {
+        "name": "ThrowEndClose",
+        "take": "ThrowEndClose",
+        "first_frame": 0.0,
+        "last_frame": 72.0
+      },
+      {
+        "name": "ThrowCancel",
+        "take": "ThrowCancel",
+        "first_frame": 0.0,
+        "last_frame": 60.0
+      },
+      {
+        "name": "ThrowSingle1",
+        "take": "ThrowSingle1",
+        "first_frame": 0.0,
+        "last_frame": 90.0
+      },
+      {
+        "name": "ThrowSingle2",
+        "take": "ThrowSingle2",
+        "first_frame": 0.0,
+        "last_frame": 90.0
+      },
+      {
+        "name": "StrafeRight45Loop",
+        "take": "StrafeRight45Loop",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "StrafeLeft135Loop",
+        "take": "StrafeLeft135Loop",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "Climb1m",
+        "take": "Climb1m",
+        "first_frame": 0.0,
+        "last_frame": 65.0
+      },
+      {
+        "name": "SitChairStart",
+        "take": "SitChairStart",
+        "first_frame": 0.0,
+        "last_frame": 57.0
+      },
+      {
+        "name": "SitChairLoop",
+        "take": "SitChairLoop",
+        "first_frame": 0.0,
+        "last_frame": 152.0
+      },
+      {
+        "name": "SitChairEnd",
+        "take": "SitChairEnd",
+        "first_frame": 0.0,
+        "last_frame": 70.0
+      },
+      {
+        "name": "GetUpFromBack",
+        "take": "GetUpFromBack",
+        "first_frame": 0.0,
+        "last_frame": 103.0
+      },
+      {
+        "name": "GetUpFromFace",
+        "take": "GetUpFromFace",
+        "first_frame": 0.0,
+        "last_frame": 72.0
+      }
+    ]
+  },
+  {
+    "file": "Assets/MovementAnimsetPro/Animations/MovementAnimsetPro_SlideClimb.bck/MovementAnimsetPro_SlideClimb.001.fbx",
+    "bone_count": 74,
+    "bones": [
+      "Root",
+      "Hips",
+      "Spine",
+      "Spine1",
+      "LeftShoulder",
+      "LeftArm",
+      "LeftArmRoll",
+      "LeftForeArm",
+      "LeftForeArmRoll",
+      "LeftHand",
+      "LeftHandIndex1",
+      "LeftHandIndex2",
+      "LeftHandIndex3",
+      "LeftHandIndex4",
+      "LeftHandMiddle1",
+      "LeftHandMiddle2",
+      "LeftHandMiddle3",
+      "LeftHandMiddle4",
+      "LeftHandPinky1",
+      "LeftHandPinky2",
+      "LeftHandPinky3",
+      "LeftHandPinky4",
+      "LeftHandProp",
+      "LeftHandRing1",
+      "LeftHandRing2",
+      "LeftHandRing3",
+      "LeftHandRing4",
+      "LeftHandThumb1",
+      "LeftHandThumb2",
+      "LeftHandThumb3",
+      "LeftHandThumb4",
+      "Neck",
+      "Head",
+      "RightShoulder",
+      "RightArm",
+      "RightArmRoll",
+      "RightForeArm",
+      "RightForeArmRoll",
+      "RightHand",
+      "RightHandIndex1",
+      "RightHandIndex2",
+      "RightHandIndex3",
+      "RightHandIndex4",
+      "RightHandMiddle1",
+      "RightHandMiddle2",
+      "RightHandMiddle3",
+      "RightHandMiddle4",
+      "RightHandPinky1",
+      "RightHandPinky2",
+      "RightHandPinky3",
+      "RightHandPinky4",
+      "RightHandProp",
+      "RightHandRing1",
+      "RightHandRing2",
+      "RightHandRing3",
+      "RightHandRing4",
+      "RightHandThumb1",
+      "RightHandThumb2",
+      "RightHandThumb3",
+      "RightHandThumb4",
+      "LeftUpLeg",
+      "LeftLeg",
+      "LeftFoot",
+      "LeftToeBase",
+      "LeftToeBase_END",
+      "LeftLegRoll",
+      "LeftUpLegRoll",
+      "RightUpLeg",
+      "RightLeg",
+      "RightFoot",
+      "RightToeBase",
+      "RightToeBase_END",
+      "RightLegRoll",
+      "RightUpLegRoll"
+    ],
+    "animation_stacks": [
+      "BindPose",
+      "Slide",
+      "Vault1m",
+      "Climb2m"
+    ],
+    "unity_clips": []
+  },
+  {
+    "file": "Assets/MovementAnimsetPro/Animations/MovementAnimsetPro_SlideClimb.bck/MovementAnimsetPro_SlideClimb.002.fbx",
+    "bone_count": 74,
+    "bones": [
+      "Root",
+      "Hips",
+      "Spine",
+      "Spine1",
+      "LeftShoulder",
+      "LeftArm",
+      "LeftArmRoll",
+      "LeftForeArm",
+      "LeftForeArmRoll",
+      "LeftHand",
+      "LeftHandIndex1",
+      "LeftHandIndex2",
+      "LeftHandIndex3",
+      "LeftHandIndex4",
+      "LeftHandMiddle1",
+      "LeftHandMiddle2",
+      "LeftHandMiddle3",
+      "LeftHandMiddle4",
+      "LeftHandPinky1",
+      "LeftHandPinky2",
+      "LeftHandPinky3",
+      "LeftHandPinky4",
+      "LeftHandProp",
+      "LeftHandRing1",
+      "LeftHandRing2",
+      "LeftHandRing3",
+      "LeftHandRing4",
+      "LeftHandThumb1",
+      "LeftHandThumb2",
+      "LeftHandThumb3",
+      "LeftHandThumb4",
+      "Neck",
+      "Head",
+      "RightShoulder",
+      "RightArm",
+      "RightArmRoll",
+      "RightForeArm",
+      "RightForeArmRoll",
+      "RightHand",
+      "RightHandIndex1",
+      "RightHandIndex2",
+      "RightHandIndex3",
+      "RightHandIndex4",
+      "RightHandMiddle1",
+      "RightHandMiddle2",
+      "RightHandMiddle3",
+      "RightHandMiddle4",
+      "RightHandPinky1",
+      "RightHandPinky2",
+      "RightHandPinky3",
+      "RightHandPinky4",
+      "RightHandProp",
+      "RightHandRing1",
+      "RightHandRing2",
+      "RightHandRing3",
+      "RightHandRing4",
+      "RightHandThumb1",
+      "RightHandThumb2",
+      "RightHandThumb3",
+      "RightHandThumb4",
+      "LeftUpLeg",
+      "LeftLeg",
+      "LeftFoot",
+      "LeftToeBase",
+      "LeftToeBase_END",
+      "LeftLegRoll",
+      "LeftUpLegRoll",
+      "RightUpLeg",
+      "RightLeg",
+      "RightFoot",
+      "RightToeBase",
+      "RightToeBase_END",
+      "RightLegRoll",
+      "RightUpLegRoll"
+    ],
+    "animation_stacks": [
+      "BindPose",
+      "Slide",
+      "Vault1m",
+      "Climb2m"
+    ],
+    "unity_clips": []
+  },
+  {
+    "file": "Assets/MovementAnimsetPro/Animations/MovementAnimsetPro_SlideClimb.bck/MovementAnimsetPro_SlideClimb.003.fbx",
+    "bone_count": 74,
+    "bones": [
+      "Root",
+      "Hips",
+      "Spine",
+      "Spine1",
+      "LeftShoulder",
+      "LeftArm",
+      "LeftArmRoll",
+      "LeftForeArm",
+      "LeftForeArmRoll",
+      "LeftHand",
+      "LeftHandIndex1",
+      "LeftHandIndex2",
+      "LeftHandIndex3",
+      "LeftHandIndex4",
+      "LeftHandMiddle1",
+      "LeftHandMiddle2",
+      "LeftHandMiddle3",
+      "LeftHandMiddle4",
+      "LeftHandPinky1",
+      "LeftHandPinky2",
+      "LeftHandPinky3",
+      "LeftHandPinky4",
+      "LeftHandProp",
+      "LeftHandRing1",
+      "LeftHandRing2",
+      "LeftHandRing3",
+      "LeftHandRing4",
+      "LeftHandThumb1",
+      "LeftHandThumb2",
+      "LeftHandThumb3",
+      "LeftHandThumb4",
+      "Neck",
+      "Head",
+      "RightShoulder",
+      "RightArm",
+      "RightArmRoll",
+      "RightForeArm",
+      "RightForeArmRoll",
+      "RightHand",
+      "RightHandIndex1",
+      "RightHandIndex2",
+      "RightHandIndex3",
+      "RightHandIndex4",
+      "RightHandMiddle1",
+      "RightHandMiddle2",
+      "RightHandMiddle3",
+      "RightHandMiddle4",
+      "RightHandPinky1",
+      "RightHandPinky2",
+      "RightHandPinky3",
+      "RightHandPinky4",
+      "RightHandProp",
+      "RightHandRing1",
+      "RightHandRing2",
+      "RightHandRing3",
+      "RightHandRing4",
+      "RightHandThumb1",
+      "RightHandThumb2",
+      "RightHandThumb3",
+      "RightHandThumb4",
+      "LeftUpLeg",
+      "LeftLeg",
+      "LeftFoot",
+      "LeftToeBase",
+      "LeftToeBase_END",
+      "LeftLegRoll",
+      "LeftUpLegRoll",
+      "RightUpLeg",
+      "RightLeg",
+      "RightFoot",
+      "RightToeBase",
+      "RightToeBase_END",
+      "RightLegRoll",
+      "RightUpLegRoll"
+    ],
+    "animation_stacks": [
+      "BindPose",
+      "Slide",
+      "Vault1m",
+      "Climb2m"
+    ],
+    "unity_clips": []
+  },
+  {
+    "file": "Assets/MovementAnimsetPro/Animations/MovementAnimsetPro_SlideClimb.fbx",
+    "bone_count": 74,
+    "bones": [
+      "Root",
+      "Hips",
+      "Spine",
+      "Spine1",
+      "LeftShoulder",
+      "LeftArm",
+      "LeftArmRoll",
+      "LeftForeArm",
+      "LeftForeArmRoll",
+      "LeftHand",
+      "LeftHandIndex1",
+      "LeftHandIndex2",
+      "LeftHandIndex3",
+      "LeftHandIndex4",
+      "LeftHandMiddle1",
+      "LeftHandMiddle2",
+      "LeftHandMiddle3",
+      "LeftHandMiddle4",
+      "LeftHandPinky1",
+      "LeftHandPinky2",
+      "LeftHandPinky3",
+      "LeftHandPinky4",
+      "LeftHandProp",
+      "LeftHandRing1",
+      "LeftHandRing2",
+      "LeftHandRing3",
+      "LeftHandRing4",
+      "LeftHandThumb1",
+      "LeftHandThumb2",
+      "LeftHandThumb3",
+      "LeftHandThumb4",
+      "Neck",
+      "Head",
+      "RightShoulder",
+      "RightArm",
+      "RightArmRoll",
+      "RightForeArm",
+      "RightForeArmRoll",
+      "RightHand",
+      "RightHandIndex1",
+      "RightHandIndex2",
+      "RightHandIndex3",
+      "RightHandIndex4",
+      "RightHandMiddle1",
+      "RightHandMiddle2",
+      "RightHandMiddle3",
+      "RightHandMiddle4",
+      "RightHandPinky1",
+      "RightHandPinky2",
+      "RightHandPinky3",
+      "RightHandPinky4",
+      "RightHandProp",
+      "RightHandRing1",
+      "RightHandRing2",
+      "RightHandRing3",
+      "RightHandRing4",
+      "RightHandThumb1",
+      "RightHandThumb2",
+      "RightHandThumb3",
+      "RightHandThumb4",
+      "LeftUpLeg",
+      "LeftLeg",
+      "LeftFoot",
+      "LeftToeBase",
+      "LeftToeBase_END",
+      "LeftLegRoll",
+      "LeftUpLegRoll",
+      "RightUpLeg",
+      "RightLeg",
+      "RightFoot",
+      "RightToeBase",
+      "RightToeBase_END",
+      "RightLegRoll",
+      "RightUpLegRoll"
+    ],
+    "animation_stacks": [
+      "BindPose",
+      "Slide",
+      "Vault1m",
+      "Climb2m"
+    ],
+    "unity_clips": [
+      {
+        "name": "BindPose",
+        "take": "BindPose",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "Slide",
+        "take": "Slide",
+        "first_frame": 0.0,
+        "last_frame": 72.0
+      },
+      {
+        "name": "Vault1m",
+        "take": "Vault1m",
+        "first_frame": 10.0,
+        "last_frame": 97.0
+      },
+      {
+        "name": "Climb2m",
+        "take": "Climb2m",
+        "first_frame": 0.0,
+        "last_frame": 108.0
+      }
+    ]
+  },
+  {
+    "file": "Assets/MovementAnimsetPro/Animations/MovementAnimsetPro_SprintFixed.fbx",
+    "bone_count": 74,
+    "bones": [
+      "Root",
+      "Hips",
+      "Spine",
+      "Spine1",
+      "LeftShoulder",
+      "LeftArm",
+      "LeftArmRoll",
+      "LeftForeArm",
+      "LeftForeArmRoll",
+      "LeftHand",
+      "LeftHandIndex1",
+      "LeftHandIndex2",
+      "LeftHandIndex3",
+      "LeftHandIndex4",
+      "LeftHandMiddle1",
+      "LeftHandMiddle2",
+      "LeftHandMiddle3",
+      "LeftHandMiddle4",
+      "LeftHandPinky1",
+      "LeftHandPinky2",
+      "LeftHandPinky3",
+      "LeftHandPinky4",
+      "LeftHandProp",
+      "LeftHandRing1",
+      "LeftHandRing2",
+      "LeftHandRing3",
+      "LeftHandRing4",
+      "LeftHandThumb1",
+      "LeftHandThumb2",
+      "LeftHandThumb3",
+      "LeftHandThumb4",
+      "Neck",
+      "Head",
+      "RightShoulder",
+      "RightArm",
+      "RightArmRoll",
+      "RightForeArm",
+      "RightForeArmRoll",
+      "RightHand",
+      "RightHandIndex1",
+      "RightHandIndex2",
+      "RightHandIndex3",
+      "RightHandIndex4",
+      "RightHandMiddle1",
+      "RightHandMiddle2",
+      "RightHandMiddle3",
+      "RightHandMiddle4",
+      "RightHandPinky1",
+      "RightHandPinky2",
+      "RightHandPinky3",
+      "RightHandPinky4",
+      "RightHandProp",
+      "RightHandRing1",
+      "RightHandRing2",
+      "RightHandRing3",
+      "RightHandRing4",
+      "RightHandThumb1",
+      "RightHandThumb2",
+      "RightHandThumb3",
+      "RightHandThumb4",
+      "LeftUpLeg",
+      "LeftLeg",
+      "LeftFoot",
+      "LeftToeBase",
+      "LeftToeBase_END",
+      "LeftLegRoll",
+      "LeftUpLegRoll",
+      "RightUpLeg",
+      "RightLeg",
+      "RightFoot",
+      "RightToeBase",
+      "RightToeBase_END",
+      "RightLegRoll",
+      "RightUpLegRoll"
+    ],
+    "animation_stacks": [
+      "BindPose",
+      "SprintFwdLoop"
+    ],
+    "unity_clips": [
+      {
+        "name": "BindPose",
+        "take": "BindPose",
+        "first_frame": 0.0,
+        "last_frame": 30.0
+      },
+      {
+        "name": "SprintFwdLoop",
+        "take": "SprintFwdLoop",
+        "first_frame": 0.0,
+        "last_frame": 19.0
+      }
+    ]
+  },
+  {
+    "file": "Assets/MovementAnimsetPro/Models/Character.fbx",
+    "bone_count": 0,
+    "bones": [],
+    "animation_stacks": [],
+    "unity_clips": []
+  },
+  {
+    "file": "Assets/MovementAnimsetPro/Models/Dummy.fbx",
+    "bone_count": 0,
+    "bones": [],
+    "animation_stacks": [],
+    "unity_clips": []
+  }
+]

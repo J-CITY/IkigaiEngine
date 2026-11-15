@@ -1,0 +1,330 @@
+{
+  "Version": 1,
+  "Dimension": "2D",
+  "EventLimits": {
+    "MaxEventsPerStep": 1024,
+    "MaxChildParticlesPerStep": 1024,
+    "MaxDepth": 4
+  },
+  "Emitters": [
+    {
+      "Id": "spark",
+      "Capacity": 512,
+      "Timing": {
+        "Duration": 2,
+        "Loops": 0
+      },
+      "Emission": {
+        "Mode": "eventsOnly"
+      },
+      "Spawn": [
+        {
+          "Id": "area",
+          "Type": "Shape",
+          "Shape": "circle",
+          "Radius": 2
+        },
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "uniform",
+            "Min": 0.45,
+            "Max": 0.9,
+            "RandomChannels": "independent"
+          },
+          "Size": {
+            "Mode": "constant",
+            "Value": [
+              3,
+              3
+            ]
+          },
+          "Color": {
+            "Mode": "uniform",
+            "Min": [
+              0.1,
+              0.6,
+              0.2,
+              1
+            ],
+            "Max": [
+              0.8,
+              1,
+              1,
+              1
+            ],
+            "RandomChannels": "independent"
+          },
+          "Velocity": {
+            "Mode": "constant",
+            "Value": [
+              0,
+              0
+            ]
+          }
+        },
+        {
+          "Id": "radial",
+          "Type": "RadialVelocity",
+          "Speed": {
+            "Mode": "uniform",
+            "Min": 70,
+            "Max": 140,
+            "RandomChannels": "independent"
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "gravity",
+          "Type": "Acceleration",
+          "Value": {
+            "Mode": "constant",
+            "Value": [
+              0,
+              60
+            ]
+          }
+        },
+        {
+          "Id": "motion",
+          "Type": "IntegrateMotion"
+        },
+        {
+          "Id": "fade",
+          "Type": "AlphaOverLife",
+          "Value": {
+            "Mode": "curve",
+            "Keys": [
+              {
+                "Time": 0,
+                "Value": 1
+              },
+              {
+                "Time": 0.5,
+                "Value": 1
+              },
+              {
+                "Time": 1,
+                "Value": 0
+              }
+            ]
+          }
+        },
+        {
+          "Id": "shrink",
+          "Type": "SizeOverLife",
+          "Value": {
+            "Mode": "curve",
+            "Keys": [
+              {
+                "Time": 0,
+                "Value": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "Time": 1,
+                "Value": [
+                  0,
+                  0
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "Renderer": {
+        "Type": "sprite2D",
+        "RenderSpace": "screen",
+        "Blend": "additive"
+      }
+    },
+    {
+      "Id": "launch",
+      "Capacity": 32,
+      "Timing": {
+        "Duration": 2,
+        "Loops": 0
+      },
+      "Emission": {
+        "Rate": {
+          "Mode": "constant",
+          "Value": 1.5
+        },
+        "Bursts": [
+          {
+            "Time": 0,
+            "Count": 1
+          }
+        ]
+      },
+      "Spawn": [
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "uniform",
+            "Min": 0.15,
+            "Max": 0.25,
+            "RandomChannels": "independent"
+          },
+          "Size": {
+            "Mode": "constant",
+            "Value": [
+              4,
+              10
+            ]
+          },
+          "Color": {
+            "Mode": "constant",
+            "Value": [
+              0.6,
+              1,
+              1,
+              1
+            ]
+          },
+          "Velocity": {
+            "Mode": "uniform",
+            "Min": [
+              -20,
+              -300
+            ],
+            "Max": [
+              20,
+              -250
+            ],
+            "RandomChannels": "independent"
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "motion",
+          "Type": "IntegrateMotion"
+        }
+      ],
+      "Renderer": {
+        "Type": "sprite2D",
+        "RenderSpace": "screen",
+        "Blend": "additive"
+      },
+      "Events": [
+        {
+          "Id": "puff-at-birth",
+          "On": "birth",
+          "Emitter": "puff",
+          "Count": 2
+        },
+        {
+          "Id": "burst-on-death",
+          "On": "death",
+          "Emitter": "spark",
+          "Count": 32,
+          "InheritVelocity": 0.1
+        }
+      ]
+    },
+    {
+      "Id": "puff",
+      "Capacity": 512,
+      "Timing": {
+        "Duration": 2,
+        "Loops": 0
+      },
+      "Emission": {
+        "Mode": "eventsOnly"
+      },
+      "Spawn": [
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "constant",
+            "Value": 0.4
+          },
+          "Size": {
+            "Mode": "constant",
+            "Value": [
+              8,
+              8
+            ]
+          },
+          "Color": {
+            "Mode": "constant",
+            "Value": [
+              0.3,
+              0.4,
+              0.4,
+              0.4
+            ]
+          },
+          "Velocity": {
+            "Mode": "constant",
+            "Value": [
+              0,
+              15
+            ]
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "motion",
+          "Type": "IntegrateMotion"
+        },
+        {
+          "Id": "fade",
+          "Type": "AlphaOverLife",
+          "Value": {
+            "Mode": "curve",
+            "Keys": [
+              {
+                "Time": 0,
+                "Value": 1
+              },
+              {
+                "Time": 0.5,
+                "Value": 1
+              },
+              {
+                "Time": 1,
+                "Value": 0
+              }
+            ]
+          }
+        },
+        {
+          "Id": "grow",
+          "Type": "SizeOverLife",
+          "Value": {
+            "Mode": "curve",
+            "Keys": [
+              {
+                "Time": 0,
+                "Value": [
+                  1,
+                  1
+                ]
+              },
+              {
+                "Time": 1,
+                "Value": [
+                  3,
+                  3
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "Renderer": {
+        "Type": "sprite2D",
+        "Blend": "alpha"
+      }
+    }
+  ]
+}

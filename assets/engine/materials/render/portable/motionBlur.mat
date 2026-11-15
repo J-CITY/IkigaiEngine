@@ -1,0 +1,11 @@
+{
+  "ShaderPath": "/shaders/render/portable/motionBlur.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOStrength": 0.5
+  }
+}

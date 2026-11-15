@@ -1,0 +1,13 @@
+{
+  "ShaderPath": "/shaders/render/portable/environmentPrefilter.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOFace": 0,
+    "data_UBOSamples": 128,
+    "data_UBORoughness": 0.5
+  }
+}

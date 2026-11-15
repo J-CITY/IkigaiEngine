@@ -1,0 +1,196 @@
+{
+  "Version": 1,
+  "Dimension": "3D",
+  "Emitters": [
+    {
+      "Id": "shards",
+      "SimulationSpace": "world",
+      "Capacity": 128,
+      "Timing": {
+        "Duration": 2,
+        "Loops": 0
+      },
+      "Emission": {
+        "Rate": {
+          "Mode": "constant",
+          "Value": 28
+        }
+      },
+      "Spawn": [
+        {
+          "Id": "area",
+          "Type": "Shape",
+          "Shape": "sphere",
+          "Radius": 0.15,
+          "Offset": [
+            0,
+            0,
+            0
+          ]
+        },
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "uniform",
+            "Min": 1.2,
+            "Max": 2
+          },
+          "Size": {
+            "Mode": "uniform",
+            "Min": [
+              0.25,
+              0.4,
+              0.25
+            ],
+            "Max": [
+              0.5,
+              0.7,
+              0.5
+            ]
+          },
+          "Color": {
+            "Mode": "uniform",
+            "Min": [
+              0.4,
+              0.1,
+              0.7,
+              1
+            ],
+            "Max": [
+              1,
+              0.4,
+              1,
+              1
+            ]
+          },
+          "Velocity": {
+            "Mode": "uniform",
+            "Min": [
+              -1.3,
+              2,
+              -1.3
+            ],
+            "Max": [
+              1.3,
+              4,
+              1.3
+            ],
+            "RandomChannels": "independent"
+          },
+          "Orientation": {
+            "Mode": "uniform",
+            "Min": [
+              -180,
+              -180,
+              -180
+            ],
+            "Max": [
+              180,
+              180,
+              180
+            ],
+            "RandomChannels": "independent"
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "gravity",
+          "Type": "Acceleration",
+          "Value": {
+            "Mode": "constant",
+            "Value": [
+              0,
+              -3,
+              0
+            ]
+          }
+        },
+        {
+          "Id": "motion",
+          "Type": "IntegrateMotion"
+        },
+        {
+          "Id": "spin",
+          "Type": "AngularVelocity3D",
+          "Value": {
+            "Mode": "uniform",
+            "Min": [
+              -180,
+              -240,
+              -120
+            ],
+            "Max": [
+              180,
+              240,
+              120
+            ],
+            "RandomChannels": "independent"
+          }
+        },
+        {
+          "Id": "shrink",
+          "Type": "SizeOverLife",
+          "Value": {
+            "Mode": "curve",
+            "Keys": [
+              {
+                "Time": 0,
+                "Value": [
+                  1,
+                  1,
+                  1
+                ]
+              },
+              {
+                "Time": 0.7,
+                "Value": [
+                  1,
+                  1,
+                  1
+                ]
+              },
+              {
+                "Time": 1,
+                "Value": [
+                  0,
+                  0,
+                  0
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "Id": "fade",
+          "Type": "AlphaOverLife",
+          "Value": {
+            "Mode": "curve",
+            "Keys": [
+              {
+                "Time": 0,
+                "Value": 1
+              },
+              {
+                "Time": 0.8,
+                "Value": 1
+              },
+              {
+                "Time": 1,
+                "Value": 0
+              }
+            ]
+          }
+        }
+      ],
+      "Renderer": {
+        "Type": "mesh3D",
+        "Mesh": "/particles/meshes/shard.obj",
+        "MeshIndex": 0,
+        "Blend": "alpha",
+        "DepthTest": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "Version": 1,
+  "Dimension": "3D",
+  "Emitters": [
+    {
+      "Id": "sparks",
+      "SimulationSpace": "world",
+      "Capacity": 256,
+      "Timing": {
+        "Duration": 2,
+        "Loops": 0
+      },
+      "Emission": {
+        "Bursts": [
+          {
+            "Time": 0.0,
+            "Count": 128
+          }
+        ]
+      },
+      "Spawn": [
+        {
+          "Id": "shape",
+          "Type": "Shape",
+          "Shape": "sphere",
+          "Radius": 0.15,
+          "Sampling": "volume"
+        },
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "uniform",
+            "Min": 0.4,
+            "Max": 1.2
+          },
+          "Size": {
+            "Mode": "constant",
+            "Value": [
+              0.03,
+              0.08
+            ]
+          },
+          "Color": {
+            "Mode": "constant",
+            "Value": [
+              1,
+              0.6,
+              0.05,
+              1
+            ]
+          }
+        },
+        {
+          "Id": "launch",
+          "Type": "RadialVelocity",
+          "Speed": {
+            "Mode": "uniform",
+            "Min": 2.0,
+            "Max": 6.0
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "gravity",
+          "Type": "Acceleration",
+          "Value": {
+            "Mode": "constant",
+            "Value": [
+              0.0,
+              -9.81,
+              0.0
+            ]
+          }
+        },
+        {
+          "Id": "motion",
+          "Type": "IntegrateMotion"
+        }
+      ],
+      "Renderer": {
+        "Type": "billboard3D",
+        "Alignment": "velocity",
+        "Blend": "additive",
+        "DepthTest": true
+      }
+    }
+  ]
+}

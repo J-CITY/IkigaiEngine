@@ -1,0 +1,101 @@
+{
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 2,
+            "Z": -7
+          },
+          "LocalRotation": {
+            "X": 12,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 60.0,
+          "Near": 0.1,
+          "Far": 100.0,
+          "Size": 5.0,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Firework events",
+      "Id": 20,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 700,
+            "Y": 450,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "ParticleSystem2DComponentType": "class IKIGAI::ECS::ParticleSystem2DComponent",
+          "EffectPath": "/particles/firework2d.particle.json",
+          "AutoPlay": true,
+          "Seed": 20
+        }
+      ]
+    },
+    {
+      "Name": "Mesh death sparks",
+      "Id": 21,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "ParticleSystem3DComponentType": "class IKIGAI::ECS::ParticleSystem3DComponent",
+          "EffectPath": "/particles/fragmentBurst3d.particle.json",
+          "AutoPlay": true,
+          "Seed": 21
+        }
+      ]
+    }
+  ]
+}

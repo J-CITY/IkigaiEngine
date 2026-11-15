@@ -1,0 +1,250 @@
+{
+  "RenderPipeline": "/renderPipeline/pica-pica-demo.json",
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -10,
+            "Y": 8,
+            "Z": 13
+          },
+          "LocalRotation": {
+            "X": 24,
+            "Y": 142,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 50.0,
+          "Near": 0.1,
+          "Far": 150.0,
+          "Size": 5.0,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        },
+        {
+          "IkigaiScriptComponentType": "class IKIGAI::ECS::IkigaiScriptComponent",
+          "Path": "PicaPicaCamera"
+        }
+      ]
+    },
+    {
+      "Name": "Pica Pica",
+      "Id": 2,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0.7432408937572875,
+            "Y": 0.1819190978166386,
+            "Z": 1.0907368068144394
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 12.133091469429337,
+            "Y": 12.133091469429337,
+            "Z": 12.133091469429337
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/pica_pica/diorama.model"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "Plastic_Wall_Only",
+            "Plastic_Grey_Dark",
+            "Plastic_Red_Matte",
+            "Plastic_Blue",
+            "Plastic_MediumGrey_Glossy",
+            "Plastic_Brown_Satin",
+            "Plastic_Orange_Satin",
+            "Plastic_Brown_Dark",
+            "Plastic_Tape_Glossy",
+            "Paper_StickyNote_01",
+            "Decal_Note_01",
+            "Plastic_White_Matte",
+            "Decal_First_Aid_Kit",
+            "Plastic_Dark_Matte",
+            "Metal_Aluminium",
+            "Plastic_Pink_Details",
+            "Plastic_Decals",
+            "Decal_Caution",
+            "Plastic_Blue_Satin",
+            "Decal_Keyboard_01",
+            "Glass_Dark_01",
+            "Plastic_Blue_ExtraLight",
+            "Metal_Blue",
+            "Plastic_Red_Transparent",
+            "Wax_Pastel_Label_02",
+            "Wax_Pastel_Yellow_01",
+            "Wax_Pastel_Blue_01",
+            "Coated_Black_Glossy"
+          ],
+          "Materials": [
+            "/materials/pica-pica-demo/Plastic_Wall_Only.mat",
+            "/materials/pica-pica-demo/Plastic_Grey_Dark.mat",
+            "/materials/pica-pica-demo/Plastic_Red_Matte.mat",
+            "/materials/pica-pica-demo/Plastic_Blue.mat",
+            "/materials/pica-pica-demo/Plastic_MediumGrey_Glossy.mat",
+            "/materials/pica-pica-demo/Plastic_Brown_Satin.mat",
+            "/materials/pica-pica-demo/Plastic_Orange_Satin.mat",
+            "/materials/pica-pica-demo/Plastic_Brown_Dark.mat",
+            "/materials/pica-pica-demo/Plastic_Tape_Glossy.mat",
+            "/materials/pica-pica-demo/Paper_StickyNote_01.mat",
+            "/materials/pica-pica-demo/Decal_Note_01.mat",
+            "/materials/pica-pica-demo/Plastic_White_Matte.mat",
+            "/materials/pica-pica-demo/Decal_First_Aid_Kit.mat",
+            "/materials/pica-pica-demo/Plastic_Dark_Matte.mat",
+            "/materials/pica-pica-demo/Metal_Aluminium.mat",
+            "/materials/pica-pica-demo/Plastic_Pink_Details.mat",
+            "/materials/pica-pica-demo/Plastic_Decals.mat",
+            "/materials/pica-pica-demo/Decal_Caution.mat",
+            "/materials/pica-pica-demo/Plastic_Blue_Satin.mat",
+            "/materials/pica-pica-demo/Decal_Keyboard_01.mat",
+            "/materials/pica-pica-demo/Glass_Dark_01.mat",
+            "/materials/pica-pica-demo/Plastic_Blue_ExtraLight.mat",
+            "/materials/pica-pica-demo/Metal_Blue.mat",
+            "/materials/pica-pica-demo/Plastic_Red_Transparent.mat",
+            "/materials/pica-pica-demo/Wax_Pastel_Label_02.mat",
+            "/materials/pica-pica-demo/Wax_Pastel_Yellow_01.mat",
+            "/materials/pica-pica-demo/Wax_Pastel_Blue_01.mat",
+            "/materials/pica-pica-demo/Coated_Black_Glossy.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Sun",
+      "Id": 3,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 40,
+            "Y": -35,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "DirectionalLightType": "class IKIGAI::ECS::DirectionalLight",
+          "Color": {
+            "X": 1.0,
+            "Y": 0.92,
+            "Z": 0.8
+          },
+          "Intensity": 3.0,
+          "Distance": 100.0,
+          "CastShadows": true,
+          "ShadowNear": 0.1,
+          "ShadowFar": 80.0
+        }
+      ]
+    },
+    {
+      "Name": "Warm point",
+      "Id": 4,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -4,
+            "Y": 4,
+            "Z": -3
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "PointLightType": "class IKIGAI::ECS::PointLight",
+          "Color": {
+            "X": 1,
+            "Y": 0.5,
+            "Z": 0.22
+          },
+          "Intensity": 30.0,
+          "Constant": 1.0,
+          "Linear": 0.05,
+          "Quadratic": 0.12,
+          "CastShadows": true,
+          "ShadowNear": 0.1,
+          "ShadowFar": 35.0
+        }
+      ]
+    },
+    {
+      "Name": "Cool point",
+      "Id": 5,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 4,
+            "Y": 3,
+            "Z": 3
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "PointLightType": "class IKIGAI::ECS::PointLight",
+          "Color": {
+            "X": 0.3,
+            "Y": 0.55,
+            "Z": 1
+          },
+          "Intensity": 30.0,
+          "Constant": 1.0,
+          "Linear": 0.05,
+          "Quadratic": 0.12,
+          "CastShadows": true,
+          "ShadowNear": 0.1,
+          "ShadowFar": 35.0
+        }
+      ]
+    }
+  ]
+}

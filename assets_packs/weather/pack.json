@@ -1,0 +1,9 @@
+{
+  "id": "weather",
+  "platforms": [
+    "*"
+  ],
+  "requires": [
+    "environment"
+  ]
+}

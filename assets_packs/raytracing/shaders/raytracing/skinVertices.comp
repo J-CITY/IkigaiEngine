@@ -1,0 +1,19 @@
+#version 450
+layout(local_size_x=64) in;
+struct SkinVertex {vec4 Position,Normal,UV;ivec4 BoneIds;vec4 Weights;};
+struct DeformedVertex {vec4 Position,Normal,UV;};
+layout(std430,set=0,binding=0) readonly buffer Source {SkinVertex vertices[];} source;
+layout(std140,set=0,binding=1) uniform Bones {int use;mat4 bones[128];} pose;
+layout(std430,set=0,binding=2) writeonly buffer Output {DeformedVertex vertices[];} outputVertices;
+layout(push_constant) uniform Options {uvec4 Counts;} options;
+void main() {
+    uint id=gl_GlobalInvocationID.x;if(id>=options.Counts.x)return;
+    SkinVertex v=source.vertices[id];mat4 skin=mat4(0);float sum=0;
+    for(int i=0;i<4;++i)if(v.BoneIds[i]>=0&&v.BoneIds[i]<128&&v.Weights[i]>0) {
+        skin+=pose.bones[v.BoneIds[i]]*v.Weights[i];sum+=v.Weights[i];
+    }
+    if(sum<1e-5||pose.use==0)skin=mat4(1);else skin/=sum;
+    outputVertices.vertices[id].Position=skin*v.Position;
+    outputVertices.vertices[id].Normal=vec4(transpose(inverse(mat3(skin)))*v.Normal.xyz,0);
+    outputVertices.vertices[id].UV=v.UV;
+}

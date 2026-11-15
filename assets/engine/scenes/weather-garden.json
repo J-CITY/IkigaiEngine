@@ -1,0 +1,827 @@
+{
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 2.5,
+            "Z": -7
+          },
+          "LocalRotation": {
+            "X": -15,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 60.0,
+          "Near": 0.1,
+          "Far": 2000.0,
+          "Size": 5.0,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Sun",
+      "Id": 2,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 45,
+            "Y": -30,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "DirectionalLightType": "class IKIGAI::ECS::DirectionalLight",
+          "Color": {
+            "X": 1.0,
+            "Y": 0.9,
+            "Z": 0.75
+          },
+          "Intensity": 2.0,
+          "Distance": 100.0,
+          "CastShadows": true
+        }
+      ]
+    },
+    {
+      "Name": "Environment",
+      "Id": 20,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "EnvironmentComponentType": "class IKIGAI::ECS::EnvironmentComponent",
+          "Sun": {
+            "ObjectId": 2,
+            "Component": "DirectionalLight"
+          },
+          "Environment": {
+            "TimeOfDay": 16.0,
+            "DayDuration": 180.0,
+            "AnimateTime": true,
+            "SunAzimuth": 25.0,
+            "Clouds": "Cumulus",
+            "CloudCoverage": 0.65,
+            "CloudDarkness": 0.15,
+            "Precipitation": "Rain",
+            "PrecipitationIntensity": 0.55,
+            "MaxParticles": 1024,
+            "CollisionBudget": 64,
+            "WindDirection": {
+              "X": 1.0,
+              "Y": 0.2
+            },
+            "WindSpeed": 2.0
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Ground",
+      "Id": 30,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": -0.4,
+            "Z": 1
+          },
+          "LocalScale": {
+            "X": 9,
+            "Y": 0.4,
+            "Z": 9
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Grass 0",
+      "Id": 40,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -3.0,
+            "Y": 0,
+            "Z": 0.5
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 1,
+            "Z": 0.8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/grass.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/grass.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Grass 1",
+      "Id": 41,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -1.85,
+            "Y": 0,
+            "Z": 0.5
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 1,
+            "Z": 0.8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/grass.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/grass.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Grass 2",
+      "Id": 42,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -0.7000000000000002,
+            "Y": 0,
+            "Z": 0.5
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 1,
+            "Z": 0.8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/grass.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/grass.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Grass 3",
+      "Id": 43,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0.44999999999999973,
+            "Y": 0,
+            "Z": 0.5
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 1,
+            "Z": 0.8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/grass.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/grass.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Grass 4",
+      "Id": 44,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 1.5999999999999996,
+            "Y": 0,
+            "Z": 0.5
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 1,
+            "Z": 0.8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/grass.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/grass.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Grass 5",
+      "Id": 45,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 2.75,
+            "Y": 0,
+            "Z": 0.5
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 1,
+            "Z": 0.8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/grass.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/grass.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Grass 6",
+      "Id": 46,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -3.0,
+            "Y": 0,
+            "Z": 1.9
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 1,
+            "Z": 0.8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/grass.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/grass.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Grass 7",
+      "Id": 47,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -1.85,
+            "Y": 0,
+            "Z": 1.9
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 1,
+            "Z": 0.8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/grass.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/grass.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Grass 8",
+      "Id": 48,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -0.7000000000000002,
+            "Y": 0,
+            "Z": 1.9
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 1,
+            "Z": 0.8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/grass.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/grass.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Grass 9",
+      "Id": 49,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0.44999999999999973,
+            "Y": 0,
+            "Z": 1.9
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 1,
+            "Z": 0.8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/grass.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/grass.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Grass 10",
+      "Id": 50,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 1.5999999999999996,
+            "Y": 0,
+            "Z": 1.9
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 1,
+            "Z": 0.8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/grass.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/grass.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Grass 11",
+      "Id": 51,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 2.75,
+            "Y": 0,
+            "Z": 1.9
+          },
+          "LocalScale": {
+            "X": 0.8,
+            "Y": 1,
+            "Z": 0.8
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/grass.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/grass.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Foliage",
+      "Id": 60,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 2,
+            "Y": 1,
+            "Z": 3
+          },
+          "LocalScale": {
+            "X": 2,
+            "Y": 1.5,
+            "Z": 2
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/grass.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/foliage.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Fur",
+      "Id": 61,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -1,
+            "Y": 1,
+            "Z": 3
+          },
+          "LocalScale": {
+            "X": 0.75,
+            "Y": 0.75,
+            "Z": 0.75
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/sphere.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/fur.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Move me through vegetation",
+      "Id": 70,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 1
+          },
+          "LocalScale": {
+            "X": 0.3,
+            "Y": 0.6,
+            "Z": 0.3
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/interactor.mat"
+          ]
+        },
+        {
+          "VegetationInteractorComponentType": "class IKIGAI::ECS::VegetationInteractorComponent",
+          "Radius": 0.65,
+          "Height": 1.8,
+          "Strength": 1.5,
+          "RecoverySeconds": 0.8
+        }
+      ]
+    },
+    {
+      "Name": "Shelter",
+      "Id": 71,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 2,
+            "Y": 2,
+            "Z": 2
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 0.15,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "/models/weather/cube.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Ground collider",
+      "Id": 100,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": -0.4,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics3DComponentType": "class IKIGAI::ECS::Physics3DComponent",
+          "BodyMode": 0,
+          "HalfSize": {
+            "X": 9,
+            "Y": 0.4,
+            "Z": 9
+          },
+          "ShapeKind": 1
+        }
+      ]
+    },
+    {
+      "Name": "Shelter collider",
+      "Id": 101,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 2,
+            "Y": 2,
+            "Z": 2
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics3DComponentType": "class IKIGAI::ECS::Physics3DComponent",
+          "BodyMode": 0,
+          "HalfSize": {
+            "X": 1,
+            "Y": 0.15,
+            "Z": 1
+          },
+          "ShapeKind": 1
+        }
+      ]
+    }
+  ]
+}

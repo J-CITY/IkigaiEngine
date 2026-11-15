@@ -1,0 +1,18 @@
+{
+  "ShaderPath": "/shaders/render/portable/outline.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOEdgeColor": {
+      "X": 0.0,
+      "Y": 0.0,
+      "Z": 0.0
+    },
+    "data_UBORadius": 1.0,
+    "data_UBODepthThreshold": 0.002,
+    "data_UBONormalThreshold": 0.5
+  }
+}

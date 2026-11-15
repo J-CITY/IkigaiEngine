@@ -1,0 +1,15 @@
+{
+  "ShaderPath": "/shaders/render/portable/chromaticAbberation.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOu_ChromaticAbberationParams": {
+      "X": 0.2,
+      "Y": 0.01,
+      "Z": 1.0
+    }
+  }
+}

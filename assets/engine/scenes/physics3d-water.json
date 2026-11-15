@@ -1,0 +1,272 @@
+{
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 3,
+            "Z": -12
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "ORTHOGRAPHIC",
+          "Fov": 60,
+          "Near": 0.1,
+          "Far": 100,
+          "Size": 8,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Floor",
+      "Id": 2,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": -0.3,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics3DComponentType": "class IKIGAI::ECS::Physics3DComponent",
+          "BodyMode": 0,
+          "HalfSize": {
+            "X": 4,
+            "Y": 0.3,
+            "Z": 4
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Water",
+      "Id": 3,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -0.4,
+            "Y": 0.5,
+            "Z": -0.4
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Fluid3DComponentType": "class IKIGAI::ECS::Fluid3DComponent",
+          "Width": 8,
+          "Height": 5,
+          "Depth": 8
+        }
+      ]
+    },
+    {
+      "Name": "Left wall",
+      "Id": 4,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -1.1,
+            "Y": 0.7,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics3DComponentType": "class IKIGAI::ECS::Physics3DComponent",
+          "BodyMode": 0,
+          "HalfSize": {
+            "X": 0.1,
+            "Y": 1,
+            "Z": 1.2
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Right wall",
+      "Id": 5,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 1.1,
+            "Y": 0.7,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics3DComponentType": "class IKIGAI::ECS::Physics3DComponent",
+          "BodyMode": 0,
+          "HalfSize": {
+            "X": 0.1,
+            "Y": 1,
+            "Z": 1.2
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Back wall",
+      "Id": 6,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0.7,
+            "Z": -1.1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics3DComponentType": "class IKIGAI::ECS::Physics3DComponent",
+          "BodyMode": 0,
+          "HalfSize": {
+            "X": 1,
+            "Y": 1,
+            "Z": 0.1
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Front wall",
+      "Id": 7,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0.7,
+            "Z": 1.1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics3DComponentType": "class IKIGAI::ECS::Physics3DComponent",
+          "BodyMode": 0,
+          "HalfSize": {
+            "X": 1,
+            "Y": 1,
+            "Z": 0.1
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Floating probe",
+      "Id": 8,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0.3,
+            "Y": 0.8,
+            "Z": 0.3
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics3DComponentType": "class IKIGAI::ECS::Physics3DComponent",
+          "ShapeKind": 0,
+          "Radius": 0.15,
+          "Mass": 0.2
+        }
+      ]
+    }
+  ]
+}

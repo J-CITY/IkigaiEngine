@@ -1,0 +1,14 @@
+{
+  "ShaderPath": "/shaders/render/portable/dilation.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOparameters": {
+      "X": 2.0,
+      "Y": 1.0
+    }
+  }
+}

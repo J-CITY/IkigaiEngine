@@ -1,0 +1,992 @@
+{
+  "Version": 2,
+  "SkeletonPath": "/third-person/guy.fbx",
+  "InitialState": "Idle",
+  "Rig": {
+    "Root": "Hips",
+    "Feet": [
+      "LeftFoot",
+      "RightFoot",
+      "LeftToeBase",
+      "RightToeBase"
+    ],
+    "Hands": [
+      "LeftHand",
+      "RightHand"
+    ],
+    "UnitsToMeters": 0.01,
+    "RootHeight": 96.35,
+    "SoleOffset": 0.03
+  },
+  "Parameters": {
+    "Speed": {
+      "Type": "float",
+      "Default": 0
+    },
+    "InputSpeed": {
+      "Type": "float",
+      "Default": 0
+    },
+    "LocalVelocityX": {
+      "Type": "float",
+      "Default": 0
+    },
+    "LocalVelocityZ": {
+      "Type": "float",
+      "Default": 0
+    },
+    "VerticalSpeed": {
+      "Type": "float",
+      "Default": 0
+    },
+    "TurnRate": {
+      "Type": "float",
+      "Default": 0
+    },
+    "AirTime": {
+      "Type": "float",
+      "Default": 0
+    },
+    "TimeSinceStep": {
+      "Type": "float",
+      "Default": 100
+    },
+    "LandingAirTime": {
+      "Type": "float",
+      "Default": 0
+    },
+    "ImpactSpeed": {
+      "Type": "float",
+      "Default": 0
+    },
+    "ObstacleHeight": {
+      "Type": "float",
+      "Default": 0
+    },
+    "TraversalProgress": {
+      "Type": "float",
+      "Default": 0
+    },
+    "SprintRequested": {
+      "Type": "bool",
+      "Default": false
+    },
+    "Traversing": {
+      "Type": "bool",
+      "Default": false
+    },
+    "TraversalVault": {
+      "Type": "bool",
+      "Default": false
+    },
+    "Grounded": {
+      "Type": "bool",
+      "Default": true
+    },
+    "Landed": {
+      "Type": "trigger"
+    },
+    "JumpAccepted": {
+      "Type": "trigger"
+    },
+    "TraversalAccepted": {
+      "Type": "trigger"
+    },
+    "TraversalCompleted": {
+      "Type": "trigger"
+    },
+    "TraversalCancelled": {
+      "Type": "trigger"
+    },
+    "ActionId": {
+      "Type": "int",
+      "Default": 0
+    }
+  },
+  "Bindings": {
+    "StairsFactor": [
+      "max",
+      0,
+      [
+        "-",
+        0.4,
+        "TimeSinceStep"
+      ]
+    ],
+    "SideBlend": [
+      "/",
+      [
+        "abs",
+        "LocalVelocityX"
+      ],
+      [
+        "max",
+        0.001,
+        [
+          "+",
+          [
+            "abs",
+            "LocalVelocityX"
+          ],
+          [
+            "abs",
+            "LocalVelocityZ"
+          ]
+        ]
+      ]
+    ],
+    "TurnBlend": [
+      "clamp",
+      [
+        "/",
+        [
+          "-",
+          [
+            "abs",
+            "TurnRate"
+          ],
+          10
+        ],
+        120
+      ],
+      0,
+      0.75
+    ],
+    "GroundMotion": [
+      "or",
+      "Grounded",
+      [
+        "and",
+        [
+          "<=",
+          "VerticalSpeed",
+          1
+        ],
+        [
+          "<=",
+          "AirTime",
+          0.12
+        ]
+      ]
+    ],
+    "OnStairs": [
+      "and",
+      "GroundMotion",
+      [
+        ">",
+        "StairsFactor",
+        0
+      ],
+      [
+        ">",
+        "LocalVelocityZ",
+        0.5
+      ],
+      [
+        "<",
+        [
+          "abs",
+          "LocalVelocityX"
+        ],
+        [
+          "*",
+          [
+            "abs",
+            "LocalVelocityZ"
+          ],
+          0.7
+        ]
+      ]
+    ],
+    "SideOnly": [
+      "and",
+      [
+        "<",
+        [
+          "abs",
+          "LocalVelocityZ"
+        ],
+        0.1
+      ],
+      [
+        ">",
+        [
+          "abs",
+          "LocalVelocityX"
+        ],
+        0.1
+      ]
+    ],
+    "SprintForward": [
+      "and",
+      "SprintRequested",
+      [
+        ">=",
+        "LocalVelocityZ",
+        0
+      ],
+      [
+        "<",
+        [
+          "abs",
+          "LocalVelocityX"
+        ],
+        [
+          "*",
+          [
+            "abs",
+            "LocalVelocityZ"
+          ],
+          0.3
+        ]
+      ]
+    ]
+  },
+  "Clips": {
+    "Idle": {
+      "Path": "/third-person/animations/Idle.animation",
+      "Loop": true
+    },
+    "Run": {
+      "Path": "/third-person/animations/Run.animation",
+      "Loop": true
+    },
+    "Back": {
+      "Path": "/third-person/animations/Back.animation",
+      "Loop": true,
+      "PhaseOffset": 0.28125
+    },
+    "Left": {
+      "Path": "/third-person/animations/Left.animation",
+      "Loop": true,
+      "PhaseOffset": 0.5625
+    },
+    "Right": {
+      "Path": "/third-person/animations/Right.animation",
+      "Loop": true,
+      "PhaseReference": "Run"
+    },
+    "Sprint": {
+      "Path": "/third-person/animations/Sprint.animation",
+      "Loop": true,
+      "PhaseOffset": 0.0625
+    },
+    "TurnLeft": {
+      "Path": "/third-person/animations/TurnLeft.animation",
+      "Loop": true,
+      "RemoveYaw": true,
+      "PhaseOffset": 0.53125
+    },
+    "TurnRight": {
+      "Path": "/third-person/animations/TurnRight.animation",
+      "Loop": true,
+      "RemoveYaw": true,
+      "PhaseOffset": 0.03125
+    },
+    "BackTurnLeft": {
+      "Path": "/third-person/animations/BackTurnLeft.animation",
+      "Loop": true,
+      "RemoveYaw": true,
+      "PhaseOffset": 0.8125
+    },
+    "BackTurnRight": {
+      "Path": "/third-person/animations/BackTurnRight.animation",
+      "Loop": true,
+      "RemoveYaw": true,
+      "PhaseOffset": 0.3125
+    },
+    "Stairs": {
+      "Path": "/third-person/animations/Stairs.animation",
+      "Loop": true,
+      "RootMode": "stairs",
+      "PhaseOffset": 0.28125
+    },
+    "StairsRun": {
+      "Path": "/third-person/animations/StairsRun.animation",
+      "Loop": true,
+      "RootMode": "stairs",
+      "PhaseOffset": 0.21875
+    },
+    "Jump": {
+      "Path": "/third-person/animations/Jump.animation",
+      "Loop": false,
+      "RootMode": "flat"
+    },
+    "Fall": {
+      "Path": "/third-person/animations/Fall.animation",
+      "Loop": true
+    },
+    "Land": {
+      "Path": "/third-person/animations/Land.animation",
+      "Loop": false,
+      "RemoveYaw": true
+    },
+    "VaultLow": {
+      "Path": "/third-person/animations/VaultLow.animation",
+      "Loop": false,
+      "RootMode": "traversal"
+    },
+    "Vault": {
+      "Path": "/third-person/animations/Vault.animation",
+      "Loop": false,
+      "RootMode": "traversal"
+    },
+    "Mantle": {
+      "Path": "/third-person/animations/Mantle.animation",
+      "Loop": false,
+      "RootMode": "traversal"
+    },
+    "MantleHigh": {
+      "Path": "/third-person/animations/MantleHigh.animation",
+      "Loop": false,
+      "RootMode": "traversal"
+    },
+    "MantleSprint": {
+      "Path": "/third-person/animations/MantleSprint.animation",
+      "Loop": false,
+      "RootMode": "traversal"
+    }
+  },
+  "States": {
+    "Idle": {
+      "Node": "Idle",
+      "Clock": "Idle",
+      "Tag": "idle",
+      "ApplyPoseOffset": false
+    },
+    "Run": {
+      "Node": {
+        "Blend": [
+          {
+            "Blend": [
+              "Run",
+              {
+                "Resource": "/third-person/locomotion-side.blendspace1d",
+                "X": [
+                  "if",
+                  [
+                    ">=",
+                    "LocalVelocityX",
+                    0
+                  ],
+                  1,
+                  -1
+                ]
+              }
+            ],
+            "Weight": "SideBlend"
+          },
+          {
+            "Select": [
+              ">",
+              "TurnRate",
+              0
+            ],
+            "True": "TurnLeft",
+            "False": "TurnRight"
+          }
+        ],
+        "Weight": "TurnBlend"
+      },
+      "Clock": "Run",
+      "Tag": "locomotion",
+      "Rate": [
+        "clamp",
+        [
+          "/",
+          "Speed",
+          3.5
+        ],
+        0.5,
+        1.8
+      ],
+      "SyncGroup": "Stride",
+      "ApplyPoseOffset": false
+    },
+    "Back": {
+      "Node": {
+        "Blend": [
+          {
+            "Blend": [
+              "Back",
+              {
+                "Resource": "/third-person/locomotion-side.blendspace1d",
+                "X": [
+                  "if",
+                  [
+                    ">=",
+                    "LocalVelocityX",
+                    0
+                  ],
+                  1,
+                  -1
+                ]
+              }
+            ],
+            "Weight": "SideBlend"
+          },
+          {
+            "Select": [
+              ">",
+              "TurnRate",
+              0
+            ],
+            "True": "BackTurnLeft",
+            "False": "BackTurnRight"
+          }
+        ],
+        "Weight": "TurnBlend"
+      },
+      "Clock": "Back",
+      "Tag": "locomotion",
+      "Rate": [
+        "clamp",
+        [
+          "/",
+          "Speed",
+          3.5
+        ],
+        0.5,
+        1.8
+      ],
+      "SyncGroup": "Stride",
+      "ApplyPoseOffset": false
+    },
+    "Left": {
+      "Node": {
+        "Blend": [
+          "Left",
+          {
+            "Resource": "/third-person/locomotion-side.blendspace1d",
+            "X": [
+              "if",
+              [
+                ">=",
+                "LocalVelocityX",
+                0
+              ],
+              1,
+              -1
+            ]
+          }
+        ],
+        "Weight": "SideBlend"
+      },
+      "Clock": "Left",
+      "Tag": "locomotion",
+      "Rate": [
+        "if",
+        "SprintRequested",
+        2.4,
+        1.7
+      ],
+      "SyncGroup": "Stride",
+      "ApplyPoseOffset": false
+    },
+    "Right": {
+      "Node": {
+        "Blend": [
+          "Right",
+          {
+            "Resource": "/third-person/locomotion-side.blendspace1d",
+            "X": [
+              "if",
+              [
+                ">=",
+                "LocalVelocityX",
+                0
+              ],
+              1,
+              -1
+            ]
+          }
+        ],
+        "Weight": "SideBlend"
+      },
+      "Clock": "Right",
+      "Tag": "locomotion",
+      "Rate": [
+        "if",
+        "SprintRequested",
+        2.4,
+        1.7
+      ],
+      "SyncGroup": "Stride",
+      "ApplyPoseOffset": false
+    },
+    "Sprint": {
+      "Node": {
+        "Blend": [
+          "Sprint",
+          {
+            "Select": [
+              ">",
+              "TurnRate",
+              0
+            ],
+            "True": "TurnLeft",
+            "False": "TurnRight"
+          }
+        ],
+        "Weight": "TurnBlend"
+      },
+      "Clock": "Sprint",
+      "Tag": "locomotion",
+      "SyncGroup": "Stride",
+      "ApplyPoseOffset": false
+    },
+    "Stairs": {
+      "Node": "Stairs",
+      "Clock": "Stairs",
+      "Tag": "stairs",
+      "Rate": [
+        "clamp",
+        [
+          "/",
+          [
+            "*",
+            "Speed",
+            "Duration"
+          ],
+          1.6
+        ],
+        0.7,
+        3
+      ],
+      "SyncGroup": "Stride",
+      "ApplyPoseOffset": false
+    },
+    "StairsRun": {
+      "Node": "StairsRun",
+      "Clock": "StairsRun",
+      "Tag": "stairs",
+      "Rate": [
+        "clamp",
+        [
+          "/",
+          [
+            "*",
+            "Speed",
+            "Duration"
+          ],
+          1.6
+        ],
+        0.7,
+        3
+      ],
+      "SyncGroup": "Stride",
+      "ApplyPoseOffset": false
+    },
+    "Jump": {
+      "Node": "Jump",
+      "Clock": "Jump",
+      "Tag": "jump",
+      "Rate": 1.5,
+      "ApplyPoseOffset": false
+    },
+    "Fall": {
+      "Node": "Fall",
+      "Clock": "Fall",
+      "Tag": "fall",
+      "ApplyPoseOffset": false
+    },
+    "Land": {
+      "Node": "Land",
+      "Clock": "Land",
+      "Tag": "landing",
+      "Rate": 1.2,
+      "LockTransitions": true,
+      "Transitions": [
+        {
+          "Target": "Idle",
+          "When": [
+            "or",
+            [
+              ">=",
+              "StateTime",
+              [
+                "min",
+                0.32,
+                [
+                  "/",
+                  "Duration",
+                  1.2
+                ]
+              ]
+            ],
+            [
+              ">",
+              "InputSpeed",
+              0.1
+            ]
+          ],
+          "Priority": 1000,
+          "BlendTime": 0.15,
+          "Interrupt": true
+        }
+      ],
+      "ApplyPoseOffset": false
+    },
+    "VaultLow": {
+      "Node": "VaultLow",
+      "Clock": "VaultLow",
+      "ExternalTime": [
+        "*",
+        "TraversalProgress",
+        "Duration"
+      ],
+      "LockTransitions": true,
+      "BlendTime": 0.15,
+      "Tag": "traversal",
+      "Transitions": [
+        {
+          "Target": "Idle",
+          "When": [
+            "not",
+            "Traversing"
+          ],
+          "Priority": 1000,
+          "BlendTime": 0.15,
+          "Interrupt": true
+        }
+      ],
+      "ApplyPoseOffset": true
+    },
+    "Vault": {
+      "Node": "Vault",
+      "Clock": "Vault",
+      "ExternalTime": [
+        "*",
+        "TraversalProgress",
+        "Duration"
+      ],
+      "LockTransitions": true,
+      "BlendTime": 0.15,
+      "Tag": "traversal",
+      "Transitions": [
+        {
+          "Target": "Idle",
+          "When": [
+            "not",
+            "Traversing"
+          ],
+          "Priority": 1000,
+          "BlendTime": 0.15,
+          "Interrupt": true
+        }
+      ],
+      "ApplyPoseOffset": true
+    },
+    "Mantle": {
+      "Node": "Mantle",
+      "Clock": "Mantle",
+      "ExternalTime": [
+        "*",
+        "TraversalProgress",
+        "Duration"
+      ],
+      "LockTransitions": true,
+      "BlendTime": 0.15,
+      "Tag": "traversal",
+      "Transitions": [
+        {
+          "Target": "Idle",
+          "When": [
+            "not",
+            "Traversing"
+          ],
+          "Priority": 1000,
+          "BlendTime": 0.15,
+          "Interrupt": true
+        }
+      ],
+      "ApplyPoseOffset": true
+    },
+    "MantleHigh": {
+      "Node": "MantleHigh",
+      "Clock": "MantleHigh",
+      "ExternalTime": [
+        "*",
+        "TraversalProgress",
+        "Duration"
+      ],
+      "LockTransitions": true,
+      "BlendTime": 0.15,
+      "Tag": "traversal",
+      "Transitions": [
+        {
+          "Target": "Idle",
+          "When": [
+            "not",
+            "Traversing"
+          ],
+          "Priority": 1000,
+          "BlendTime": 0.15,
+          "Interrupt": true
+        }
+      ],
+      "ApplyPoseOffset": true
+    },
+    "MantleSprint": {
+      "Node": "MantleSprint",
+      "Clock": "MantleSprint",
+      "ExternalTime": [
+        "*",
+        "TraversalProgress",
+        "Duration"
+      ],
+      "LockTransitions": true,
+      "BlendTime": 0.15,
+      "Tag": "traversal",
+      "Transitions": [
+        {
+          "Target": "Idle",
+          "When": [
+            "not",
+            "Traversing"
+          ],
+          "Priority": 1000,
+          "BlendTime": 0.15,
+          "Interrupt": true
+        }
+      ],
+      "ApplyPoseOffset": true
+    }
+  },
+  "AnyState": [
+    {
+      "Target": "MantleSprint",
+      "When": [
+        "and",
+        "Traversing",
+        [
+          "==",
+          "ActionId",
+          5
+        ]
+      ],
+      "Priority": 1105,
+      "Interrupt": true,
+      "BlendTime": 0.15,
+      "Force": true
+    },
+    {
+      "Target": "MantleHigh",
+      "When": [
+        "and",
+        "Traversing",
+        [
+          "==",
+          "ActionId",
+          4
+        ]
+      ],
+      "Priority": 1104,
+      "Interrupt": true,
+      "BlendTime": 0.15,
+      "Force": true
+    },
+    {
+      "Target": "Mantle",
+      "When": [
+        "and",
+        "Traversing",
+        [
+          "==",
+          "ActionId",
+          3
+        ]
+      ],
+      "Priority": 1103,
+      "Interrupt": true,
+      "BlendTime": 0.15,
+      "Force": true
+    },
+    {
+      "Target": "Vault",
+      "When": [
+        "and",
+        "Traversing",
+        [
+          "==",
+          "ActionId",
+          2
+        ]
+      ],
+      "Priority": 1102,
+      "Interrupt": true,
+      "BlendTime": 0.15,
+      "Force": true
+    },
+    {
+      "Target": "VaultLow",
+      "When": [
+        "and",
+        "Traversing",
+        [
+          "==",
+          "ActionId",
+          1
+        ]
+      ],
+      "Priority": 1101,
+      "Interrupt": true,
+      "BlendTime": 0.15,
+      "Force": true
+    },
+    {
+      "Target": "Land",
+      "When": "Landed",
+      "Priority": 1000,
+      "BlendTime": 0.15,
+      "Interrupt": true,
+      "Consume": [
+        "Landed"
+      ]
+    },
+    {
+      "Target": "Jump",
+      "When": [
+        "and",
+        [
+          "not",
+          "Grounded"
+        ],
+        [
+          ">",
+          "VerticalSpeed",
+          1
+        ]
+      ],
+      "Priority": 900,
+      "BlendTime": 0.15,
+      "Interrupt": true,
+      "Force": true
+    },
+    {
+      "Target": "Fall",
+      "When": [
+        "and",
+        [
+          "not",
+          "Grounded"
+        ],
+        [
+          ">",
+          "AirTime",
+          0.12
+        ],
+        [
+          "<=",
+          "VerticalSpeed",
+          1
+        ]
+      ],
+      "Priority": 800,
+      "BlendTime": 0.15,
+      "Interrupt": true
+    },
+    {
+      "Target": "StairsRun",
+      "When": [
+        "and",
+        "OnStairs",
+        [
+          ">",
+          "Speed",
+          2.2
+        ]
+      ],
+      "Priority": 700,
+      "BlendTime": 0.15,
+      "Interrupt": true
+    },
+    {
+      "Target": "Stairs",
+      "When": "OnStairs",
+      "Priority": 600,
+      "BlendTime": 0.15,
+      "Interrupt": true
+    },
+    {
+      "Target": "Idle",
+      "When": [
+        "and",
+        "GroundMotion",
+        [
+          "<",
+          "Speed",
+          0.15
+        ]
+      ],
+      "Priority": 550,
+      "BlendTime": 0.15,
+      "Interrupt": true
+    },
+    {
+      "Target": "Right",
+      "When": [
+        "and",
+        "GroundMotion",
+        "SideOnly",
+        [
+          ">",
+          "LocalVelocityX",
+          0
+        ]
+      ],
+      "Priority": 500,
+      "BlendTime": 0.15,
+      "Interrupt": true
+    },
+    {
+      "Target": "Left",
+      "When": [
+        "and",
+        "GroundMotion",
+        "SideOnly",
+        [
+          "<",
+          "LocalVelocityX",
+          0
+        ]
+      ],
+      "Priority": 490,
+      "BlendTime": 0.15,
+      "Interrupt": true
+    },
+    {
+      "Target": "Sprint",
+      "When": [
+        "and",
+        "GroundMotion",
+        "SprintForward"
+      ],
+      "Priority": 400,
+      "BlendTime": 0.15,
+      "Interrupt": true
+    },
+    {
+      "Target": "Run",
+      "When": [
+        "and",
+        "GroundMotion",
+        [
+          ">=",
+          "LocalVelocityZ",
+          0
+        ]
+      ],
+      "Priority": 300,
+      "BlendTime": 0.15,
+      "Interrupt": true
+    },
+    {
+      "Target": "Back",
+      "When": "GroundMotion",
+      "Priority": 200,
+      "BlendTime": 0.15,
+      "Interrupt": true
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "PathTexture": [
+    "/models/pica_pica/textures/Decal_Caution_baseColor.png"
+  ],
+  "Channels": 4,
+  "PixelType": "RGBA_INT",
+  "UseMipmap": true,
+  "WrapS": "REPEAT",
+  "WrapT": "REPEAT"
+}

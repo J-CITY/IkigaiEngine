@@ -1,0 +1,8 @@
+{
+  "PathTexture": [
+    "/third-person/textures/Ch08_1001_Specular.png"
+  ],
+  "TexType": "TEXTURE_2D",
+  "PixelType": "RGBA_INT",
+  "UseMipmap": true
+}

@@ -1,0 +1,200 @@
+{
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": -2
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Far": 1000.0,
+          "Fov": 60.0,
+          "Near": 0.1,
+          "Mode": "PERSPECTIVE",
+          "Size": 5.0,
+          "GeometryCulling": false,
+          "LightCulling": false,
+          "GeometryBVHCulling": false
+        },
+        {
+          "AudioListenerComponentType": "class IKIGAI::ECS::AudioListenerComponent"
+        },
+        {
+          "Path": "Controller",
+          "ScriptComponentType": "class IKIGAI::ECS::ScriptComponent"
+        }
+      ]
+    },
+    {
+      "Name": "lightDir",
+      "Id": 100,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 10,
+            "Z": -10
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "DirectionalLightType": "class IKIGAI::ECS::DirectionalLight",
+          "Color": {
+            "X": 1.0,
+            "Y": 1.0,
+            "Z": 1.0
+          },
+          "Distance": 1000.0,
+          "Intensity": 1.0
+        }
+      ]
+    },
+    {
+      "Name": "lightAmbient",
+      "Id": 101,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "AmbientLightType": "class IKIGAI::ECS::AmbientLight",
+          "Color": {
+            "X": 1.0,
+            "Y": 1.0,
+            "Z": 1.0
+          },
+          "Size": {
+            "X": 1.0,
+            "Y": 1.0,
+            "Z": 1.0
+          },
+          "Intensity": 0.3
+        }
+      ]
+    },
+    {
+      "Name": "box1",
+      "Id": 2,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 30,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "models/crate.obj"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "materials/box.material"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "player",
+      "Id": 22321,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 30,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": "models/RunForward.dae"
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "materials/player.material"
+          ]
+        },
+        {
+          "SkeletalComponentType": "class IKIGAI::ECS::SkeletalComponent",
+          "SkeletalPath": "/models/RunForward.dae"
+        },
+        {
+          "SkeletalAnimationComponentType": "class IKIGAI::ECS::SkeletalAnimationComponent",
+          "SkeletalPlayablePath": "/animations/player.animation"
+        }
+      ]
+    }
+  ]
+}

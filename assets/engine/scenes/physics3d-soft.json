@@ -1,0 +1,154 @@
+{
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 3,
+            "Z": -12
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "ORTHOGRAPHIC",
+          "Fov": 60,
+          "Near": 0.1,
+          "Far": 100,
+          "Size": 8,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Floor",
+      "Id": 2,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": -0.3,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics3DComponentType": "class IKIGAI::ECS::Physics3DComponent",
+          "BodyMode": 0,
+          "HalfSize": {
+            "X": 4,
+            "Y": 0.3,
+            "Z": 4
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Soft cube",
+      "Id": 3,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -0.2,
+            "Y": 2,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SoftBody3DComponentType": "class IKIGAI::ECS::SoftBody3DComponent",
+          "Width": 3,
+          "Height": 3,
+          "Depth": 3,
+          "Spacing": 0.2,
+          "Compliance": 1e-05,
+          "VolumeCompliance": 1e-05
+        },
+        {
+          "ModelRendererType": "class IKIGAI::ECS::ModelRenderer",
+          "Path": ""
+        },
+        {
+          "MaterialRendererType": "class IKIGAI::ECS::MaterialRenderer",
+          "MaterialNames": [
+            "Physics surface"
+          ],
+          "Materials": [
+            "/materials/render/portable/gbuffer.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Rigid cube",
+      "Id": 4,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0.7,
+            "Y": 2,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "Physics3DComponentType": "class IKIGAI::ECS::Physics3DComponent",
+          "HalfSize": {
+            "X": 0.2,
+            "Y": 0.2,
+            "Z": 0.2
+          }
+        }
+      ]
+    }
+  ]
+}

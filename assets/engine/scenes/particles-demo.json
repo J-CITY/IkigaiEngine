@@ -1,0 +1,298 @@
+{
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 2,
+            "Z": -7
+          },
+          "LocalRotation": {
+            "X": 12,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 60.0,
+          "Near": 0.1,
+          "Far": 100.0,
+          "Size": 5.0,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Smoke",
+      "Id": 10,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 140,
+            "Y": 250,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ParticleSystem2DComponentType": "class IKIGAI::ECS::ParticleSystem2DComponent",
+          "EffectPath": "/particles/smoke2d.particle.json",
+          "Seed": 10,
+          "AutoPlay": true
+        }
+      ]
+    },
+    {
+      "Name": "Snow",
+      "Id": 11,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 360,
+            "Y": 50,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ParticleSystem2DComponentType": "class IKIGAI::ECS::ParticleSystem2DComponent",
+          "EffectPath": "/particles/snow2d.particle.json",
+          "Seed": 11,
+          "AutoPlay": true
+        }
+      ]
+    },
+    {
+      "Name": "Curve path",
+      "Id": 12,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 350,
+            "Y": 300,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ParticleSystem2DComponentType": "class IKIGAI::ECS::ParticleSystem2DComponent",
+          "EffectPath": "/particles/path2d.particle.json",
+          "Seed": 12,
+          "AutoPlay": true
+        }
+      ]
+    },
+    {
+      "Name": "Sparks",
+      "Id": 13,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -1,
+            "Y": 1,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ParticleSystem3DComponentType": "class IKIGAI::ECS::ParticleSystem3DComponent",
+          "EffectPath": "/particles/sparks3d.particle.json",
+          "Seed": 13,
+          "AutoPlay": true
+        }
+      ]
+    },
+    {
+      "Name": "Fountain",
+      "Id": 14,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 1,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ParticleSystem3DComponentType": "class IKIGAI::ECS::ParticleSystem3DComponent",
+          "EffectPath": "/particles/fountain3d.particle.json",
+          "Seed": 14,
+          "AutoPlay": true
+        }
+      ]
+    },
+    {
+      "Name": "Legacy adapter",
+      "Id": 15,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 750,
+            "Y": 120,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "SpriteParticleComponentType": "class IKIGAI::ECS::SpriteParticleComponent",
+          "Emmiters": [
+            {
+              "Count": 64,
+              "LocalPos": {
+                "X": 0,
+                "Y": 0,
+                "Z": 0
+              },
+              "Gravity": {
+                "X": 0,
+                "Y": 40,
+                "Z": 0
+              },
+              "Color": {
+                "X": 1,
+                "Y": 0.3,
+                "Z": 0.7,
+                "W": 1
+              },
+              "Scale": {
+                "X": 3,
+                "Y": 7
+              },
+              "Weight": {
+                "X": 0.5,
+                "Y": 1.5
+              },
+              "Angle": {
+                "X": 0,
+                "Y": 360
+              },
+              "AngleForce": {
+                "X": 20,
+                "Y": 60
+              },
+              "LifeTime": {
+                "X": 1,
+                "Y": 2
+              },
+              "SpawnTime": 0.15,
+              "SpawnCount": 4,
+              "Pause": 0.1,
+              "Piece": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Mesh shards",
+      "Id": 16,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 2.5,
+            "Y": 0,
+            "Z": 1
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ParticleSystem3DComponentType": "class IKIGAI::ECS::ParticleSystem3DComponent",
+          "EffectPath": "/particles/shards3d.particle.json",
+          "Seed": 16,
+          "AutoPlay": true
+        }
+      ]
+    }
+  ]
+}

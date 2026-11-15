@@ -1,0 +1,17 @@
+{
+  "ShaderPath": "/shaders/render/portable/fog.shader",
+  "DepthTest": false,
+  "DepthWriting": false,
+  "BackfaceCulling": false,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOFogColor": {
+      "X": 0.25,
+      "Y": 0.3,
+      "Z": 0.35
+    },
+    "data_UBODensity": 0.01,
+    "data_UBOStart": 10.0
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "ShaderPath": "/shaders/render/portable/vegetation.shader",
+  "IsDeferred": true,
+  "BackfaceCulling": false,
+  "PbrLayers": {
+    "Version": 1,
+    "AlphaMode": "Masked",
+    "AlphaCutoff": 0.5,
+    "Layers": []
+  },
+  "Deformation": {
+    "Mode": "Grass",
+    "Height": 1.0,
+    "Stiffness": 0.35,
+    "WindStrength": 0.15,
+    "FurShells": 12
+  },
+  "Uniforms": {
+    "data_UBOu_Albedo": {
+      "X": 0.16,
+      "Y": 0.35,
+      "Z": 0.08,
+      "W": 1.0
+    },
+    "data_UBOu_Roughness": 0.8,
+    "data_UBOu_Metallic": 0.0
+  }
+}

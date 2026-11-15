@@ -1,0 +1,1390 @@
+{
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 22,
+            "Z": -45
+          },
+          "LocalRotation": {
+            "X": 26,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 60.0,
+          "Near": 0.1,
+          "Far": 700,
+          "Size": 5.0,
+          "GeometryCulling": true,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Sun",
+      "Id": 2,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 45,
+            "Y": -30,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "DirectionalLightType": "class IKIGAI::ECS::DirectionalLight",
+          "Color": {
+            "X": 1.0,
+            "Y": 0.9,
+            "Z": 0.75
+          },
+          "Intensity": 2.0,
+          "Distance": 100.0,
+          "CastShadows": true
+        }
+      ]
+    },
+    {
+      "Name": "Environment",
+      "Id": 20,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "EnvironmentComponentType": "class IKIGAI::ECS::EnvironmentComponent",
+          "Sun": {
+            "ObjectId": 2,
+            "Component": "DirectionalLight"
+          },
+          "Environment": {
+            "TimeOfDay": 13,
+            "DayDuration": 180.0,
+            "AnimateTime": false,
+            "SunAzimuth": 35,
+            "Clouds": "Cumulus",
+            "CloudCoverage": 0.15,
+            "CloudDarkness": 0.08,
+            "Precipitation": "Clear",
+            "PrecipitationIntensity": 0.0,
+            "MaxParticles": 0,
+            "CollisionBudget": 64,
+            "WindDirection": {
+              "X": 1.0,
+              "Y": 0.2
+            },
+            "WindSpeed": 1.2,
+            "SunIntensity": 4.5,
+            "Turbidity": 1.3,
+            "FogDensity": 0.0012
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Generated surface",
+      "Id": 200,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SurfaceComponentType": "class IKIGAI::ECS::SurfaceComponent",
+          "Surface": {
+            "Version": 1,
+            "TilesX": 4,
+            "TilesZ": 4,
+            "TileSize": 16,
+            "Resolution": 32,
+            "Noise": {
+              "Seed": 47,
+              "BaseHeight": 1.5,
+              "Amplitude": 3.3,
+              "Frequency": 0.025,
+              "Octaves": 4,
+              "Warp": 7
+            },
+            "Layers": [
+              {
+                "Name": "Meadow",
+                "Id": 10,
+                "Material": "/materials/surface/garden/meadow.mat",
+                "TextureScale": 0.35,
+                "HeightTransition": 0.9,
+                "SlopeTransition": 8
+              },
+              {
+                "Name": "Soil",
+                "Id": 20,
+                "Material": "/materials/surface/garden/soil.mat",
+                "TextureScale": 0.35,
+                "HeightTransition": 0.9,
+                "SlopeTransition": 8,
+                "MinHeight": 2.2,
+                "MinSlope": 0
+              },
+              {
+                "Name": "Sand",
+                "Id": 30,
+                "Material": "/materials/surface/garden/sand.mat",
+                "TextureScale": 0.35,
+                "HeightTransition": 0.9,
+                "SlopeTransition": 8,
+                "MaxHeight": 0.45
+              },
+              {
+                "Name": "Rock",
+                "Id": 40,
+                "Material": "/materials/surface/garden/rock.mat",
+                "TextureScale": 0.35,
+                "HeightTransition": 0.9,
+                "SlopeTransition": 8,
+                "MinSlope": 38
+              }
+            ],
+            "Blend": {
+              "Enabled": true,
+              "MapResolution": 256,
+              "BoundaryNoise": 0.3,
+              "NoiseFrequency": 0.12,
+              "HeightInfluence": 0.22,
+              "TransitionWidth": 0.95
+            },
+            "Edits": [
+              {
+                "Id": 1,
+                "Name": "Path, clearing and pond",
+                "Strokes": [
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 1.0221644081073267,
+                      "Y": -40
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 1.0221644081073267,
+                      "Y": -40
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 0.35316891273043216,
+                      "Y": -38
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 0.35316891273043216,
+                      "Y": -38
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -0.3260086070410765,
+                      "Y": -36
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -0.3260086070410765,
+                      "Y": -36
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -0.9957871466926103,
+                      "Y": -34
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -0.9957871466926103,
+                      "Y": -34
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -1.6368566786880692,
+                      "Y": -32
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -1.6368566786880692,
+                      "Y": -32
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -2.2307348695656666,
+                      "Y": -30
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -2.2307348695656666,
+                      "Y": -30
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -2.7602999342277443,
+                      "Y": -28
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -2.7602999342277443,
+                      "Y": -28
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -3.210284264986989,
+                      "Y": -26
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -3.210284264986989,
+                      "Y": -26
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -3.5677146038135183,
+                      "Y": -24
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -3.5677146038135183,
+                      "Y": -24
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -3.822286067411776,
+                      "Y": -22
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -3.822286067411776,
+                      "Y": -22
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -3.9666592418098743,
+                      "Y": -20
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -3.9666592418098743,
+                      "Y": -20
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -3.996671781085904,
+                      "Y": -18
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -3.996671781085904,
+                      "Y": -18
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -3.911458409741265,
+                      "Y": -16
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -3.911458409741265,
+                      "Y": -16
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -3.713475868996667,
+                      "Y": -14
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -3.713475868996667,
+                      "Y": -14
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -3.408432087797452,
+                      "Y": -12
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -3.408432087797452,
+                      "Y": -12
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -3.005121620561171,
+                      "Y": -10
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -3.005121620561171,
+                      "Y": -10
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -2.5151720960738744,
+                      "Y": -8
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -2.5151720960738744,
+                      "Y": -8
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -1.95270898753163,
+                      "Y": -6
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -1.95270898753163,
+                      "Y": -6
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -1.3339483685632576,
+                      "Y": -4
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -1.3339483685632576,
+                      "Y": -4
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -0.6767293962679841,
+                      "Y": -2
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -0.6767293962679841,
+                      "Y": -2
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 0.0,
+                      "Y": 0
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 0.0,
+                      "Y": 0
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 0.6767293962679841,
+                      "Y": 2
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 0.6767293962679841,
+                      "Y": 2
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 1.3339483685632576,
+                      "Y": 4
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 1.3339483685632576,
+                      "Y": 4
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 1.95270898753163,
+                      "Y": 6
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 1.95270898753163,
+                      "Y": 6
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 2.5151720960738744,
+                      "Y": 8
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 2.5151720960738744,
+                      "Y": 8
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 3.005121620561171,
+                      "Y": 10
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 3.005121620561171,
+                      "Y": 10
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 3.408432087797452,
+                      "Y": 12
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 3.408432087797452,
+                      "Y": 12
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 3.713475868996667,
+                      "Y": 14
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 3.713475868996667,
+                      "Y": 14
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 3.911458409741265,
+                      "Y": 16
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 3.911458409741265,
+                      "Y": 16
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 3.996671781085904,
+                      "Y": 18
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 3.996671781085904,
+                      "Y": 18
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 3.9666592418098743,
+                      "Y": 20
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 3.9666592418098743,
+                      "Y": 20
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 3.822286067411776,
+                      "Y": 22
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 3.822286067411776,
+                      "Y": 22
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 3.5677146038135183,
+                      "Y": 24
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 3.5677146038135183,
+                      "Y": 24
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 3.210284264986989,
+                      "Y": 26
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 3.210284264986989,
+                      "Y": 26
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 2.7602999342277443,
+                      "Y": 28
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 2.7602999342277443,
+                      "Y": 28
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 2.2307348695656666,
+                      "Y": 30
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 2.2307348695656666,
+                      "Y": 30
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 1.6368566786880692,
+                      "Y": 32
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 1.6368566786880692,
+                      "Y": 32
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 0.9957871466926103,
+                      "Y": 34
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 0.9957871466926103,
+                      "Y": 34
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": 0.3260086070410765,
+                      "Y": 36
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 0.3260086070410765,
+                      "Y": 36
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -0.35316891273043216,
+                      "Y": 38
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -0.35316891273043216,
+                      "Y": 38
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "PaintLayer",
+                    "Center": {
+                      "X": -1.0221644081073267,
+                      "Y": 40
+                    },
+                    "Radius": 2.5,
+                    "Hardness": 0.5,
+                    "LayerId": 20
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": -1.0221644081073267,
+                      "Y": 40
+                    },
+                    "Radius": 3,
+                    "Hardness": 0.6,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "FoliageDensity",
+                    "Center": {
+                      "X": 10,
+                      "Y": 10
+                    },
+                    "Radius": 7,
+                    "Hardness": 0.5,
+                    "Value": 0
+                  },
+                  {
+                    "Operation": "FlattenHeight",
+                    "Center": {
+                      "X": 10,
+                      "Y": 10
+                    },
+                    "Radius": 8,
+                    "Hardness": 0.2,
+                    "Value": 1.7,
+                    "Strength": 0.7
+                  },
+                  {
+                    "Operation": "FlattenHeight",
+                    "Center": {
+                      "X": -23,
+                      "Y": 0
+                    },
+                    "Radius": 15,
+                    "Hardness": 0.3,
+                    "Value": -1.8
+                  }
+                ]
+              }
+            ],
+            "LodDistances": [
+              65,
+              140
+            ],
+            "ViewDistance": 350,
+            "SkirtDepth": 5,
+            "BuildBudget": 12,
+            "CacheMegabytes": 128,
+            "Water": {
+              "Enabled": true,
+              "Level": -0.45,
+              "TextureScale": 0.05,
+              "Material": "/materials/surface/water.mat"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Distant ground",
+      "Id": 210,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SurfaceComponentType": "class IKIGAI::ECS::SurfaceComponent",
+          "Surface": {
+            "TilesX": 4,
+            "TilesZ": 4,
+            "TileSize": 128,
+            "Resolution": 8,
+            "Noise": {
+              "Seed": 47,
+              "BaseHeight": -4,
+              "Amplitude": 0.3
+            },
+            "Layers": [
+              {
+                "Name": "Meadow backdrop",
+                "Id": 10,
+                "Material": "/materials/surface/garden/backdrop.mat",
+                "TextureScale": 0.12
+              }
+            ],
+            "LodDistances": [
+              100,
+              300
+            ],
+            "BuildBudget": 16,
+            "ViewDistance": 900,
+            "CacheMegabytes": 16
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Surface foliage",
+      "Id": 201,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "FoliageComponentType": "class IKIGAI::ECS::FoliageComponent",
+          "Surface": {
+            "ObjectId": 200,
+            "Component": "SurfaceComponent"
+          },
+          "Species": [
+            {
+              "Name": "Meadow grasses",
+              "Seed": 1397,
+              "LayerIds": [
+                10,
+                20
+              ],
+              "Lods": [
+                {
+                  "Distance": 42,
+                  "Model": "/models/surface/garden/grass.obj",
+                  "Material": "/materials/surface/garden/grass.mat"
+                },
+                {
+                  "Distance": 180,
+                  "Model": "/models/surface/garden/grass-low.obj",
+                  "Material": "/materials/surface/garden/grass.mat"
+                }
+              ],
+              "Density": 2.5,
+              "MaxInstances": 10000,
+              "MinScale": 0.75,
+              "MaxScale": 1.3,
+              "MaxSlope": 36,
+              "ViewDistance": 70,
+              "Instancing": true,
+              "MinTint": {
+                "X": 0.78,
+                "Y": 0.84,
+                "Z": 0.72
+              },
+              "MaxTint": {
+                "X": 1,
+                "Y": 1,
+                "Z": 0.96
+              },
+              "FadeDistance": 12,
+              "AlignToNormal": true
+            },
+            {
+              "Name": "Dry grasses",
+              "Seed": 1095,
+              "LayerIds": [
+                10,
+                20
+              ],
+              "Lods": [
+                {
+                  "Distance": 42,
+                  "Model": "/models/surface/garden/grass.obj",
+                  "Material": "/materials/surface/garden/grass-dry.mat"
+                },
+                {
+                  "Distance": 180,
+                  "Model": "/models/surface/garden/grass-low.obj",
+                  "Material": "/materials/surface/garden/grass-dry.mat"
+                }
+              ],
+              "Density": 0.3,
+              "MaxInstances": 1500,
+              "MinScale": 0.75,
+              "MaxScale": 1.3,
+              "MaxSlope": 36,
+              "ViewDistance": 65,
+              "Instancing": true,
+              "MinTint": {
+                "X": 0.78,
+                "Y": 0.84,
+                "Z": 0.72
+              },
+              "MaxTint": {
+                "X": 1,
+                "Y": 1,
+                "Z": 0.96
+              },
+              "FadeDistance": 12,
+              "AlignToNormal": true
+            },
+            {
+              "Name": "Oak trees",
+              "Seed": 862,
+              "LayerIds": [
+                10,
+                20
+              ],
+              "Lods": [
+                {
+                  "Distance": 42,
+                  "Model": "/models/surface/garden/oak.obj"
+                },
+                {
+                  "Distance": 180,
+                  "Model": "/models/surface/garden/oak-low.obj"
+                }
+              ],
+              "Density": 0.01,
+              "MaxInstances": 60,
+              "MinScale": 0.8,
+              "MaxScale": 1.4,
+              "MaxSlope": 28,
+              "ViewDistance": 250,
+              "Instancing": true,
+              "MinTint": {
+                "X": 0.78,
+                "Y": 0.84,
+                "Z": 0.72
+              },
+              "MaxTint": {
+                "X": 1,
+                "Y": 1,
+                "Z": 0.96
+              },
+              "FadeDistance": 12,
+              "MaterialBindings": [
+                {
+                  "Slot": "bark",
+                  "Material": "/materials/surface/garden/bark.mat"
+                },
+                {
+                  "Slot": "leaves",
+                  "Material": "/materials/surface/garden/leaves.mat"
+                }
+              ]
+            },
+            {
+              "Name": "Warm oak variants",
+              "Seed": 1658,
+              "LayerIds": [
+                10,
+                20
+              ],
+              "Lods": [
+                {
+                  "Distance": 42,
+                  "Model": "/models/surface/garden/oak-variant.obj"
+                },
+                {
+                  "Distance": 180,
+                  "Model": "/models/surface/garden/oak-low.obj"
+                }
+              ],
+              "Density": 0.004,
+              "MaxInstances": 25,
+              "MinScale": 0.75,
+              "MaxScale": 1.3,
+              "MaxSlope": 36,
+              "ViewDistance": 250,
+              "Instancing": true,
+              "MinTint": {
+                "X": 0.78,
+                "Y": 0.84,
+                "Z": 0.72
+              },
+              "MaxTint": {
+                "X": 1,
+                "Y": 1,
+                "Z": 0.96
+              },
+              "FadeDistance": 12,
+              "MaterialBindings": [
+                {
+                  "Slot": "bark",
+                  "Material": "/materials/surface/garden/bark.mat"
+                },
+                {
+                  "Slot": "leaves",
+                  "Material": "/materials/surface/garden/leaves-warm.mat"
+                }
+              ]
+            },
+            {
+              "Name": "Meadow flowers",
+              "Seed": 1407,
+              "LayerIds": [
+                10,
+                20
+              ],
+              "Lods": [
+                {
+                  "Distance": 42,
+                  "Model": "/models/surface/garden/flowers.obj"
+                },
+                {
+                  "Distance": 180,
+                  "Model": "/models/surface/garden/flowers.obj"
+                }
+              ],
+              "Density": 0.065,
+              "MaxInstances": 400,
+              "MinScale": 0.75,
+              "MaxScale": 1.3,
+              "MaxSlope": 36,
+              "ViewDistance": 75,
+              "Instancing": true,
+              "MinTint": {
+                "X": 0.78,
+                "Y": 0.84,
+                "Z": 0.72
+              },
+              "MaxTint": {
+                "X": 1,
+                "Y": 1,
+                "Z": 0.96
+              },
+              "FadeDistance": 12,
+              "MaterialBindings": [
+                {
+                  "Slot": "stem",
+                  "Material": "/materials/surface/garden/stem.mat"
+                },
+                {
+                  "Slot": "petal",
+                  "Material": "/materials/surface/garden/petal.mat"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "RenderPipeline": "/renderPipeline/weather.json"
+}
