@@ -1,4 +1,4 @@
-name: Renderer core prerequisites
+name: Renderer production checks
 
 on:
   push:
@@ -14,23 +14,41 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-2022]
+        include:
+          - os: ubuntu-24.04
+            preset: core-linux
+          - os: windows-2022
+            preset: core-windows
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+      - name: Initialize math header dependencies
+        run: git submodule update --init --depth 1 -- 3rd/serdepp 3rd/json 3rd/nameof 3rd/magic_enum
       - name: Configure without graphics SDKs or local test sources
-        run: cmake -S cmake/core -B build/core -DCMAKE_BUILD_TYPE=Release
-      - name: Build production task, coroutine and render command libraries
-        run: cmake --build build/core --config Release --parallel 2
+        run: cmake --preset ${{ matrix.preset }}
+      - name: Build production core libraries
+        run: cmake --build --preset ${{ matrix.preset }}-release --parallel 2
 
-  production-assets:
-    runs-on: ubuntu-24.04
+  windows-renderer:
+    name: Windows ${{ matrix.backend }} ${{ matrix.configuration }}
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [Vulkan, DX12]
+        configuration: [Debug, Release]
+    runs-on: windows-2022
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: recursive
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - name: Verify versioned production inputs
-        run: python utils/assets/install_production_assets.py --verify
-      - name: Install into an empty asset directory
-        run: python utils/assets/install_production_assets.py --assets build/rc0-assets
+      - name: Configure production renderer without local tests
+        run: >-
+          cmake --preset windows -B build/windows/renderer
+          -DUSE_VULKAN=${{ matrix.backend == 'Vulkan' && 'ON' || 'OFF' }} -DUSE_OPENGL=OFF
+          -DUSE_DX12=${{ matrix.backend == 'DX12' && 'ON' || 'OFF' }} -DUSE_GPU_DRIVEN=ON
+          -DUSE_NETWORK=OFF -DUSE_IKIGAI_SCRIPT=OFF -DENABLE_OPT=OFF -DIKIGAI_BUILD_TEST_MODULE=OFF
+      - name: Build the engine
+        run: cmake --build build/windows/renderer --config ${{ matrix.configuration }} --target IkigaiEngine --parallel 2
