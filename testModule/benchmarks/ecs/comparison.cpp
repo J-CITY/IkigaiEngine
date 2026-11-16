@@ -1,4 +1,5 @@
 #include "backends.h"
+#include "registryFixture.h"
 
 #include <benchmark/benchmark.h>
 
@@ -287,8 +288,8 @@ namespace {
 		const auto count = static_cast<std::size_t>(state.range(0));
 		std::vector<Entity> entities(count);
 		if constexpr (SparseIds) {
-			for (std::uint32_t i = 0; i < count; ++i) {
-				entities[i] = Entity { Entity::ID { 0x10000000u + i * 65537u } };
+			for (std::size_t index = 0; index < count; ++index) {
+				entities[index] = IKIGAI::BENCHMARKS::sparseRegistryEntity(index);
 			}
 		}
 		else if constexpr (Register) {

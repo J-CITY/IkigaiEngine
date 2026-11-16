@@ -35,10 +35,17 @@ $filter = '^(movement<(IkigaiCompact|IkigaiMixed|EnTT|FlecsUncached|FlecsCached)
 
 Для диагностики Ikigai доступны `IkigaiNoHandle` с вызовом `addComponents`, `IkigaiWithListeners` с подписчиками на события и `Ikigai/AddTransition` с холодным и повторным переходом. В каждом замере `AddTransition` выполняется по одному добавлению в 64 отдельных мирах. Для времени на добавление значение из JSON делится на 64.
 
-`Ikigai/EntityRegistry/GenerateIds` измеряет только выдачу ID. Для `RegisterKnownIds` заранее готовятся 100 000 последовательных ID, а таймер охватывает регистрацию в новом мире. `RegisterSparseIds` регистрирует 1 000 загруженных ID с шагом 65 537, поэтому каждый попадает в отдельную страницу и каталог страниц. Подготовка ID и проверка реестра в обоих сценариях выполняются вне таймера.
+`Ikigai/EntityRegistry/GenerateIds` измеряет только выдачу ID. Для `RegisterKnownIds` заранее готовятся 100 000 последовательных ID, а таймер охватывает регистрацию в новом мире. `RegisterSparseIds` регистрирует 1 000 загруженных ID с шагом 65 537. В страничном реестре такой шаг давал отдельную страницу и отдельный каталог страниц на ID. Гибрид хранит эти записи компактно. Подготовка ID и проверка реестра в обоих сценариях выполняются вне таймера.
 
 ```powershell
-& $exe '--benchmark_filter=^(structural<.*Structure::(Create|Destroy)>|Ikigai/EntityRegistry/)' --benchmark_min_time=0.04s --benchmark_min_warmup_time=0.01 --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/lifecycle.json --benchmark_out_format=json
+& $exe '--benchmark_filter=^(structural<.*Structure::(Create|Destroy)>|Ikigai/EntityRegistry/)' --benchmark_min_time=0.04s --benchmark_min_warmup_time=0.01 --benchmark_repetitions=7 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/lifecycle.json --benchmark_out_format=json
+```
+
+На Windows отдельный исполняемый файл измеряет память пустых сущностей через снимки занятых блоков кучи CRT. Мир, пустой архетип и буфер ID готовятся перед первым снимком. Программа выводит прирост живых байтов после регистрации и остаток после уничтожения всех сущностей. Зарезервированная память процесса и свободные блоки в эти числа не входят.
+
+```powershell
+cmake --build build/ecs --config Release --target ecs_registry_memory
+& './build/ecs/benchmarks/ecs/Release/ecs_registry_memory.exe'
 ```
 
 Диагностика роста использует обе схемы хранения и миры с 1, 4 и 8 сохраняемыми колонками. Прогрев выполняется на временных сущностях. После него измеряемые сущности создаются в одном и том же порядке.

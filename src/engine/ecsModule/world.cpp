@@ -24,7 +24,7 @@ std::weak_ptr<ComponentManager> World::getComponentManagerWeak() const noexcept 
 
 Entity World::createEntity() const {
 	Entity newEntity = Entity::create();
-	mComponentsManager->registerEntity(newEntity);
+	mComponentsManager->registerEntityImpl<true>(newEntity);
 	return newEntity;
 }
 

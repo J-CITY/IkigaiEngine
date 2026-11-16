@@ -77,12 +77,16 @@ struct Record {
 };
 
 class ComponentManager {
+	friend class World;
+
 	class EntityRecords {
 		// ID bytes select a branch, a directory, a page and a slot.
 		// Only occupied branches allocate storage. Pages keep record addresses stable.
 		static constexpr std::uint32_t pageBits = 8;
 		static constexpr std::uint32_t pageSize = 1u << pageBits;
 		static constexpr std::uint32_t pageMask = pageSize - 1;
+		// Promote a stream of supplied IDs only after evidence of a dense run.
+		static constexpr std::uint32_t denseRunLength = 8;
 
 		struct Page {
 			std::array<Record, pageSize> records;
@@ -111,13 +115,22 @@ class ComponentManager {
 		using Pages = Directory<Page>;
 		using Branch = Directory<Pages>;
 		using Root = Directory<Branch>;
+		using CompactRecords = std::unordered_map<std::uint32_t, Record>;
 
 		std::unique_ptr<Root> mRoot;
 		Page* mInsertPage = nullptr;
 		std::uint32_t mInsertPageIndex = 0;
+		std::uint32_t mErasePageIndex = 0;
+		Page* mErasePage = nullptr;
+		std::unique_ptr<CompactRecords> mCompact {};
+		std::uint32_t mLargestCompactId = 0;
+		std::uint32_t mLastSuppliedId = 0;
+		std::uint32_t mSuppliedRun = 0;
 
 		Page& ensurePage(std::uint32_t pageIndex);
 		void releasePage(std::uint32_t pageIndex) noexcept;
+		const Record* findCompact(std::uint32_t id) const noexcept;
+		bool insertSuppliedSlow(std::uint32_t id, Archetype* archetype, std::uint64_t generation);
 
 		Page* findPage(std::uint32_t pageIndex) const noexcept {
 			const auto* branch = mRoot ? mRoot->children[pageIndex >> (2 * pageBits)].get() : nullptr;
@@ -125,30 +138,69 @@ class ComponentManager {
 			return pages ? pages->children[pageIndex & pageMask].get() : nullptr;
 		}
 
-	public:
-		bool insert(Entity entity, Archetype* archetype, std::uint64_t generation) {
-			const auto id = entity.getUniqueId().value();
-			const auto pageIndex = id >> pageBits;
-			auto& page = mInsertPage && mInsertPageIndex == pageIndex ? *mInsertPage : ensurePage(pageIndex);
-			auto& record = page.records[id & pageMask];
-			if (record.generation != 0) {
-				return false;
-			}
+		static void setSlot(Page& page, Record& record, Archetype* archetype, std::uint64_t generation) noexcept {
 			record.archetype = archetype;
 			record.generation = generation;
 			++page.live;
-			return true;
+		}
+
+	public:
+		struct Location {
+			const Record* record = nullptr;
+			Page* page = nullptr;
+		};
+
+		void insertGenerated(Entity entity, Archetype* archetype, std::uint64_t generation) {
+			// Observing a loaded ID advances the generator before it can issue that ID.
+			const auto id = entity.getUniqueId().value();
+			const auto pageIndex = id >> pageBits;
+			auto& page = mInsertPage && mInsertPageIndex == pageIndex ? *mInsertPage : ensurePage(pageIndex);
+			setSlot(page, page.records[id & pageMask], archetype, generation);
+		}
+
+		bool insertSupplied(Entity entity, Archetype* archetype, std::uint64_t generation) {
+			const auto id = entity.getUniqueId().value();
+			if (mInsertPage && mInsertPageIndex == (id >> pageBits) && mSuppliedRun == denseRunLength && id == mLastSuppliedId + 1
+				&& id > mLargestCompactId) {
+				auto& record = mInsertPage->records[id & pageMask];
+				if (record.generation != 0) {
+					return false;
+				}
+				setSlot(*mInsertPage, record, archetype, generation);
+				mLastSuppliedId = id;
+				return true;
+			}
+			return insertSuppliedSlow(id, archetype, generation);
+		}
+
+	private:
+		Location locateInPage(std::uint32_t id, Page* page) const noexcept {
+			const auto* record = page ? &page->records[id & pageMask] : nullptr;
+			if (record && record->generation != 0) {
+				return { record, page };
+			}
+			return { mCompact ? findCompact(id) : nullptr, nullptr };
+		}
+
+	public:
+		Location locateForErase(Entity entity) noexcept {
+			const auto id = entity.getUniqueId().value();
+			const auto pageIndex = id >> pageBits;
+			if (mErasePageIndex != pageIndex || !mErasePage) {
+				mErasePage = findPage(pageIndex);
+				mErasePageIndex = pageIndex;
+			}
+			return locateInPage(id, mErasePage);
 		}
 
 		const Record* find(Entity entity) const noexcept {
 			const auto id = entity.getUniqueId().value();
-			const auto* page = findPage(id >> pageBits);
-			const auto* record = page ? &page->records[id & pageMask] : nullptr;
-			return record && record->generation != 0 ? record : nullptr;
+			return locateInPage(id, findPage(id >> pageBits)).record;
 		}
 
 		Record& at(Entity entity);
 		void erase(Entity entity) noexcept;
+		void eraseLocated(Entity entity, Location location) noexcept;
 	};
 
 public:
@@ -756,24 +808,37 @@ public:
 		return newArchetype;
 	}
 
-	void registerEntity(Entity entity) {
-		if (!entity.getUniqueId().valid()) {
-			throw std::invalid_argument("Cannot register an invalid entity");
+private:
+	template <bool Generated> void registerEntityImpl(Entity entity) {
+		if constexpr (!Generated) {
+			if (!entity.getUniqueId().valid()) {
+				throw std::invalid_argument("Cannot register an invalid entity");
+			}
 		}
 		requireStructuralChangesAllowed();
 		if (mNextEntityGeneration == 0) {
-			if (mEntityRecords.find(entity)) {
-				throw std::logic_error("Entity is already registered in this ECS world");
+			if constexpr (!Generated) {
+				if (mEntityRecords.find(entity)) {
+					throw std::logic_error("Entity is already registered in this ECS world");
+				}
 			}
 			throw std::overflow_error("ECS entity generation exhausted");
 		}
 		if (!mEmptyArchetype) {
 			mEmptyArchetype = getArchetype(Signature {}).get();
 		}
-		if (!mEntityRecords.insert(entity, mEmptyArchetype, mNextEntityGeneration)) {
+		if constexpr (Generated) {
+			mEntityRecords.insertGenerated(entity, mEmptyArchetype, mNextEntityGeneration);
+		}
+		else if (!mEntityRecords.insertSupplied(entity, mEmptyArchetype, mNextEntityGeneration)) {
 			throw std::logic_error("Entity is already registered in this ECS world");
 		}
 		++mNextEntityGeneration;
+	}
+
+public:
+	void registerEntity(Entity entity) {
+		registerEntityImpl<false>(entity);
 	}
 
 	[[nodiscard]] EntityHandle getEntityHandle(Entity entity) const {
@@ -850,13 +915,14 @@ public:
 
 	void destroyEntity(Entity entity) {
 		requireStructuralChangesAllowed();
-		const auto* record = mEntityRecords.find(entity);
+		const auto location = mEntityRecords.locateForErase(entity);
+		const auto* record = location.record;
 		if (!record) {
 			return;
 		}
 		if (record->archetype == mEmptyArchetype && mSparseArrays.empty()) {
 			mRelationManager.onEntityDestroyed(entity);
-			mEntityRecords.erase(entity);
+			mEntityRecords.eraseLocated(entity, location);
 			return;
 		}
 		auto archetype = record->archetype;

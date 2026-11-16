@@ -2,6 +2,7 @@
 #include "ecsModule/world.h"
 #include "support/expect.h"
 
+#include <array>
 #include <cstdint>
 #include <stdexcept>
 #include <unordered_map>
@@ -53,7 +54,7 @@ namespace {
 		expect(components.resolveEntity(components.getEntityHandle(entity)) == entity, "new registration resolves");
 	}
 
-	void checkPagedRegistry(ArchetypeLayout layout) {
+	void checkImportedIds(ArchetypeLayout layout) {
 		World world { layout };
 		auto& components = *world.getComponentManager();
 		const Entity zero { Entity::ID { 0 } };
@@ -65,23 +66,50 @@ namespace {
 		for (const auto entity : { high, zero, nextPage, low, highNeighbor }) {
 			world.registerEntity(entity);
 		}
-		expect(!components.resolveEntity(components.getEntityHandle(absent)), "slot in an occupied page remains absent");
+		expect(!components.resolveEntity(components.getEntityHandle(absent)), "unregistered neighbor of a sparse ID remains absent");
 		world.destroyEntity(absent);
 		const auto highHandle = components.addComponent(high, Position { 70 });
 		const auto lowHandle = components.addComponent(low, Position { 25 });
 		const auto neighborHandle = components.getEntityHandle(highNeighbor);
 		world.destroyEntity(high);
 		expect(!components.resolveComponent(highHandle), "destroying a sparse loaded ID invalidates its component handle");
-		expect(components.resolveEntity(neighborHandle) == highNeighbor, "removing a loaded ID preserves others on its page");
+		expect(components.resolveEntity(neighborHandle) == highNeighbor, "removing a loaded ID preserves its neighbor");
 		const auto* position = components.resolveComponent(lowHandle);
 		expect(position && position->value == 25, "swap-removal across ID pages preserves the relocated component");
 		world.destroyEntity(highNeighbor);
 		world.registerEntity(highNeighbor);
-		expect(!components.resolveEntity(neighborHandle), "recreating a released ID page does not revive stale handles");
-		expect(components.resolveEntity(components.getEntityHandle(highNeighbor)) == highNeighbor, "released page accepts the same ID");
+		expect(!components.resolveEntity(neighborHandle), "registering a loaded ID again does not revive stale handles");
+		expect(components.resolveEntity(components.getEntityHandle(highNeighbor)) == highNeighbor, "a deleted loaded ID can be registered again");
 		expect(components.resolveEntity(components.getEntityHandle(zero)) == zero, "loaded zero is distinct from an unoccupied slot");
-		expect(components.resolveEntity(components.getEntityHandle(nextPage)) == nextPage, "adjacent pages use independent records");
+		expect(components.resolveEntity(components.getEntityHandle(nextPage)) == nextPage, "IDs on opposite sides of a page boundary are distinct");
 		expect(world.createEntity().getUniqueId().value() > absent.getUniqueId().value(), "generation continues beyond sparse loaded IDs");
+	}
+
+	void checkHybridRegistry(ArchetypeLayout layout) {
+		World world { layout };
+		auto& components = *world.getComponentManager();
+		constexpr std::uint32_t firstId = 0x04020000u;
+		std::array<Entity, 12> entities {};
+		for (std::uint32_t index = 0; index < entities.size(); ++index) {
+			entities[index] = Entity { Entity::ID { firstId + index } };
+			world.registerEntity(entities[index]);
+		}
+		const auto compact = entities.front();
+		const auto dense = entities.back();
+		expectThrows([&] { world.registerEntity(compact); }, "records remain unique when dense and compact storage share an ID page");
+		expectThrows([&] { world.registerEntity(dense); }, "dense records remain unique after supplied IDs switch to pages");
+		const auto compactHandle = components.addComponent(compact, Position { 1 });
+		const auto denseHandle = components.addComponent(dense, Position { 12 });
+		world.destroyEntity(compact);
+		const auto* position = components.resolveComponent(denseHandle);
+		expect(position && position->value == 12, "swap-removal from compact storage updates the dense registration");
+		world.registerEntity(compact);
+		expect(!components.resolveComponent(compactHandle), "reusing a compact ID in dense storage invalidates the old component handle");
+		const auto survivingCompact = components.getEntityHandle(entities[1]);
+		for (const auto entity : { compact, entities[7], entities[8], entities[9], entities[10], dense }) {
+			world.destroyEntity(entity);
+		}
+		expect(components.resolveEntity(survivingCompact) == entities[1], "releasing a dense page preserves compact registrations in its range");
 	}
 
 	void checkComponentEvents(ArchetypeLayout layout) {
@@ -370,7 +398,8 @@ void checkIndexedWeakRelocation() {
 void runStorageTests() {
 	for (const auto layout : { ECS::ArchetypeLayout::PerColumn, ECS::ArchetypeLayout::SharedRows }) {
 		checkHandles(layout);
-		checkPagedRegistry(layout);
+		checkImportedIds(layout);
+		checkHybridRegistry(layout);
 		checkComponentEvents(layout);
 		checkQueries(layout);
 		checkMixedJoin(layout);

@@ -1,5 +1,7 @@
 #include "componentManager.h"
 
+#include <algorithm>
+
 namespace IKIGAI::ECS {
 ComponentManager::ComponentManager()
 	: ComponentManager(ArchetypeLayout::PerColumn) { }
@@ -24,12 +26,49 @@ void ComponentManager::EntityRecords::releasePage(std::uint32_t pageIndex) noexc
 	if (mInsertPageIndex == pageIndex) {
 		mInsertPage = nullptr;
 	}
+	if (mErasePageIndex == pageIndex) {
+		mErasePage = nullptr;
+	}
 	const auto branchIndex = pageIndex >> (2 * pageBits);
 	const auto pagesIndex = (pageIndex >> pageBits) & pageMask;
 	auto& branch = *mRoot->children[branchIndex];
 	if (branch.children[pagesIndex]->remove(pageIndex & pageMask) && branch.remove(pagesIndex)) {
 		mRoot->remove(branchIndex);
 	}
+}
+
+bool ComponentManager::EntityRecords::insertSuppliedSlow(std::uint32_t id, Archetype* archetype, std::uint64_t generation) {
+	const auto pageIndex = id >> pageBits;
+	auto* page = mInsertPage && mInsertPageIndex == pageIndex ? mInsertPage : findPage(pageIndex);
+	const auto run = mSuppliedRun != 0 && id == mLastSuppliedId + 1 ? std::min(mSuppliedRun + 1, denseRunLength) : 1u;
+	if (page || run == denseRunLength) {
+		if (mCompact && id <= mLargestCompactId && mCompact->contains(id)) {
+			return false;
+		}
+		auto& target = page ? *page : ensurePage(pageIndex);
+		auto& record = target.records[id & pageMask];
+		if (record.generation != 0) {
+			return false;
+		}
+		setSlot(target, record, archetype, generation);
+	}
+	else {
+		if (!mCompact) {
+			mCompact = std::make_unique<CompactRecords>();
+		}
+		if (!mCompact->try_emplace(id, Record { .archetype = archetype, .generation = generation }).second) {
+			return false;
+		}
+		mLargestCompactId = std::max(mLargestCompactId, id);
+	}
+	mSuppliedRun = run;
+	mLastSuppliedId = id;
+	return true;
+}
+
+const Record* ComponentManager::EntityRecords::findCompact(std::uint32_t id) const noexcept {
+	const auto record = mCompact->find(id);
+	return record == mCompact->end() ? nullptr : &record->second;
 }
 
 Record& ComponentManager::EntityRecords::at(Entity entity) {
@@ -40,16 +79,25 @@ Record& ComponentManager::EntityRecords::at(Entity entity) {
 }
 
 void ComponentManager::EntityRecords::erase(Entity entity) noexcept {
+	const auto location = locateForErase(entity);
+	if (location.record) {
+		eraseLocated(entity, location);
+	}
+}
+
+void ComponentManager::EntityRecords::eraseLocated(Entity entity, Location location) noexcept {
 	const auto id = entity.getUniqueId().value();
-	const auto pageIndex = id >> pageBits;
-	if (auto* page = findPage(pageIndex)) {
-		auto& record = page->records[id & pageMask];
-		if (record.generation != 0) {
-			record = {};
-			if (--page->live == 0) {
-				releasePage(pageIndex);
-			}
+	if (auto* page = location.page) {
+		page->records[id & pageMask] = {};
+		if (--page->live == 0) {
+			releasePage(id >> pageBits);
 		}
+		return;
+	}
+	mCompact->erase(id);
+	if (mCompact->empty()) {
+		mCompact.reset();
+		mLargestCompactId = 0;
 	}
 }
 
