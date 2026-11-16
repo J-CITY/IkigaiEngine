@@ -292,6 +292,49 @@ namespace {
 		}
 	}
 
+	void checkIndexedPair() {
+		World world { ArchetypeLayout::SharedRows };
+		auto& components = *world.getComponentManager();
+		components.registerComponent<Health>(StorageType::Sparse);
+		std::vector<Entity> entities;
+		for (int index = 0; index < 600; ++index) {
+			const auto entity = world.createEntity();
+			entities.push_back(entity);
+			components.addComponent(entity, Position { index });
+		}
+		std::unordered_map<Entity, int> expected;
+		for (int index = 596; index >= 0; index -= 4) {
+			components.addComponent(entities[index], Health { 10 });
+			expected.emplace(entities[index], index);
+		}
+		const auto lastId = entities.back().getUniqueId().value();
+		const Entity loaded { Entity::ID { lastId + 65537 } };
+		const Entity sparseOnly { Entity::ID { lastId + 131074 } };
+		world.registerEntity(loaded);
+		world.registerEntity(sparseOnly);
+		components.addComponents(loaded, Health { 10 }, Position { 700 });
+		components.addComponent(sparseOnly, Health { 10 });
+		expected.emplace(loaded, 700);
+
+		std::unordered_set<Entity> visited;
+		components.forEach<Write<Health>, Read<Position>>([&](Entity entity, Health& health, const Position& position) {
+			expect(visited.insert(entity).second && expected.at(entity) == position.value,
+				"indexed pair uses the correct row across chunks and ID pages");
+			health.value += position.value;
+		});
+		expect(visited.size() == expected.size(), "indexed pair also resolves compact IDs");
+
+		components.removeComponents<Position>(loaded);
+		expected.erase(loaded);
+		visited.clear();
+		components.forEach<Read<Position>, Read<Health>>([&](Entity entity, const Position& position, const Health& health) {
+			expect(
+				visited.insert(entity).second && expected.at(entity) == position.value, "indexed pair rejects rows outside the matching archetype");
+			expect(health.value == 10 + position.value, "indexed pair preserves parameter order and writes to the original sparse pool");
+		});
+		expect(visited.size() == expected.size(), "indexed pair remains correct after an archetype transition");
+	}
+
 	void checkAlignment(ArchetypeLayout layout) {
 		World world { layout };
 		auto& components = *world.getComponentManager();
@@ -409,5 +452,6 @@ void runStorageTests() {
 	}
 	checkIndexedTransitionFailure();
 	checkIndexedWeakRelocation();
+	checkIndexedPair();
 }
 }

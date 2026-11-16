@@ -78,6 +78,7 @@ struct Record {
 
 class ComponentManager {
 	friend class World;
+	friend struct MixedQueryBenchmarkAccess;
 
 	class EntityRecords {
 		// ID bytes select a branch, a directory, a page and a slot.
@@ -150,6 +151,12 @@ class ComponentManager {
 			Page* page = nullptr;
 		};
 
+		// Each query owns its cursor. Structural changes are blocked during the pass.
+		struct PageCursor {
+			std::uint32_t index = std::numeric_limits<std::uint32_t>::max();
+			Page* page = nullptr;
+		};
+
 		void insertGenerated(Entity entity, Archetype* archetype, std::uint64_t generation) {
 			// Observing a loaded ID advances the generator before it can issue that ID.
 			const auto id = entity.getUniqueId().value();
@@ -196,6 +203,16 @@ class ComponentManager {
 		const Record* find(Entity entity) const noexcept {
 			const auto id = entity.getUniqueId().value();
 			return locateInPage(id, findPage(id >> pageBits)).record;
+		}
+
+		const Record* find(Entity entity, PageCursor& cursor) const noexcept {
+			const auto id = entity.getUniqueId().value();
+			const auto pageIndex = id >> pageBits;
+			if (cursor.index != pageIndex) {
+				cursor.index = pageIndex;
+				cursor.page = findPage(pageIndex);
+			}
+			return locateInPage(id, cursor.page).record;
 		}
 
 		Record& at(Entity entity);
@@ -482,6 +499,35 @@ private:
 		}
 	}
 
+	template <bool DenseFirst, class First, class Second, class Func>
+	void visitIndexedPair(const std::array<ComponentArrayInterface*, 2>& arrays, const Archetype& table, Func& func) const {
+		using DenseTerm = std::conditional_t<DenseFirst, First, Second>;
+		using SparseTerm = std::conditional_t<DenseFirst, Second, First>;
+		auto& dense = static_cast<ComponentArray<RawType<DenseTerm>>&>(*arrays[DenseFirst ? 0 : 1]).componentArray;
+		auto& sparse = static_cast<ComponentArray<RawType<SparseTerm>>&>(*arrays[DenseFirst ? 1 : 0]);
+		const auto entities = sparse.getEntities();
+		EntityRecords::PageCursor cursor;
+		std::size_t firstRow = 0;
+		for (std::size_t chunk = 0; chunk < sparse.componentArray.chunk_count(); ++chunk) {
+			const auto values = sparse.componentArray.chunk(chunk);
+			for (std::size_t offset = 0; offset < values.size(); ++offset) {
+				const Entity entity = entities[firstRow + offset];
+				const auto* record = mEntityRecords.find(entity, cursor);
+				if (record && record->archetype == &table) {
+					auto& denseValue = dense[record->row];
+					auto& sparseValue = values[offset];
+					if constexpr (DenseFirst) {
+						std::invoke(func, entity, static_cast<QueryReference<First>>(denseValue), static_cast<QueryReference<Second>>(sparseValue));
+					}
+					else {
+						std::invoke(func, entity, static_cast<QueryReference<First>>(sparseValue), static_cast<QueryReference<Second>>(denseValue));
+					}
+				}
+			}
+			firstRow += values.size();
+		}
+	}
+
 	template <template <class> class Event, class T> void emitComponentEvent(Entity entity) {
 		auto* signal = mEventManager.findSignal<Event<T>>();
 		if (!signal || signal->getListenerCount() == 0) {
@@ -498,7 +544,7 @@ private:
 		const auto storage = mComponentStorageType.find(id);
 		if (storage != mComponentStorageType.end() && storage->second == StorageType::Archetype) {
 			const Record& record = mEntityRecords.at(entity);
-			const auto& archetype = record->archetype;
+			const auto& archetype = record.archetype;
 			return std::static_pointer_cast<ComponentArray<T>>(archetype->mComponentArrays.at(id))->getData(entity);
 		}
 		return std::static_pointer_cast<ComponentArray<T>>(mSparseArrays.at(id))->getData(entity);
@@ -1039,12 +1085,25 @@ public:
 					visitRows<Components...>(arrays, sparseAligned, *smallestSparse, func);
 					return;
 				}
+				if constexpr (count == 2) {
+					if (matchingArchetypes == 1) {
+						bindColumns(*matchingArchetype);
+						if (firstArchetype == 0) {
+							visitIndexedPair<true, Components...>(arrays, *matchingArchetype, func);
+						}
+						else {
+							visitIndexedPair<false, Components...>(arrays, *matchingArchetype, func);
+						}
+						return;
+					}
+				}
 
 				const Archetype* previousArchetype = nullptr;
 				bool matchesPrevious = false;
+				EntityRecords::PageCursor cursor;
 				for (std::size_t row = 0; row < sparseRows.size(); ++row) {
 					const Entity entity = sparseRows[row];
-					const auto* record = mEntityRecords.find(entity);
+					const auto* record = mEntityRecords.find(entity, cursor);
 					if (!record) {
 						continue;
 					}

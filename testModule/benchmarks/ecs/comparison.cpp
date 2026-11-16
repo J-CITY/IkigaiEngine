@@ -10,6 +10,22 @@
 #include <string>
 #include <vector>
 
+namespace IKIGAI::ECS {
+struct MixedQueryBenchmarkAccess {
+	static std::size_t sumRows(const ComponentManager& manager, std::span<const Entity> entities) {
+		std::size_t sum = 0;
+		ComponentManager::EntityRecords::PageCursor cursor;
+		for (const auto entity : entities) {
+			const auto* record = manager.mEntityRecords.find(entity, cursor);
+			if (record) {
+				sum += record->row;
+			}
+		}
+		return sum;
+	}
+};
+}
+
 namespace ECS_BENCHMARK {
 namespace {
 	using IKIGAI::ECS::ArchetypeLayout;
@@ -46,7 +62,7 @@ namespace {
 			...);
 	}
 
-	template <class Backend> void movement(benchmark::State& state) {
+	template <class Backend, bool LookupOnly = false> void movement(benchmark::State& state) {
 		using PositionType = typename Backend::PositionType;
 		using VelocityType = typename Backend::VelocityType;
 		const auto count = static_cast<std::size_t>(state.range(0));
@@ -81,15 +97,29 @@ namespace {
 			position.x += velocity.x * delta;
 			position.y += velocity.y * delta;
 		});
+		std::span<const IKIGAI::ECS::Entity> lookupEntities;
+		if constexpr (LookupOnly) {
+			lookupEntities = backend.components.template getComponentsArray<VelocityType>().getEntities();
+			const auto expectedSum = expectedMatches * (expectedMatches - 1) / 2 * stride;
+			if (IKIGAI::ECS::MixedQueryBenchmarkAccess::sumRows(backend.components, lookupEntities) != expectedSum) {
+				state.SkipWithError("record lookup returned unexpected rows");
+				return;
+			}
+		}
 		for (auto _ : state) {
-			move();
+			if constexpr (LookupOnly) {
+				benchmark::DoNotOptimize(IKIGAI::ECS::MixedQueryBenchmarkAccess::sumRows(backend.components, lookupEntities));
+			}
+			else {
+				move();
+			}
 			benchmark::ClobberMemory();
 		}
 		const auto iterations = static_cast<float>(state.iterations());
 		for (std::size_t index = 0; index < count; ++index) {
 			const auto* position = backend.template get<PositionType>(entities[index]);
 			const auto initial = static_cast<float>(index % 29);
-			const auto updates = index % stride == 0 ? iterations : 0.0f;
+			const auto updates = !LookupOnly && index % stride == 0 ? iterations : 0.0f;
 			if (!position || position->x != initial + updates * 0.25f || position->y != -initial - updates * 0.125f) {
 				state.SkipWithError("movement updated the wrong entity or value");
 				return;
@@ -407,6 +437,7 @@ namespace {
 		->Args({ 10000, 50, 1 })
 		->Args({ 100000, 10, 1 })
 		->Args({ 100000, 50, 1 });
+	BENCHMARK_TEMPLATE(movement, IkigaiMixed, true)->Name("Ikigai/MixedRows/Lookup")->UseRealTime()->Args({ 100000, 10, 1 })->Args({ 100000, 50, 1 });
 	BENCHMARK(cachedQueryBuild)->UseManualTime();
 
 	BENCHMARK_TEMPLATE(structural, IkigaiCompact, Structure::Create)->Apply(entitySizes);

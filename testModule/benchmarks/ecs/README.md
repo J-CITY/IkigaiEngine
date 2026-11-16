@@ -33,6 +33,13 @@ $filter = '^(movement<(IkigaiCompact|IkigaiMixed|EnTT|FlecsUncached|FlecsCached)
 - `structural` измеряет создание и удаление пустых сущностей, добавление, снятие и цикл добавления/снятия компонента у сущности с позицией. Для раздельных добавления и снятия целевое хранилище подготавливается вне таймера. В цикле одна пара считается двумя операциями.
 - Время сравнения берётся из `real_time`. Для наносекунд на элемент медиану делят на число совпадений, а для структурных операций на число операций. Исходные повторы и коэффициент вариации записываются в JSON. Подготовка мира, проверка результата и очистка фикстур находятся вне измеряемого участка.
 
+`Ikigai/MixedRows/Lookup` использует тот же порядок ID из sparse-пула, что и `IkigaiMixed`. Таймер охватывает поиск записи и суммирование номеров архетипных строк. Время делится на число ID в sparse-пуле.
+
+```powershell
+$filter = '^(movement<IkigaiMixed>/100000/(10|50)/1/|movement<(IkigaiCompact|EnTT|FlecsUncached|FlecsCached)>/entities:100000/match_pct:(10|50)/signatures:1/|Ikigai/MixedRows/)'
+& $exe "--benchmark_filter=$filter" --benchmark_min_time=0.08s --benchmark_min_warmup_time=0.02 --benchmark_repetitions=7 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/mixed-lookup.json --benchmark_out_format=json
+```
+
 Для диагностики Ikigai доступны `IkigaiNoHandle` с вызовом `addComponents`, `IkigaiWithListeners` с подписчиками на события и `Ikigai/AddTransition` с холодным и повторным переходом. В каждом замере `AddTransition` выполняется по одному добавлению в 64 отдельных мирах. Для времени на добавление значение из JSON делится на 64.
 
 `Ikigai/EntityRegistry/GenerateIds` измеряет только выдачу ID. Для `RegisterKnownIds` заранее готовятся 100 000 последовательных ID, а таймер охватывает регистрацию в новом мире. `RegisterSparseIds` регистрирует 1 000 загруженных ID с шагом 65 537. В страничном реестре такой шаг давал отдельную страницу и отдельный каталог страниц на ID. Гибрид хранит эти записи компактно. Подготовка ID и проверка реестра в обоих сценариях выполняются вне таймера.
