@@ -2,6 +2,7 @@
 #include "ecsModule/world.h"
 #include "support/expect.h"
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <stdexcept>
@@ -472,6 +473,69 @@ void checkIndexedTransitionPlans() {
 	expect(components.resolveComponent(retained) != nullptr, "add returns a live handle after the listener is removed");
 }
 
+void checkArchetypeBatch(ECS::ArchetypeLayout layout) {
+	using namespace ECS;
+	World world { layout };
+	auto& components = *world.getComponentManager();
+	std::array<Entity, 257> entities {};
+	std::array<ComponentHandle<Position>, 257> positions {};
+	for (std::size_t index = 0; index < entities.size(); ++index) {
+		entities[index] = world.createEntity();
+		positions[index] = components.addComponent(entities[index], Position { static_cast<int>(index) });
+		if (index % 2 == 0) {
+			components.addComponent(entities[index], Velocity { 5 });
+		}
+	}
+	const auto previous = components.addComponent(entities.front(), Shield { 1 });
+	const std::array missing { entities.back(), Entity {} };
+	expectThrows([&] { components.addArchetypeComponentBatch(missing, Shield { 10 }); }, "invalid entity is detected before changing the batch");
+	expect(!components.checkComponent<Shield>(entities.back()), "batch preflight leaves valid candidates unchanged on failure");
+
+	std::vector<Entity> edits(entities.rbegin(), entities.rend());
+	edits.push_back(entities.back());
+	components.addArchetypeComponentBatch(edits, Shield { 10 });
+	expect(!components.resolveComponent(previous), "batch replacement supersedes the old handle");
+	for (std::size_t index = 0; index < entities.size(); ++index) {
+		const auto* position = components.resolveComponent(positions[index]);
+		const auto* shield = components.tryGetComponent<Shield>(entities[index]);
+		expect(position && position->value == static_cast<int>(index) && shield && shield->value == 10,
+			"batch retains component handles and maps values across source tables");
+		expect(components.checkComponent<Velocity>(entities[index]) == (index % 2 == 0), "batch keeps the retained signature");
+	}
+
+	std::vector<Entity> events;
+	auto& signals = components.getEventManager();
+	const auto token = signals.subscribe<OnAdd<Health>>([&](const OnAdd<Health>& event) {
+		events.push_back(event.entity);
+		components.removeComponents<Health>(event.entity);
+	});
+	const std::array ordered { entities[10], entities[11], entities[10] };
+	components.addArchetypeComponentBatch(ordered, Health { 20 });
+	expect(
+		std::ranges::equal(events, ordered) && !components.checkComponent<Health>(entities[10]), "batch honors callback order and structural edits");
+	signals.unsubscribe<OnAdd<Health>>(token);
+
+	Signature signature;
+	const auto positionType = components.getComponentType<Position>();
+	signature.set(positionType.value(), true);
+	signature.set(components.getComponentType<Shield>().value(), true);
+	const auto source = components.getArchetype(signature);
+	const auto sourceRows = source->getComponents<Position>(positionType)->getEntities();
+	expect(sourceRows.size() == entities.size() / 2, "fixture spans the odd-numbered source rows");
+	components.addArchetypeComponentBatch(sourceRows, Health { 42 });
+	for (std::size_t index = 0; index < entities.size(); ++index) {
+		expect(components.checkComponent<Health>(entities[index]) == (index % 2 != 0), "batch can take a span into its source table");
+	}
+
+	const auto custom = world.createEntity();
+	TrackedComponent tracked;
+	tracked.value = 31;
+	const auto weak = components.addComponent(custom, std::move(tracked));
+	const std::array withCustomLifetime { custom, entities[2] };
+	components.addArchetypeComponentBatch(withCustomLifetime, Health { 42 });
+	expect(weak && weak->value == 31 && components.checkComponent<Health>(custom), "batch preserves weak references for retained components");
+}
+
 void runStorageTests() {
 	for (const auto layout : { ECS::ArchetypeLayout::PerColumn, ECS::ArchetypeLayout::SharedRows }) {
 		checkHandles(layout);
@@ -483,6 +547,7 @@ void runStorageTests() {
 		checkDenseChunks(layout);
 		checkAlignment(layout);
 		checkRelationCleanup(layout);
+		checkArchetypeBatch(layout);
 	}
 	checkIndexedTransitionFailure();
 	checkIndexedWeakRelocation();

@@ -462,6 +462,81 @@ namespace {
 		}
 	};
 
+	template <class Backend, std::size_t Columns, bool Batch> void batchAddition(benchmark::State& state) {
+		const auto count = static_cast<std::size_t>(state.range(0));
+		std::vector<typename Backend::Entity> entities(count);
+		for (auto _ : state) {
+			state.PauseTiming();
+			auto backend = std::make_unique<Backend>();
+			const auto createSource = [&](std::size_t value) {
+				const auto entity = backend->create();
+				[&]<std::size_t... Index>(std::index_sequence<Index...>) {
+					(backend->add(entity, RetainedComponent<Index> { static_cast<int>(value + Index) }), ...);
+				}(std::make_index_sequence<Columns> {});
+				return entity;
+			};
+			const auto warm = createSource(0);
+			backend->add(warm, Marker { 7 });
+			backend->destroy(warm);
+			for (std::size_t index = 0; index < count; ++index) {
+				entities[index] = createSource(index);
+			}
+			state.ResumeTiming();
+			if constexpr (Batch && std::is_same_v<Backend, IkigaiCompact>) {
+				backend->components.addArchetypeComponentBatch(entities, Marker { 7 });
+			}
+			else if constexpr (Batch) {
+				backend->addBatch(entities, Marker { 7 });
+			}
+			else {
+				for (const auto entity : entities) {
+					backend->add(entity, Marker { 7 });
+				}
+			}
+			benchmark::ClobberMemory();
+			state.PauseTiming();
+			bool valid = true;
+			for (std::size_t index = 0; index < count && valid; ++index) {
+				const auto entity = entities[index];
+				const auto* marker = backend->template get<Marker>(entity);
+				const auto retained = [&]<std::size_t I> {
+					const auto* component = backend->template get<RetainedComponent<I>>(entity);
+					return component && component->value == static_cast<int>(index + I);
+				};
+				valid = marker && marker->value == 7 && [&]<std::size_t... Index>(std::index_sequence<Index...>) {
+					return (retained.template operator()<Index>() && ...);
+				}(std::make_index_sequence<Columns> {});
+			}
+			backend.reset();
+			state.ResumeTiming();
+			if (!valid) {
+				state.SkipWithError("batch addition lost a component or updated the wrong entity");
+				break;
+			}
+		}
+		state.SetItemsProcessed(state.iterations() * count);
+	}
+
+	template <std::size_t Columns> void registerBatchAddition() {
+		const auto add = [](const char* name, void (*run)(benchmark::State&)) {
+			const auto label = std::string("ArchetypeBatch/") + name + "/" + std::to_string(Columns);
+			benchmark::RegisterBenchmark(label, run)->UseRealTime()->Arg(1000)->Arg(100000);
+		};
+		add("Ikigai/Single", batchAddition<IkigaiCompact, Columns, false>);
+		add("Ikigai/SingleNoHandle", batchAddition<IkigaiNoHandle, Columns, false>);
+		add("Ikigai/Reserved", batchAddition<IkigaiCompact, Columns, true>);
+		add("EnTT/Single", batchAddition<EnTT, Columns, false>);
+		add("EnTT/ReservedRange", batchAddition<EnTT, Columns, true>);
+		add("Flecs/Single", batchAddition<FlecsUncached, Columns, false>);
+	}
+
+	const bool batchRegistered = [] {
+		registerBatchAddition<1>();
+		registerBatchAddition<4>();
+		registerBatchAddition<8>();
+		return true;
+	}();
+
 	BENCHMARK_TEMPLATE(movement, IkigaiCompact)->Apply(movementSizes);
 	BENCHMARK_TEMPLATE(movement, EnTT)->Apply(movementSizes);
 	BENCHMARK_TEMPLATE(movement, FlecsUncached)->Apply(movementSizes);

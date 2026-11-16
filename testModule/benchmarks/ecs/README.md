@@ -74,3 +74,15 @@ $filter = '^(Ikigai/StorageGrowth/SharedRows/|Ikigai/AddTransition/|structural<(
 cmake --build build/ecs --config Release --target ecs_target_allocation
 & './build/ecs/benchmarks/ecs/Release/ecs_target_allocation.exe' --benchmark_min_time=0.03s --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/target-allocation.json --benchmark_out_format=json
 ```
+
+## Пакетное добавление в существующие сущности
+
+`ArchetypeBatch` добавляет одинаковый компонент к 1 000 или 100 000 существующих сущностей с 1, 4 или 8 сохраняемыми колонками. Цель прогревается одной временной сущностью. Резервирование и вставка входят в таймер, подготовка мира и проверка всех компонентов выполняются вне него.
+
+- Ikigai измеряет поштучные `addComponent` и `addComponents`, а также `addArchetypeComponentBatch`. Последний группирует записи по целевому архетипу, резервирует строки до вставки и сохраняет порядок входных ID.
+- EnTT измеряет `emplace` и пару `storage.reserve` + `registry.insert` для диапазона. Хранилища остальных компонентов сохраняют свои строки.
+- Flecs измеряет поштучный `entity.set`. В публичном `ecs_bulk_init` предоставленные ID должны принадлежать пустым сущностям, а в этой фикстуре у сущностей уже есть компоненты.
+
+```powershell
+& $exe '--benchmark_filter=^ArchetypeBatch/' --benchmark_min_time=0.03s --benchmark_min_warmup_time=0.01 --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/archetype-batch.json --benchmark_out_format=json
+```

@@ -7,6 +7,7 @@
 #include <flecs.h>
 
 #include <chrono>
+#include <span>
 #include <type_traits>
 #include <utility>
 
@@ -75,6 +76,11 @@ public:
 	}
 	template <class T> void add(Entity entity, T value) {
 		registry.emplace<T>(entity, value);
+	}
+	template <class T> void addBatch(std::span<const Entity> entities, const T& value) {
+		auto& storage = registry.storage<T>();
+		storage.reserve(storage.size() + entities.size());
+		registry.insert<T>(entities.begin(), entities.end(), value);
 	}
 	template <class T> void remove(Entity entity) {
 		registry.remove<T>(entity);

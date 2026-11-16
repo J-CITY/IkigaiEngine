@@ -395,9 +395,27 @@ private:
 	const Archetype::Transition* getSingleComponentTransition(Archetype* from, ComponentType type, bool adding);
 	static const std::shared_ptr<MEMORY::IAllocator>& indexedChunkResource();
 	void prepareIndexedTransition(const Record& record, Archetype& to);
+	static void reserveIndexedRows(Archetype& table, std::size_t required);
 	void commitIndexedTransition(
 		Entity entity, Record& record, Archetype* to, std::span<const ComponentType> replaced, const Archetype::Transition* plan = nullptr) noexcept;
 	void eraseIndexedEntity(Archetype& archetype, std::size_t row) noexcept;
+
+	struct IndexedBatch {
+		struct Target {
+			Archetype* table = nullptr;
+			const Archetype::Transition* plan = nullptr;
+			ComponentArrayInterface* column = nullptr;
+			std::size_t incoming = 0;
+		};
+		struct Entry {
+			Record* record = nullptr;
+			Entity entity {};
+			std::uint32_t targetIndex = 0;
+		};
+		std::vector<Target> targets;
+		std::vector<Entry> entries;
+	};
+	std::optional<IndexedBatch> prepareIndexedBatch(std::span<const Entity> entities, ComponentType type);
 
 	template <class... Components>
 	std::uint64_t addIndexedComponents(Entity entity, Record& record, Archetype* to, std::span<const ComponentType> types,
@@ -687,6 +705,50 @@ public:
 
 	template <class... Components> void addComponents(Entity entity, Components&&... newComponent) {
 		addRvalueComponents(entity, copyLvalues(std::forward<Components>(newComponent))...);
+	}
+
+	// Adds or replaces one value per requested entity, in input order, without returning handles.
+	// An exception during insertion can leave successfully processed entities updated.
+	template <class T> void addArchetypeComponentBatch(std::span<const Entity> entities, const T& value) {
+		requireStructuralChangesAllowed();
+		if (entities.empty()) {
+			return;
+		}
+		const auto type = getComponentType<T>();
+		if (ensureComponentRegistered<T>(type) != StorageType::Archetype) {
+			throw std::invalid_argument("Batch addition requires an archetype component");
+		}
+		const T prototype(value);
+		auto* signal = mEventManager.findSignal<OnAdd<T>>();
+		const auto batch = mIndexedRecords && std::is_trivially_copyable_v<T> && (!signal || signal->getListenerCount() == 0)
+			? prepareIndexedBatch(entities, type)
+			: std::nullopt;
+		if (!batch) {
+			// The span may point into an archetype whose rows are changed by the edits.
+			const std::vector<Entity> ids(entities.begin(), entities.end());
+			for (const auto entity : ids) {
+				mEntityRecords.at(entity);
+			}
+			for (const auto entity : ids) {
+				addComponents(entity, prototype);
+			}
+			return;
+		}
+
+		for (const auto& edit : batch->entries) {
+			auto& record = *edit.record;
+			const auto& target = batch->targets[edit.targetIndex];
+			auto& column = static_cast<ComponentArray<T>&>(*target.column);
+			T component(prototype);
+			const auto generation = ComponentArray<T>::nextGeneration();
+			if (record.archetype == target.table) {
+				column.replaceIndexed(record.row, component, generation);
+			}
+			else {
+				column.appendIndexed(component, generation);
+				commitIndexedTransition(edit.entity, record, target.table, {}, target.plan);
+			}
+		}
 	}
 
 private:

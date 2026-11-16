@@ -115,14 +115,65 @@ void ComponentManager::prepareIndexedTransition(const Record& record, Archetype&
 	if (entities.size() < to.mReservedRows) {
 		return;
 	}
-	if (entities.size() == entities.capacity()) {
-		entities.reserve(entities.size() + entities.size() / 2 + 1);
+	reserveIndexedRows(to, entities.size() + 1);
+}
+
+void ComponentManager::reserveIndexedRows(Archetype& table, std::size_t required) {
+	if (required <= table.mReservedRows) {
+		return;
+	}
+	auto& entities = table.mRows->entities;
+	if (required > entities.capacity()) {
+		entities.reserve(std::max(required, entities.size() + entities.size() / 2 + 1));
 	}
 	auto reserved = entities.capacity();
-	for (auto* column : to.mIndexedColumns) {
-		reserved = std::min(reserved, column->reserveIndexedRow());
+	for (auto* column : table.mIndexedColumns) {
+		reserved = std::min(reserved, column->reserveIndexedRows(required));
 	}
-	to.mReservedRows = reserved;
+	table.mReservedRows = reserved;
+}
+
+std::optional<ComponentManager::IndexedBatch> ComponentManager::prepareIndexedBatch(std::span<const Entity> entities, ComponentType type) {
+	IndexedBatch batch;
+	batch.entries.reserve(entities.size());
+	std::unordered_map<Archetype*, std::uint32_t> sourceTargets;
+	Archetype* previousSource = nullptr;
+	std::uint32_t targetIndex = 0;
+	EntityRecords::PageCursor cursor;
+	for (const auto entity : entities) {
+		auto* record = const_cast<Record*>(mEntityRecords.find(entity, cursor));
+		if (!record) {
+			throw std::out_of_range("Entity is not registered in this ECS world");
+		}
+		auto* source = record->archetype;
+		if (source != previousSource) {
+			const auto [target, inserted] = sourceTargets.try_emplace(source, static_cast<std::uint32_t>(batch.targets.size()));
+			if (inserted) {
+				const auto* plan = getSingleComponentTransition(source, type, true);
+				// Custom moves and destruction may run user code while rows are in flight.
+				if (plan && !std::ranges::all_of(source->mIndexedColumns, &ComponentArrayInterface::hasTrivialLifecycle)) {
+					return std::nullopt;
+				}
+				auto* table = plan ? plan->target : source;
+				batch.targets.push_back({ table, plan, table->mComponentArrays.at(type).get(), 0 });
+			}
+			targetIndex = target->second;
+			previousSource = source;
+		}
+		auto& target = batch.targets[targetIndex];
+		target.incoming += target.plan != nullptr;
+		batch.entries.push_back({ record, entity, targetIndex });
+	}
+	for (const auto& target : batch.targets) {
+		if (target.incoming != 0) {
+			const auto& rows = target.table->mRows->entities;
+			if (target.incoming > rows.max_size() - rows.size()) {
+				throw std::length_error("ECS batch exceeds archetype capacity");
+			}
+			reserveIndexedRows(*target.table, rows.size() + target.incoming);
+		}
+	}
+	return batch;
 }
 
 void ComponentManager::commitIndexedTransition(

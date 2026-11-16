@@ -215,15 +215,19 @@ private:
 		mRows = rows;
 	}
 
-	std::size_t reserveIndexedRow() override {
+	bool hasTrivialLifecycle() const noexcept override {
+		return std::is_trivially_copyable_v<T>;
+	}
+
+	std::size_t reserveIndexedRows(std::size_t required) override {
 		const auto count = componentArray.size();
-		if (count == componentArray.capacity()) {
-			componentArray.reserve(count + 1);
+		if (required > componentArray.capacity()) {
+			componentArray.reserve(required);
 		}
-		if (count == mGenerations.capacity()) {
+		if (required > mGenerations.capacity()) {
 			// Keep small archetypes compact and copy large generation buffers less often.
 			const auto extra = count < 4096 ? count / 2 + 1 : count;
-			mGenerations.reserve(count + extra);
+			mGenerations.reserve(std::max(required, count + extra));
 		}
 		return std::min(componentArray.capacity(), mGenerations.capacity());
 	}
