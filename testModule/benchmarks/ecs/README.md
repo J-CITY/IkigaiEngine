@@ -96,3 +96,11 @@ cmake --build build/ecs --config Release --target ecs_target_allocation
 ```powershell
 & $exe '--benchmark_filter=^ArchetypeBatchScatter/' --benchmark_min_time=0.02s --benchmark_min_warmup_time=0.005 --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/archetype-batch-scatter.json --benchmark_out_format=json
 ```
+
+`ArchetypeScatterFocus` повторяет сценарий `Shuffled` при 10% выбранных сущностей и восьми сохраняемых колонках. `SourceChunks`, `SourceRowsBitmap` и `TargetChunksBitmap` измеряют одни и те же фазы с разным порядком переноса. В JSON `plan_ns` включает поиск записей, резервирование и построение плана, `target_ns` включает заполнение цели и обновление записей перемещённых сущностей, `compact_ns` включает уплотнение источника и обновление номеров оставшихся строк. Счётчики уже нормированы на выбранную сущность. `Adaptive` вызывает публичный API без таймеров фаз. Сравнение с EnTT и Flecs выполняется в том же прогоне.
+
+```powershell
+& $exe '--benchmark_filter=^ArchetypeScatterFocus/' --benchmark_min_time=0.02s --benchmark_min_warmup_time=0.005 --benchmark_repetitions=7 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/archetype-scatter-focus.json --benchmark_out_format=json
+```
+
+Для контрольного замера процесс закреплялся за логическим CPU 18 через `ProcessorAffinity` с маской `1 -shl 18`.

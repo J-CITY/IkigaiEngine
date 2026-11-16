@@ -42,9 +42,9 @@ public:
 	virtual std::size_t reserveIndexedRows(std::size_t required) = 0;
 	virtual void appendIndexedMove(std::size_t sourceRow, ComponentArrayInterface& destination) noexcept = 0;
 	virtual void transferIndexedRange(std::size_t first, std::size_t count, ComponentArrayInterface& destination) noexcept = 0;
-	virtual void transferIndexedRows(
-		std::span<const IndexedRowMove> outgoing, std::span<const IndexedRowMove> compacted, ComponentArrayInterface& destination) noexcept
+	virtual void appendIndexedRows(std::span<const IndexedRowMove> outgoing, ComponentArrayInterface& destination, bool destinationOrder) noexcept
 		= 0;
+	virtual void compactIndexedRows(std::size_t retained, std::span<const IndexedRowMove> compacted) noexcept = 0;
 	virtual void eraseIndexedRow(std::size_t row) noexcept = 0;
 };
 }

@@ -288,21 +288,37 @@ private:
 		}
 	}
 
-	void transferIndexedRows(
-		std::span<const IndexedRowMove> outgoing, std::span<const IndexedRowMove> compacted, ComponentArrayInterface& destination) noexcept override {
+	void appendIndexedRows(std::span<const IndexedRowMove> outgoing, ComponentArrayInterface& destination, bool destinationOrder) noexcept override {
 		if constexpr (std::is_trivially_copyable_v<T> && std::is_trivially_move_constructible_v<T>) {
 			auto& target = static_cast<ComponentArray&>(destination);
 			const auto first = target.mGenerations.size();
-			target.componentArray.append_trivial_rows_reserved(componentArray, outgoing);
 			target.mGenerations.resize(first + outgoing.size());
-			for (const auto& row : outgoing) {
-				target.mGenerations[first + row.destination] = mGenerations[row.source];
+			if (destinationOrder) {
+				target.componentArray.append_trivial_gather_reserved(componentArray, outgoing);
+				auto generations = target.mGenerations.begin() + first;
+				for (const auto& row : outgoing) {
+					*generations++ = mGenerations[row.source];
+				}
 			}
+			else {
+				target.componentArray.append_trivial_rows_reserved(componentArray, outgoing);
+				for (const auto& row : outgoing) {
+					target.mGenerations[first + row.destination] = mGenerations[row.source];
+				}
+			}
+		}
+		else {
+			std::terminate();
+		}
+	}
+
+	void compactIndexedRows(std::size_t retained, std::span<const IndexedRowMove> compacted) noexcept override {
+		if constexpr (std::is_trivially_copyable_v<T> && std::is_trivially_move_constructible_v<T>) {
 			for (const auto& row : compacted) {
 				mGenerations[row.destination] = mGenerations[row.source];
 			}
-			mGenerations.resize(mGenerations.size() - outgoing.size());
-			componentArray.compact_trivial_rows(mGenerations.size(), compacted);
+			mGenerations.resize(retained);
+			componentArray.compact_trivial_rows(retained, compacted);
 		}
 		else {
 			std::terminate();

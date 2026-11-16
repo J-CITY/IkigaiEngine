@@ -427,10 +427,22 @@ private:
 		std::vector<IndexedRowMove> outgoing;
 		std::vector<IndexedRowMove> compacted;
 		bool needsGrouping = false;
+		bool destinationOrder = false;
 		std::uint32_t nextDestination = 0;
 	};
-	static std::optional<std::vector<IndexedScatterTarget>> prepareIndexedScatter(const IndexedBatch& batch, std::size_t chunkSize);
-	void commitIndexedScatter(const IndexedBatch& batch, std::span<IndexedScatterTarget> scatter) noexcept;
+	enum class ScatterOrder { Adaptive, Source, SourceRowsBitmap, Destination };
+	static std::optional<std::vector<IndexedScatterTarget>> prepareIndexedScatter(
+		const IndexedBatch& batch, std::size_t chunkSize, ScatterOrder order = ScatterOrder::Adaptive);
+	static void appendIndexedScatterRows(const IndexedBatch& batch, std::span<IndexedScatterTarget> scatter) noexcept;
+	void compactIndexedScatter(const IndexedBatch& batch, std::span<const IndexedScatterTarget> scatter) noexcept;
+	template <class T> static void appendIndexedScatterValues(const IndexedBatch& batch, const T& value) {
+		auto generation = ComponentArray<T>::generationSequence().nextRange(batch.entries.size()).value();
+		for (const auto& target : batch.targets) {
+			auto& column = static_cast<ComponentArray<T>&>(*target.column);
+			column.appendIndexedValues(target.incoming, value, generation);
+			generation += target.incoming;
+		}
+	}
 	struct IndexedBatchRange {
 		Archetype* source = nullptr;
 		const Archetype::Transition* plan = nullptr;
@@ -774,13 +786,9 @@ private:
 
 		if constexpr (Chunked && std::is_trivially_copyable_v<T> && std::is_trivially_copy_constructible_v<T>) {
 			if (auto scatter = prepareIndexedScatter(*batch, ComponentArray<T>::Storage::chunk_size)) {
-				auto generation = ComponentArray<T>::generationSequence().nextRange(entities.size()).value();
-				for (const auto& target : batch->targets) {
-					auto& column = static_cast<ComponentArray<T>&>(*target.column);
-					column.appendIndexedValues(target.incoming, prototype, generation);
-					generation += target.incoming;
-				}
-				commitIndexedScatter(*batch, *scatter);
+				appendIndexedScatterValues(*batch, prototype);
+				appendIndexedScatterRows(*batch, *scatter);
+				compactIndexedScatter(*batch, *scatter);
 				return;
 			}
 		}

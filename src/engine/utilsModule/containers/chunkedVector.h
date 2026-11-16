@@ -219,6 +219,23 @@ public:
 		copyTrivialRows(mSize, source, rows);
 		mSize += rows.size();
 	}
+	// The rows are indexed in destination order, so each destination chunk is resolved once.
+	template <class Row>
+	void append_trivial_gather_reserved(const ChunkedVector& source, std::span<const Row> rows) noexcept
+		requires(std::is_trivially_copyable_v<T> && std::is_trivially_move_constructible_v<T>)
+	{
+		assert(this != &source && rows.size() <= capacity() - mSize);
+		while (!rows.empty()) {
+			const auto offset = mSize % ChunkSize;
+			const auto count = std::min(ChunkSize - offset, rows.size());
+			auto* output = mBlocks[mSize / ChunkSize] + offset;
+			for (std::size_t index = 0; index < count; ++index) {
+				std::memcpy(output + index, std::addressof(source[rows[index].source]), sizeof(T));
+			}
+			mSize += count;
+			rows = rows.subspan(count);
+		}
+	}
 	// Each copy reads a distinct survivor in the discarded tail.
 	template <class Row>
 	void compact_trivial_rows(size_type retained, std::span<const Row> rows) noexcept

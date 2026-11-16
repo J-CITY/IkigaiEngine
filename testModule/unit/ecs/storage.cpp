@@ -649,6 +649,50 @@ void checkScatteredArchetypeBatch() {
 	expect(visited == repeated.size() - 1, "repeated IDs fall back to replacement without adding duplicate rows");
 }
 
+void checkWideSparseChunkBatch() {
+	using namespace ECS;
+	World world { ArchetypeLayout::SharedRows };
+	auto& components = *world.getComponentManager();
+	const auto addSource = [&](int value) {
+		const auto entity = world.createEntity();
+		components.addComponents(entity, Position { value }, Velocity { value }, Shield { value }, Follows {}, Owns {}, AlignedPosition { value + 1 },
+			AlignedVelocity { -value }, static_cast<std::uint32_t>(value));
+		return entity;
+	};
+	const auto existing = addSource(0);
+	const auto oldHealth = components.addComponent(existing, Health { 7 });
+	std::vector<Entity> entities;
+	std::vector<ComponentHandle<Position>> positions;
+	for (int index = 0; index < 1277; ++index) {
+		const auto entity = addSource(index);
+		entities.push_back(entity);
+		positions.push_back(components.getComponentHandle<Position>(entity));
+	}
+	std::vector<Entity> selected;
+	for (int index = 1270; index >= 0; index -= 10) {
+		selected.push_back(entities[index]);
+	}
+	components.addArchetypeComponentBatch(selected, Health { 11 });
+	Signature signature;
+	[&]<class... T> {
+		(signature.set(components.getComponentType<T>().value(), true), ...);
+	}.template operator()<Position, Velocity, Shield, Follows, Owns, AlignedPosition, AlignedVelocity, std::uint32_t, Health>();
+	const auto positionType = components.getComponentType<Position>();
+	const auto targetRows = components.getArchetype(signature)->getComponents<Position>(positionType)->getEntities();
+	expect(targetRows.size() == selected.size() + 1 && targetRows.front() == existing && std::ranges::equal(targetRows.subspan(1), selected),
+		"wide sparse batches preserve the batch order across a partially filled destination chunk");
+	expect(components.resolveComponent(oldHealth) && components.resolveComponent(oldHealth)->value == 7,
+		"wide sparse batches preserve live rows preceding the batch");
+	for (std::size_t index = 0; index < entities.size(); ++index) {
+		const auto* position = components.resolveComponent(positions[index]);
+		const auto* aligned = components.tryGetComponent<AlignedVelocity>(entities[index]);
+		const auto* health = components.tryGetComponent<Health>(entities[index]);
+		expect(position && position->value == static_cast<int>(index) && aligned && aligned->value == -static_cast<int>(index),
+			"wide sparse batches retain component values and generations");
+		expect(index % 10 == 0 ? health && health->value == 11 : health == nullptr, "bitmap compaction preserves the selected rows");
+	}
+}
+
 void runStorageTests() {
 	for (const auto layout : { ECS::ArchetypeLayout::PerColumn, ECS::ArchetypeLayout::SharedRows }) {
 		checkHandles(layout);
@@ -668,6 +712,7 @@ void runStorageTests() {
 	checkIndexedPair();
 	checkChunkedArchetypeBatch();
 	checkScatteredArchetypeBatch();
+	checkWideSparseChunkBatch();
 	checkGenerationRange();
 }
 }

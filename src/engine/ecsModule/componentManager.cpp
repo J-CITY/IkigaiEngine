@@ -1,6 +1,7 @@
 #include "componentManager.h"
 
 #include <algorithm>
+#include <bit>
 
 namespace IKIGAI::ECS {
 ComponentManager::ComponentManager()
@@ -230,7 +231,7 @@ std::optional<ComponentManager::IndexedBatch> ComponentManager::prepareIndexedBa
 }
 
 std::optional<std::vector<ComponentManager::IndexedScatterTarget>> ComponentManager::prepareIndexedScatter(
-	const IndexedBatch& batch, std::size_t chunkSize) {
+	const IndexedBatch& batch, std::size_t chunkSize, ScatterOrder order) {
 	std::vector<IndexedScatterTarget> scatter;
 	scatter.reserve(batch.targets.size());
 	constexpr std::size_t minimumRetainedColumns = 4;
@@ -258,11 +259,23 @@ std::optional<std::vector<ComponentManager::IndexedScatterTarget>> ComponentMana
 	std::vector<IndexedRowMove> reordered;
 	std::vector<unsigned char> seen(chunkSize);
 	std::vector<unsigned char> outgoingTail;
+	std::vector<std::uint64_t> selected;
+	constexpr std::size_t minimumWideColumns = 8;
+	// Limit the dense destination-offset scratch to batches near the measured density.
+	constexpr std::size_t minimumDensityDivisor = 16;
+	constexpr std::size_t maximumDensityDivisor = 8;
 	for (std::size_t index = 0; index < scatter.size(); ++index) {
 		auto& group = scatter[index];
-		const auto rows = batch.targets[index].source->mRows->entities.size();
+		const auto& target = batch.targets[index];
+		const auto rows = target.source->mRows->entities.size();
+		const auto count = group.outgoing.size();
+		const auto minimumCount = rows / minimumDensityDivisor + (rows % minimumDensityDivisor != 0);
+		const bool wideSparseBatch = group.needsGrouping && target.plan->columns.size() >= minimumWideColumns && count >= minimumCount
+			&& count <= rows / maximumDensityDivisor;
+		const bool ascendingSource = order == ScatterOrder::SourceRowsBitmap || (order == ScatterOrder::Adaptive && wideSparseBatch);
+		group.destinationOrder = order == ScatterOrder::Destination;
 		const auto chunkCount = rows / chunkSize + (rows % chunkSize != 0);
-		if (group.needsGrouping) {
+		if (group.needsGrouping && !group.destinationOrder && !ascendingSource) {
 			chunks.assign(chunkCount, 0);
 			for (const auto& move : group.outgoing) {
 				++chunks[move.source / chunkSize];
@@ -281,6 +294,53 @@ std::optional<std::vector<ComponentManager::IndexedScatterTarget>> ComponentMana
 		}
 
 		const auto retained = rows - group.outgoing.size();
+		group.compacted.reserve(std::min(retained, group.outgoing.size()));
+		if (group.destinationOrder || ascendingSource) {
+			constexpr std::size_t bitsPerWord = 64;
+			selected.assign(rows / bitsPerWord + (rows % bitsPerWord != 0), 0);
+			// Read destination offsets only for bits present in selected.
+			auto destinations = ascendingSource ? std::make_unique_for_overwrite<std::uint32_t[]>(rows) : nullptr;
+			for (const auto& move : group.outgoing) {
+				auto& word = selected[move.source / bitsPerWord];
+				const auto bit = std::uint64_t { 1 } << (move.source % bitsPerWord);
+				if (word & bit) {
+					return std::nullopt;
+				}
+				word |= bit;
+				if (ascendingSource) {
+					destinations[move.source] = move.destination;
+				}
+			}
+			const auto retainedWords = retained / bitsPerWord + (retained % bitsPerWord != 0);
+			const auto words = ascendingSource ? selected.size() : retainedWords;
+			reordered.clear();
+			if (ascendingSource) {
+				reordered.reserve(group.outgoing.size());
+			}
+			auto tail = rows;
+			for (std::size_t wordIndex = 0; wordIndex < words; ++wordIndex) {
+				auto pending = selected[wordIndex];
+				const auto first = wordIndex * bitsPerWord;
+				while (pending) {
+					const auto row = static_cast<std::uint32_t>(first + std::countr_zero(pending));
+					pending &= pending - 1;
+					if (ascendingSource) {
+						reordered.push_back({ row, destinations[row] });
+					}
+					if (row < retained) {
+						do {
+							--tail;
+						} while ((selected[tail / bitsPerWord] >> (tail % bitsPerWord)) & 1);
+						group.compacted.push_back({ static_cast<std::uint32_t>(tail), row });
+					}
+				}
+			}
+			if (ascendingSource) {
+				group.outgoing.swap(reordered);
+			}
+			continue;
+		}
+
 		outgoingTail.assign(group.outgoing.size(), 0);
 		auto chunk = chunkCount;
 		for (const auto& move : group.outgoing) {
@@ -297,7 +357,6 @@ std::optional<std::vector<ComponentManager::IndexedScatterTarget>> ComponentMana
 		}
 
 		// Consume surviving tail rows once, leaving rows in the retained prefix in place.
-		group.compacted.reserve(std::min(retained, group.outgoing.size()));
 		auto tail = outgoingTail.size();
 		for (const auto& move : group.outgoing) {
 			if (move.source < retained) {
@@ -311,8 +370,7 @@ std::optional<std::vector<ComponentManager::IndexedScatterTarget>> ComponentMana
 	return scatter;
 }
 
-void ComponentManager::commitIndexedScatter(const IndexedBatch& batch, std::span<IndexedScatterTarget> scatter) noexcept {
-	EntityRecords::PageCursor cursor;
+void ComponentManager::appendIndexedScatterRows(const IndexedBatch& batch, std::span<IndexedScatterTarget> scatter) noexcept {
 	for (std::size_t index = 0; index < scatter.size(); ++index) {
 		const auto& target = batch.targets[index];
 		auto& group = scatter[index];
@@ -321,22 +379,43 @@ void ComponentManager::commitIndexedScatter(const IndexedBatch& batch, std::span
 		const auto first = targetRows.size();
 		group.nextDestination = static_cast<std::uint32_t>(first);
 		targetRows.resize(first + group.outgoing.size());
-		for (const auto& move : group.outgoing) {
-			targetRows[first + move.destination] = sourceRows[move.source];
+		if (group.destinationOrder) {
+			auto rows = targetRows.begin() + first;
+			for (const auto& move : group.outgoing) {
+				*rows++ = sourceRows[move.source];
+			}
+		}
+		else {
+			for (const auto& move : group.outgoing) {
+				targetRows[first + move.destination] = sourceRows[move.source];
+			}
 		}
 		for (const auto& column : target.plan->columns) {
-			column.source->transferIndexedRows(group.outgoing, group.compacted, *column.destination);
+			column.source->appendIndexedRows(group.outgoing, *column.destination, group.destinationOrder);
+		}
+	}
+	for (const auto& edit : batch.entries) {
+		edit.record->archetype = batch.targets[edit.targetIndex].table;
+		edit.record->row = scatter[edit.targetIndex].nextDestination++;
+	}
+}
+
+void ComponentManager::compactIndexedScatter(const IndexedBatch& batch, std::span<const IndexedScatterTarget> scatter) noexcept {
+	EntityRecords::PageCursor cursor;
+	for (std::size_t index = 0; index < scatter.size(); ++index) {
+		const auto& target = batch.targets[index];
+		const auto& group = scatter[index];
+		auto& sourceRows = target.source->mRows->entities;
+		const auto retained = sourceRows.size() - group.outgoing.size();
+		for (const auto& column : target.plan->columns) {
+			column.source->compactIndexedRows(retained, group.compacted);
 		}
 		for (const auto& move : group.compacted) {
 			const auto entity = sourceRows[move.source];
 			sourceRows[move.destination] = entity;
 			mEntityRecords.at(entity, cursor).row = move.destination;
 		}
-		sourceRows.resize(sourceRows.size() - group.outgoing.size());
-	}
-	for (const auto& edit : batch.entries) {
-		edit.record->archetype = batch.targets[edit.targetIndex].table;
-		edit.record->row = scatter[edit.targetIndex].nextDestination++;
+		sourceRows.resize(retained);
 	}
 }
 

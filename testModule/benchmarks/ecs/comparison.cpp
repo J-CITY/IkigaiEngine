@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <memory>
 #include <random>
 #include <ranges>
@@ -13,6 +14,34 @@
 
 namespace IKIGAI::ECS {
 struct EcsBenchmarkAccess {
+	enum class ScatterPolicy { Source, SourceRowsBitmap, Destination };
+
+	template <class T>
+	static std::array<double, 3> profileScatter(ComponentManager& manager, std::span<const Entity> entities, const T& value, ScatterPolicy policy) {
+		using Clock = std::chrono::steady_clock;
+		const auto begin = Clock::now();
+		const auto batch = manager.prepareIndexedBatch(entities, manager.getComponentType<T>());
+		if (!batch) {
+			throw std::logic_error("Scatter benchmark must use the indexed batch planner");
+		}
+		using Order = ComponentManager::ScatterOrder;
+		const auto order = policy == ScatterPolicy::Destination ? Order::Destination
+			: policy == ScatterPolicy::SourceRowsBitmap			? Order::SourceRowsBitmap
+																: Order::Source;
+		auto scatter = manager.prepareIndexedScatter(*batch, UTILS::ChunkList<T>::chunk_size, order);
+		if (!scatter) {
+			throw std::logic_error("Scatter benchmark must use grouped rows");
+		}
+		const auto planned = Clock::now();
+		manager.appendIndexedScatterValues(*batch, value);
+		manager.appendIndexedScatterRows(*batch, *scatter);
+		const auto appended = Clock::now();
+		manager.compactIndexedScatter(*batch, *scatter);
+		const auto end = Clock::now();
+		using Nanoseconds = std::chrono::duration<double, std::nano>;
+		return { Nanoseconds(planned - begin).count(), Nanoseconds(appended - planned).count(), Nanoseconds(end - appended).count() };
+	}
+
 	template <class T> static void addBatchByRow(ComponentManager& manager, std::span<const Entity> entities, const T& value) {
 		manager.addArchetypeComponentBatchImpl<false>(entities, value);
 	}
@@ -467,13 +496,15 @@ namespace {
 		}
 	};
 
-	enum class BatchDispatch { Single, ReservedRows, Range };
+	enum class BatchDispatch { Single, ReservedRows, Range, ProfileSource, ProfileSourceRowsBitmap, ProfileDestination };
 	enum class BatchSelection { Full, Slice, Strided, Shuffled };
 
 	template <class Backend, std::size_t Columns, BatchDispatch Dispatch, BatchSelection Selection = BatchSelection::Full>
 	void batchAddition(benchmark::State& state) {
 		using Entity = typename Backend::Entity;
 		constexpr bool scattered = Selection == BatchSelection::Strided || Selection == BatchSelection::Shuffled;
+		constexpr bool profiled = Dispatch == BatchDispatch::ProfileSource || Dispatch == BatchDispatch::ProfileSourceRowsBitmap
+			|| Dispatch == BatchDispatch::ProfileDestination;
 		const auto size = static_cast<std::size_t>(state.range(0));
 		const auto stride = scattered ? 100 / static_cast<std::size_t>(state.range(1)) : 1;
 		const auto count = (size + stride - 1) / stride;
@@ -481,6 +512,7 @@ namespace {
 		std::vector<Entity> entities(Selection == BatchSelection::Slice ? 2 * count : size);
 		std::vector<std::size_t> selectedIndices;
 		std::vector<Entity> selectedEntities;
+		std::array<double, 3> phaseTimes {};
 		if constexpr (scattered) {
 			selectedIndices.reserve(count);
 			selectedEntities.resize(count);
@@ -520,7 +552,17 @@ namespace {
 				}
 			}();
 			state.ResumeTiming();
-			if constexpr (Dispatch == BatchDispatch::ReservedRows) {
+			if constexpr (profiled) {
+				using Access = IKIGAI::ECS::EcsBenchmarkAccess;
+				constexpr auto policy = Dispatch == BatchDispatch::ProfileDestination ? Access::ScatterPolicy::Destination
+					: Dispatch == BatchDispatch::ProfileSourceRowsBitmap			  ? Access::ScatterPolicy::SourceRowsBitmap
+																					  : Access::ScatterPolicy::Source;
+				const auto phases = Access::profileScatter(backend->components, selected, Marker { 7 }, policy);
+				for (std::size_t index = 0; index < phases.size(); ++index) {
+					phaseTimes[index] += phases[index];
+				}
+			}
+			else if constexpr (Dispatch == BatchDispatch::ReservedRows) {
 				IKIGAI::ECS::EcsBenchmarkAccess::addBatchByRow(
 					backend->components, std::span<const typename Backend::Entity>(selected), Marker { 7 });
 			}
@@ -559,6 +601,12 @@ namespace {
 			}
 		}
 		state.SetItemsProcessed(state.iterations() * count);
+		if constexpr (profiled) {
+			const auto operations = static_cast<double>(state.iterations() * count);
+			state.counters["plan_ns"] = phaseTimes[0] / operations;
+			state.counters["target_ns"] = phaseTimes[1] / operations;
+			state.counters["compact_ns"] = phaseTimes[2] / operations;
+		}
 	}
 
 	template <std::size_t Columns, BatchSelection Selection> void registerScatteredAddition(const char* order) {
@@ -602,6 +650,15 @@ namespace {
 		registerBatchAddition<1>();
 		registerBatchAddition<4>();
 		registerBatchAddition<8>();
+		const auto focus = [](const char* name, void (*run)(benchmark::State&)) {
+			benchmark::RegisterBenchmark(std::string("ArchetypeScatterFocus/") + name, run)->UseRealTime()->Args({ 100000, 10 });
+		};
+		focus("Ikigai/SourceChunks", batchAddition<IkigaiCompact, 8, BatchDispatch::ProfileSource, BatchSelection::Shuffled>);
+		focus("Ikigai/SourceRowsBitmap", batchAddition<IkigaiCompact, 8, BatchDispatch::ProfileSourceRowsBitmap, BatchSelection::Shuffled>);
+		focus("Ikigai/TargetChunksBitmap", batchAddition<IkigaiCompact, 8, BatchDispatch::ProfileDestination, BatchSelection::Shuffled>);
+		focus("Ikigai/Adaptive", batchAddition<IkigaiCompact, 8, BatchDispatch::Range, BatchSelection::Shuffled>);
+		focus("EnTT/ReservedRange", batchAddition<EnTT, 8, BatchDispatch::Range, BatchSelection::Shuffled>);
+		focus("Flecs/Single", batchAddition<FlecsUncached, 8, BatchDispatch::Single, BatchSelection::Shuffled>);
 		return true;
 	}();
 
