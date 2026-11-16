@@ -67,3 +67,10 @@ cmake --build build/ecs --config Release --target ecs_registry_memory
 $filter = '^(Ikigai/StorageGrowth/SharedRows/|Ikigai/AddTransition/|structural<(IkigaiCompact|IkigaiNoHandle|EnTT|FlecsUncached), Structure::(Add|Remove|AddRemove)>)'
 & $exe "--benchmark_filter=$filter" --benchmark_min_time=0.04s --benchmark_min_warmup_time=0.01 --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/archetype-transition.json --benchmark_out_format=json
 ```
+
+`ecs_target_allocation` воспроизводит шаги роста хранилища пустого целевого архетипа на 100 000 строк. Для 1, 4 и 8 сохраняемых колонок в цели выделяются соответственно 2, 5 и 9 колонок. Таймер охватывает вызовы `reserve`. Для непрерывных поколений перед расширением заполняется живой диапазон, чтобы `reserve` переносил его как при реальном росте. Счётчик `copied_bytes` учитывает только этот диапазон. Бенчмарк сравнивает free-list и heap для чанков, прежний и новый шаг роста непрерывных поколений и экспериментальные сегменты поколений.
+
+```powershell
+cmake --build build/ecs --config Release --target ecs_target_allocation
+& './build/ecs/benchmarks/ecs/Release/ecs_target_allocation.exe' --benchmark_min_time=0.03s --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/target-allocation.json --benchmark_out_format=json
+```

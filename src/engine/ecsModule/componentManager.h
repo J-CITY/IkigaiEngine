@@ -393,6 +393,7 @@ private:
 	}
 
 	const Archetype::Transition* getSingleComponentTransition(Archetype* from, ComponentType type, bool adding);
+	static const std::shared_ptr<MEMORY::IAllocator>& indexedChunkResource();
 	void prepareIndexedTransition(const Record& record, Archetype& to);
 	void commitIndexedTransition(
 		Entity entity, Record& record, Archetype* to, std::span<const ComponentType> replaced, const Archetype::Transition* plan = nullptr) noexcept;
@@ -616,12 +617,16 @@ public:
 				throw std::invalid_argument("Shared-row archetype components require noexcept move and destruction");
 			}
 		}
-		mComponentStorageType[id] = type;
-		if (type == StorageType::Archetype) {
-			mDefaultArraysArchetype.insert({ id, std::make_shared<ComponentArray<T>>() });
-		}
-		else {
-			mSparseArrays.insert({ id, std::make_shared<ComponentArray<T>>() });
+		auto prototype = mIndexedRecords && type == StorageType::Archetype
+			? std::make_shared<ComponentArray<T>>(MEMORY::StlAllocator<T, MEMORY::Category::Component> { indexedChunkResource() })
+			: std::make_shared<ComponentArray<T>>();
+		auto& pools = type == StorageType::Archetype ? mDefaultArraysArchetype : mSparseArrays;
+		const auto registration = mComponentStorageType.emplace(id, type);
+		try {
+			pools.emplace(id, std::move(prototype));
+		} catch (...) {
+			mComponentStorageType.erase(registration.first);
+			throw;
 		}
 	}
 

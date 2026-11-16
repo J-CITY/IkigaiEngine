@@ -22,6 +22,9 @@ add_executable(ecs_benchmarks comparison.cpp demo.cpp "${ENGINE_ROOT}/src/ecsDem
 target_include_directories(ecs_benchmarks PRIVATE "${ENGINE_ROOT}/src")
 target_link_libraries(ecs_benchmarks PRIVATE ikigai_ecs_under_test EnTT::EnTT flecs::flecs_static benchmark::benchmark_main)
 
+add_executable(ecs_target_allocation targetAllocation.cpp)
+target_link_libraries(ecs_target_allocation PRIVATE ikigai_ecs_under_test benchmark::benchmark_main)
+
 if(WIN32)
     add_executable(ecs_registry_memory registryMemory.cpp)
     target_link_libraries(ecs_registry_memory PRIVATE ikigai_ecs_under_test)

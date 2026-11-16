@@ -10,6 +10,12 @@ ComponentManager::ComponentManager(ArchetypeLayout layout)
 	: mIndexedRecords(layout == ArchetypeLayout::SharedRows ? std::make_shared<EntityRecords>() : nullptr)
 	, mEntityRecords(mIndexedRecords ? *mIndexedRecords : mLocalRecords) { }
 
+const std::shared_ptr<MEMORY::IAllocator>& ComponentManager::indexedChunkResource() {
+	using namespace MEMORY;
+	static const std::shared_ptr<IAllocator> resource = std::make_shared<OptionalProfiledAllocator<HeapAllocator, Category::Component>>();
+	return resource;
+}
+
 ComponentManager::EntityRecords::Page& ComponentManager::EntityRecords::ensurePage(std::uint32_t pageIndex) {
 	if (!mRoot) {
 		mRoot = std::make_unique<Root>();

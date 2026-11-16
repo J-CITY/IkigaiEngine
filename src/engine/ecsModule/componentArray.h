@@ -10,8 +10,12 @@
 namespace IKIGAI::ECS {
 template <class T, template <class, class> class CONT = std::vector, unsigned CHUNK_SIZE = 100>
 class ComponentArray : public ComponentArrayInterface {
+	using Storage = UTILS::ChunkList<T, CONT, CHUNK_SIZE>;
+
 public:
 	ComponentArray() = default;
+	explicit ComponentArray(const typename Storage::allocator_type& allocator)
+		: componentArray(allocator) { }
 	ComponentArray(const ComponentArray&) = default;
 	ComponentArray(ComponentArray&&) = default;
 	ComponentArray& operator=(const ComponentArray&) = default;
@@ -137,7 +141,7 @@ public:
 	}
 
 	std::shared_ptr<ComponentArrayInterface> createEmptyFromThis() override {
-		return std::make_shared<ComponentArray>();
+		return std::make_shared<ComponentArray>(componentArray.get_allocator());
 	}
 
 	[[nodiscard]] bool contains(Entity entity) const override {
@@ -217,7 +221,9 @@ private:
 			componentArray.reserve(count + 1);
 		}
 		if (count == mGenerations.capacity()) {
-			mGenerations.reserve(count + count / 2 + 1);
+			// Keep small archetypes compact and copy large generation buffers less often.
+			const auto extra = count < 4096 ? count / 2 + 1 : count;
+			mGenerations.reserve(count + extra);
 		}
 		return std::min(componentArray.capacity(), mGenerations.capacity());
 	}
@@ -322,7 +328,7 @@ private:
 		entityToIndexInArray.at(indexToEntity[lastIndex]).index = lastIndex;
 	}
 
-	UTILS::ChunkList<T, CONT, CHUNK_SIZE> componentArray;
+	Storage componentArray;
 	std::unordered_map<Entity, Slot> entityToIndexInArray;
 	std::vector<Entity> indexToEntity;
 	std::shared_ptr<const ArchetypeRows> mRows;
