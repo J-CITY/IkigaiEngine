@@ -54,18 +54,23 @@ public:
 		return false;
 	}
 
-	[[nodiscard]] std::vector<Entity> getTargets(Entity entity, ComponentType relation) const {
-		std::vector<Entity> targets;
-		if (!mRelations.contains(entity)) {
-			return targets;
+	// Visit matching targets in insertion order. Callbacks must leave relation storage intact.
+	template <class Visitor> void forEachTarget(Entity entity, ComponentType relation, Visitor&& visit) const {
+		const auto entry = mRelations.find(entity);
+		if (entry == mRelations.end()) {
+			return;
 		}
 
-		const auto& rels = mRelations.at(entity);
-		for (const auto& pair : rels) {
-			if (pair.first == relation) {
-				targets.push_back(pair.second);
+		for (const auto& [type, target] : entry->second) {
+			if (type == relation) {
+				visit(target);
 			}
 		}
+	}
+
+	[[nodiscard]] std::vector<Entity> getTargets(Entity entity, ComponentType relation) const {
+		std::vector<Entity> targets;
+		forEachTarget(entity, relation, [&](Entity target) { targets.push_back(target); });
 		return targets;
 	}
 

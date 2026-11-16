@@ -1,0 +1,23 @@
+enable_language(C)
+
+set(IKIGAI_ECS_BENCHMARK_DEPS "" CACHE PATH "Directory containing the entt, flecs and benchmark checkouts")
+foreach(dependency IN ITEMS entt flecs benchmark)
+    if(NOT EXISTS "${IKIGAI_ECS_BENCHMARK_DEPS}/${dependency}/CMakeLists.txt")
+        message(FATAL_ERROR "Missing ${dependency}; set IKIGAI_ECS_BENCHMARK_DEPS to the directory containing the local checkouts")
+    endif()
+endforeach()
+
+set(FLECS_SHARED OFF)
+set(FLECS_STATIC ON)
+set(FLECS_TESTS OFF)
+set(ENTT_BUILD_TESTING OFF)
+set(BENCHMARK_ENABLE_TESTING OFF)
+set(BENCHMARK_ENABLE_INSTALL OFF)
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+add_subdirectory("${IKIGAI_ECS_BENCHMARK_DEPS}/entt" entt EXCLUDE_FROM_ALL)
+add_subdirectory("${IKIGAI_ECS_BENCHMARK_DEPS}/flecs" flecs EXCLUDE_FROM_ALL)
+add_subdirectory("${IKIGAI_ECS_BENCHMARK_DEPS}/benchmark" google-benchmark EXCLUDE_FROM_ALL)
+
+add_executable(ecs_benchmarks comparison.cpp demo.cpp "${ENGINE_ROOT}/src/ecsDemo/systems.cpp")
+target_include_directories(ecs_benchmarks PRIVATE "${ENGINE_ROOT}/src")
+target_link_libraries(ecs_benchmarks PRIVATE ikigai_ecs_under_test EnTT::EnTT flecs::flecs_static benchmark::benchmark_main)
