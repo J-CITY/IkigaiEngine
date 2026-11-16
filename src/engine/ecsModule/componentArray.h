@@ -161,6 +161,8 @@ public:
 	}
 
 private:
+	friend class ComponentManager;
+
 	struct Slot {
 		std::size_t index = 0;
 		std::uint64_t generation = 0;

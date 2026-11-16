@@ -239,6 +239,29 @@ private:
 	}
 
 	template <class... Components, class Func, std::size_t... Indices>
+	static void visitDense(const std::array<ComponentArrayInterface*, sizeof...(Components)>& arrays, Func& func, std::index_sequence<Indices...>) {
+		const auto columns = std::tuple { static_cast<ComponentArray<RawType<Components>>*>(arrays[Indices])... };
+		const auto& leading = *std::get<0>(columns);
+		const std::span<const Entity> entities = leading.indexToEntity;
+		if (((std::get<Indices>(columns)->componentArray.size() != entities.size()) || ...)) {
+			throw std::logic_error("Archetype column sizes diverged");
+		}
+
+		// Every column in an archetype stores the same rows with the same chunk boundaries.
+		const auto chunkCount = leading.componentArray.chunk_count();
+		std::size_t firstRow = 0;
+		for (std::size_t chunk = 0; chunk < chunkCount; ++chunk) {
+			const auto rows = std::tuple { std::get<Indices>(columns)->componentArray.chunk(chunk)... };
+			const auto rowCount = std::get<0>(rows).size();
+			for (std::size_t offset = 0; offset < rowCount; ++offset) {
+				const Entity entity = entities[firstRow + offset];
+				std::invoke(func, entity, static_cast<QueryReference<Components>>(std::get<Indices>(rows)[offset])...);
+			}
+			firstRow += rowCount;
+		}
+	}
+
+	template <class... Components, class Func, std::size_t... Indices>
 	static void visitRows(const std::array<ComponentArrayInterface*, sizeof...(Components)>& arrays,
 		const std::array<bool, sizeof...(Components)>& rowAligned, ComponentArrayInterface& leading, Func& func, std::index_sequence<Indices...>) {
 		const auto count = static_cast<std::size_t>(leading.getSize());
@@ -640,12 +663,12 @@ public:
 		static_assert((!IsExclude<RawType<Components>> && ...), "Exclude is not supported by forEach");
 		constexpr auto count = sizeof...(Components);
 		const std::array types { getComponentType<Components>()... };
-		(SystemAccessScope::requireComponent(
-			 *this, getComponentType<Components>(), AccessTraits<Components>::ReadOnly ? AccessMode::Read : AccessMode::Write),
-			...);
+		constexpr std::array accessModes { (AccessTraits<Components>::ReadOnly ? AccessMode::Read : AccessMode::Write)... };
+		for (std::size_t i = 0; i < count; ++i) {
+			SystemAccessScope::requireComponent(*this, types[i], accessModes[i]);
+		}
 		std::array<ComponentArrayInterface*, count> arrays {};
 		std::array<bool, count> rowAligned {};
-		Signature mask;
 		ComponentArrayInterface* smallestSparse = nullptr;
 		std::size_t firstArchetype = count;
 		for (std::size_t i = 0; i < count; ++i) {
@@ -654,7 +677,6 @@ public:
 				return;
 			}
 			if (storage->second == StorageType::Archetype) {
-				mask.set(types[i].value());
 				rowAligned[i] = true;
 				if (firstArchetype == count) {
 					firstArchetype = i;
@@ -671,8 +693,16 @@ public:
 			visitRows<Components...>(arrays, rowAligned, *smallestSparse, func, std::index_sequence_for<Components...> {});
 			return;
 		}
+		const auto matches = [&](const Signature& signature) {
+			for (std::size_t i = firstArchetype; i < count; ++i) {
+				if (rowAligned[i] && !signature.test(types[i].value())) {
+					return false;
+				}
+			}
+			return true;
+		};
 		for (const auto& [signature, archetype] : mMaskToArchetype) {
-			if (!signature.contains(mask)) {
+			if (!matches(signature)) {
 				continue;
 			}
 			for (std::size_t i = 0; i < count; ++i) {
@@ -680,7 +710,12 @@ public:
 					arrays[i] = archetype->mComponentArrays.at(types[i]).get();
 				}
 			}
-			visitRows<Components...>(arrays, rowAligned, *arrays[firstArchetype], func, std::index_sequence_for<Components...> {});
+			if (smallestSparse) {
+				visitRows<Components...>(arrays, rowAligned, *arrays[firstArchetype], func, std::index_sequence_for<Components...> {});
+			}
+			else {
+				visitDense<Components...>(arrays, func, std::index_sequence_for<Components...> {});
+			}
 		}
 	}
 

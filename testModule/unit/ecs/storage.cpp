@@ -86,6 +86,38 @@ namespace {
 		});
 	}
 
+	void checkDenseChunks() {
+		World world;
+		auto& components = *world.getComponentManager();
+		std::unordered_map<Entity, int> expected;
+		std::vector<Entity> entities;
+		for (int index = 0; index < 257; ++index) {
+			const auto entity = world.createEntity();
+			entities.push_back(entity);
+			components.addComponents(entity, Position { index }, Velocity { 2 * index });
+			expected.emplace(entity, index);
+		}
+		for (std::size_t index = 0; index < 117; ++index) {
+			components.addComponent(entities[index], Shield { 1 });
+		}
+		world.destroyEntity(entities[10]);
+		expected.erase(entities[10]);
+
+		std::unordered_set<Entity> visited;
+		components.forEach<Read<Velocity>, Write<Position>>([&](Entity entity, const Velocity& velocity, Position& position) {
+			const auto entry = expected.find(entity);
+			expect(entry != expected.end() && position.value == entry->second && velocity.value == 2 * entry->second,
+				"dense iteration matches entity IDs and components across chunk boundaries");
+			expect(visited.insert(entity).second, "dense iteration visits a row only once");
+			position.value += velocity.value;
+		});
+		expect(visited.size() == expected.size(), "dense iteration visits full and partial chunks in both archetypes");
+		for (const auto& [entity, value] : expected) {
+			const auto* position = components.tryGetComponent<Position>(entity);
+			expect(position && position->value == 3 * value, "dense query writes through to the original column");
+		}
+	}
+
 	void checkAlignment() {
 		World world;
 		auto& components = *world.getComponentManager();
@@ -146,6 +178,7 @@ namespace {
 void runStorageTests() {
 	checkHandles();
 	checkQueries();
+	checkDenseChunks();
 	checkAlignment();
 	checkRelationCleanup();
 }
