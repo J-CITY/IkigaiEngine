@@ -438,6 +438,40 @@ void checkIndexedWeakRelocation() {
 	expect(!firstWeak, "destroying an indexed row invalidates weak references");
 }
 
+void checkIndexedTransitionPlans() {
+	using namespace ECS;
+	World world { ArchetypeLayout::SharedRows };
+	auto& components = *world.getComponentManager();
+	std::array<Entity, 257> entities {};
+	std::array<ComponentHandle<Position>, 257> positions {};
+	for (std::size_t index = 0; index < entities.size(); ++index) {
+		entities[index] = world.createEntity();
+		positions[index] = components.addComponent(entities[index], Position { static_cast<int>(index) });
+	}
+	for (std::size_t index = 0; index < entities.size(); ++index) {
+		const auto entity = entities[index];
+		if (index % 3 == 0) {
+			components.addComponent(entity, Shield { 5 });
+			components.removeComponents<Shield>(entity);
+		}
+		components.addComponent(entity, Velocity { 7 });
+	}
+	for (std::size_t index = 0; index < entities.size(); ++index) {
+		const auto* position = components.resolveComponent(positions[index]);
+		expect(position && position->value == static_cast<int>(index), "cached transitions preserve handles across column growth and swap-removal");
+		const auto* velocity = components.tryGetComponent<Velocity>(entities[index]);
+		expect(velocity && velocity->value == 7, "cached transitions choose the correct destination after alternating edges");
+	}
+
+	auto& events = components.getEventManager();
+	const auto token = events.subscribe<OnAdd<Shield>>([&](const OnAdd<Shield>& event) { components.removeComponents<Shield>(event.entity); });
+	const auto removed = components.addComponent(entities.front(), Shield { 9 });
+	expect(!removed && !components.checkComponent<Shield>(entities.front()), "add returns the current handle after an OnAdd listener removes it");
+	events.unsubscribe<OnAdd<Shield>>(token);
+	const auto retained = components.addComponent(entities.front(), Shield { 10 });
+	expect(components.resolveComponent(retained) != nullptr, "add returns a live handle after the listener is removed");
+}
+
 void runStorageTests() {
 	for (const auto layout : { ECS::ArchetypeLayout::PerColumn, ECS::ArchetypeLayout::SharedRows }) {
 		checkHandles(layout);
@@ -452,6 +486,7 @@ void runStorageTests() {
 	}
 	checkIndexedTransitionFailure();
 	checkIndexedWeakRelocation();
+	checkIndexedTransitionPlans();
 	checkIndexedPair();
 }
 }

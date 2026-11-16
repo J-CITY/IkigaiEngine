@@ -11,7 +11,7 @@
 #include <vector>
 
 namespace IKIGAI::ECS {
-struct MixedQueryBenchmarkAccess {
+struct EcsBenchmarkAccess {
 	static std::size_t sumRows(const ComponentManager& manager, std::span<const Entity> entities) {
 		std::size_t sum = 0;
 		ComponentManager::EntityRecords::PageCursor cursor;
@@ -22,6 +22,26 @@ struct MixedQueryBenchmarkAccess {
 			}
 		}
 		return sum;
+	}
+
+	static Archetype* table(const ComponentManager& manager, Entity entity) {
+		return manager.mEntityRecords.at(entity).archetype;
+	}
+
+	static const Archetype::Transition* addPlan(ComponentManager& manager, Entity entity, ComponentType type) {
+		return manager.getSingleComponentTransition(table(manager, entity), type, true);
+	}
+
+	static Archetype* addTarget(ComponentManager& manager, Entity entity, ComponentType type) {
+		const auto* plan = addPlan(manager, entity, type);
+		return plan ? plan->target : table(manager, entity);
+	}
+
+	template <class T>
+	static void movePrepared(
+		ComponentManager& manager, Entity entity, Archetype& target, ComponentType type, const Archetype::Transition* plan, T value) {
+		auto& record = manager.mEntityRecords.at(entity);
+		manager.addIndexedComponents(entity, record, &target, std::span(&type, 1), plan, value);
 	}
 };
 }
@@ -101,14 +121,14 @@ namespace {
 		if constexpr (LookupOnly) {
 			lookupEntities = backend.components.template getComponentsArray<VelocityType>().getEntities();
 			const auto expectedSum = expectedMatches * (expectedMatches - 1) / 2 * stride;
-			if (IKIGAI::ECS::MixedQueryBenchmarkAccess::sumRows(backend.components, lookupEntities) != expectedSum) {
+			if (IKIGAI::ECS::EcsBenchmarkAccess::sumRows(backend.components, lookupEntities) != expectedSum) {
 				state.SkipWithError("record lookup returned unexpected rows");
 				return;
 			}
 		}
 		for (auto _ : state) {
 			if constexpr (LookupOnly) {
-				benchmark::DoNotOptimize(IKIGAI::ECS::MixedQueryBenchmarkAccess::sumRows(backend.components, lookupEntities));
+				benchmark::DoNotOptimize(IKIGAI::ECS::EcsBenchmarkAccess::sumRows(backend.components, lookupEntities));
 			}
 			else {
 				move();
@@ -222,7 +242,11 @@ namespace {
 		int value = 0;
 	};
 
-	template <std::size_t Columns, bool ReuseCapacity, ArchetypeLayout Layout> void storageGrowth(benchmark::State& state) {
+	enum class TransitionProbe { PublicAdd, TargetLookup, MovePrepared };
+
+	template <std::size_t Columns, bool ReuseCapacity, ArchetypeLayout Layout, TransitionProbe Probe = TransitionProbe::PublicAdd>
+	void storageGrowth(benchmark::State& state) {
+		using IKIGAI::ECS::EcsBenchmarkAccess;
 		const auto count = static_cast<std::size_t>(state.range(0));
 		using Backend = Ikigai<alignof(float), false, Layout>;
 		std::vector<typename Backend::Entity> entities(count);
@@ -243,24 +267,38 @@ namespace {
 				entity = createSource(0);
 				backend->add(entity, Marker { 7 });
 			}
+			auto* target = EcsBenchmarkAccess::table(backend->components, warmEntities.back());
+			const auto markerType = backend->components.template getComponentType<Marker>();
 			for (const auto entity : warmEntities | std::views::reverse) {
 				backend->destroy(entity);
 			}
 			for (std::size_t i = 0; i < count; ++i) {
 				entities[i] = createSource(i);
 			}
+			const auto* plan
+				= Probe == TransitionProbe::MovePrepared ? EcsBenchmarkAccess::addPlan(backend->components, entities.front(), markerType) : nullptr;
 			state.ResumeTiming();
+			std::size_t foundTargets = 0;
 			for (const auto entity : entities) {
-				backend->add(entity, Marker { 7 });
+				if constexpr (Probe == TransitionProbe::TargetLookup) {
+					foundTargets += EcsBenchmarkAccess::addTarget(backend->components, entity, markerType) == target;
+				}
+				else if constexpr (Probe == TransitionProbe::MovePrepared) {
+					EcsBenchmarkAccess::movePrepared(backend->components, entity, *target, markerType, plan, Marker { 7 });
+				}
+				else {
+					backend->add(entity, Marker { 7 });
+				}
 			}
 			benchmark::ClobberMemory();
 			state.PauseTiming();
-			bool valid = true;
+			bool valid = Probe != TransitionProbe::TargetLookup || foundTargets == count;
 			for (std::size_t i = 0; i < count; ++i) {
 				const auto* marker = backend->template get<Marker>(entities[i]);
 				const auto* first = backend->template get<RetainedComponent<0>>(entities[i]);
 				const auto* last = backend->template get<RetainedComponent<Columns - 1>>(entities[i]);
-				valid = valid && marker && marker->value == 7 && first && first->value == static_cast<int>(i) && last
+				const auto validMarker = Probe == TransitionProbe::TargetLookup ? marker == nullptr : marker && marker->value == 7;
+				valid = valid && validMarker && first && first->value == static_cast<int>(i) && last
 					&& last->value == static_cast<int>(i + Columns - 1);
 			}
 			backend.reset();
@@ -467,6 +505,14 @@ namespace {
 		const auto prefix = std::string("Ikigai/StorageGrowth/") + layout + "/" + std::to_string(Columns);
 		benchmark::RegisterBenchmark(prefix + "/Grow", storageGrowth<Columns, false, Layout>)->UseRealTime()->Arg(100000);
 		benchmark::RegisterBenchmark(prefix + "/Reuse", storageGrowth<Columns, true, Layout>)->UseRealTime()->Arg(100000);
+		if constexpr (Layout == ArchetypeLayout::SharedRows) {
+			benchmark::RegisterBenchmark(prefix + "/TargetLookup", storageGrowth<Columns, false, Layout, TransitionProbe::TargetLookup>)
+				->UseRealTime()
+				->Arg(100000);
+			benchmark::RegisterBenchmark(prefix + "/MovePrepared", storageGrowth<Columns, true, Layout, TransitionProbe::MovePrepared>)
+				->UseRealTime()
+				->Arg(100000);
+		}
 	}
 
 	const bool growthRegistered = [] {

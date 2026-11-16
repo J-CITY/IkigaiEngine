@@ -102,36 +102,49 @@ void ComponentManager::EntityRecords::eraseLocated(Entity entity, Location locat
 }
 
 void ComponentManager::prepareIndexedTransition(const Record& record, Archetype& to) {
-	if (record.archetype == &to || to.mComponentArrays.empty()) {
+	if (record.archetype == &to || to.mIndexedColumns.empty()) {
 		return;
 	}
 	auto& entities = to.mRows->entities;
+	if (entities.size() < to.mReservedRows) {
+		return;
+	}
 	if (entities.size() == entities.capacity()) {
 		entities.reserve(entities.size() + entities.size() / 2 + 1);
 	}
-	for (const auto& [type, column] : to.mComponentArrays) {
-		column->reserveIndexedRow();
+	auto reserved = entities.capacity();
+	for (auto* column : to.mIndexedColumns) {
+		reserved = std::min(reserved, column->reserveIndexedRow());
 	}
+	to.mReservedRows = reserved;
 }
 
-void ComponentManager::commitIndexedTransition(Entity entity, Record& record, Archetype* to, std::span<const ComponentType> replaced) noexcept {
+void ComponentManager::commitIndexedTransition(
+	Entity entity, Record& record, Archetype* to, std::span<const ComponentType> replaced, const Archetype::Transition* plan) noexcept {
 	auto& from = *record.archetype;
 	if (&from == to) {
 		return;
 	}
 	const auto sourceRow = record.row;
 	if (sourceRow != ArchetypeRows::missing) {
-		for (const auto& [type, source] : from.mComponentArrays) {
-			const auto destination = to->mComponentArrays.find(type);
-			if (destination != to->mComponentArrays.end() && std::ranges::find(replaced, type) == replaced.end()) {
-				source->appendIndexedMove(sourceRow, *destination->second);
+		if (plan) {
+			for (const auto& column : plan->columns) {
+				column.source->appendIndexedMove(sourceRow, *column.destination);
+			}
+		}
+		else {
+			for (const auto& [type, source] : from.mComponentArrays) {
+				const auto destination = to->mComponentArrays.find(type);
+				if (destination != to->mComponentArrays.end() && std::ranges::find(replaced, type) == replaced.end()) {
+					source->appendIndexedMove(sourceRow, *destination->second);
+				}
 			}
 		}
 		eraseIndexedEntity(from, sourceRow);
 	}
 
 	record.row = ArchetypeRows::missing;
-	if (!to->mComponentArrays.empty()) {
+	if (!to->mIndexedColumns.empty()) {
 		auto& entities = to->mRows->entities;
 		record.row = entities.size();
 		entities.push_back(entity);
@@ -140,7 +153,7 @@ void ComponentManager::commitIndexedTransition(Entity entity, Record& record, Ar
 }
 
 void ComponentManager::eraseIndexedEntity(Archetype& archetype, std::size_t row) noexcept {
-	for (const auto& [type, column] : archetype.mComponentArrays) {
+	for (auto* column : archetype.mIndexedColumns) {
 		column->eraseIndexedRow(row);
 	}
 	auto& entities = archetype.mRows->entities;
@@ -152,19 +165,31 @@ void ComponentManager::eraseIndexedEntity(Archetype& archetype, std::size_t row)
 	entities.pop_back();
 }
 
-Archetype* ComponentManager::getSingleComponentTransition(Archetype* from, ComponentType type, bool adding) {
+const Archetype::Transition* ComponentManager::getSingleComponentTransition(Archetype* from, ComponentType type, bool adding) {
+	if (const auto* last = from->mLastTransition; last && last->type == type && last->adding == adding) {
+		return last;
+	}
 	if (from->mMask.test(type.value()) == adding) {
-		return from;
+		return nullptr;
 	}
 	if (const auto cached = from->mTransitions.find(type); cached != from->mTransitions.end()) {
-		return cached->second;
+		return from->mLastTransition = &cached->second;
 	}
 
 	auto mask = from->mMask;
 	mask.set(type.value(), adding);
 	auto* to = getArchetype(std::move(mask)).get();
-	from->mTransitions.emplace(type, to);
-	return to;
+	Archetype::Transition transition { .target = to, .type = type, .adding = adding, .columns = {} };
+	if (from->mRows) {
+		transition.columns.reserve(std::min(from->mComponentArrays.size(), to->mComponentArrays.size()));
+		for (const auto& [type, source] : from->mComponentArrays) {
+			if (const auto destination = to->mComponentArrays.find(type); destination != to->mComponentArrays.end()) {
+				transition.columns.push_back({ source.get(), destination->second.get() });
+			}
+		}
+	}
+	const auto insert = from->mTransitions.emplace(type, std::move(transition));
+	return from->mLastTransition = &insert.first->second;
 }
 
 ComponentArrayInterface* ComponentManager::findArray(Entity entity, ComponentType type, std::uint64_t entityGeneration) const {

@@ -211,7 +211,7 @@ private:
 		mRows = rows;
 	}
 
-	void reserveIndexedRow() override {
+	std::size_t reserveIndexedRow() override {
 		const auto count = componentArray.size();
 		if (count == componentArray.capacity()) {
 			componentArray.reserve(count + 1);
@@ -219,6 +219,7 @@ private:
 		if (count == mGenerations.capacity()) {
 			mGenerations.reserve(count + count / 2 + 1);
 		}
+		return std::min(componentArray.capacity(), mGenerations.capacity());
 	}
 
 	void appendIndexed(T& component, std::uint64_t generation) noexcept {

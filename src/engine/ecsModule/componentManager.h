@@ -63,9 +63,24 @@ public:
 
 private:
 	friend class ComponentManager;
+	friend struct EcsBenchmarkAccess;
 	std::shared_ptr<ArchetypeRows> mRows;
+	std::vector<ComponentArrayInterface*> mIndexedColumns;
+	std::size_t mReservedRows = 0;
+
+	struct ColumnTransfer {
+		ComponentArrayInterface* source = nullptr;
+		ComponentArrayInterface* destination = nullptr;
+	};
+	struct Transition {
+		Archetype* target = nullptr;
+		ComponentType type {};
+		bool adding = false;
+		std::vector<ColumnTransfer> columns;
+	};
 	// For a fixed source signature and type, a transition toggles that type.
-	std::unordered_map<ComponentType, Archetype*> mTransitions;
+	std::unordered_map<ComponentType, Transition> mTransitions;
+	const Transition* mLastTransition = nullptr;
 };
 
 struct Record {
@@ -78,7 +93,7 @@ struct Record {
 
 class ComponentManager {
 	friend class World;
-	friend struct MixedQueryBenchmarkAccess;
+	friend struct EcsBenchmarkAccess;
 
 	class EntityRecords {
 		// ID bytes select a branch, a directory, a page and a slot.
@@ -277,13 +292,14 @@ private:
 private:
 private:
 	// Helper to lazily register component with default storage if not already registered
-	template <typename T> void ensureComponentRegistered(ComponentType id) {
-		if (mComponentStorageType.contains(id)) {
-			return;
+	template <typename T> StorageType ensureComponentRegistered(ComponentType id) {
+		if (const auto storage = mComponentStorageType.find(id); storage != mComponentStorageType.end()) {
+			return storage->second;
 		}
 
 		// Default storage is Archetype. Sparse is opt-in via registerComponent.
 		registerComponent<T>(StorageType::Archetype);
+		return StorageType::Archetype;
 	}
 
 	template <typename T, typename... Args> void addComponentToArchetypeImpl(Entity entity, Archetype& to, T&& component) {
@@ -302,8 +318,7 @@ private:
 	template <typename T> void addComponentToArchetypeMaskImpl(Signature& mask) {
 		using C = std::decay_t<T>;
 		ComponentType id = getComponentType<C>();
-		ensureComponentRegistered<C>(id);
-		if (mComponentStorageType[id] == StorageType::Archetype) {
+		if (ensureComponentRegistered<C>(id) == StorageType::Archetype) {
 			mask.set(static_cast<size_t>(id), true);
 		}
 	}
@@ -315,8 +330,7 @@ private:
 	template <typename T> void addComponentToSparseImpl(Entity entity, T&& component) {
 		using C = std::decay_t<T>;
 		ComponentType id = getComponentType<C>();
-		ensureComponentRegistered<C>(id);
-		if (mComponentStorageType[id] == StorageType::Sparse) {
+		if (ensureComponentRegistered<C>(id) == StorageType::Sparse) {
 			std::static_pointer_cast<ComponentArray<C>>(mSparseArrays[id])->insert(entity, std::forward<T>(component));
 		}
 	}
@@ -378,13 +392,15 @@ private:
 		record.archetype = to;
 	}
 
-	Archetype* getSingleComponentTransition(Archetype* from, ComponentType type, bool adding);
+	const Archetype::Transition* getSingleComponentTransition(Archetype* from, ComponentType type, bool adding);
 	void prepareIndexedTransition(const Record& record, Archetype& to);
-	void commitIndexedTransition(Entity entity, Record& record, Archetype* to, std::span<const ComponentType> replaced) noexcept;
+	void commitIndexedTransition(
+		Entity entity, Record& record, Archetype* to, std::span<const ComponentType> replaced, const Archetype::Transition* plan = nullptr) noexcept;
 	void eraseIndexedEntity(Archetype& archetype, std::size_t row) noexcept;
 
 	template <class... Components>
-	void addIndexedComponents(Entity entity, Record& record, Archetype* to, std::span<const ComponentType> types, Components&... values) {
+	std::uint64_t addIndexedComponents(Entity entity, Record& record, Archetype* to, std::span<const ComponentType> types,
+		const Archetype::Transition* plan, Components&... values) {
 		constexpr auto count = sizeof...(Components);
 		std::array<ComponentArrayInterface*, count> columns {};
 		std::array<std::uint64_t, count> generations {};
@@ -437,7 +453,11 @@ private:
 			}
 		};
 		(addDense(values), ...);
-		commitIndexedTransition(entity, record, to, types);
+		commitIndexedTransition(entity, record, to, types, plan);
+		if constexpr (count == 1) {
+			return generations.front();
+		}
+		return 0;
 	}
 
 	template <typename T> void insertNewComponent(Entity entity, Record& record, T&& component) {
@@ -528,15 +548,16 @@ private:
 		}
 	}
 
-	template <template <class> class Event, class T> void emitComponentEvent(Entity entity) {
+	template <template <class> class Event, class T> bool emitComponentEvent(Entity entity) {
 		auto* signal = mEventManager.findSignal<Event<T>>();
 		if (!signal || signal->getListenerCount() == 0) {
-			return;
+			return false;
 		}
 		auto* array = findArray<T>(entity);
 		if (auto* component = array ? array->tryGetData(entity) : nullptr) {
 			signal->run(Event<T> { entity, component });
 		}
+		return true;
 	}
 
 	template <typename T> T& getRef(Entity entity) {
@@ -640,11 +661,17 @@ public:
 
 	template <typename T> auto addComponent(Entity entity, T&& newComponent) {
 		using C = std::remove_cvref_t<T>;
-		addComponents(entity, std::forward<T>(newComponent));
 		if constexpr (std::is_base_of_v<Component, C>) {
+			addComponents(entity, std::forward<T>(newComponent));
 			return getComponent<C>(entity);
 		}
 		else {
+			const auto identity = addRvalueComponents<true>(entity, copyLvalues(std::forward<T>(newComponent)));
+			if (identity.componentGeneration != 0) {
+				SystemAccessScope::requireComponent(*this, identity.type, AccessMode::Read);
+				return ComponentHandle<C> { EntityHandle { entity.getUniqueId(), mOwner, identity.entityGeneration }, identity.type,
+					identity.componentGeneration };
+			}
 			return getComponentHandle<C>(entity);
 		}
 	}
@@ -667,7 +694,13 @@ private:
 		}
 	}
 
-	template <class... Components> void addRvalueComponents(Entity entity, Components&&... newComponent) {
+	struct AddedIdentity {
+		std::uint64_t entityGeneration = 0;
+		std::uint64_t componentGeneration = 0;
+		ComponentType type {};
+	};
+
+	template <bool CaptureIdentity = false, class... Components> auto addRvalueComponents(Entity entity, Components&&... newComponent) {
 		requireStructuralChangesAllowed();
 		const std::array<ComponentType, sizeof...(Components)> types { getComponentType<Components>()... };
 		for (std::size_t i = 0; i < types.size(); ++i) {
@@ -681,11 +714,13 @@ private:
 		}
 		Record& record = mEntityRecords.at(entity);
 		Archetype* nextArchetype = nullptr;
+		const Archetype::Transition* plan = nullptr;
 		if constexpr (sizeof...(Components) == 1) {
 			const auto type = types.front();
-			(ensureComponentRegistered<std::decay_t<Components>>(type), ...);
-			nextArchetype = mComponentStorageType.at(type) == StorageType::Archetype ? getSingleComponentTransition(record.archetype, type, true)
-																					 : record.archetype;
+			if ((ensureComponentRegistered<std::decay_t<Components>>(type), ...) == StorageType::Archetype) {
+				plan = getSingleComponentTransition(record.archetype, type, true);
+			}
+			nextArchetype = plan ? plan->target : record.archetype;
 		}
 		else {
 			auto mask = record.archetype->mMask;
@@ -694,14 +729,28 @@ private:
 		}
 
 		// Transfer existing archetype columns only. Each new value is inserted once below.
+		AddedIdentity identity;
 		if (mIndexedRecords) {
-			addIndexedComponents(entity, record, nextArchetype, types, newComponent...);
+			const auto generation = addIndexedComponents(entity, record, nextArchetype, types, plan, newComponent...);
+			if constexpr (CaptureIdentity) {
+				static_assert(sizeof...(Components) == 1);
+				identity = { record.generation, generation, types.front() };
+			}
 		}
 		else {
 			moveEntity<Components...>(entity, record.archetype, nextArchetype, record);
 			(insertNewComponent(entity, record, std::forward<Components>(newComponent)), ...);
 		}
-		(emitComponentEvent<OnAdd, std::decay_t<Components>>(entity), ...);
+		if constexpr (CaptureIdentity) {
+			// A listener may remove or replace the new component before the handle is returned.
+			if ((emitComponentEvent<OnAdd, std::decay_t<Components>>(entity), ...)) {
+				return AddedIdentity {};
+			}
+			return identity;
+		}
+		else {
+			(emitComponentEvent<OnAdd, std::decay_t<Components>>(entity), ...);
+		}
 
 		// auto signature = getSignature(entity);
 		// signature.set(static_cast<int>(getComponentType<T>()), true);
@@ -717,12 +766,14 @@ public:
 		Record& record = mEntityRecords.at(entity);
 		auto archetype = record.archetype;
 		Archetype* nextArchetype = nullptr;
+		const Archetype::Transition* plan = nullptr;
 		if constexpr (sizeof...(Components) == 1) {
 			const auto type = (getComponentType<Components>(), ...);
 			const auto storage = mComponentStorageType.find(type);
-			nextArchetype = storage != mComponentStorageType.end() && storage->second == StorageType::Archetype
-				? getSingleComponentTransition(archetype, type, false)
-				: archetype;
+			if (storage != mComponentStorageType.end() && storage->second == StorageType::Archetype) {
+				plan = getSingleComponentTransition(archetype, type, false);
+			}
+			nextArchetype = plan ? plan->target : archetype;
 		}
 		else {
 			auto mask = archetype->mMask;
@@ -732,7 +783,7 @@ public:
 
 		if (mIndexedRecords) {
 			prepareIndexedTransition(record, *nextArchetype);
-			commitIndexedTransition(entity, record, nextArchetype, {});
+			commitIndexedTransition(entity, record, nextArchetype, {}, plan);
 		}
 		else {
 			moveEntity(entity, archetype, nextArchetype, record);
@@ -848,6 +899,12 @@ public:
 					column->attachRows(newArchetype->mRows);
 				}
 				newArchetype->mComponentArrays.emplace(type, std::move(column));
+			}
+		}
+		if (newArchetype->mRows) {
+			newArchetype->mIndexedColumns.reserve(newArchetype->mComponentArrays.size());
+			for (const auto& [type, column] : newArchetype->mComponentArrays) {
+				newArchetype->mIndexedColumns.push_back(column.get());
 			}
 		}
 		mMaskToArchetype.emplace(std::move(mask), newArchetype);

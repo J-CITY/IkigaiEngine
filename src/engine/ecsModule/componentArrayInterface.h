@@ -33,7 +33,7 @@ public:
 	virtual UTILS::WeakPtr<ECS::Component> getComponentBasePtr(Entity entity) = 0;
 
 	virtual void attachRows(const std::shared_ptr<const ArchetypeRows>& rows) = 0;
-	virtual void reserveIndexedRow() = 0;
+	virtual std::size_t reserveIndexedRow() = 0;
 	virtual void appendIndexedMove(std::size_t sourceRow, ComponentArrayInterface& destination) noexcept = 0;
 	virtual void eraseIndexedRow(std::size_t row) noexcept = 0;
 };

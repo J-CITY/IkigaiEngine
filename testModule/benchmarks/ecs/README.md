@@ -60,3 +60,10 @@ cmake --build build/ecs --config Release --target ecs_registry_memory
 ```powershell
 & $exe '--benchmark_filter=^Ikigai/StorageGrowth/' --benchmark_min_time=0.04s --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/row-growth-comparison.json --benchmark_out_format=json
 ```
+
+В `SharedRows` сценарий `TargetLookup` измеряет поиск записи сущности и выбор прогретого перехода. `MovePrepared` получает план заранее и измеряет поиск записи, добавление нового компонента, перенос сохранённых колонок и освобождение исходной строки. Ёмкость целевой таблицы подготовлена заранее. `Grow` и `Reuse` используют публичный вызов с возвратом handle. Замеры этапов запускаются отдельными проходами.
+
+```powershell
+$filter = '^(Ikigai/StorageGrowth/SharedRows/|Ikigai/AddTransition/|structural<(IkigaiCompact|IkigaiNoHandle|EnTT|FlecsUncached), Structure::(Add|Remove|AddRemove)>)'
+& $exe "--benchmark_filter=$filter" --benchmark_min_time=0.04s --benchmark_min_warmup_time=0.01 --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/archetype-transition.json --benchmark_out_format=json
+```
