@@ -282,11 +282,16 @@ namespace {
 		state.SetItemsProcessed(state.iterations() * batchSize);
 	}
 
-	template <bool Register> void entityRegistry(benchmark::State& state) {
+	template <bool Register, bool SparseIds = false> void entityRegistry(benchmark::State& state) {
 		using IKIGAI::ECS::Entity;
 		const auto count = static_cast<std::size_t>(state.range(0));
 		std::vector<Entity> entities(count);
-		if constexpr (Register) {
+		if constexpr (SparseIds) {
+			for (std::uint32_t i = 0; i < count; ++i) {
+				entities[i] = Entity { Entity::ID { 0x10000000u + i * 65537u } };
+			}
+		}
+		else if constexpr (Register) {
 			std::ranges::generate(entities, Entity::create);
 		}
 		for (auto _ : state) {
@@ -425,6 +430,7 @@ namespace {
 	BENCHMARK_TEMPLATE(addTransition, true)->Name("Ikigai/AddTransition/Warm")->UseRealTime();
 	BENCHMARK_TEMPLATE(entityRegistry, false)->Name("Ikigai/EntityRegistry/GenerateIds")->UseRealTime()->Arg(100000);
 	BENCHMARK_TEMPLATE(entityRegistry, true)->Name("Ikigai/EntityRegistry/RegisterKnownIds")->UseRealTime()->Arg(100000);
+	BENCHMARK_TEMPLATE(entityRegistry, true, true)->Name("Ikigai/EntityRegistry/RegisterSparseIds")->UseRealTime()->Arg(1000);
 	template <ArchetypeLayout Layout, std::size_t Columns> void registerGrowth(const char* layout) {
 		const auto prefix = std::string("Ikigai/StorageGrowth/") + layout + "/" + std::to_string(Columns);
 		benchmark::RegisterBenchmark(prefix + "/Grow", storageGrowth<Columns, false, Layout>)->UseRealTime()->Arg(100000);

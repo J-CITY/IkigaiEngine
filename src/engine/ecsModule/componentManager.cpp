@@ -8,6 +8,51 @@ ComponentManager::ComponentManager(ArchetypeLayout layout)
 	: mIndexedRecords(layout == ArchetypeLayout::SharedRows ? std::make_shared<EntityRecords>() : nullptr)
 	, mEntityRecords(mIndexedRecords ? *mIndexedRecords : mLocalRecords) { }
 
+ComponentManager::EntityRecords::Page& ComponentManager::EntityRecords::ensurePage(std::uint32_t pageIndex) {
+	if (!mRoot) {
+		mRoot = std::make_unique<Root>();
+	}
+	auto& branch = mRoot->ensure(pageIndex >> (2 * pageBits));
+	auto& pages = branch.ensure((pageIndex >> pageBits) & pageMask);
+	auto& page = pages.ensure(pageIndex & pageMask);
+	mInsertPage = &page;
+	mInsertPageIndex = pageIndex;
+	return page;
+}
+
+void ComponentManager::EntityRecords::releasePage(std::uint32_t pageIndex) noexcept {
+	if (mInsertPageIndex == pageIndex) {
+		mInsertPage = nullptr;
+	}
+	const auto branchIndex = pageIndex >> (2 * pageBits);
+	const auto pagesIndex = (pageIndex >> pageBits) & pageMask;
+	auto& branch = *mRoot->children[branchIndex];
+	if (branch.children[pagesIndex]->remove(pageIndex & pageMask) && branch.remove(pagesIndex)) {
+		mRoot->remove(branchIndex);
+	}
+}
+
+Record& ComponentManager::EntityRecords::at(Entity entity) {
+	if (const auto* record = find(entity)) {
+		return *const_cast<Record*>(record);
+	}
+	throw std::out_of_range("Entity is not registered in this ECS world");
+}
+
+void ComponentManager::EntityRecords::erase(Entity entity) noexcept {
+	const auto id = entity.getUniqueId().value();
+	const auto pageIndex = id >> pageBits;
+	if (auto* page = findPage(pageIndex)) {
+		auto& record = page->records[id & pageMask];
+		if (record.generation != 0) {
+			record = {};
+			if (--page->live == 0) {
+				releasePage(pageIndex);
+			}
+		}
+	}
+}
+
 void ComponentManager::prepareIndexedTransition(const Record& record, Archetype& to) {
 	if (record.archetype == &to || to.mComponentArrays.empty()) {
 		return;
@@ -75,11 +120,11 @@ Archetype* ComponentManager::getSingleComponentTransition(Archetype* from, Compo
 }
 
 ComponentArrayInterface* ComponentManager::findArray(Entity entity, ComponentType type, std::uint64_t entityGeneration) const {
-	const auto record = mEntityRecords.find(entity);
-	if (record == mEntityRecords.end() || (entityGeneration != 0 && record->second.generation != entityGeneration)) {
+	const auto* record = mEntityRecords.find(entity);
+	if (!record || (entityGeneration != 0 && record->generation != entityGeneration)) {
 		return nullptr;
 	}
-	const auto& columns = record->second.archetype->mComponentArrays;
+	const auto& columns = record->archetype->mComponentArrays;
 	if (const auto column = columns.find(type); column != columns.end()) {
 		return column->second.get();
 	}

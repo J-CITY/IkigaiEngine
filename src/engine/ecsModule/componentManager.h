@@ -77,7 +77,79 @@ struct Record {
 };
 
 class ComponentManager {
-	using EntityRecords = std::unordered_map<Entity, Record>;
+	class EntityRecords {
+		// ID bytes select a branch, a directory, a page and a slot.
+		// Only occupied branches allocate storage. Pages keep record addresses stable.
+		static constexpr std::uint32_t pageBits = 8;
+		static constexpr std::uint32_t pageSize = 1u << pageBits;
+		static constexpr std::uint32_t pageMask = pageSize - 1;
+
+		struct Page {
+			std::array<Record, pageSize> records;
+			std::size_t live = 0;
+		};
+
+		template <class Child> struct Directory {
+			std::array<std::unique_ptr<Child>, pageSize> children {};
+			std::size_t used = 0;
+
+			Child& ensure(std::uint32_t index) {
+				auto& child = children[index];
+				if (!child) {
+					child = std::make_unique<Child>();
+					++used;
+				}
+				return *child;
+			}
+
+			bool remove(std::uint32_t index) noexcept {
+				children[index].reset();
+				return --used == 0;
+			}
+		};
+
+		using Pages = Directory<Page>;
+		using Branch = Directory<Pages>;
+		using Root = Directory<Branch>;
+
+		std::unique_ptr<Root> mRoot;
+		Page* mInsertPage = nullptr;
+		std::uint32_t mInsertPageIndex = 0;
+
+		Page& ensurePage(std::uint32_t pageIndex);
+		void releasePage(std::uint32_t pageIndex) noexcept;
+
+		Page* findPage(std::uint32_t pageIndex) const noexcept {
+			const auto* branch = mRoot ? mRoot->children[pageIndex >> (2 * pageBits)].get() : nullptr;
+			const auto* pages = branch ? branch->children[(pageIndex >> pageBits) & pageMask].get() : nullptr;
+			return pages ? pages->children[pageIndex & pageMask].get() : nullptr;
+		}
+
+	public:
+		bool insert(Entity entity, Archetype* archetype, std::uint64_t generation) {
+			const auto id = entity.getUniqueId().value();
+			const auto pageIndex = id >> pageBits;
+			auto& page = mInsertPage && mInsertPageIndex == pageIndex ? *mInsertPage : ensurePage(pageIndex);
+			auto& record = page.records[id & pageMask];
+			if (record.generation != 0) {
+				return false;
+			}
+			record.archetype = archetype;
+			record.generation = generation;
+			++page.live;
+			return true;
+		}
+
+		const Record* find(Entity entity) const noexcept {
+			const auto id = entity.getUniqueId().value();
+			const auto* page = findPage(id >> pageBits);
+			const auto* record = page ? &page->records[id & pageMask] : nullptr;
+			return record && record->generation != 0 ? record : nullptr;
+		}
+
+		Record& at(Entity entity);
+		void erase(Entity entity) noexcept;
+	};
 
 public:
 	ComponentManager();
@@ -374,7 +446,7 @@ private:
 		const auto storage = mComponentStorageType.find(id);
 		if (storage != mComponentStorageType.end() && storage->second == StorageType::Archetype) {
 			const Record& record = mEntityRecords.at(entity);
-			const auto& archetype = record.archetype;
+			const auto& archetype = record->archetype;
 			return std::static_pointer_cast<ComponentArray<T>>(archetype->mComponentArrays.at(id))->getData(entity);
 		}
 		return std::static_pointer_cast<ComponentArray<T>>(mSparseArrays.at(id))->getData(entity);
@@ -594,8 +666,7 @@ public:
 	template <class T = Component> std::vector<UTILS::WeakPtr<T>> getComponents(Entity entity) {
 		std::vector<UTILS::WeakPtr<T>> res;
 
-		if (mEntityRecords.contains(entity)) {
-			const Record& record = mEntityRecords.at(entity);
+		if (const auto* record = mEntityRecords.find(entity)) {
 			const auto& archetype = record.archetype;
 
 			for (auto& [id, componentArr] : archetype->mComponentArrays) {
@@ -664,9 +735,9 @@ public:
 			newArchetype->mRows = std::make_shared<ArchetypeRows>();
 			newArchetype->mRows->find = [records = std::weak_ptr<EntityRecords>(mIndexedRecords), owner = newArchetype.get()](Entity entity) {
 				if (const auto locked = records.lock()) {
-					const auto record = locked->find(entity);
-					if (record != locked->end() && record->second.archetype == owner) {
-						return record->second.row;
+					const auto* record = locked->find(entity);
+					if (record && record->archetype == owner) {
+						return record->row;
 					}
 				}
 				return ArchetypeRows::missing;
@@ -690,24 +761,27 @@ public:
 			throw std::invalid_argument("Cannot register an invalid entity");
 		}
 		requireStructuralChangesAllowed();
-		if (mNextEntityGeneration == 0 && !mEntityRecords.contains(entity)) {
+		if (mNextEntityGeneration == 0) {
+			if (mEntityRecords.find(entity)) {
+				throw std::logic_error("Entity is already registered in this ECS world");
+			}
 			throw std::overflow_error("ECS entity generation exhausted");
 		}
 		if (!mEmptyArchetype) {
 			mEmptyArchetype = getArchetype(Signature {}).get();
 		}
-		if (!mEntityRecords.try_emplace(entity, Record { .archetype = mEmptyArchetype, .generation = mNextEntityGeneration }).second) {
+		if (!mEntityRecords.insert(entity, mEmptyArchetype, mNextEntityGeneration)) {
 			throw std::logic_error("Entity is already registered in this ECS world");
 		}
 		++mNextEntityGeneration;
 	}
 
 	[[nodiscard]] EntityHandle getEntityHandle(Entity entity) const {
-		const auto record = mEntityRecords.find(entity);
-		if (record == mEntityRecords.end()) {
+		const auto* record = mEntityRecords.find(entity);
+		if (!record) {
 			return {};
 		}
-		return { entity.getUniqueId(), mOwner, record->second.generation };
+		return { entity.getUniqueId(), mOwner, record->generation };
 	}
 
 	[[nodiscard]] std::optional<Entity> resolveEntity(EntityHandle handle) const {
@@ -715,8 +789,8 @@ public:
 			return std::nullopt;
 		}
 		const Entity entity(handle.id);
-		const auto record = mEntityRecords.find(entity);
-		if (record == mEntityRecords.end() || record->second.generation != handle.generation) {
+		const auto* record = mEntityRecords.find(entity);
+		if (!record || record->generation != handle.generation) {
 			return std::nullopt;
 		}
 		return entity;
@@ -725,20 +799,19 @@ public:
 	template <class T> [[nodiscard]] ComponentHandle<T> getComponentHandle(Entity entity) const {
 		SystemAccessScope::requireComponent(*this, getComponentType<T>(), AccessMode::Read);
 		if (mIndexedRecords) {
-			const auto record = mEntityRecords.find(entity);
-			if (record == mEntityRecords.end()) {
+			const auto* record = mEntityRecords.find(entity);
+			if (!record) {
 				return {};
 			}
 			const auto type = getComponentType<T>();
-			const auto& columns = record->second.archetype->mComponentArrays;
+			const auto& columns = record->archetype->mComponentArrays;
 			const auto column = columns.find(type);
 			const auto sparse = column == columns.end() ? mSparseArrays.find(type) : mSparseArrays.end();
-			const auto generation = column != columns.end() ? static_cast<const ComponentArray<T>&>(*column->second).mGenerations[record->second.row]
+			const auto generation = column != columns.end() ? static_cast<const ComponentArray<T>&>(*column->second).mGenerations[record->row]
 				: sparse != mSparseArrays.end()				? static_cast<const ComponentArray<T>&>(*sparse->second).getGeneration(entity)
 															: 0;
-			return generation == 0
-				? ComponentHandle<T> {}
-				: ComponentHandle<T> { EntityHandle { entity.getUniqueId(), mOwner, record->second.generation }, type, generation };
+			return generation == 0 ? ComponentHandle<T> {}
+								   : ComponentHandle<T> { EntityHandle { entity.getUniqueId(), mOwner, record->generation }, type, generation };
 		}
 		const auto* array = findArray<T>(entity);
 		const auto generation = array ? array->getGeneration(entity) : 0;
@@ -777,22 +850,23 @@ public:
 
 	void destroyEntity(Entity entity) {
 		requireStructuralChangesAllowed();
-		const auto it = mEntityRecords.find(entity);
-		if (it == mEntityRecords.end()) {
+		const auto* record = mEntityRecords.find(entity);
+		if (!record) {
 			return;
 		}
-		if (it->second.archetype == mEmptyArchetype && mSparseArrays.empty()) {
+		if (record->archetype == mEmptyArchetype && mSparseArrays.empty()) {
 			mRelationManager.onEntityDestroyed(entity);
-			mEntityRecords.erase(it);
+			mEntityRecords.erase(entity);
 			return;
 		}
-		auto archetype = it->second.archetype;
+		auto archetype = record->archetype;
+		const auto row = record->row;
 		for (auto& [type, array] : mSparseArrays) {
 			array->entityDestroyed(entity);
 		}
 		if (archetype->mRows) {
-			if (it->second.row != ArchetypeRows::missing) {
-				eraseIndexedEntity(*archetype, it->second.row);
+			if (row != ArchetypeRows::missing) {
+				eraseIndexedEntity(*archetype, row);
 			}
 		}
 		else {
@@ -904,11 +978,11 @@ public:
 				bool matchesPrevious = false;
 				for (std::size_t row = 0; row < sparseRows.size(); ++row) {
 					const Entity entity = sparseRows[row];
-					const auto record = mEntityRecords.find(entity);
-					if (record == mEntityRecords.end()) {
+					const auto* record = mEntityRecords.find(entity);
+					if (!record) {
 						continue;
 					}
-					const auto* archetype = record->second.archetype;
+					const auto* archetype = record->archetype;
 					if (archetype != previousArchetype) {
 						previousArchetype = archetype;
 						matchesPrevious = matches(archetype->mMask);
@@ -918,7 +992,7 @@ public:
 					}
 					if (matchesPrevious) {
 						visitJoinedRow<Components...>(arrays, mIndexedRecords ? rowAligned : sparseAligned, *smallestSparse, row, entity, func,
-							std::index_sequence_for<Components...> {}, record->second.row);
+							std::index_sequence_for<Components...> {}, record->row);
 					}
 				}
 				return;
