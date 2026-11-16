@@ -3,6 +3,7 @@
 #include "componentArrayInterface.h"
 #include "utilsModule/chunkList.h"
 #include "utilsModule/exeptions.h"
+#include <numeric>
 #include <stdexcept>
 #include <type_traits>
 #include <unordered_map>
@@ -206,9 +207,13 @@ private:
 		}
 	}
 
-	static std::uint64_t nextGeneration() {
+	static auto& generationSequence() {
 		static IdSequence<ComponentArray, std::uint64_t, 1> generations;
-		return generations.next().value();
+		return generations;
+	}
+
+	static std::uint64_t nextGeneration() {
+		return generationSequence().next().value();
 	}
 
 	void attachRows(const std::shared_ptr<const ArchetypeRows>& rows) override {
@@ -216,7 +221,7 @@ private:
 	}
 
 	bool hasTrivialLifecycle() const noexcept override {
-		return std::is_trivially_copyable_v<T>;
+		return std::is_trivially_copyable_v<T> && std::is_trivially_move_constructible_v<T>;
 	}
 
 	std::size_t reserveIndexedRows(std::size_t required) override {
@@ -250,6 +255,32 @@ private:
 
 	void appendIndexedMove(std::size_t sourceRow, ComponentArrayInterface& destination) noexcept override {
 		static_cast<ComponentArray&>(destination).appendIndexed(componentArray[sourceRow], mGenerations[sourceRow]);
+	}
+
+	void appendIndexedValues(std::size_t count, const T& value)
+		requires(std::is_trivially_copyable_v<T> && std::is_trivially_copy_constructible_v<T>)
+	{
+		const auto generation = generationSequence().nextRange(count).value();
+		const auto first = mGenerations.size();
+		componentArray.append_trivial_fill_reserved(count, value);
+		mGenerations.resize(first + count);
+		std::iota(mGenerations.begin() + first, mGenerations.end(), generation);
+	}
+
+	void transferIndexedRange(std::size_t first, std::size_t count, ComponentArrayInterface& destination) noexcept override {
+		if constexpr (std::is_trivially_copyable_v<T> && std::is_trivially_move_constructible_v<T>) {
+			auto& target = static_cast<ComponentArray&>(destination);
+			target.componentArray.append_trivial_range_reserved(componentArray, first, count);
+			target.mGenerations.insert(target.mGenerations.end(), mGenerations.begin() + first, mGenerations.begin() + first + count);
+
+			const auto tailCount = std::min(count, mGenerations.size() - first - count);
+			std::copy_n(mGenerations.end() - tailCount, tailCount, mGenerations.begin() + first);
+			mGenerations.resize(mGenerations.size() - count);
+			componentArray.erase_trivial_range_unordered(first, count);
+		}
+		else {
+			std::terminate();
+		}
 	}
 
 	void eraseIndexedRow(std::size_t row) noexcept override {

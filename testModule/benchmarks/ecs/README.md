@@ -79,10 +79,12 @@ cmake --build build/ecs --config Release --target ecs_target_allocation
 
 `ArchetypeBatch` добавляет одинаковый компонент к 1 000 или 100 000 существующих сущностей с 1, 4 или 8 сохраняемыми колонками. Цель прогревается одной временной сущностью. Резервирование и вставка входят в таймер, подготовка мира и проверка всех компонентов выполняются вне него.
 
-- Ikigai измеряет поштучные `addComponent` и `addComponents`, а также `addArchetypeComponentBatch`. Последний группирует записи по целевому архетипу, резервирует строки до вставки и сохраняет порядок входных ID.
+`ArchetypeBatchSlice` выбирает средние 100 000 строк из 200 000 сущностей при 4 или 8 сохраняемых колонках. Проверка охватывает и перенесённые, и оставшиеся в источнике строки.
+
+- Ikigai измеряет поштучные `addComponent` и `addComponents` и две версии `addArchetypeComponentBatch`. `ReservedRows` резервирует место заранее и переносит по строке. `Chunked` копирует тривиальные колонки блоками, если входные ID образуют непрерывный диапазон одного источника длиной не менее чанка. Хвост источника заполняет освободившиеся строки одним проходом. Остальные пакеты используют обычный путь.
 - EnTT измеряет `emplace` и пару `storage.reserve` + `registry.insert` для диапазона. Хранилища остальных компонентов сохраняют свои строки.
 - Flecs измеряет поштучный `entity.set`. В публичном `ecs_bulk_init` предоставленные ID должны принадлежать пустым сущностям, а в этой фикстуре у сущностей уже есть компоненты.
 
 ```powershell
-& $exe '--benchmark_filter=^ArchetypeBatch/' --benchmark_min_time=0.03s --benchmark_min_warmup_time=0.01 --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/archetype-batch.json --benchmark_out_format=json
+& $exe '--benchmark_filter=^ArchetypeBatch(Slice)?/' --benchmark_min_time=0.03s --benchmark_min_warmup_time=0.01 --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/archetype-batch.json --benchmark_out_format=json
 ```

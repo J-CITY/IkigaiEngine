@@ -12,6 +12,10 @@
 
 namespace IKIGAI::ECS {
 struct EcsBenchmarkAccess {
+	template <class T> static void addBatchByRow(ComponentManager& manager, std::span<const Entity> entities, const T& value) {
+		manager.addArchetypeComponentBatchImpl<false>(entities, value);
+	}
+
 	static std::size_t sumRows(const ComponentManager& manager, std::span<const Entity> entities) {
 		std::size_t sum = 0;
 		ComponentManager::EntityRecords::PageCursor cursor;
@@ -462,9 +466,12 @@ namespace {
 		}
 	};
 
-	template <class Backend, std::size_t Columns, bool Batch> void batchAddition(benchmark::State& state) {
+	enum class BatchDispatch { Single, ReservedRows, Range };
+
+	template <class Backend, std::size_t Columns, BatchDispatch Dispatch, bool Partial = false> void batchAddition(benchmark::State& state) {
 		const auto count = static_cast<std::size_t>(state.range(0));
-		std::vector<typename Backend::Entity> entities(count);
+		const auto first = Partial ? count / 2 : 0;
+		std::vector<typename Backend::Entity> entities(Partial ? 2 * count : count);
 		for (auto _ : state) {
 			state.PauseTiming();
 			auto backend = std::make_unique<Backend>();
@@ -478,32 +485,39 @@ namespace {
 			const auto warm = createSource(0);
 			backend->add(warm, Marker { 7 });
 			backend->destroy(warm);
-			for (std::size_t index = 0; index < count; ++index) {
+			for (std::size_t index = 0; index < entities.size(); ++index) {
 				entities[index] = createSource(index);
 			}
+			const auto selected = std::span(entities).subspan(first, count);
 			state.ResumeTiming();
-			if constexpr (Batch && std::is_same_v<Backend, IkigaiCompact>) {
-				backend->components.addArchetypeComponentBatch(entities, Marker { 7 });
+			if constexpr (Dispatch == BatchDispatch::ReservedRows) {
+				IKIGAI::ECS::EcsBenchmarkAccess::addBatchByRow(
+					backend->components, std::span<const typename Backend::Entity>(selected), Marker { 7 });
 			}
-			else if constexpr (Batch) {
-				backend->addBatch(entities, Marker { 7 });
+			else if constexpr (Dispatch == BatchDispatch::Range && std::is_same_v<Backend, IkigaiCompact>) {
+				backend->components.addArchetypeComponentBatch(selected, Marker { 7 });
+			}
+			else if constexpr (Dispatch == BatchDispatch::Range) {
+				backend->addBatch(std::span<const typename Backend::Entity>(selected), Marker { 7 });
 			}
 			else {
-				for (const auto entity : entities) {
+				for (const auto entity : selected) {
 					backend->add(entity, Marker { 7 });
 				}
 			}
 			benchmark::ClobberMemory();
 			state.PauseTiming();
 			bool valid = true;
-			for (std::size_t index = 0; index < count && valid; ++index) {
+			for (std::size_t index = 0; index < entities.size() && valid; ++index) {
 				const auto entity = entities[index];
 				const auto* marker = backend->template get<Marker>(entity);
 				const auto retained = [&]<std::size_t I> {
 					const auto* component = backend->template get<RetainedComponent<I>>(entity);
 					return component && component->value == static_cast<int>(index + I);
 				};
-				valid = marker && marker->value == 7 && [&]<std::size_t... Index>(std::index_sequence<Index...>) {
+				const bool expectedMarker = index >= first && index - first < count;
+				const bool correctMarker = expectedMarker ? marker && marker->value == 7 : marker == nullptr;
+				valid = correctMarker && [&]<std::size_t... Index>(std::index_sequence<Index...>) {
 					return (retained.template operator()<Index>() && ...);
 				}(std::make_index_sequence<Columns> {});
 			}
@@ -522,12 +536,23 @@ namespace {
 			const auto label = std::string("ArchetypeBatch/") + name + "/" + std::to_string(Columns);
 			benchmark::RegisterBenchmark(label, run)->UseRealTime()->Arg(1000)->Arg(100000);
 		};
-		add("Ikigai/Single", batchAddition<IkigaiCompact, Columns, false>);
-		add("Ikigai/SingleNoHandle", batchAddition<IkigaiNoHandle, Columns, false>);
-		add("Ikigai/Reserved", batchAddition<IkigaiCompact, Columns, true>);
-		add("EnTT/Single", batchAddition<EnTT, Columns, false>);
-		add("EnTT/ReservedRange", batchAddition<EnTT, Columns, true>);
-		add("Flecs/Single", batchAddition<FlecsUncached, Columns, false>);
+		add("Ikigai/Single", batchAddition<IkigaiCompact, Columns, BatchDispatch::Single>);
+		add("Ikigai/SingleNoHandle", batchAddition<IkigaiNoHandle, Columns, BatchDispatch::Single>);
+		add("Ikigai/ReservedRows", batchAddition<IkigaiCompact, Columns, BatchDispatch::ReservedRows>);
+		add("Ikigai/Chunked", batchAddition<IkigaiCompact, Columns, BatchDispatch::Range>);
+		add("EnTT/Single", batchAddition<EnTT, Columns, BatchDispatch::Single>);
+		add("EnTT/ReservedRange", batchAddition<EnTT, Columns, BatchDispatch::Range>);
+		add("Flecs/Single", batchAddition<FlecsUncached, Columns, BatchDispatch::Single>);
+		if constexpr (Columns > 1) {
+			const auto addSlice = [](const char* name, void (*run)(benchmark::State&)) {
+				const auto label = std::string("ArchetypeBatchSlice/") + name + "/" + std::to_string(Columns);
+				benchmark::RegisterBenchmark(label, run)->UseRealTime()->Arg(100000);
+			};
+			addSlice("Ikigai/ReservedRows", batchAddition<IkigaiCompact, Columns, BatchDispatch::ReservedRows, true>);
+			addSlice("Ikigai/Chunked", batchAddition<IkigaiCompact, Columns, BatchDispatch::Range, true>);
+			addSlice("EnTT/ReservedRange", batchAddition<EnTT, Columns, BatchDispatch::Range, true>);
+			addSlice("Flecs/Single", batchAddition<FlecsUncached, Columns, BatchDispatch::Single, true>);
+		}
 	}
 
 	const bool batchRegistered = [] {

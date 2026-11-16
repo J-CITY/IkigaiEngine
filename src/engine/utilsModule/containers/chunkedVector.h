@@ -1,9 +1,13 @@
 #pragma once
 #include "utilsModule/memory/resourceAllocator.h"
+#include <algorithm>
 #include <cassert>
 #include <compare>
+#include <cstring>
 #include <iterator>
+#include <memory>
 #include <span>
+#include <type_traits>
 #include <vector>
 
 namespace IKIGAI::UTILS {
@@ -35,8 +39,9 @@ public:
 		: ChunkedVector(allocator) {
 		try {
 			reserve(other.size());
-			for (const auto& value : other)
+			for (const auto& value : other) {
 				emplace_back(value);
+			}
 		} catch (...) {
 			clear();
 			freeBlocks();
@@ -56,8 +61,9 @@ public:
 	ChunkedVector& operator=(const ChunkedVector& other)
 		requires std::is_copy_constructible_v<T>
 	{
-		if (this == &other)
+		if (this == &other) {
 			return *this;
+		}
 		if constexpr (Traits::propagate_on_container_copy_assignment::value) {
 			if (mAllocator != other.mAllocator) {
 				clear();
@@ -72,8 +78,9 @@ public:
 		return *this;
 	}
 	ChunkedVector& operator=(ChunkedVector&& other) {
-		if (this == &other)
+		if (this == &other) {
 			return *this;
+		}
 		if constexpr (Traits::propagate_on_container_move_assignment::value) {
 			clear();
 			freeBlocks();
@@ -93,13 +100,15 @@ public:
 			if constexpr (std::is_move_constructible_v<T> || std::is_copy_constructible_v<T>) {
 				ChunkedVector copy(mAllocator);
 				copy.reserve(other.size());
-				for (auto& value : other)
+				for (auto& value : other) {
 					copy.emplace_back(std::move_if_noexcept(value));
+				}
 				swap(copy);
 				other.clear();
 			}
-			else
+			else {
 				throw std::invalid_argument("Cannot move immovable elements between allocation domains");
+			}
 		}
 		return *this;
 	}
@@ -108,8 +117,9 @@ public:
 			using std::swap;
 			swap(mAllocator, other.mAllocator);
 		}
-		else if (mAllocator != other.mAllocator)
+		else if (mAllocator != other.mAllocator) {
 			throw std::invalid_argument("Incompatible allocation domains");
+		}
 		mBlocks.swap(other.mBlocks);
 		std::swap(mSize, other.mSize);
 	}
@@ -135,8 +145,9 @@ public:
 		return std::min(Traits::max_size(mAllocator), static_cast<size_type>(PTRDIFF_MAX)) / ChunkSize * ChunkSize;
 	}
 	void reserve(size_type count) {
-		if (count > max_size())
+		if (count > max_size()) {
 			throw std::length_error("ChunkedVector capacity overflow");
+		}
 		const auto blocks = count / ChunkSize + (count % ChunkSize != 0);
 		if (blocks > mBlocks.capacity()) {
 			const auto growth = mBlocks.capacity() + std::min(mBlocks.capacity() / 2 + 1, mBlocks.max_size() - mBlocks.capacity());
@@ -153,10 +164,12 @@ public:
 		}
 	}
 	template <class... Args> T& emplace_back(Args&&... args) {
-		if (mSize == max_size())
+		if (mSize == max_size()) {
 			throw std::length_error("ChunkedVector size overflow");
-		if (mSize == capacity())
+		}
+		if (mSize == capacity()) {
 			reserve(mSize + 1);
+		}
 		T* ptr = mBlocks[mSize / ChunkSize] + mSize % ChunkSize;
 		Traits::construct(mAllocator, ptr, std::forward<Args>(args)...);
 		++mSize;
@@ -168,18 +181,49 @@ public:
 	void push_back(T&& value) {
 		emplace_back(std::move(value));
 	}
+	// The caller reserves storage before changing any live rows across containers.
+	void append_trivial_range_reserved(const ChunkedVector& source, size_type first, size_type count) noexcept
+		requires(std::is_trivially_copyable_v<T> && std::is_trivially_move_constructible_v<T>)
+	{
+		assert(this != &source && first <= source.mSize && count <= source.mSize - first && count <= capacity() - mSize);
+		copyTrivialRange(mSize, source, first, count);
+		mSize += count;
+	}
+	void append_trivial_fill_reserved(size_type count, const T& value) noexcept
+		requires(std::is_trivially_copyable_v<T> && std::is_trivially_copy_constructible_v<T>)
+	{
+		assert(count <= capacity() - mSize);
+		while (count != 0) {
+			const auto offset = mSize % ChunkSize;
+			const auto length = std::min(count, ChunkSize - offset);
+			std::uninitialized_fill_n(mBlocks[mSize / ChunkSize] + offset, length, value);
+			mSize += length;
+			count -= length;
+		}
+	}
+	// Fill the removed range from the tail. Retained rows need not keep their order.
+	void erase_trivial_range_unordered(size_type first, size_type count) noexcept
+		requires(std::is_trivially_copyable_v<T> && std::is_trivially_move_constructible_v<T>)
+	{
+		assert(first <= mSize && count <= mSize - first);
+		const auto tailCount = std::min(count, mSize - first - count);
+		copyTrivialRange(first, *this, mSize - tailCount, tailCount);
+		mSize -= count;
+	}
 	void pop_back() noexcept {
 		assert(mSize);
 		--mSize;
 		Traits::destroy(mAllocator, mBlocks[mSize / ChunkSize] + mSize % ChunkSize);
 	}
 	void clear() noexcept {
-		while (mSize)
+		while (mSize) {
 			pop_back();
+		}
 	}
 	void release() {
-		if (mSize)
+		if (mSize) {
 			throw std::logic_error("Release requires an empty ChunkedVector");
+		}
 		freeBlocks();
 		mBlocks.shrink_to_fit();
 	}
@@ -190,13 +234,15 @@ public:
 		return mBlocks[index / ChunkSize][index % ChunkSize];
 	}
 	T& at(size_type index) {
-		if (index >= mSize)
+		if (index >= mSize) {
 			throw std::out_of_range("ChunkedVector index");
+		}
 		return (*this)[index];
 	}
 	const T& at(size_type index) const {
-		if (index >= mSize)
+		if (index >= mSize) {
 			throw std::out_of_range("ChunkedVector index");
+		}
 		return (*this)[index];
 	}
 	T& back() noexcept {
@@ -211,13 +257,15 @@ public:
 		return mSize / ChunkSize + (mSize % ChunkSize != 0);
 	}
 	std::span<T> chunk(size_type index) {
-		if (index >= chunk_count())
+		if (index >= chunk_count()) {
 			throw std::out_of_range("Chunk index");
+		}
 		return { mBlocks[index], std::min(ChunkSize, mSize - index * ChunkSize) };
 	}
 	std::span<const T> chunk(size_type index) const {
-		if (index >= chunk_count())
+		if (index >= chunk_count()) {
 			throw std::out_of_range("Chunk index");
+		}
 		return { mBlocks[index], std::min(ChunkSize, mSize - index * ChunkSize) };
 	}
 
@@ -321,9 +369,24 @@ public:
 	}
 
 private:
+	void copyTrivialRange(size_type destination, const ChunkedVector& source, size_type first, size_type count) noexcept
+		requires(std::is_trivially_copyable_v<T> && std::is_trivially_move_constructible_v<T>)
+	{
+		while (count != 0) {
+			const auto destinationOffset = destination % ChunkSize;
+			const auto sourceOffset = first % ChunkSize;
+			const auto length = std::min({ count, ChunkSize - destinationOffset, ChunkSize - sourceOffset });
+			std::memcpy(mBlocks[destination / ChunkSize] + destinationOffset, source.mBlocks[first / ChunkSize] + sourceOffset, length * sizeof(T));
+			destination += length;
+			first += length;
+			count -= length;
+		}
+	}
+
 	void freeBlocks() noexcept {
-		for (auto* block : mBlocks)
+		for (auto* block : mBlocks) {
 			Traits::deallocate(mAllocator, block, ChunkSize);
+		}
 		mBlocks.clear();
 	}
 	Allocator mAllocator;

@@ -231,6 +231,12 @@ class ComponentManager {
 		}
 
 		Record& at(Entity entity);
+		Record& at(Entity entity, PageCursor& cursor) {
+			if (const auto* record = find(entity, cursor)) {
+				return *const_cast<Record*>(record);
+			}
+			throw std::out_of_range("Entity is not registered in this ECS world");
+		}
 		void erase(Entity entity) noexcept;
 		void eraseLocated(Entity entity, Location location) noexcept;
 	};
@@ -416,6 +422,13 @@ private:
 		std::vector<Entry> entries;
 	};
 	std::optional<IndexedBatch> prepareIndexedBatch(std::span<const Entity> entities, ComponentType type);
+	struct IndexedBatchRange {
+		Archetype* source = nullptr;
+		const Archetype::Transition* plan = nullptr;
+		std::size_t first = 0;
+	};
+	std::optional<IndexedBatchRange> prepareIndexedBatchRange(std::span<const Entity> entities, ComponentType type);
+	void commitIndexedBatchRange(const IndexedBatchRange& range, std::size_t count) noexcept;
 
 	template <class... Components>
 	std::uint64_t addIndexedComponents(Entity entity, Record& record, Archetype* to, std::span<const ComponentType> types,
@@ -710,6 +723,11 @@ public:
 	// Adds or replaces one value per requested entity, in input order, without returning handles.
 	// An exception during insertion can leave successfully processed entities updated.
 	template <class T> void addArchetypeComponentBatch(std::span<const Entity> entities, const T& value) {
+		addArchetypeComponentBatchImpl<true>(entities, value);
+	}
+
+private:
+	template <bool Chunked, class T> void addArchetypeComponentBatchImpl(std::span<const Entity> entities, const T& value) {
 		requireStructuralChangesAllowed();
 		if (entities.empty()) {
 			return;
@@ -720,9 +738,19 @@ public:
 		}
 		const T prototype(value);
 		auto* signal = mEventManager.findSignal<OnAdd<T>>();
-		const auto batch = mIndexedRecords && std::is_trivially_copyable_v<T> && (!signal || signal->getListenerCount() == 0)
-			? prepareIndexedBatch(entities, type)
-			: std::nullopt;
+		const bool canPlanBatch = mIndexedRecords && std::is_trivially_copyable_v<T> && (!signal || signal->getListenerCount() == 0);
+		if constexpr (Chunked && std::is_trivially_copyable_v<T> && std::is_trivially_copy_constructible_v<T>) {
+			if (canPlanBatch && entities.size() >= ComponentArray<T>::Storage::chunk_size) {
+				if (const auto range = prepareIndexedBatchRange(entities, type)) {
+					auto& column = static_cast<ComponentArray<T>&>(*range->plan->target->mComponentArrays.at(type));
+					const auto count = entities.size();
+					column.appendIndexedValues(count, prototype);
+					commitIndexedBatchRange(*range, count);
+					return;
+				}
+			}
+		}
+		const auto batch = canPlanBatch ? prepareIndexedBatch(entities, type) : std::nullopt;
 		if (!batch) {
 			// The span may point into an archetype whose rows are changed by the edits.
 			const std::vector<Entity> ids(entities.begin(), entities.end());

@@ -133,6 +133,59 @@ void ComponentManager::reserveIndexedRows(Archetype& table, std::size_t required
 	table.mReservedRows = reserved;
 }
 
+std::optional<ComponentManager::IndexedBatchRange> ComponentManager::prepareIndexedBatchRange(std::span<const Entity> entities, ComponentType type) {
+	auto& record = mEntityRecords.at(entities.front());
+	auto* source = record.archetype;
+	const auto sourceRows = std::span(source->mRows->entities);
+	const auto first = record.row;
+	if (first > sourceRows.size() || entities.size() > sourceRows.size() - first) {
+		return std::nullopt;
+	}
+	if (!std::ranges::equal(entities, sourceRows.subspan(first, entities.size()))) {
+		return std::nullopt;
+	}
+	if (!std::ranges::all_of(source->mIndexedColumns, &ComponentArrayInterface::hasTrivialLifecycle)) {
+		return std::nullopt;
+	}
+	const auto* plan = getSingleComponentTransition(source, type, true);
+	if (!plan) {
+		return std::nullopt;
+	}
+	const auto& targetRows = plan->target->mRows->entities;
+	if (entities.size() > targetRows.max_size() - targetRows.size()) {
+		throw std::length_error("ECS batch exceeds archetype capacity");
+	}
+	reserveIndexedRows(*plan->target, targetRows.size() + entities.size());
+	return IndexedBatchRange { source, plan, first };
+}
+
+void ComponentManager::commitIndexedBatchRange(const IndexedBatchRange& range, std::size_t count) noexcept {
+	auto& sourceRows = range.source->mRows->entities;
+	auto& targetRows = range.plan->target->mRows->entities;
+	const auto targetFirst = targetRows.size();
+	const auto sourceFirst = sourceRows.begin() + range.first;
+	targetRows.insert(targetRows.end(), sourceFirst, sourceFirst + count);
+	for (const auto& column : range.plan->columns) {
+		column.source->transferIndexedRange(range.first, count, *column.destination);
+	}
+
+	const auto tailCount = std::min(count, sourceRows.size() - range.first - count);
+	std::copy_n(sourceRows.end() - tailCount, tailCount, sourceFirst);
+	sourceRows.resize(sourceRows.size() - count);
+
+	EntityRecords::PageCursor cursor;
+	for (std::size_t offset = 0; offset < tailCount; ++offset) {
+		const auto index = range.first + offset;
+		mEntityRecords.at(sourceRows[index], cursor).row = index;
+	}
+	for (std::size_t offset = 0; offset < count; ++offset) {
+		const auto index = targetFirst + offset;
+		auto& record = mEntityRecords.at(targetRows[index], cursor);
+		record.archetype = range.plan->target;
+		record.row = index;
+	}
+}
+
 std::optional<ComponentManager::IndexedBatch> ComponentManager::prepareIndexedBatch(std::span<const Entity> entities, ComponentType type) {
 	IndexedBatch batch;
 	batch.entries.reserve(entities.size());

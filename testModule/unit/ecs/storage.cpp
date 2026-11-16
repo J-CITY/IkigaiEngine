@@ -536,6 +536,60 @@ void checkArchetypeBatch(ECS::ArchetypeLayout layout) {
 	expect(weak && weak->value == 31 && components.checkComponent<Health>(custom), "batch preserves weak references for retained components");
 }
 
+void checkChunkedArchetypeBatch() {
+	using namespace ECS;
+	World world { ArchetypeLayout::SharedRows };
+	auto& components = *world.getComponentManager();
+	const auto existing = world.createEntity();
+	components.addComponents(existing, Position { -1 }, Velocity { -2 }, Health { 3 });
+	const auto existingHealth = components.getComponentHandle<Health>(existing);
+
+	std::vector<Entity> entities;
+	std::vector<ComponentHandle<Position>> positions;
+	for (int index = 0; index < 535; ++index) {
+		const auto entity = world.createEntity();
+		entities.push_back(entity);
+		components.addComponents(entity, Position { index }, Velocity { -index });
+		positions.push_back(components.getComponentHandle<Position>(entity));
+	}
+	Signature signature;
+	const auto positionType = components.getComponentType<Position>();
+	signature.set(positionType.value(), true);
+	signature.set(components.getComponentType<Velocity>().value(), true);
+	const auto source = components.getArchetype(signature);
+	const auto column = source->getComponents<Position>(positionType);
+	std::unordered_set<Entity> moved;
+	for (const auto [first, count] : { std::pair { 37, 137 }, std::pair { 12, 329 } }) {
+		const auto slice = column->getEntities().subspan(first, count);
+		moved.insert(slice.begin(), slice.end());
+		components.addArchetypeComponentBatch(slice, Health { 11 });
+	}
+	expect(source->size() == entities.size() - moved.size(), "chunked batches fill the source holes and trim its tail");
+	for (std::size_t index = 0; index < entities.size(); ++index) {
+		const auto* position = components.resolveComponent(positions[index]);
+		const auto* velocity = components.tryGetComponent<Velocity>(entities[index]);
+		const auto* health = components.tryGetComponent<Health>(entities[index]);
+		expect(position && position->value == static_cast<int>(index) && velocity && velocity->value == -static_cast<int>(index),
+			"chunked batches keep components and generations on the owning entity");
+		expect(moved.contains(entities[index]) ? health && health->value == 11 : health == nullptr,
+			"only selected rows move to the destination archetype");
+	}
+	const auto replaced = components.getComponentHandle<Health>(*moved.begin());
+	components.addComponent(*moved.begin(), Health { 12 });
+	expect(!components.resolveComponent(replaced), "single replacement advances the generation after chunked insertion");
+	expect(components.resolveComponent(existingHealth) && components.resolveComponent(existingHealth)->value == 3,
+		"existing destination rows keep their values and generations");
+}
+
+void checkGenerationRange() {
+	struct TestGeneration;
+	IdSequence<TestGeneration, std::uint8_t, 1, 5> sequence;
+	expect(sequence.nextRange(3).value() == 1, "generation reservation starts at the next free generation");
+	expectThrows([&] { sequence.nextRange(3); }, "generation reservation checks the entire range");
+	expect(sequence.next().value() == 4 && sequence.nextRange(1).value() == 5, "failed generation reservation leaves the sequence intact");
+	expectThrows([&] { sequence.next(); }, "sequence is exhausted after reserving its last generation");
+}
+
 void runStorageTests() {
 	for (const auto layout : { ECS::ArchetypeLayout::PerColumn, ECS::ArchetypeLayout::SharedRows }) {
 		checkHandles(layout);
@@ -553,5 +607,7 @@ void runStorageTests() {
 	checkIndexedWeakRelocation();
 	checkIndexedTransitionPlans();
 	checkIndexedPair();
+	checkChunkedArchetypeBatch();
+	checkGenerationRange();
 }
 }

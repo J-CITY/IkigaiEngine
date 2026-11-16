@@ -36,6 +36,7 @@ public:
 	[[nodiscard]] virtual bool hasTrivialLifecycle() const noexcept = 0;
 	virtual std::size_t reserveIndexedRows(std::size_t required) = 0;
 	virtual void appendIndexedMove(std::size_t sourceRow, ComponentArrayInterface& destination) noexcept = 0;
+	virtual void transferIndexedRange(std::size_t first, std::size_t count, ComponentArrayInterface& destination) noexcept = 0;
 	virtual void eraseIndexedRow(std::size_t row) noexcept = 0;
 };
 }
