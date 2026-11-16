@@ -86,6 +86,73 @@ namespace {
 		});
 	}
 
+	void checkMixedJoin() {
+		World world;
+		auto& components = *world.getComponentManager();
+		components.registerComponent<Health>(StorageType::Sparse);
+		components.registerComponent<Shield>(StorageType::Sparse);
+		std::vector<Entity> entities;
+		std::unordered_set<Entity> expected;
+		for (int index = 0; index < 60; ++index) {
+			const auto entity = world.createEntity();
+			entities.push_back(entity);
+			components.addComponent(entity, Position { index });
+			if (index % 2 != 0) {
+				components.addComponent(entity, Velocity { index });
+			}
+			if (index != 20) {
+				components.addComponent(entity, Health { index });
+			}
+			if (index % 10 == 0 || index == 21) {
+				components.addComponent(entity, Shield { 7 });
+				if (index != 20) {
+					expected.insert(entity);
+				}
+			}
+		}
+		const auto sparseOnly = world.createEntity();
+		components.addComponents(sparseOnly, Health { 61 }, Shield { 7 });
+		const auto verify = [&] {
+			std::unordered_set<Entity> visited;
+			components.forEach<Read<Health>, Write<Position>, Read<Shield>>([&](Entity entity, const Health& health, Position& position,
+																				const Shield& shield) {
+				expect(visited.insert(entity).second, "mixed join visits each entity once");
+				const auto index = static_cast<std::size_t>(health.value);
+				expect(index < entities.size() && entities[index] == entity && shield.value == 7, "mixed join resolves the correct sparse values");
+				position.value = health.value + shield.value;
+			});
+			expect(visited == expected, "mixed join follows both archetype and sparse filters");
+			for (const auto entity : expected) {
+				const auto* health = components.tryGetComponent<Health>(entity);
+				const auto* position = components.tryGetComponent<Position>(entity);
+				expect(health && position && position->value == health->value + 7, "mixed join writes through to the right archetype row");
+			}
+		};
+		verify();
+
+		components.removeComponents<Position>(entities[0]);
+		world.destroyEntity(entities[10]);
+		components.removeComponents<Shield>(entities[30]);
+		components.addComponent(entities[40], Velocity { 40 });
+		expected.erase(entities[0]);
+		expected.erase(entities[10]);
+		expected.erase(entities[30]);
+		verify();
+
+		// Populate the sparse driver until a scan of the matching archetypes is cheaper.
+		for (std::size_t index = 1; index < entities.size(); ++index) {
+			if (index == 10 || index == 20) {
+				continue;
+			}
+			const auto entity = entities[index];
+			if (!components.checkComponent<Shield>(entity)) {
+				components.addComponent(entity, Shield { 7 });
+			}
+			expected.insert(entity);
+		}
+		verify();
+	}
+
 	void checkDenseChunks() {
 		World world;
 		auto& components = *world.getComponentManager();
@@ -178,6 +245,7 @@ namespace {
 void runStorageTests() {
 	checkHandles();
 	checkQueries();
+	checkMixedJoin();
 	checkDenseChunks();
 	checkAlignment();
 	checkRelationCleanup();

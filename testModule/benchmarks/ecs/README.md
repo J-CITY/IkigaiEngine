@@ -1,6 +1,6 @@
 # ECS benchmarks
 
-[Результаты замеров](RESULTS.md)
+[Отчёт с графиком и результатами экспериментов](RESULTS.md)
 
 Сборка использует три локальных checkout в каталоге рядом с движком. Ниже команды PowerShell из корня IkigaiEngine.
 
@@ -36,4 +36,10 @@ $exe = './build/ecs/benchmarks/ecs/Release/ecs_benchmarks.exe'
 
 ```powershell
 & $exe '--benchmark_filter=^Demo/' --benchmark_min_time=0.12s --benchmark_min_warmup_time=0.03 --benchmark_repetitions=7 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/demo.json --benchmark_out_format=json
+```
+
+Для сравнения смешанного запроса запускайте старый и новый Release-бинарники с этим фильтром. Укажите отдельный JSON для каждой версии.
+
+```powershell
+& $exe '--benchmark_filter=movement<IkigaiMixed>' --benchmark_min_time=0.16s --benchmark_min_warmup_time=0.04 --benchmark_repetitions=9 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/mixed.json --benchmark_out_format=json
 ```

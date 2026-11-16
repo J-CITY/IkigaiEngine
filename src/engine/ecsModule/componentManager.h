@@ -262,18 +262,24 @@ private:
 	}
 
 	template <class... Components, class Func, std::size_t... Indices>
+	static void visitJoinedRow(const std::array<ComponentArrayInterface*, sizeof...(Components)>& arrays,
+		const std::array<bool, sizeof...(Components)>& rowAligned, const ComponentArrayInterface& leading, std::size_t row, const Entity entity,
+		Func& func, std::index_sequence<Indices...>) {
+		const auto pointers = std::tuple { ([&] {
+			auto& array = *static_cast<ComponentArray<RawType<Components>>*>(arrays[Indices]);
+			return rowAligned[Indices] || arrays[Indices] == &leading ? &array.at(row) : array.tryGetData(entity);
+		}())... };
+		if (((std::get<Indices>(pointers) != nullptr) && ...)) {
+			std::invoke(func, entity, static_cast<QueryReference<Components>>(*std::get<Indices>(pointers))...);
+		}
+	}
+
+	template <class... Components, class Func>
 	static void visitRows(const std::array<ComponentArrayInterface*, sizeof...(Components)>& arrays,
-		const std::array<bool, sizeof...(Components)>& rowAligned, ComponentArrayInterface& leading, Func& func, std::index_sequence<Indices...>) {
-		const auto count = static_cast<std::size_t>(leading.getSize());
-		for (std::size_t row = 0; row < count; ++row) {
-			const Entity entity = leading.getEntity(row);
-			auto pointers = std::tuple { ([&] {
-				auto& array = *static_cast<ComponentArray<RawType<Components>>*>(arrays[Indices]);
-				return rowAligned[Indices] || arrays[Indices] == &leading ? &array.at(row) : array.tryGetData(entity);
-			}())... };
-			if (((std::get<Indices>(pointers) != nullptr) && ...)) {
-				std::invoke(func, entity, static_cast<QueryReference<Components>>(*std::get<Indices>(pointers))...);
-			}
+		const std::array<bool, sizeof...(Components)>& rowAligned, const ComponentArrayInterface& leading, Func& func) {
+		const auto entities = leading.getEntities();
+		for (std::size_t row = 0; row < entities.size(); ++row) {
+			visitJoinedRow<Components...>(arrays, rowAligned, leading, row, entities[row], func, std::index_sequence_for<Components...> {});
 		}
 	}
 
@@ -657,6 +663,7 @@ public:
 		mEntityRecords.erase(entity);
 	}
 
+	// Visit order follows the selected storage and can change after structural edits.
 	template <class... Components, class Func> void forEach(Func&& func) {
 		const QueryScope query(mActiveQueries);
 		static_assert(sizeof...(Components) > 0, "forEach requires components");
@@ -671,6 +678,7 @@ public:
 		std::array<bool, count> rowAligned {};
 		ComponentArrayInterface* smallestSparse = nullptr;
 		std::size_t firstArchetype = count;
+		std::size_t archetypeTerms = 0;
 		for (std::size_t i = 0; i < count; ++i) {
 			const auto storage = mComponentStorageType.find(types[i]);
 			if (storage == mComponentStorageType.end()) {
@@ -678,6 +686,7 @@ public:
 			}
 			if (storage->second == StorageType::Archetype) {
 				rowAligned[i] = true;
+				++archetypeTerms;
 				if (firstArchetype == count) {
 					firstArchetype = i;
 				}
@@ -690,7 +699,7 @@ public:
 			}
 		}
 		if (firstArchetype == count) {
-			visitRows<Components...>(arrays, rowAligned, *smallestSparse, func, std::index_sequence_for<Components...> {});
+			visitRows<Components...>(arrays, rowAligned, *smallestSparse, func);
 			return;
 		}
 		const auto matches = [&](const Signature& signature) {
@@ -701,17 +710,76 @@ public:
 			}
 			return true;
 		};
+		const auto bindColumns = [&](const Archetype& archetype) {
+			for (std::size_t i = firstArchetype; i < count; ++i) {
+				if (rowAligned[i]) {
+					arrays[i] = archetype.mComponentArrays.at(types[i]).get();
+				}
+			}
+		};
+		if (smallestSparse) {
+			const auto sparseRows = smallestSparse->getEntities();
+			if (sparseRows.empty()) {
+				return;
+			}
+			std::uint64_t archetypeRows = 0;
+			std::size_t matchingArchetypes = 0;
+			const Archetype* matchingArchetype = nullptr;
+			for (const auto& [signature, archetype] : mMaskToArchetype) {
+				if (matches(signature)) {
+					const auto rows = archetype->size();
+					if (rows != 0) {
+						archetypeRows += rows;
+						++matchingArchetypes;
+						matchingArchetype = archetype.get();
+					}
+				}
+			}
+			if (matchingArchetypes == 0) {
+				return;
+			}
+
+			// Across tables, budget a record lookup and a column lookup per archetype term.
+			const auto probesPerSparseRow = matchingArchetypes == 1 ? count - 1 : count + archetypeTerms;
+			if (static_cast<std::uint64_t>(sparseRows.size()) * probesPerSparseRow < archetypeRows * (count - archetypeTerms)) {
+				constexpr std::array<bool, count> sparseAligned {};
+				if (matchingArchetypes == 1) {
+					bindColumns(*matchingArchetype);
+					visitRows<Components...>(arrays, sparseAligned, *smallestSparse, func);
+					return;
+				}
+
+				const Archetype* previousArchetype = nullptr;
+				bool matchesPrevious = false;
+				for (std::size_t row = 0; row < sparseRows.size(); ++row) {
+					const Entity entity = sparseRows[row];
+					const auto record = mEntityRecords.find(entity);
+					if (record == mEntityRecords.end()) {
+						continue;
+					}
+					const auto* archetype = record->second.archetype.get();
+					if (archetype != previousArchetype) {
+						previousArchetype = archetype;
+						matchesPrevious = matches(archetype->mMask);
+						if (matchesPrevious) {
+							bindColumns(*archetype);
+						}
+					}
+					if (matchesPrevious) {
+						visitJoinedRow<Components...>(
+							arrays, sparseAligned, *smallestSparse, row, entity, func, std::index_sequence_for<Components...> {});
+					}
+				}
+				return;
+			}
+		}
 		for (const auto& [signature, archetype] : mMaskToArchetype) {
 			if (!matches(signature)) {
 				continue;
 			}
-			for (std::size_t i = 0; i < count; ++i) {
-				if (rowAligned[i]) {
-					arrays[i] = archetype->mComponentArrays.at(types[i]).get();
-				}
-			}
+			bindColumns(*archetype);
 			if (smallestSparse) {
-				visitRows<Components...>(arrays, rowAligned, *arrays[firstArchetype], func, std::index_sequence_for<Components...> {});
+				visitRows<Components...>(arrays, rowAligned, *arrays[firstArchetype], func);
 			}
 			else {
 				visitDense<Components...>(arrays, func, std::index_sequence_for<Components...> {});

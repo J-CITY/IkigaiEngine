@@ -160,6 +160,10 @@ public:
 		return indexToEntity.at(index);
 	}
 
+	[[nodiscard]] std::span<const Entity> getEntities() const noexcept override {
+		return indexToEntity;
+	}
+
 private:
 	friend class ComponentManager;
 
