@@ -13,6 +13,7 @@ template <typename... Components> class SystemBuilder;
 class World : public IdGenerator<World> {
 public:
 	World();
+	explicit World(ArchetypeLayout layout);
 	~World();
 
 	[[nodiscard]] ComponentManager* getComponentManager() const noexcept;

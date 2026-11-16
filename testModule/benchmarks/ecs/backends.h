@@ -12,12 +12,13 @@
 
 namespace ECS_BENCHMARK {
 
-template <int Alignment = alignof(float), bool SparseVelocity = false> class Ikigai {
+template <int Alignment = alignof(float), bool SparseVelocity = false, IKIGAI::ECS::ArchetypeLayout Layout = IKIGAI::ECS::ArchetypeLayout::SharedRows>
+class Ikigai {
 public:
 	using Entity = IKIGAI::ECS::Entity;
 	using PositionType = Position<Alignment>;
 	using VelocityType = Velocity<Alignment>;
-	IKIGAI::ECS::World world;
+	IKIGAI::ECS::World world { Layout };
 	IKIGAI::ECS::ComponentManager& components = *world.getComponentManager();
 
 	void registerMovement() {

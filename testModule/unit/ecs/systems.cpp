@@ -4,6 +4,7 @@
 #include "support/expect.h"
 #include "taskModule/taskSystem.h"
 
+#include <array>
 #include <chrono>
 #include <thread>
 
@@ -11,8 +12,8 @@ namespace IKIGAI::TEST::ECS_CASES {
 namespace {
 	using namespace IKIGAI::ECS;
 
-	void checkCommands() {
-		World world;
+	void checkCommands(ArchetypeLayout layout) {
+		World world { layout };
 		auto& components = *world.getComponentManager();
 		const auto entity = world.createEntity();
 		const auto handle = components.getEntityHandle(entity);
@@ -51,8 +52,8 @@ namespace {
 		expect(count == 1 && sum == 8, "an edit targeting a destroyed entity is skipped");
 	}
 
-	void checkScheduling(bool withWorkers) {
-		World world;
+	void checkScheduling(ArchetypeLayout layout, bool withWorkers) {
+		World world { layout };
 		auto& components = *world.getComponentManager();
 		const auto entity = world.createEntity();
 		components.addComponents(entity, Position { 1 }, Velocity { 2 });
@@ -82,8 +83,8 @@ namespace {
 		expect(velocityThread != std::thread::id {} && (velocityThread != caller) == withWorkers, "velocity writer uses the expected executor");
 	}
 
-	void checkAccessValidation() {
-		World world;
+	void checkAccessValidation(ArchetypeLayout layout) {
+		World world { layout };
 		auto& components = *world.getComponentManager();
 		const auto entity = world.createEntity();
 		components.addComponent(entity, Position { 1 });
@@ -98,9 +99,12 @@ namespace {
 }
 
 void runSystemTests() {
-	checkCommands();
-	checkScheduling(false);
-	checkAccessValidation();
+	constexpr std::array layouts { ECS::ArchetypeLayout::PerColumn, ECS::ArchetypeLayout::SharedRows };
+	for (const auto layout : layouts) {
+		checkCommands(layout);
+		checkScheduling(layout, false);
+		checkAccessValidation(layout);
+	}
 
 	TASK::TaskSystem tasks;
 	const bool started = tasks.setup() && tasks.initialize() && tasks.getThreadCounts() > 0;
@@ -114,7 +118,9 @@ void runSystemTests() {
 				RESOURCES::ServiceManager::Remove<TASK::TaskSystem>();
 			}
 		} registration(tasks);
-		checkScheduling(true);
+		for (const auto layout : layouts) {
+			checkScheduling(layout, true);
+		}
 	}
 }
 }

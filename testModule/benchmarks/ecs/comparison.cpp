@@ -5,10 +5,13 @@
 #include <algorithm>
 #include <array>
 #include <memory>
+#include <ranges>
+#include <string>
 #include <vector>
 
 namespace ECS_BENCHMARK {
 namespace {
+	using IKIGAI::ECS::ArchetypeLayout;
 
 	constexpr std::array entityCounts { 1000, 10000, 100000 };
 	constexpr float delta = 0.5f;
@@ -184,6 +187,61 @@ namespace {
 		}
 	}
 
+	template <std::size_t Index> struct RetainedComponent {
+		int value = 0;
+	};
+
+	template <std::size_t Columns, bool ReuseCapacity, ArchetypeLayout Layout> void storageGrowth(benchmark::State& state) {
+		const auto count = static_cast<std::size_t>(state.range(0));
+		using Backend = Ikigai<alignof(float), false, Layout>;
+		std::vector<typename Backend::Entity> entities(count);
+		const std::size_t warmRows = ReuseCapacity ? count : 1;
+		std::vector<typename Backend::Entity> warmEntities(warmRows);
+		for (auto _ : state) {
+			state.PauseTiming();
+			auto backend = std::make_unique<Backend>();
+			const auto createSource = [&](std::size_t value) {
+				const auto entity = backend->create();
+				[&]<std::size_t... Indices>(std::index_sequence<Indices...>) {
+					backend->components.addComponents(entity, RetainedComponent<Indices> { static_cast<int>(value + Indices) }...);
+				}(std::make_index_sequence<Columns> {});
+				return entity;
+			};
+			// Warm only the target table before creating the timed sources in the same order.
+			for (auto& entity : warmEntities) {
+				entity = createSource(0);
+				backend->add(entity, Marker { 7 });
+			}
+			for (const auto entity : warmEntities | std::views::reverse) {
+				backend->destroy(entity);
+			}
+			for (std::size_t i = 0; i < count; ++i) {
+				entities[i] = createSource(i);
+			}
+			state.ResumeTiming();
+			for (const auto entity : entities) {
+				backend->add(entity, Marker { 7 });
+			}
+			benchmark::ClobberMemory();
+			state.PauseTiming();
+			bool valid = true;
+			for (std::size_t i = 0; i < count; ++i) {
+				const auto* marker = backend->template get<Marker>(entities[i]);
+				const auto* first = backend->template get<RetainedComponent<0>>(entities[i]);
+				const auto* last = backend->template get<RetainedComponent<Columns - 1>>(entities[i]);
+				valid = valid && marker && marker->value == 7 && first && first->value == static_cast<int>(i) && last
+					&& last->value == static_cast<int>(i + Columns - 1);
+			}
+			backend.reset();
+			state.ResumeTiming();
+			if (!valid) {
+				state.SkipWithError("bulk migration did not preserve the expected components");
+				break;
+			}
+		}
+		state.SetItemsProcessed(state.iterations() * count);
+	}
+
 	template <bool Warm> void addTransition(benchmark::State& state) {
 		using Backend = Ikigai<>;
 		constexpr std::size_t batchSize = 64;
@@ -332,6 +390,21 @@ namespace {
 	BENCHMARK_TEMPLATE(structural, IkigaiWithListeners, Structure::Remove)->Apply(entitySizes);
 	BENCHMARK_TEMPLATE(addTransition, false)->Name("Ikigai/AddTransition/Cold")->UseRealTime();
 	BENCHMARK_TEMPLATE(addTransition, true)->Name("Ikigai/AddTransition/Warm")->UseRealTime();
+	template <ArchetypeLayout Layout, std::size_t Columns> void registerGrowth(const char* layout) {
+		const auto prefix = std::string("Ikigai/StorageGrowth/") + layout + "/" + std::to_string(Columns);
+		benchmark::RegisterBenchmark(prefix + "/Grow", storageGrowth<Columns, false, Layout>)->UseRealTime()->Arg(100000);
+		benchmark::RegisterBenchmark(prefix + "/Reuse", storageGrowth<Columns, true, Layout>)->UseRealTime()->Arg(100000);
+	}
+
+	const bool growthRegistered = [] {
+		registerGrowth<ArchetypeLayout::PerColumn, 1>("PerColumn");
+		registerGrowth<ArchetypeLayout::PerColumn, 4>("PerColumn");
+		registerGrowth<ArchetypeLayout::PerColumn, 8>("PerColumn");
+		registerGrowth<ArchetypeLayout::SharedRows, 1>("SharedRows");
+		registerGrowth<ArchetypeLayout::SharedRows, 4>("SharedRows");
+		registerGrowth<ArchetypeLayout::SharedRows, 8>("SharedRows");
+		return true;
+	}();
 
 	BENCHMARK_TEMPLATE(commands, true)->Name("CommandBuffer/RecordAdd")->Apply(entitySizes);
 	BENCHMARK_TEMPLATE(commands, false)->Name("CommandBuffer/PlaybackAdd")->Apply(entitySizes);

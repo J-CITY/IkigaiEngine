@@ -1,4 +1,5 @@
 #pragma once
+#include "ecsModule/componentManager.h"
 
 namespace IKIGAI::TEST::ECS_CASES {
 
@@ -26,6 +27,18 @@ struct alignas(16) AlignedPosition {
 };
 
 struct alignas(32) AlignedVelocity {
+	int value = 0;
+};
+
+struct ThrowingValue {
+	explicit ThrowingValue(bool failOnMove)
+		: failOnMove(failOnMove) { }
+	ThrowingValue(ThrowingValue&& other);
+	ThrowingValue& operator=(ThrowingValue&&) noexcept = default;
+	bool failOnMove = false;
+};
+
+struct TrackedComponent : ECS::Component {
 	int value = 0;
 };
 

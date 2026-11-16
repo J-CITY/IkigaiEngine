@@ -10,6 +10,8 @@ template <> struct IKIGAI::IdDomain<IKIGAI::ECS::Entity> {
 };
 
 namespace IKIGAI::ECS {
+enum class ArchetypeLayout { PerColumn, SharedRows };
+
 class Entity {
 public:
 	using ID = Id<Entity>;

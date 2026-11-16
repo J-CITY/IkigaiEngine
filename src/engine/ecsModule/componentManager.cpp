@@ -1,6 +1,65 @@
 #include "componentManager.h"
 
 namespace IKIGAI::ECS {
+ComponentManager::ComponentManager()
+	: ComponentManager(ArchetypeLayout::PerColumn) { }
+
+ComponentManager::ComponentManager(ArchetypeLayout layout)
+	: mIndexedRecords(layout == ArchetypeLayout::SharedRows ? std::make_shared<EntityRecords>() : nullptr)
+	, mEntityRecords(mIndexedRecords ? *mIndexedRecords : mLocalRecords) { }
+
+void ComponentManager::prepareIndexedTransition(const Record& record, Archetype& to) {
+	if (record.archetype.get() == &to || to.mComponentArrays.empty()) {
+		return;
+	}
+	auto& entities = to.mRows->entities;
+	if (entities.size() == entities.capacity()) {
+		entities.reserve(entities.size() + entities.size() / 2 + 1);
+	}
+	for (const auto& [type, column] : to.mComponentArrays) {
+		column->reserveIndexedRow();
+	}
+}
+
+void ComponentManager::commitIndexedTransition(
+	Entity entity, Record& record, const std::shared_ptr<Archetype>& to, std::span<const ComponentType> replaced) noexcept {
+	auto& from = *record.archetype;
+	if (&from == to.get()) {
+		return;
+	}
+	const auto sourceRow = record.row;
+	if (sourceRow != ArchetypeRows::missing) {
+		for (const auto& [type, source] : from.mComponentArrays) {
+			const auto destination = to->mComponentArrays.find(type);
+			if (destination != to->mComponentArrays.end() && std::ranges::find(replaced, type) == replaced.end()) {
+				source->appendIndexedMove(sourceRow, *destination->second);
+			}
+		}
+		eraseIndexedEntity(from, sourceRow);
+	}
+
+	record.row = ArchetypeRows::missing;
+	if (!to->mComponentArrays.empty()) {
+		auto& entities = to->mRows->entities;
+		record.row = entities.size();
+		entities.push_back(entity);
+	}
+	record.archetype = to;
+}
+
+void ComponentManager::eraseIndexedEntity(Archetype& archetype, std::size_t row) noexcept {
+	for (const auto& [type, column] : archetype.mComponentArrays) {
+		column->eraseIndexedRow(row);
+	}
+	auto& entities = archetype.mRows->entities;
+	if (row + 1 != entities.size()) {
+		const auto moved = entities.back();
+		entities[row] = moved;
+		mEntityRecords.at(moved).row = row;
+	}
+	entities.pop_back();
+}
+
 std::shared_ptr<Archetype> ComponentManager::getSingleComponentTransition(const std::shared_ptr<Archetype>& from, ComponentType type, bool adding) {
 	if (from->mMask.test(type.value()) == adding) {
 		return from;

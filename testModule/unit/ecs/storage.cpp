@@ -3,17 +3,25 @@
 #include "support/expect.h"
 
 #include <cstdint>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 namespace IKIGAI::TEST::ECS_CASES {
+
+ThrowingValue::ThrowingValue(ThrowingValue&& other)
+	: failOnMove(other.failOnMove) {
+	if (failOnMove) {
+		throw std::runtime_error("test component move failed");
+	}
+}
 namespace {
 	using namespace IKIGAI::ECS;
 
-	void checkHandles() {
-		World world;
-		World otherWorld;
+	void checkHandles(ArchetypeLayout layout) {
+		World world { layout };
+		World otherWorld { layout };
 		auto& components = *world.getComponentManager();
 		const auto entity = world.createEntity();
 		otherWorld.registerEntity(entity);
@@ -39,8 +47,8 @@ namespace {
 		expect(components.resolveEntity(components.getEntityHandle(entity)) == entity, "new registration resolves");
 	}
 
-	void checkComponentEvents() {
-		World world;
+	void checkComponentEvents(ArchetypeLayout layout) {
+		World world { layout };
 		auto& components = *world.getComponentManager();
 		auto& events = components.getEventManager();
 		const auto entity = world.createEntity();
@@ -73,8 +81,8 @@ namespace {
 		expect(delivered.size() == 3, "unsubscribed listeners receive no component events");
 	}
 
-	void checkQueries() {
-		World world;
+	void checkQueries(ArchetypeLayout layout) {
+		World world { layout };
 		auto& components = *world.getComponentManager();
 		components.registerComponent<Health>(StorageType::Sparse);
 		components.registerComponent<Shield>(StorageType::Sparse);
@@ -120,8 +128,8 @@ namespace {
 		});
 	}
 
-	void checkMixedJoin() {
-		World world;
+	void checkMixedJoin(ArchetypeLayout layout) {
+		World world { layout };
 		auto& components = *world.getComponentManager();
 		components.registerComponent<Health>(StorageType::Sparse);
 		components.registerComponent<Shield>(StorageType::Sparse);
@@ -187,8 +195,8 @@ namespace {
 		verify();
 	}
 
-	void checkDenseChunks() {
-		World world;
+	void checkDenseChunks(ArchetypeLayout layout) {
+		World world { layout };
 		auto& components = *world.getComponentManager();
 		std::unordered_map<Entity, int> expected;
 		std::vector<Entity> entities;
@@ -219,8 +227,8 @@ namespace {
 		}
 	}
 
-	void checkAlignment() {
-		World world;
+	void checkAlignment(ArchetypeLayout layout) {
+		World world { layout };
 		auto& components = *world.getComponentManager();
 		components.registerComponent<AlignedVelocity>(StorageType::Sparse);
 		std::vector<Entity> entities;
@@ -248,8 +256,8 @@ namespace {
 		verify();
 	}
 
-	void checkRelationCleanup() {
-		World world;
+	void checkRelationCleanup(ArchetypeLayout layout) {
+		World world { layout };
 		auto& components = *world.getComponentManager();
 		auto& relations = components.getRelationManager();
 		const auto follows = components.getComponentType<Follows>();
@@ -276,13 +284,63 @@ namespace {
 	}
 }
 
+void checkIndexedTransitionFailure() {
+	using namespace ECS;
+	World world { ArchetypeLayout::SharedRows };
+	auto& components = *world.getComponentManager();
+	expectThrows([&] { components.registerComponent<ThrowingValue>(); }, "shared rows reject potentially throwing dense relocation");
+	components.registerComponent<ThrowingValue>(StorageType::Sparse);
+	components.registerComponent<Health>(StorageType::Sparse);
+	const auto entity = world.createEntity();
+	const auto position = components.addComponent(entity, Position { 17 });
+	expectThrows([&] { components.addComponents(entity, Velocity { 5 }, Health { 10 }, ThrowingValue { true }); },
+		"a failed sparse insertion aborts the prepared indexed transition");
+	expect(components.resolveComponent(position) && components.resolveComponent(position)->value == 17, "the original row survives a failed append");
+	expect(!components.checkComponent<Health>(entity) && !components.checkComponent<Velocity>(entity), "failed append leaves no added components");
+	int visited = 0;
+	components.forEach<Read<Velocity>>([&](Entity, const Velocity&) { ++visited; });
+	expect(visited == 0, "failed append publishes no destination row");
+	components.addComponents(entity, Velocity { 5 }, Health { 10 }, ThrowingValue { false });
+	expect(components.checkComponent<Velocity>(entity) && components.checkComponent<Health>(entity), "the prepared archetype remains usable");
+}
+
+void checkIndexedWeakRelocation() {
+	using namespace ECS;
+	World world { ArchetypeLayout::SharedRows };
+	auto& components = *world.getComponentManager();
+	const auto first = world.createEntity();
+	const auto second = world.createEntity();
+	TrackedComponent initial;
+	initial.value = 7;
+	const auto firstWeak = components.addComponent(first, std::move(initial));
+	TrackedComponent other;
+	other.value = 11;
+	const auto secondWeak = components.addComponent(second, std::move(other));
+	const auto handle = components.getComponentHandle<TrackedComponent>(second);
+
+	components.addComponent(first, Velocity { 3 });
+	expect(firstWeak && firstWeak->value == 7, "migration relocates weak references to the destination column");
+	expect(secondWeak && secondWeak->value == 11 && components.resolveComponent(handle) == secondWeak.get(),
+		"swap-remove relocates the source tail and preserves its generation");
+	TrackedComponent replacement;
+	replacement.value = 21;
+	components.addComponent(second, std::move(replacement));
+	expect(!secondWeak && !components.resolveComponent(handle), "replacement invalidates weak references and the old component generation");
+	world.destroyEntity(first);
+	expect(!firstWeak, "destroying an indexed row invalidates weak references");
+}
+
 void runStorageTests() {
-	checkHandles();
-	checkComponentEvents();
-	checkQueries();
-	checkMixedJoin();
-	checkDenseChunks();
-	checkAlignment();
-	checkRelationCleanup();
+	for (const auto layout : { ECS::ArchetypeLayout::PerColumn, ECS::ArchetypeLayout::SharedRows }) {
+		checkHandles(layout);
+		checkComponentEvents(layout);
+		checkQueries(layout);
+		checkMixedJoin(layout);
+		checkDenseChunks(layout);
+		checkAlignment(layout);
+		checkRelationCleanup(layout);
+	}
+	checkIndexedTransitionFailure();
+	checkIndexedWeakRelocation();
 }
 }

@@ -4,8 +4,11 @@
 #include "componentManager.h"
 
 namespace IKIGAI::ECS {
-World::World() {
-	mComponentsManager = std::make_shared<ComponentManager>();
+World::World()
+	: World(ArchetypeLayout::PerColumn) { }
+
+World::World(ArchetypeLayout layout) {
+	mComponentsManager = std::make_shared<ComponentManager>(layout);
 	mSystemsManager = std::make_unique<SystemManager>(*this);
 }
 

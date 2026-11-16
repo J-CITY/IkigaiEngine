@@ -2,6 +2,8 @@
 
 [Сравнение Ikigai, EnTT и Flecs](RESULTS.md)
 
+Адаптер Ikigai в сравнительной матрице создаёт мир с `ArchetypeLayout::SharedRows`. Для архетипных компонентов этот экспериментальный режим требует `noexcept` у конструктора перемещения, присваивания перемещением и деструктора. Обычный `World()` использует `ArchetypeLayout::PerColumn`.
+
 Сборка использует три локальных checkout в каталоге рядом с движком. Ниже команды PowerShell из корня IkigaiEngine.
 
 ```powershell
@@ -32,3 +34,9 @@ $filter = '^(movement<(IkigaiCompact|IkigaiMixed|EnTT|FlecsUncached|FlecsCached)
 - Время сравнения берётся из `real_time`. Для наносекунд на элемент медиану делят на число совпадений, а для структурных операций на число операций. Исходные повторы и коэффициент вариации записываются в JSON. Подготовка мира, проверка результата и очистка фикстур находятся вне измеряемого участка.
 
 Для диагностики Ikigai доступны `IkigaiNoHandle` с вызовом `addComponents`, `IkigaiWithListeners` с подписчиками на события и `Ikigai/AddTransition` с холодным и повторным переходом. В каждом замере `AddTransition` выполняется по одному добавлению в 64 отдельных мирах. Для времени на добавление значение из JSON делится на 64.
+
+Диагностика роста использует обе схемы хранения и миры с 1, 4 и 8 сохраняемыми колонками. Прогрев выполняется на временных сущностях. После него измеряемые сущности создаются в одном и том же порядке.
+
+```powershell
+& $exe '--benchmark_filter=^Ikigai/StorageGrowth/' --benchmark_min_time=0.04s --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/row-growth-comparison.json --benchmark_out_format=json
+```

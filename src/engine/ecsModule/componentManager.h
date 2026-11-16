@@ -58,11 +58,12 @@ public:
 	}
 
 	size_t size() const {
-		return mComponentArrays.empty() ? 0 : mComponentArrays.begin()->second->getSize();
+		return mRows ? mRows->entities.size() : (mComponentArrays.empty() ? 0 : mComponentArrays.begin()->second->getSize());
 	}
 
 private:
 	friend class ComponentManager;
+	std::shared_ptr<ArchetypeRows> mRows;
 	// For a fixed source signature and type, a transition toggles that type.
 	std::unordered_map<ComponentType, std::weak_ptr<Archetype>> mTransitions;
 };
@@ -71,11 +72,15 @@ struct Record {
 	std::unordered_map<ComponentType, std::unordered_map<TagType, std::any>> mTagsMap;
 	std::shared_ptr<Archetype> archetype;
 	std::uint64_t generation = 0;
+	std::size_t row = ArchetypeRows::missing;
 };
 
 class ComponentManager {
+	using EntityRecords = std::unordered_map<Entity, Record>;
+
 public:
-	ComponentManager() { };
+	ComponentManager();
+	explicit ComponentManager(ArchetypeLayout layout);
 
 private:
 	std::unordered_map<Entity, Signature> mSignatures;
@@ -109,7 +114,9 @@ private:
 	}
 
 	// Archetype structs
-	std::unordered_map<Entity, Record> mEntityRecords;
+	EntityRecords mLocalRecords;
+	std::shared_ptr<EntityRecords> mIndexedRecords;
+	EntityRecords& mEntityRecords;
 	std::unordered_map<Signature, std::shared_ptr<Archetype>> mMaskToArchetype;
 	std::unordered_map<ComponentType, std::shared_ptr<ComponentArrayInterface>> mDefaultArraysArchetype;
 
@@ -229,6 +236,68 @@ private:
 	}
 
 	std::shared_ptr<Archetype> getSingleComponentTransition(const std::shared_ptr<Archetype>& from, ComponentType type, bool adding);
+	void prepareIndexedTransition(const Record& record, Archetype& to);
+	void commitIndexedTransition(
+		Entity entity, Record& record, const std::shared_ptr<Archetype>& to, std::span<const ComponentType> replaced) noexcept;
+	void eraseIndexedEntity(Archetype& archetype, std::size_t row) noexcept;
+
+	template <class... Components>
+	void addIndexedComponents(
+		Entity entity, Record& record, const std::shared_ptr<Archetype>& to, std::span<const ComponentType> types, Components&... values) {
+		constexpr auto count = sizeof...(Components);
+		std::array<ComponentArrayInterface*, count> columns {};
+		std::array<std::uint64_t, count> generations {};
+		std::size_t index = 0;
+		const auto stage = [&]<class T>(T&) {
+			const auto i = index++;
+			const auto type = types[i];
+			if (const auto column = to->mComponentArrays.find(type); column != to->mComponentArrays.end()) {
+				columns[i] = column->second.get();
+				generations[i] = ComponentArray<T>::nextGeneration();
+			}
+			else {
+				columns[i] = mSparseArrays.at(type).get();
+			}
+		};
+		(stage(values), ...);
+		prepareIndexedTransition(record, *to);
+
+		std::array<ComponentArrayInterface*, count> insertedSparse {};
+		std::size_t inserted = 0;
+		index = 0;
+		const auto addSparse = [&]<class T>(T& value) {
+			const auto i = index++;
+			if (generations[i] == 0) {
+				static_cast<ComponentArray<T>&>(*columns[i]).insert(entity, std::move(value));
+				insertedSparse[inserted++] = columns[i];
+			}
+		};
+		try {
+			(addSparse(values), ...);
+		} catch (...) {
+			while (inserted != 0) {
+				insertedSparse[--inserted]->entityDestroyed(entity);
+			}
+			throw;
+		}
+
+		const bool replacing = record.archetype == to;
+		index = 0;
+		const auto addDense = [&]<class T>(T& value) noexcept {
+			const auto i = index++;
+			if (generations[i] != 0) {
+				auto& column = static_cast<ComponentArray<T>&>(*columns[i]);
+				if (replacing) {
+					column.replaceIndexed(record.row, value, generations[i]);
+				}
+				else {
+					column.appendIndexed(value, generations[i]);
+				}
+			}
+		};
+		(addDense(values), ...);
+		commitIndexedTransition(entity, record, to, types);
+	}
 
 	template <typename T> void insertNewComponent(Entity entity, Record& record, T&& component) {
 		using C = std::decay_t<T>;
@@ -245,7 +314,7 @@ private:
 	static void visitDense(const std::array<ComponentArrayInterface*, sizeof...(Components)>& arrays, Func& func, std::index_sequence<Indices...>) {
 		const auto columns = std::tuple { static_cast<ComponentArray<RawType<Components>>*>(arrays[Indices])... };
 		const auto& leading = *std::get<0>(columns);
-		const std::span<const Entity> entities = leading.indexToEntity;
+		const std::span<const Entity> entities = leading.getEntities();
 		if (((std::get<Indices>(columns)->componentArray.size() != entities.size()) || ...)) {
 			throw std::logic_error("Archetype column sizes diverged");
 		}
@@ -267,9 +336,12 @@ private:
 	template <class... Components, class Func, std::size_t... Indices>
 	static void visitJoinedRow(const std::array<ComponentArrayInterface*, sizeof...(Components)>& arrays,
 		const std::array<bool, sizeof...(Components)>& rowAligned, const ComponentArrayInterface& leading, std::size_t row, const Entity entity,
-		Func& func, std::index_sequence<Indices...>) {
+		Func& func, std::index_sequence<Indices...>, std::size_t indexedRow = ArchetypeRows::missing) {
 		const auto pointers = std::tuple { ([&] {
 			auto& array = *static_cast<ComponentArray<RawType<Components>>*>(arrays[Indices]);
+			if (indexedRow != ArchetypeRows::missing && rowAligned[Indices]) {
+				return &array.componentArray[indexedRow];
+			}
 			return rowAligned[Indices] || arrays[Indices] == &leading ? &array.at(row) : array.tryGetData(entity);
 		}())... };
 		if (((std::get<Indices>(pointers) != nullptr) && ...)) {
@@ -348,6 +420,11 @@ public:
 			return;
 		}
 
+		if constexpr (!std::is_nothrow_move_constructible_v<T> || !std::is_nothrow_move_assignable_v<T> || !std::is_nothrow_destructible_v<T>) {
+			if (mIndexedRecords && type == StorageType::Archetype) {
+				throw std::invalid_argument("Shared-row archetype components require noexcept move and destruction");
+			}
+		}
 		mComponentStorageType[id] = type;
 		if (type == StorageType::Archetype) {
 			mDefaultArraysArchetype.insert({ id, std::make_shared<ComponentArray<T>>() });
@@ -447,8 +524,13 @@ private:
 		}
 
 		// Transfer existing archetype columns only. Each new value is inserted once below.
-		moveEntity<Components...>(entity, record.archetype, nextArchetype, record);
-		(insertNewComponent(entity, record, std::forward<Components>(newComponent)), ...);
+		if (mIndexedRecords) {
+			addIndexedComponents(entity, record, nextArchetype, types, newComponent...);
+		}
+		else {
+			moveEntity<Components...>(entity, record.archetype, nextArchetype, record);
+			(insertNewComponent(entity, record, std::forward<Components>(newComponent)), ...);
+		}
 		(emitComponentEvent<OnAdd, std::decay_t<Components>>(entity), ...);
 
 		// auto signature = getSignature(entity);
@@ -478,7 +560,13 @@ public:
 			nextArchetype = getArchetype(std::move(mask));
 		}
 
-		moveEntity(entity, archetype, nextArchetype, record);
+		if (mIndexedRecords) {
+			prepareIndexedTransition(record, *nextArchetype);
+			commitIndexedTransition(entity, record, nextArchetype, {});
+		}
+		else {
+			moveEntity(entity, archetype, nextArchetype, record);
+		}
 
 		// Remove Sparse components
 		(removeComponentFromSparseImpl<Components>(entity), ...);
@@ -572,9 +660,25 @@ public:
 		requireStructuralChangesAllowed();
 		auto newArchetype = std::make_shared<Archetype>();
 		newArchetype->mMask = mask;
+		if (mIndexedRecords) {
+			newArchetype->mRows = std::make_shared<ArchetypeRows>();
+			newArchetype->mRows->find = [records = std::weak_ptr<EntityRecords>(mIndexedRecords), owner = newArchetype.get()](Entity entity) {
+				if (const auto locked = records.lock()) {
+					const auto record = locked->find(entity);
+					if (record != locked->end() && record->second.archetype.get() == owner) {
+						return record->second.row;
+					}
+				}
+				return ArchetypeRows::missing;
+			};
+		}
 		for (const auto& [type, prototype] : mDefaultArraysArchetype) {
 			if (mask[type.value()]) {
-				newArchetype->mComponentArrays.emplace(type, prototype->createEmptyFromThis());
+				auto column = prototype->createEmptyFromThis();
+				if (newArchetype->mRows) {
+					column->attachRows(newArchetype->mRows);
+				}
+				newArchetype->mComponentArrays.emplace(type, std::move(column));
 			}
 		}
 		mMaskToArchetype.emplace(std::move(mask), newArchetype);
@@ -617,6 +721,22 @@ public:
 
 	template <class T> [[nodiscard]] ComponentHandle<T> getComponentHandle(Entity entity) const {
 		SystemAccessScope::requireComponent(*this, getComponentType<T>(), AccessMode::Read);
+		if (mIndexedRecords) {
+			const auto record = mEntityRecords.find(entity);
+			if (record == mEntityRecords.end()) {
+				return {};
+			}
+			const auto type = getComponentType<T>();
+			const auto& columns = record->second.archetype->mComponentArrays;
+			const auto column = columns.find(type);
+			const auto sparse = column == columns.end() ? mSparseArrays.find(type) : mSparseArrays.end();
+			const auto generation = column != columns.end() ? static_cast<const ComponentArray<T>&>(*column->second).mGenerations[record->second.row]
+				: sparse != mSparseArrays.end()				? static_cast<const ComponentArray<T>&>(*sparse->second).getGeneration(entity)
+															: 0;
+			return generation == 0
+				? ComponentHandle<T> {}
+				: ComponentHandle<T> { EntityHandle { entity.getUniqueId(), mOwner, record->second.generation }, type, generation };
+		}
 		const auto* array = findArray<T>(entity);
 		const auto generation = array ? array->getGeneration(entity) : 0;
 		return generation == 0 ? ComponentHandle<T> {} : ComponentHandle<T> { getEntityHandle(entity), getComponentType<T>(), generation };
@@ -662,7 +782,12 @@ public:
 		for (auto& [type, array] : mSparseArrays) {
 			array->entityDestroyed(entity);
 		}
-		if (archetype) {
+		if (archetype->mRows) {
+			if (it->second.row != ArchetypeRows::missing) {
+				eraseIndexedEntity(*archetype, it->second.row);
+			}
+		}
+		else {
 			int columnSize = -1;
 			for (auto& [type, array] : archetype->mComponentArrays) {
 				if (columnSize < 0) {
@@ -757,10 +882,11 @@ public:
 			}
 
 			// Across tables, budget a record lookup and a column lookup per archetype term.
-			const auto probesPerSparseRow = matchingArchetypes == 1 ? count - 1 : count + archetypeTerms;
+			const auto probesPerSparseRow = mIndexedRecords ? (matchingArchetypes == 1 ? count - archetypeTerms : count)
+															: (matchingArchetypes == 1 ? count - 1 : count + archetypeTerms);
 			if (static_cast<std::uint64_t>(sparseRows.size()) * probesPerSparseRow < archetypeRows * (count - archetypeTerms)) {
 				constexpr std::array<bool, count> sparseAligned {};
-				if (matchingArchetypes == 1) {
+				if (matchingArchetypes == 1 && !mIndexedRecords) {
 					bindColumns(*matchingArchetype);
 					visitRows<Components...>(arrays, sparseAligned, *smallestSparse, func);
 					return;
@@ -783,8 +909,8 @@ public:
 						}
 					}
 					if (matchesPrevious) {
-						visitJoinedRow<Components...>(
-							arrays, sparseAligned, *smallestSparse, row, entity, func, std::index_sequence_for<Components...> {});
+						visitJoinedRow<Components...>(arrays, mIndexedRecords ? rowAligned : sparseAligned, *smallestSparse, row, entity, func,
+							std::index_sequence_for<Components...> {}, record->second.row);
 					}
 				}
 				return;
