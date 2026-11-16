@@ -17,7 +17,9 @@ public:
 	using ID = Id<Entity>;
 	constexpr Entity() noexcept = default;
 	static Entity create() {
-		return Entity(IdGenerator<Entity>::generateId());
+		Entity entity;
+		entity.mId = IdGenerator<Entity>::generateId();
+		return entity;
 	}
 	ID getUniqueId() const noexcept {
 		return mId;

@@ -24,8 +24,13 @@ namespace {
 		World otherWorld { layout };
 		auto& components = *world.getComponentManager();
 		const auto entity = world.createEntity();
+		const Entity loaded { Entity::ID { entity.getUniqueId().value() + 4096 } };
+		world.registerEntity(loaded);
+		expect(world.createEntity().getUniqueId().value() > loaded.getUniqueId().value(), "generated IDs advance past imported IDs");
+		expectThrows([&] { world.registerEntity(Entity {}); }, "invalid IDs cannot be registered");
 		otherWorld.registerEntity(entity);
 		const auto entityHandle = components.getEntityHandle(entity);
+		expectThrows([&] { world.registerEntity(entity); }, "duplicate IDs cannot be registered in one world");
 		const auto position = components.addComponent(entity, Position { 10 });
 		expect(components.resolveEntity(entityHandle) == entity, "live entity resolves");
 		expect(!otherWorld.getComponentManager()->resolveEntity(entityHandle), "foreign entity handle is rejected");
@@ -41,6 +46,7 @@ namespace {
 
 		components.removeComponents<Position>(entity);
 		expect(components.resolveComponent(replacement) == nullptr, "removed component cannot be resolved");
+		world.destroyEntity(entity);
 		world.destroyEntity(entity);
 		world.registerEntity(entity);
 		expect(!components.resolveEntity(entityHandle), "old handle is stale after registering the same ID again");

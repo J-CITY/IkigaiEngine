@@ -78,6 +78,9 @@ public:
 	// This can be expensive if we strictly need to remove 'target' references.
 	// For now, let's implement removeOwner. RemoveTarget requires reverse map or global scan.
 	void onEntityDestroyed(Entity entity) {
+		if (mRelations.empty()) {
+			return;
+		}
 		mRelations.erase(entity);
 		// Optional: Remove where entity is target?
 		// To support that efficiently we would need a reverse map: Target -> Vector<(Source, Relation)>

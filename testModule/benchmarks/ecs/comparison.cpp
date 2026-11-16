@@ -282,6 +282,39 @@ namespace {
 		state.SetItemsProcessed(state.iterations() * batchSize);
 	}
 
+	template <bool Register> void entityRegistry(benchmark::State& state) {
+		using IKIGAI::ECS::Entity;
+		const auto count = static_cast<std::size_t>(state.range(0));
+		std::vector<Entity> entities(count);
+		if constexpr (Register) {
+			std::ranges::generate(entities, Entity::create);
+		}
+		for (auto _ : state) {
+			if constexpr (Register) {
+				state.PauseTiming();
+				auto world = std::make_unique<Ikigai<>>();
+				state.ResumeTiming();
+				for (const auto entity : entities) {
+					world->world.registerEntity(entity);
+				}
+				benchmark::ClobberMemory();
+				state.PauseTiming();
+				const bool valid = std::ranges::all_of(entities, [&](Entity entity) { return world->alive(entity); });
+				world.reset();
+				state.ResumeTiming();
+				if (!valid) {
+					state.SkipWithError("registry lost a supplied ID");
+					break;
+				}
+			}
+			else {
+				std::ranges::generate(entities, Entity::create);
+				benchmark::ClobberMemory();
+			}
+		}
+		state.SetItemsProcessed(state.iterations() * count);
+	}
+
 	template <bool Record> void commands(benchmark::State& state) {
 		const auto count = static_cast<std::size_t>(state.range(0));
 		Ikigai<> backend;
@@ -390,6 +423,8 @@ namespace {
 	BENCHMARK_TEMPLATE(structural, IkigaiWithListeners, Structure::Remove)->Apply(entitySizes);
 	BENCHMARK_TEMPLATE(addTransition, false)->Name("Ikigai/AddTransition/Cold")->UseRealTime();
 	BENCHMARK_TEMPLATE(addTransition, true)->Name("Ikigai/AddTransition/Warm")->UseRealTime();
+	BENCHMARK_TEMPLATE(entityRegistry, false)->Name("Ikigai/EntityRegistry/GenerateIds")->UseRealTime()->Arg(100000);
+	BENCHMARK_TEMPLATE(entityRegistry, true)->Name("Ikigai/EntityRegistry/RegisterKnownIds")->UseRealTime()->Arg(100000);
 	template <ArchetypeLayout Layout, std::size_t Columns> void registerGrowth(const char* layout) {
 		const auto prefix = std::string("Ikigai/StorageGrowth/") + layout + "/" + std::to_string(Columns);
 		benchmark::RegisterBenchmark(prefix + "/Grow", storageGrowth<Columns, false, Layout>)->UseRealTime()->Arg(100000);

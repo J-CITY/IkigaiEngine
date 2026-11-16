@@ -35,6 +35,12 @@ $filter = '^(movement<(IkigaiCompact|IkigaiMixed|EnTT|FlecsUncached|FlecsCached)
 
 Для диагностики Ikigai доступны `IkigaiNoHandle` с вызовом `addComponents`, `IkigaiWithListeners` с подписчиками на события и `Ikigai/AddTransition` с холодным и повторным переходом. В каждом замере `AddTransition` выполняется по одному добавлению в 64 отдельных мирах. Для времени на добавление значение из JSON делится на 64.
 
+`Ikigai/EntityRegistry/GenerateIds` измеряет только выдачу ID. Для `RegisterKnownIds` ID готовятся заранее, а таймер охватывает регистрацию в новом мире.
+
+```powershell
+& $exe '--benchmark_filter=^(structural<.*Structure::(Create|Destroy)>|Ikigai/EntityRegistry/)' --benchmark_min_time=0.04s --benchmark_min_warmup_time=0.01 --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/lifecycle.json --benchmark_out_format=json
+```
+
 Диагностика роста использует обе схемы хранения и миры с 1, 4 и 8 сохраняемыми колонками. Прогрев выполняется на временных сущностях. После него измеряемые сущности создаются в одном и том же порядке.
 
 ```powershell

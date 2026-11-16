@@ -9,7 +9,7 @@ ComponentManager::ComponentManager(ArchetypeLayout layout)
 	, mEntityRecords(mIndexedRecords ? *mIndexedRecords : mLocalRecords) { }
 
 void ComponentManager::prepareIndexedTransition(const Record& record, Archetype& to) {
-	if (record.archetype.get() == &to || to.mComponentArrays.empty()) {
+	if (record.archetype == &to || to.mComponentArrays.empty()) {
 		return;
 	}
 	auto& entities = to.mRows->entities;
@@ -21,10 +21,9 @@ void ComponentManager::prepareIndexedTransition(const Record& record, Archetype&
 	}
 }
 
-void ComponentManager::commitIndexedTransition(
-	Entity entity, Record& record, const std::shared_ptr<Archetype>& to, std::span<const ComponentType> replaced) noexcept {
+void ComponentManager::commitIndexedTransition(Entity entity, Record& record, Archetype* to, std::span<const ComponentType> replaced) noexcept {
 	auto& from = *record.archetype;
-	if (&from == to.get()) {
+	if (&from == to) {
 		return;
 	}
 	const auto sourceRow = record.row;
@@ -60,20 +59,18 @@ void ComponentManager::eraseIndexedEntity(Archetype& archetype, std::size_t row)
 	entities.pop_back();
 }
 
-std::shared_ptr<Archetype> ComponentManager::getSingleComponentTransition(const std::shared_ptr<Archetype>& from, ComponentType type, bool adding) {
+Archetype* ComponentManager::getSingleComponentTransition(Archetype* from, ComponentType type, bool adding) {
 	if (from->mMask.test(type.value()) == adding) {
 		return from;
 	}
 	if (const auto cached = from->mTransitions.find(type); cached != from->mTransitions.end()) {
-		if (auto to = cached->second.lock()) {
-			return to;
-		}
+		return cached->second;
 	}
 
 	auto mask = from->mMask;
 	mask.set(type.value(), adding);
-	auto to = getArchetype(std::move(mask));
-	from->mTransitions.insert_or_assign(type, to);
+	auto* to = getArchetype(std::move(mask)).get();
+	from->mTransitions.emplace(type, to);
 	return to;
 }
 

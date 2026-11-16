@@ -65,14 +65,15 @@ private:
 	friend class ComponentManager;
 	std::shared_ptr<ArchetypeRows> mRows;
 	// For a fixed source signature and type, a transition toggles that type.
-	std::unordered_map<ComponentType, std::weak_ptr<Archetype>> mTransitions;
+	std::unordered_map<ComponentType, Archetype*> mTransitions;
 };
 
 struct Record {
-	std::unordered_map<ComponentType, std::unordered_map<TagType, std::any>> mTagsMap;
-	std::shared_ptr<Archetype> archetype;
+	using Tags = std::unordered_map<ComponentType, std::unordered_map<TagType, std::any>>;
+	Archetype* archetype = nullptr;
 	std::uint64_t generation = 0;
 	std::size_t row = ArchetypeRows::missing;
+	std::unique_ptr<Tags> mTagsMap {};
 };
 
 class ComponentManager {
@@ -114,10 +115,12 @@ private:
 	}
 
 	// Archetype structs
+	// Table ownership covers all records and transition entries in this world.
+	std::unordered_map<Signature, std::shared_ptr<Archetype>> mMaskToArchetype;
 	EntityRecords mLocalRecords;
 	std::shared_ptr<EntityRecords> mIndexedRecords;
 	EntityRecords& mEntityRecords;
-	std::unordered_map<Signature, std::shared_ptr<Archetype>> mMaskToArchetype;
+	Archetype* mEmptyArchetype = nullptr;
 	std::unordered_map<ComponentType, std::shared_ptr<ComponentArrayInterface>> mDefaultArraysArchetype;
 
 	std::unordered_map<ComponentType, std::unique_ptr<Component>> mSingletonComponent;
@@ -203,8 +206,7 @@ private:
 
 	// Migrate archetype columns. NewComponents are not transferred: the caller inserts each once.
 	// An empty pack (removeComponents) transfers every column that still exists on `to`.
-	template <class... NewComponents>
-	void moveEntity(Entity entity, const std::shared_ptr<Archetype>& from, const std::shared_ptr<Archetype>& to, Record& record) {
+	template <class... NewComponents> void moveEntity(Entity entity, Archetype* from, Archetype* to, Record& record) {
 		const bool sameArchetype = from == to;
 		if (sameArchetype && !((from->mComponentArrays.contains(getComponentType<std::decay_t<NewComponents>>())) || ...)) {
 			return;
@@ -235,15 +237,13 @@ private:
 		record.archetype = to;
 	}
 
-	std::shared_ptr<Archetype> getSingleComponentTransition(const std::shared_ptr<Archetype>& from, ComponentType type, bool adding);
+	Archetype* getSingleComponentTransition(Archetype* from, ComponentType type, bool adding);
 	void prepareIndexedTransition(const Record& record, Archetype& to);
-	void commitIndexedTransition(
-		Entity entity, Record& record, const std::shared_ptr<Archetype>& to, std::span<const ComponentType> replaced) noexcept;
+	void commitIndexedTransition(Entity entity, Record& record, Archetype* to, std::span<const ComponentType> replaced) noexcept;
 	void eraseIndexedEntity(Archetype& archetype, std::size_t row) noexcept;
 
 	template <class... Components>
-	void addIndexedComponents(
-		Entity entity, Record& record, const std::shared_ptr<Archetype>& to, std::span<const ComponentType> types, Components&... values) {
+	void addIndexedComponents(Entity entity, Record& record, Archetype* to, std::span<const ComponentType> types, Components&... values) {
 		constexpr auto count = sizeof...(Components);
 		std::array<ComponentArrayInterface*, count> columns {};
 		std::array<std::uint64_t, count> generations {};
@@ -510,7 +510,7 @@ private:
 			}
 		}
 		Record& record = mEntityRecords.at(entity);
-		std::shared_ptr<Archetype> nextArchetype;
+		Archetype* nextArchetype = nullptr;
 		if constexpr (sizeof...(Components) == 1) {
 			const auto type = types.front();
 			(ensureComponentRegistered<std::decay_t<Components>>(type), ...);
@@ -520,7 +520,7 @@ private:
 		else {
 			auto mask = record.archetype->mMask;
 			(addComponentToArchetypeMaskImpl<Components>(mask), ...);
-			nextArchetype = getArchetype(std::move(mask));
+			nextArchetype = getArchetype(std::move(mask)).get();
 		}
 
 		// Transfer existing archetype columns only. Each new value is inserted once below.
@@ -546,7 +546,7 @@ public:
 		(emitComponentEvent<OnRemove, Components>(entity), ...);
 		Record& record = mEntityRecords.at(entity);
 		auto archetype = record.archetype;
-		std::shared_ptr<Archetype> nextArchetype;
+		Archetype* nextArchetype = nullptr;
 		if constexpr (sizeof...(Components) == 1) {
 			const auto type = (getComponentType<Components>(), ...);
 			const auto storage = mComponentStorageType.find(type);
@@ -557,7 +557,7 @@ public:
 		else {
 			auto mask = archetype->mMask;
 			(removeComponentFromArchetypeMaskImpl<Components>(mask), ...);
-			nextArchetype = getArchetype(std::move(mask));
+			nextArchetype = getArchetype(std::move(mask)).get();
 		}
 
 		if (mIndexedRecords) {
@@ -665,7 +665,7 @@ public:
 			newArchetype->mRows->find = [records = std::weak_ptr<EntityRecords>(mIndexedRecords), owner = newArchetype.get()](Entity entity) {
 				if (const auto locked = records.lock()) {
 					const auto record = locked->find(entity);
-					if (record != locked->end() && record->second.archetype.get() == owner) {
+					if (record != locked->end() && record->second.archetype == owner) {
 						return record->second.row;
 					}
 				}
@@ -690,13 +690,16 @@ public:
 			throw std::invalid_argument("Cannot register an invalid entity");
 		}
 		requireStructuralChangesAllowed();
-		if (mEntityRecords.contains(entity)) {
-			throw std::logic_error("Entity is already registered in this ECS world");
-		}
-		if (mNextEntityGeneration == 0) {
+		if (mNextEntityGeneration == 0 && !mEntityRecords.contains(entity)) {
 			throw std::overflow_error("ECS entity generation exhausted");
 		}
-		mEntityRecords.emplace(entity, Record { {}, getArchetype(Signature()), mNextEntityGeneration++ });
+		if (!mEmptyArchetype) {
+			mEmptyArchetype = getArchetype(Signature {}).get();
+		}
+		if (!mEntityRecords.try_emplace(entity, Record { .archetype = mEmptyArchetype, .generation = mNextEntityGeneration }).second) {
+			throw std::logic_error("Entity is already registered in this ECS world");
+		}
+		++mNextEntityGeneration;
 	}
 
 	[[nodiscard]] EntityHandle getEntityHandle(Entity entity) const {
@@ -776,6 +779,11 @@ public:
 		requireStructuralChangesAllowed();
 		const auto it = mEntityRecords.find(entity);
 		if (it == mEntityRecords.end()) {
+			return;
+		}
+		if (it->second.archetype == mEmptyArchetype && mSparseArrays.empty()) {
+			mRelationManager.onEntityDestroyed(entity);
+			mEntityRecords.erase(it);
 			return;
 		}
 		auto archetype = it->second.archetype;
@@ -900,7 +908,7 @@ public:
 					if (record == mEntityRecords.end()) {
 						continue;
 					}
-					const auto* archetype = record->second.archetype.get();
+					const auto* archetype = record->second.archetype;
 					if (archetype != previousArchetype) {
 						previousArchetype = archetype;
 						matchesPrevious = matches(archetype->mMask);
