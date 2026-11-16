@@ -1,6 +1,6 @@
 # ECS benchmarks
 
-[Отчёт с графиком и результатами экспериментов](RESULTS.md)
+[Сравнение Ikigai, EnTT и Flecs](RESULTS.md)
 
 Сборка использует три локальных checkout в каталоге рядом с движком. Ниже команды PowerShell из корня IkigaiEngine.
 
@@ -14,8 +14,8 @@ git clone --depth 1 --branch v1.9.4 https://github.com/google/benchmark.git "$de
 cmake -S testModule -B build/ecs -G 'Visual Studio 17 2022' -A x64 "-DIKIGAI_ECS_BENCHMARK_DEPS=$deps" -DIKIGAI_BUILD_ECS_BENCHMARKS=ON
 cmake --build build/ecs --config Release --target ecs_benchmarks
 $exe = './build/ecs/benchmarks/ecs/Release/ecs_benchmarks.exe'
-& $exe --benchmark_dry_run
-& $exe --benchmark_min_time=0.06s --benchmark_min_warmup_time=0.02 --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/results.json --benchmark_out_format=json
+$filter = '^(movement<(IkigaiCompact|IkigaiMixed|EnTT|FlecsUncached|FlecsCached)>|structural<(IkigaiCompact|EnTT|FlecsUncached),)'
+& $exe "--benchmark_filter=$filter" --benchmark_min_time=0.05s --benchmark_min_warmup_time=0.01 --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/ecs-comparison.json --benchmark_out_format=json
 ```
 
 | Репозиторий | SHA |
@@ -26,20 +26,9 @@ $exe = './build/ecs/benchmarks/ecs/Release/ecs_benchmarks.exe'
 
 ## Как читать результаты
 
-- `movement` измеряет проход по сущностям. У всех ECS одинаковые позиция, скорость, шаг и доля совпадений. При 16 наборах компонентов четыре дополнительных тега задают все 16 комбинаций. EnTT использует `view`. Flecs измеряется с `QueryCacheNone` и `QueryCacheAuto`. `cachedQueryBuild` измеряет создание кэшированного запроса на уже заполненном мире с 16 наборами компонентов.
-- `IkigaiMixed` хранит скорость в sparse-пуле. `IkigaiAligned` повторяет плотный проход с 16-байтными компонентами вместо 8-байтных.
-- `structural` измеряет отдельно создание и удаление пустых сущностей и добавление со снятием компонента у сущности с позицией. Число операций в последнем сценарии равно удвоенному числу сущностей. `CommandBuffer` измеряет запись или применение команды добавления компонента.
-- `Demo` запускает реальные системы из `src/ecsDemo` через `SystemManager::runUpdate`. В сценарии преследования у половины сущностей есть одна цель, у остальных целей нет. `Demo/Movement` и `Demo/Follower` измеряются отдельно.
+- `movement` измеряет проход по сущностям. У всех ECS одинаковые позиция, скорость, шаг и доля совпадений. При 16 наборах компонентов четыре дополнительных тега задают все 16 комбинаций. EnTT использует `view`. Flecs измеряется с `QueryCacheNone` и `QueryCacheAuto`.
+- `IkigaiMixed` использует те же данные и ту же операцию при 10% и 50% совпадений. Скорость хранится в sparse-пуле.
+- `structural` измеряет создание и удаление пустых сущностей, добавление, снятие и цикл добавления/снятия компонента у сущности с позицией. Для раздельных добавления и снятия целевое хранилище подготавливается вне таймера. В цикле одна пара считается двумя операциями.
 - Время сравнения берётся из `real_time`. Для наносекунд на элемент медиану делят на число совпадений, а для структурных операций на число операций. Исходные повторы и коэффициент вариации записываются в JSON. Подготовка мира, проверка результата и очистка фикстур находятся вне измеряемого участка.
 
-Для сравнения версий демо сохраняйте Release-бинарник каждой стадии до следующей правки. Запускайте каждый бинарник с одинаковыми параметрами и отдельным файлом JSON.
-
-```powershell
-& $exe '--benchmark_filter=^Demo/' --benchmark_min_time=0.12s --benchmark_min_warmup_time=0.03 --benchmark_repetitions=7 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/demo.json --benchmark_out_format=json
-```
-
-Для сравнения смешанного запроса запускайте старый и новый Release-бинарники с этим фильтром. Укажите отдельный JSON для каждой версии.
-
-```powershell
-& $exe '--benchmark_filter=movement<IkigaiMixed>' --benchmark_min_time=0.16s --benchmark_min_warmup_time=0.04 --benchmark_repetitions=9 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/mixed.json --benchmark_out_format=json
-```
+Для диагностики Ikigai доступны `IkigaiNoHandle` с вызовом `addComponents`, `IkigaiWithListeners` с подписчиками на события и `Ikigai/AddTransition` с холодным и повторным переходом. В каждом замере `AddTransition` выполняется по одному добавлению в 64 отдельных мирах. Для времени на добавление значение из JSON делится на 64.

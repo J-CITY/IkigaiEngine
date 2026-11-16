@@ -1,6 +1,23 @@
 #include "componentManager.h"
 
 namespace IKIGAI::ECS {
+std::shared_ptr<Archetype> ComponentManager::getSingleComponentTransition(const std::shared_ptr<Archetype>& from, ComponentType type, bool adding) {
+	if (from->mMask.test(type.value()) == adding) {
+		return from;
+	}
+	if (const auto cached = from->mTransitions.find(type); cached != from->mTransitions.end()) {
+		if (auto to = cached->second.lock()) {
+			return to;
+		}
+	}
+
+	auto mask = from->mMask;
+	mask.set(type.value(), adding);
+	auto to = getArchetype(std::move(mask));
+	from->mTransitions.insert_or_assign(type, to);
+	return to;
+}
+
 ComponentArrayInterface* ComponentManager::findArray(Entity entity, ComponentType type, std::uint64_t entityGeneration) const {
 	const auto record = mEntityRecords.find(entity);
 	if (record == mEntityRecords.end() || (entityGeneration != 0 && record->second.generation != entityGeneration)) {

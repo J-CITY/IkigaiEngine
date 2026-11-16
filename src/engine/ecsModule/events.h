@@ -30,6 +30,14 @@ class EventManager {
 public:
 	template <typename E> using EventSignal = IKIGAI::EVENT::Event<const E&>;
 
+	template <typename E> [[nodiscard]] EventSignal<E>* findSignal() {
+		if (mEvents.empty()) {
+			return nullptr;
+		}
+		const auto found = mEvents.find(std::type_index(typeid(E)));
+		return found == mEvents.end() ? nullptr : static_cast<EventSignal<E>*>(found->second.get());
+	}
+
 	template <typename E> EventSignal<E>& getSignal() {
 		// Static variable per event type - simple and effective for global event manager.
 		// But ComponentManager is per World. We want per-World events.

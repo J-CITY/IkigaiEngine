@@ -96,7 +96,7 @@ namespace {
 		state.counters["velocity_bytes"] = sizeof(VelocityType);
 	}
 
-	enum class Structure { Create, Destroy, AddRemove };
+	enum class Structure { Create, Destroy, Add, Remove, AddRemove };
 
 	template <class Backend, Structure Operation> void structural(benchmark::State& state) {
 		const auto count = static_cast<std::size_t>(state.range(0));
@@ -105,11 +105,21 @@ namespace {
 		for (auto _ : state) {
 			state.PauseTiming();
 			auto backend = std::make_unique<Backend>();
+			if constexpr (Operation == Structure::Add) {
+				const auto warm = backend->create();
+				backend->add(warm, typename Backend::PositionType {});
+				backend->add(warm, Marker { 7 });
+				backend->template remove<Marker>(warm);
+				backend->destroy(warm);
+			}
 			if constexpr (Operation != Structure::Create) {
 				for (auto& entity : entities) {
 					entity = backend->create();
-					if constexpr (Operation == Structure::AddRemove) {
-						backend->add(entity, typename Backend::PositionType {});
+					if constexpr (Operation == Structure::Add || Operation == Structure::Remove || Operation == Structure::AddRemove) {
+						backend->add(entity, typename Backend::PositionType { 1.0f, -2.0f });
+					}
+					if constexpr (Operation == Structure::Remove) {
+						backend->add(entity, Marker { 7 });
 					}
 				}
 			}
@@ -122,8 +132,14 @@ namespace {
 				else if constexpr (Operation == Structure::Destroy) {
 					backend->destroy(entity);
 				}
-				else {
+				else if constexpr (Operation == Structure::AddRemove) {
 					backend->add(entity, Marker { 7 });
+					backend->template remove<Marker>(entity);
+				}
+				else if constexpr (Operation == Structure::Add) {
+					backend->add(entity, Marker { 7 });
+				}
+				else {
 					backend->template remove<Marker>(entity);
 				}
 			}
@@ -131,11 +147,14 @@ namespace {
 
 			state.PauseTiming();
 			const auto valid = std::ranges::all_of(entities, [&](Entity entity) {
-				if constexpr (Operation == Structure::AddRemove) {
-					return backend->template get<typename Backend::PositionType>(entity) && !backend->template get<Marker>(entity);
+				if constexpr (Operation == Structure::Create || Operation == Structure::Destroy) {
+					return backend->alive(entity) == (Operation == Structure::Create);
 				}
 				else {
-					return backend->alive(entity) == (Operation == Structure::Create);
+					const auto* position = backend->template get<typename Backend::PositionType>(entity);
+					const auto* marker = backend->template get<Marker>(entity);
+					const bool correctMarker = Operation == Structure::Add ? marker && marker->value == 7 : !marker;
+					return position && position->x == 1.0f && position->y == -2.0f && correctMarker;
 				}
 			});
 			backend.reset();
@@ -163,6 +182,46 @@ namespace {
 		for (auto _ : state) {
 			state.SetIterationTime(backend.queryBuildNs() * 1e-9);
 		}
+	}
+
+	template <bool Warm> void addTransition(benchmark::State& state) {
+		using Backend = Ikigai<>;
+		constexpr std::size_t batchSize = 64;
+		std::array<std::unique_ptr<Backend>, batchSize> worlds;
+		std::array<Backend::Entity, batchSize> entities;
+		for (auto _ : state) {
+			state.PauseTiming();
+			for (std::size_t i = 0; i < batchSize; ++i) {
+				worlds[i] = std::make_unique<Backend>();
+				auto& world = *worlds[i];
+				world.components.registerComponent<Marker>();
+				entities[i] = world.create();
+				world.add(entities[i], Backend::PositionType { 1.0f, -2.0f });
+				if constexpr (Warm) {
+					world.add(entities[i], Marker { 7 });
+					world.remove<Marker>(entities[i]);
+				}
+			}
+			state.ResumeTiming();
+			for (std::size_t i = 0; i < batchSize; ++i) {
+				worlds[i]->add(entities[i], Marker { 7 });
+			}
+			benchmark::ClobberMemory();
+			state.PauseTiming();
+			bool valid = true;
+			for (std::size_t i = 0; i < batchSize; ++i) {
+				const auto* position = worlds[i]->get<Backend::PositionType>(entities[i]);
+				const auto* marker = worlds[i]->get<Marker>(entities[i]);
+				valid = valid && position && position->x == 1.0f && position->y == -2.0f && marker && marker->value == 7;
+				worlds[i].reset();
+			}
+			state.ResumeTiming();
+			if (!valid) {
+				state.SkipWithError("transition did not preserve the expected components");
+				break;
+			}
+		}
+		state.SetItemsProcessed(state.iterations() * batchSize);
 	}
 
 	template <bool Record> void commands(benchmark::State& state) {
@@ -219,6 +278,25 @@ namespace {
 	using FlecsUncached = Flecs<>;
 	using FlecsCached = Flecs<flecs::QueryCacheAuto>;
 
+	class IkigaiNoHandle : public IkigaiCompact {
+	public:
+		template <class T> void add(Entity entity, T value) {
+			components.addComponents(entity, std::move(value));
+		}
+	};
+
+	class IkigaiWithListeners : public IkigaiCompact {
+	public:
+		IkigaiWithListeners() {
+			using IKIGAI::ECS::OnAdd;
+			using IKIGAI::ECS::OnRemove;
+			auto& events = components.getEventManager();
+			const auto observe = [](const auto& event) { benchmark::DoNotOptimize(event.component->value); };
+			events.subscribe<OnAdd<Marker>>(observe);
+			events.subscribe<OnRemove<Marker>>(observe);
+		}
+	};
+
 	BENCHMARK_TEMPLATE(movement, IkigaiCompact)->Apply(movementSizes);
 	BENCHMARK_TEMPLATE(movement, EnTT)->Apply(movementSizes);
 	BENCHMARK_TEMPLATE(movement, FlecsUncached)->Apply(movementSizes);
@@ -243,6 +321,17 @@ namespace {
 	BENCHMARK_TEMPLATE(structural, IkigaiCompact, Structure::AddRemove)->Apply(entitySizes);
 	BENCHMARK_TEMPLATE(structural, EnTT, Structure::AddRemove)->Apply(entitySizes);
 	BENCHMARK_TEMPLATE(structural, FlecsUncached, Structure::AddRemove)->Apply(entitySizes);
+	BENCHMARK_TEMPLATE(structural, IkigaiCompact, Structure::Add)->Apply(entitySizes);
+	BENCHMARK_TEMPLATE(structural, EnTT, Structure::Add)->Apply(entitySizes);
+	BENCHMARK_TEMPLATE(structural, FlecsUncached, Structure::Add)->Apply(entitySizes);
+	BENCHMARK_TEMPLATE(structural, IkigaiCompact, Structure::Remove)->Apply(entitySizes);
+	BENCHMARK_TEMPLATE(structural, EnTT, Structure::Remove)->Apply(entitySizes);
+	BENCHMARK_TEMPLATE(structural, FlecsUncached, Structure::Remove)->Apply(entitySizes);
+	BENCHMARK_TEMPLATE(structural, IkigaiNoHandle, Structure::Add)->Apply(entitySizes);
+	BENCHMARK_TEMPLATE(structural, IkigaiWithListeners, Structure::Add)->Apply(entitySizes);
+	BENCHMARK_TEMPLATE(structural, IkigaiWithListeners, Structure::Remove)->Apply(entitySizes);
+	BENCHMARK_TEMPLATE(addTransition, false)->Name("Ikigai/AddTransition/Cold")->UseRealTime();
+	BENCHMARK_TEMPLATE(addTransition, true)->Name("Ikigai/AddTransition/Warm")->UseRealTime();
 
 	BENCHMARK_TEMPLATE(commands, true)->Name("CommandBuffer/RecordAdd")->Apply(entitySizes);
 	BENCHMARK_TEMPLATE(commands, false)->Name("CommandBuffer/PlaybackAdd")->Apply(entitySizes);

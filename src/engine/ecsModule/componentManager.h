@@ -60,6 +60,11 @@ public:
 	size_t size() const {
 		return mComponentArrays.empty() ? 0 : mComponentArrays.begin()->second->getSize();
 	}
+
+private:
+	friend class ComponentManager;
+	// For a fixed source signature and type, a transition toggles that type.
+	std::unordered_map<ComponentType, std::weak_ptr<Archetype>> mTransitions;
 };
 
 struct Record {
@@ -138,8 +143,8 @@ private:
 		// But careful validation or design is needed.
 		// Ideally addComponents logic separates them.
 
-		if (to.mComponentArrays.contains(cname)) {
-			std::static_pointer_cast<ComponentArray<C>>(to.mComponentArrays.at(cname))->insert(entity, std::forward<T>(component));
+		if (const auto column = to.mComponentArrays.find(cname); column != to.mComponentArrays.end()) {
+			static_cast<ComponentArray<C>&>(*column->second).insert(entity, std::forward<T>(component));
 		}
 	}
 
@@ -191,10 +196,10 @@ private:
 
 	// Migrate archetype columns. NewComponents are not transferred: the caller inserts each once.
 	// An empty pack (removeComponents) transfers every column that still exists on `to`.
-	template <class... NewComponents> void moveEntity(Entity entity, std::shared_ptr<Archetype> from, std::shared_ptr<Archetype> to, Record& record) {
-		const bool replacesExisting = ((from->mComponentArrays.contains(getComponentType<std::decay_t<NewComponents>>())) || ...);
-		if (from.get() == to.get() && !replacesExisting) {
-			record.archetype = to;
+	template <class... NewComponents>
+	void moveEntity(Entity entity, const std::shared_ptr<Archetype>& from, const std::shared_ptr<Archetype>& to, Record& record) {
+		const bool sameArchetype = from == to;
+		if (sameArchetype && !((from->mComponentArrays.contains(getComponentType<std::decay_t<NewComponents>>())) || ...)) {
 			return;
 		}
 
@@ -203,21 +208,17 @@ private:
 				continue;
 			}
 			const bool inPack = ((getComponentType<std::decay_t<NewComponents>>() == ctype) || ...);
-			const bool keep = to->mComponentArrays.contains(ctype) && !inPack;
-			if (!keep) {
+			const auto destination = to->mComponentArrays.find(ctype);
+			if (inPack || destination == to->mComponentArrays.end()) {
 				fromArr->entityDestroyed(entity);
-				continue;
 			}
-			if (from.get() != to.get()) {
-				fromArr->transferEntityTo(entity, *to->mComponentArrays.at(ctype));
-			}
-			else if (replacesExisting) {
+			else {
 				// Same table: replay remove+append so a replaced column stays index-aligned.
-				fromArr->transferEntityTo(entity, *fromArr);
+				fromArr->transferEntityTo(entity, *destination->second);
 			}
 		}
 
-		if (from.get() != to.get()) {
+		if (!sameArchetype) {
 			for (auto& [ctype, fromArr] : from->mComponentArrays) {
 				if (fromArr->contains(entity)) {
 					throw std::logic_error("Entity remained in source archetype");
@@ -226,6 +227,8 @@ private:
 		}
 		record.archetype = to;
 	}
+
+	std::shared_ptr<Archetype> getSingleComponentTransition(const std::shared_ptr<Archetype>& from, ComponentType type, bool adding);
 
 	template <typename T> void insertNewComponent(Entity entity, Record& record, T&& component) {
 		using C = std::decay_t<T>;
@@ -283,17 +286,14 @@ private:
 		}
 	}
 
-	template <typename T> void emitOnAdd(Entity entity) {
-		auto* array = findArray<T>(entity);
-		if (auto* component = array ? array->tryGetData(entity) : nullptr) {
-			mEventManager.emit(OnAdd<T> { entity, component });
+	template <template <class> class Event, class T> void emitComponentEvent(Entity entity) {
+		auto* signal = mEventManager.findSignal<Event<T>>();
+		if (!signal || signal->getListenerCount() == 0) {
+			return;
 		}
-	}
-
-	template <typename T> void emitOnRemove(Entity entity) {
 		auto* array = findArray<T>(entity);
 		if (auto* component = array ? array->tryGetData(entity) : nullptr) {
-			mEventManager.emit(OnRemove<T> { entity, component });
+			signal->run(Event<T> { entity, component });
 		}
 	}
 
@@ -433,15 +433,23 @@ private:
 			}
 		}
 		Record& record = mEntityRecords.at(entity);
-		auto newMask = record.archetype->mMask;
-		// set all components to mask (Only Archetype ones)
-		(addComponentToArchetypeMaskImpl<Components>(newMask), ...);
-		auto nextArchetype = getArchetype(newMask);
+		std::shared_ptr<Archetype> nextArchetype;
+		if constexpr (sizeof...(Components) == 1) {
+			const auto type = types.front();
+			(ensureComponentRegistered<std::decay_t<Components>>(type), ...);
+			nextArchetype = mComponentStorageType.at(type) == StorageType::Archetype ? getSingleComponentTransition(record.archetype, type, true)
+																					 : record.archetype;
+		}
+		else {
+			auto mask = record.archetype->mMask;
+			(addComponentToArchetypeMaskImpl<Components>(mask), ...);
+			nextArchetype = getArchetype(std::move(mask));
+		}
 
 		// Transfer existing archetype columns only. Each new value is inserted once below.
 		moveEntity<Components...>(entity, record.archetype, nextArchetype, record);
 		(insertNewComponent(entity, record, std::forward<Components>(newComponent)), ...);
-		(emitOnAdd<std::decay_t<Components>>(entity), ...);
+		(emitComponentEvent<OnAdd, std::decay_t<Components>>(entity), ...);
 
 		// auto signature = getSignature(entity);
 		// signature.set(static_cast<int>(getComponentType<T>()), true);
@@ -453,13 +461,22 @@ public:
 	template <class... Components> void removeComponents(Entity entity) {
 		requireStructuralChangesAllowed();
 		// static_assert(sizeof...(Components) == 0, "Must contain non 0 components");
-		(emitOnRemove<Components>(entity), ...);
+		(emitComponentEvent<OnRemove, Components>(entity), ...);
 		Record& record = mEntityRecords.at(entity);
 		auto archetype = record.archetype;
-		auto newMask = archetype->mMask;
-		// set all components to mask (Only Archetype ones)
-		(removeComponentFromArchetypeMaskImpl<Components>(newMask), ...);
-		auto nextArchetype = getArchetype(newMask);
+		std::shared_ptr<Archetype> nextArchetype;
+		if constexpr (sizeof...(Components) == 1) {
+			const auto type = (getComponentType<Components>(), ...);
+			const auto storage = mComponentStorageType.find(type);
+			nextArchetype = storage != mComponentStorageType.end() && storage->second == StorageType::Archetype
+				? getSingleComponentTransition(archetype, type, false)
+				: archetype;
+		}
+		else {
+			auto mask = archetype->mMask;
+			(removeComponentFromArchetypeMaskImpl<Components>(mask), ...);
+			nextArchetype = getArchetype(std::move(mask));
+		}
 
 		moveEntity(entity, archetype, nextArchetype, record);
 

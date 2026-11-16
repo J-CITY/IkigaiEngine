@@ -39,6 +39,40 @@ namespace {
 		expect(components.resolveEntity(components.getEntityHandle(entity)) == entity, "new registration resolves");
 	}
 
+	void checkComponentEvents() {
+		World world;
+		auto& components = *world.getComponentManager();
+		auto& events = components.getEventManager();
+		const auto entity = world.createEntity();
+		components.addComponents(entity, Position { 4 }, Velocity { 6 });
+		components.removeComponents<Velocity>(entity);
+		expect(!events.findSignal<OnAdd<Velocity>>() && !events.findSignal<OnRemove<Velocity>>(), "component edits do not create unused signals");
+
+		std::vector<int> delivered;
+		const auto added = events.subscribe<OnAdd<Velocity>>([&](const OnAdd<Velocity>& event) {
+			expect(
+				event.entity == entity && components.tryGetComponent<Velocity>(entity) == event.component, "OnAdd observes the inserted component");
+			delivered.push_back(event.component->value);
+		});
+		const auto removed = events.subscribe<OnRemove<Velocity>>([&](const OnRemove<Velocity>& event) {
+			expect(event.entity == entity && components.tryGetComponent<Velocity>(entity) == event.component,
+				"OnRemove observes the original component");
+			delivered.push_back(-event.component->value);
+		});
+		const auto original = components.addComponent(entity, Velocity { 8 });
+		const auto replacement = components.addComponent(entity, Velocity { 9 });
+		expect(!components.resolveComponent(original) && components.resolveComponent(replacement), "replacement changes the component generation");
+		components.removeComponents<Velocity>(entity);
+		components.removeComponents<Velocity>(entity);
+		expect(delivered == std::vector<int> { 8, 9, -9 }, "listeners see insertion, replacement and genuine removal in order");
+
+		events.unsubscribe<OnAdd<Velocity>>(added);
+		events.unsubscribe<OnRemove<Velocity>>(removed);
+		components.addComponents(entity, Velocity { 10 });
+		components.removeComponents<Velocity>(entity);
+		expect(delivered.size() == 3, "unsubscribed listeners receive no component events");
+	}
+
 	void checkQueries() {
 		World world;
 		auto& components = *world.getComponentManager();
@@ -244,6 +278,7 @@ namespace {
 
 void runStorageTests() {
 	checkHandles();
+	checkComponentEvents();
 	checkQueries();
 	checkMixedJoin();
 	checkDenseChunks();
