@@ -18,6 +18,11 @@ struct ArchetypeRows {
 	std::function<std::size_t(Entity)> find;
 };
 
+struct IndexedRowMove {
+	std::uint32_t source = 0;
+	std::uint32_t destination = 0;
+};
+
 class ComponentArrayInterface {
 public:
 	virtual ~ComponentArrayInterface() = default;
@@ -37,6 +42,9 @@ public:
 	virtual std::size_t reserveIndexedRows(std::size_t required) = 0;
 	virtual void appendIndexedMove(std::size_t sourceRow, ComponentArrayInterface& destination) noexcept = 0;
 	virtual void transferIndexedRange(std::size_t first, std::size_t count, ComponentArrayInterface& destination) noexcept = 0;
+	virtual void transferIndexedRows(
+		std::span<const IndexedRowMove> outgoing, std::span<const IndexedRowMove> compacted, ComponentArrayInterface& destination) noexcept
+		= 0;
 	virtual void eraseIndexedRow(std::size_t row) noexcept = 0;
 };
 }

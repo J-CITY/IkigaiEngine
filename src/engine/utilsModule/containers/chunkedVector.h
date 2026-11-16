@@ -210,6 +210,24 @@ public:
 		copyTrivialRange(first, *this, mSize - tailCount, tailCount);
 		mSize -= count;
 	}
+	// Destination offsets form a permutation of the reserved append range.
+	template <class Row>
+	void append_trivial_rows_reserved(const ChunkedVector& source, std::span<const Row> rows) noexcept
+		requires(std::is_trivially_copyable_v<T> && std::is_trivially_move_constructible_v<T>)
+	{
+		assert(this != &source && rows.size() <= capacity() - mSize);
+		copyTrivialRows(mSize, source, rows);
+		mSize += rows.size();
+	}
+	// Each copy reads a distinct survivor in the discarded tail.
+	template <class Row>
+	void compact_trivial_rows(size_type retained, std::span<const Row> rows) noexcept
+		requires(std::is_trivially_copyable_v<T> && std::is_trivially_move_constructible_v<T>)
+	{
+		assert(retained <= mSize);
+		copyTrivialRows(0, *this, rows);
+		mSize = retained;
+	}
 	void pop_back() noexcept {
 		assert(mSize);
 		--mSize;
@@ -369,6 +387,23 @@ public:
 	}
 
 private:
+	template <class Row>
+	void copyTrivialRows(size_type offset, const ChunkedVector& source, std::span<const Row> rows) noexcept
+		requires(std::is_trivially_copyable_v<T> && std::is_trivially_move_constructible_v<T>)
+	{
+		auto sourceChunk = source.mBlocks.size();
+		const T* block = nullptr;
+		for (const auto& row : rows) {
+			const auto chunk = row.source / ChunkSize;
+			if (chunk != sourceChunk) {
+				sourceChunk = chunk;
+				block = source.mBlocks[chunk];
+			}
+			const auto destination = offset + row.destination;
+			std::memcpy(mBlocks[destination / ChunkSize] + destination % ChunkSize, block + row.source % ChunkSize, sizeof(T));
+		}
+	}
+
 	void copyTrivialRange(size_type destination, const ChunkedVector& source, size_type first, size_type count) noexcept
 		requires(std::is_trivially_copyable_v<T> && std::is_trivially_move_constructible_v<T>)
 	{

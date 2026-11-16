@@ -88,3 +88,11 @@ cmake --build build/ecs --config Release --target ecs_target_allocation
 ```powershell
 & $exe '--benchmark_filter=^ArchetypeBatch(Slice)?/' --benchmark_min_time=0.03s --benchmark_min_warmup_time=0.01 --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/archetype-batch.json --benchmark_out_format=json
 ```
+
+`ArchetypeBatchScatter` выбирает 10% или 50% строк из 100 000 сущностей при 4 или 8 сохраняемых колонках. В `Strided` ID идут в порядке источника. `Shuffled` перемешивает те же ID с фиксированным seed. Таймер включает построение плана, резервирование, перенос и уплотнение. Итоговое время делится на число выбранных сущностей. Проверка охватывает весь исходный набор.
+
+`Grouped` сравнивает новый путь Ikigai с `ReservedRows` из того же бинарника. Группировка применяется к пакетам тривиальных строк с четырьмя и более сохраняемыми колонками на источник. Путь требует уникальных ID и отсутствия добавляемого компонента. EnTT использует резервирование и вставку диапазона, Flecs — поштучный `entity.set` для существующих сущностей.
+
+```powershell
+& $exe '--benchmark_filter=^ArchetypeBatchScatter/' --benchmark_min_time=0.02s --benchmark_min_warmup_time=0.005 --benchmark_repetitions=5 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/archetype-batch-scatter.json --benchmark_out_format=json
+```

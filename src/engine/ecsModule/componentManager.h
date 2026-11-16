@@ -408,6 +408,7 @@ private:
 
 	struct IndexedBatch {
 		struct Target {
+			Archetype* source = nullptr;
 			Archetype* table = nullptr;
 			const Archetype::Transition* plan = nullptr;
 			ComponentArrayInterface* column = nullptr;
@@ -422,6 +423,14 @@ private:
 		std::vector<Entry> entries;
 	};
 	std::optional<IndexedBatch> prepareIndexedBatch(std::span<const Entity> entities, ComponentType type);
+	struct IndexedScatterTarget {
+		std::vector<IndexedRowMove> outgoing;
+		std::vector<IndexedRowMove> compacted;
+		bool needsGrouping = false;
+		std::uint32_t nextDestination = 0;
+	};
+	static std::optional<std::vector<IndexedScatterTarget>> prepareIndexedScatter(const IndexedBatch& batch, std::size_t chunkSize);
+	void commitIndexedScatter(const IndexedBatch& batch, std::span<IndexedScatterTarget> scatter) noexcept;
 	struct IndexedBatchRange {
 		Archetype* source = nullptr;
 		const Archetype::Transition* plan = nullptr;
@@ -761,6 +770,19 @@ private:
 				addComponents(entity, prototype);
 			}
 			return;
+		}
+
+		if constexpr (Chunked && std::is_trivially_copyable_v<T> && std::is_trivially_copy_constructible_v<T>) {
+			if (auto scatter = prepareIndexedScatter(*batch, ComponentArray<T>::Storage::chunk_size)) {
+				auto generation = ComponentArray<T>::generationSequence().nextRange(entities.size()).value();
+				for (const auto& target : batch->targets) {
+					auto& column = static_cast<ComponentArray<T>&>(*target.column);
+					column.appendIndexedValues(target.incoming, prototype, generation);
+					generation += target.incoming;
+				}
+				commitIndexedScatter(*batch, *scatter);
+				return;
+			}
 		}
 
 		for (const auto& edit : batch->entries) {

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <memory>
+#include <random>
 #include <ranges>
 #include <string>
 #include <vector>
@@ -467,11 +468,30 @@ namespace {
 	};
 
 	enum class BatchDispatch { Single, ReservedRows, Range };
+	enum class BatchSelection { Full, Slice, Strided, Shuffled };
 
-	template <class Backend, std::size_t Columns, BatchDispatch Dispatch, bool Partial = false> void batchAddition(benchmark::State& state) {
-		const auto count = static_cast<std::size_t>(state.range(0));
-		const auto first = Partial ? count / 2 : 0;
-		std::vector<typename Backend::Entity> entities(Partial ? 2 * count : count);
+	template <class Backend, std::size_t Columns, BatchDispatch Dispatch, BatchSelection Selection = BatchSelection::Full>
+	void batchAddition(benchmark::State& state) {
+		using Entity = typename Backend::Entity;
+		constexpr bool scattered = Selection == BatchSelection::Strided || Selection == BatchSelection::Shuffled;
+		const auto size = static_cast<std::size_t>(state.range(0));
+		const auto stride = scattered ? 100 / static_cast<std::size_t>(state.range(1)) : 1;
+		const auto count = (size + stride - 1) / stride;
+		const auto first = Selection == BatchSelection::Slice ? count / 2 : 0;
+		std::vector<Entity> entities(Selection == BatchSelection::Slice ? 2 * count : size);
+		std::vector<std::size_t> selectedIndices;
+		std::vector<Entity> selectedEntities;
+		if constexpr (scattered) {
+			selectedIndices.reserve(count);
+			selectedEntities.resize(count);
+			for (std::size_t index = 0; index < size; index += stride) {
+				selectedIndices.push_back(index);
+			}
+			if constexpr (Selection == BatchSelection::Shuffled) {
+				std::mt19937 generator(407);
+				std::shuffle(selectedIndices.begin(), selectedIndices.end(), generator);
+			}
+		}
 		for (auto _ : state) {
 			state.PauseTiming();
 			auto backend = std::make_unique<Backend>();
@@ -488,7 +508,17 @@ namespace {
 			for (std::size_t index = 0; index < entities.size(); ++index) {
 				entities[index] = createSource(index);
 			}
-			const auto selected = std::span(entities).subspan(first, count);
+			const auto selected = [&]() -> std::span<const Entity> {
+				if constexpr (scattered) {
+					for (std::size_t index = 0; index < count; ++index) {
+						selectedEntities[index] = entities[selectedIndices[index]];
+					}
+					return selectedEntities;
+				}
+				else {
+					return std::span(entities).subspan(first, count);
+				}
+			}();
 			state.ResumeTiming();
 			if constexpr (Dispatch == BatchDispatch::ReservedRows) {
 				IKIGAI::ECS::EcsBenchmarkAccess::addBatchByRow(
@@ -515,7 +545,7 @@ namespace {
 					const auto* component = backend->template get<RetainedComponent<I>>(entity);
 					return component && component->value == static_cast<int>(index + I);
 				};
-				const bool expectedMarker = index >= first && index - first < count;
+				const bool expectedMarker = scattered ? index % stride == 0 : index >= first && index - first < count;
 				const bool correctMarker = expectedMarker ? marker && marker->value == 7 : marker == nullptr;
 				valid = correctMarker && [&]<std::size_t... Index>(std::index_sequence<Index...>) {
 					return (retained.template operator()<Index>() && ...);
@@ -529,6 +559,17 @@ namespace {
 			}
 		}
 		state.SetItemsProcessed(state.iterations() * count);
+	}
+
+	template <std::size_t Columns, BatchSelection Selection> void registerScatteredAddition(const char* order) {
+		const auto add = [&](const char* name, void (*run)(benchmark::State&)) {
+			const auto label = std::string("ArchetypeBatchScatter/") + order + "/" + name + "/" + std::to_string(Columns);
+			benchmark::RegisterBenchmark(label, run)->UseRealTime()->Args({ 100000, 10 })->Args({ 100000, 50 });
+		};
+		add("Ikigai/ReservedRows", batchAddition<IkigaiCompact, Columns, BatchDispatch::ReservedRows, Selection>);
+		add("Ikigai/Grouped", batchAddition<IkigaiCompact, Columns, BatchDispatch::Range, Selection>);
+		add("EnTT/ReservedRange", batchAddition<EnTT, Columns, BatchDispatch::Range, Selection>);
+		add("Flecs/Single", batchAddition<FlecsUncached, Columns, BatchDispatch::Single, Selection>);
 	}
 
 	template <std::size_t Columns> void registerBatchAddition() {
@@ -548,10 +589,12 @@ namespace {
 				const auto label = std::string("ArchetypeBatchSlice/") + name + "/" + std::to_string(Columns);
 				benchmark::RegisterBenchmark(label, run)->UseRealTime()->Arg(100000);
 			};
-			addSlice("Ikigai/ReservedRows", batchAddition<IkigaiCompact, Columns, BatchDispatch::ReservedRows, true>);
-			addSlice("Ikigai/Chunked", batchAddition<IkigaiCompact, Columns, BatchDispatch::Range, true>);
-			addSlice("EnTT/ReservedRange", batchAddition<EnTT, Columns, BatchDispatch::Range, true>);
-			addSlice("Flecs/Single", batchAddition<FlecsUncached, Columns, BatchDispatch::Single, true>);
+			addSlice("Ikigai/ReservedRows", batchAddition<IkigaiCompact, Columns, BatchDispatch::ReservedRows, BatchSelection::Slice>);
+			addSlice("Ikigai/Chunked", batchAddition<IkigaiCompact, Columns, BatchDispatch::Range, BatchSelection::Slice>);
+			addSlice("EnTT/ReservedRange", batchAddition<EnTT, Columns, BatchDispatch::Range, BatchSelection::Slice>);
+			addSlice("Flecs/Single", batchAddition<FlecsUncached, Columns, BatchDispatch::Single, BatchSelection::Slice>);
+			registerScatteredAddition<Columns, BatchSelection::Strided>("Strided");
+			registerScatteredAddition<Columns, BatchSelection::Shuffled>("Shuffled");
 		}
 	}
 

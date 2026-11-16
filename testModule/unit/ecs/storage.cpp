@@ -590,6 +590,65 @@ void checkGenerationRange() {
 	expectThrows([&] { sequence.next(); }, "sequence is exhausted after reserving its last generation");
 }
 
+void checkScatteredArchetypeBatch() {
+	using namespace ECS;
+	World world { ArchetypeLayout::SharedRows };
+	auto& components = *world.getComponentManager();
+	std::vector<Entity> entities;
+	std::vector<ComponentHandle<Position>> positions;
+	for (int index = 0; index < 1200; ++index) {
+		const auto entity = world.createEntity();
+		entities.push_back(entity);
+		components.addComponents(entity, Position { index }, AlignedPosition { index + 1 }, AlignedVelocity { -index }, Owns {});
+		positions.push_back(components.getComponentHandle<Position>(entity));
+		if (index % 2 == 0) {
+			components.addComponent(entity, Velocity { -index });
+		}
+	}
+	std::array<std::vector<Entity>, 2> expectedOrder;
+	std::vector<Entity> batch;
+	for (int index = 1199; index >= 0; --index) {
+		if (index % 3 == 0) {
+			batch.push_back(entities[index]);
+			expectedOrder[index % 2].push_back(entities[index]);
+		}
+	}
+	components.addArchetypeComponentBatch(batch, Health { 20 });
+
+	const auto positionType = components.getComponentType<Position>();
+	Signature signature;
+	signature.set(positionType.value(), true);
+	signature.set(components.getComponentType<AlignedPosition>().value(), true);
+	signature.set(components.getComponentType<AlignedVelocity>().value(), true);
+	signature.set(components.getComponentType<Owns>().value(), true);
+	signature.set(components.getComponentType<Health>().value(), true);
+	for (const auto parity : { 1, 0 }) {
+		signature.set(components.getComponentType<Velocity>().value(), parity == 0);
+		const auto target = components.getArchetype(signature);
+		expect(std::ranges::equal(target->getComponents<Position>(positionType)->getEntities(), expectedOrder[parity]),
+			"grouping by source chunks preserves input order within each destination");
+	}
+	for (std::size_t index = 0; index < entities.size(); ++index) {
+		const auto* position = components.resolveComponent(positions[index]);
+		const auto* aligned = components.tryGetComponent<AlignedPosition>(entities[index]);
+		const auto* velocity = components.tryGetComponent<Velocity>(entities[index]);
+		const auto* health = components.tryGetComponent<Health>(entities[index]);
+		expect(position && position->value == static_cast<int>(index), "scattered copy and source compaction preserve existing generations");
+		expect(aligned && aligned->value == static_cast<int>(index) + 1, "scattered copy preserves values in an aligned column");
+		expect(index % 2 == 0 ? velocity && velocity->value == -static_cast<int>(index) : velocity == nullptr,
+			"source compaction preserves columns across different archetypes");
+		expect(index % 3 == 0 ? health && health->value == 20 : health == nullptr, "scattered batch changes only selected entities");
+	}
+
+	auto repeated = expectedOrder[0];
+	repeated.resize(150);
+	repeated.push_back(repeated.front());
+	components.addArchetypeComponentBatch(repeated, Shield { 5 });
+	std::size_t visited = 0;
+	components.forEach<Read<Shield>>([&](Entity, const Shield&) { ++visited; });
+	expect(visited == repeated.size() - 1, "repeated IDs fall back to replacement without adding duplicate rows");
+}
+
 void runStorageTests() {
 	for (const auto layout : { ECS::ArchetypeLayout::PerColumn, ECS::ArchetypeLayout::SharedRows }) {
 		checkHandles(layout);
@@ -608,6 +667,7 @@ void runStorageTests() {
 	checkIndexedTransitionPlans();
 	checkIndexedPair();
 	checkChunkedArchetypeBatch();
+	checkScatteredArchetypeBatch();
 	checkGenerationRange();
 }
 }

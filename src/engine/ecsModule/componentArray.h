@@ -260,7 +260,12 @@ private:
 	void appendIndexedValues(std::size_t count, const T& value)
 		requires(std::is_trivially_copyable_v<T> && std::is_trivially_copy_constructible_v<T>)
 	{
-		const auto generation = generationSequence().nextRange(count).value();
+		appendIndexedValues(count, value, generationSequence().nextRange(count).value());
+	}
+
+	void appendIndexedValues(std::size_t count, const T& value, std::uint64_t generation)
+		requires(std::is_trivially_copyable_v<T> && std::is_trivially_copy_constructible_v<T>)
+	{
 		const auto first = mGenerations.size();
 		componentArray.append_trivial_fill_reserved(count, value);
 		mGenerations.resize(first + count);
@@ -277,6 +282,27 @@ private:
 			std::copy_n(mGenerations.end() - tailCount, tailCount, mGenerations.begin() + first);
 			mGenerations.resize(mGenerations.size() - count);
 			componentArray.erase_trivial_range_unordered(first, count);
+		}
+		else {
+			std::terminate();
+		}
+	}
+
+	void transferIndexedRows(
+		std::span<const IndexedRowMove> outgoing, std::span<const IndexedRowMove> compacted, ComponentArrayInterface& destination) noexcept override {
+		if constexpr (std::is_trivially_copyable_v<T> && std::is_trivially_move_constructible_v<T>) {
+			auto& target = static_cast<ComponentArray&>(destination);
+			const auto first = target.mGenerations.size();
+			target.componentArray.append_trivial_rows_reserved(componentArray, outgoing);
+			target.mGenerations.resize(first + outgoing.size());
+			for (const auto& row : outgoing) {
+				target.mGenerations[first + row.destination] = mGenerations[row.source];
+			}
+			for (const auto& row : compacted) {
+				mGenerations[row.destination] = mGenerations[row.source];
+			}
+			mGenerations.resize(mGenerations.size() - outgoing.size());
+			componentArray.compact_trivial_rows(mGenerations.size(), compacted);
 		}
 		else {
 			std::terminate();

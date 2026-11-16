@@ -208,7 +208,7 @@ std::optional<ComponentManager::IndexedBatch> ComponentManager::prepareIndexedBa
 					return std::nullopt;
 				}
 				auto* table = plan ? plan->target : source;
-				batch.targets.push_back({ table, plan, table->mComponentArrays.at(type).get(), 0 });
+				batch.targets.push_back({ source, table, plan, table->mComponentArrays.at(type).get(), 0 });
 			}
 			targetIndex = target->second;
 			previousSource = source;
@@ -227,6 +227,117 @@ std::optional<ComponentManager::IndexedBatch> ComponentManager::prepareIndexedBa
 		}
 	}
 	return batch;
+}
+
+std::optional<std::vector<ComponentManager::IndexedScatterTarget>> ComponentManager::prepareIndexedScatter(
+	const IndexedBatch& batch, std::size_t chunkSize) {
+	std::vector<IndexedScatterTarget> scatter;
+	scatter.reserve(batch.targets.size());
+	constexpr std::size_t minimumRetainedColumns = 4;
+	for (const auto& target : batch.targets) {
+		const auto rows = target.source->mRows->entities.size();
+		const auto chunks = rows / chunkSize + (rows % chunkSize != 0);
+		if (!target.plan || target.plan->columns.size() < minimumRetainedColumns || target.incoming < chunkSize || target.incoming > rows
+			|| chunks > target.incoming) {
+			return std::nullopt;
+		}
+		auto& group = scatter.emplace_back();
+		group.outgoing.reserve(target.incoming);
+	}
+
+	for (const auto& edit : batch.entries) {
+		const auto row = static_cast<std::uint32_t>(edit.record->row);
+		auto& group = scatter[edit.targetIndex];
+		if (!group.outgoing.empty() && row < group.outgoing.back().source) {
+			group.needsGrouping = true;
+		}
+		group.outgoing.push_back({ row, static_cast<std::uint32_t>(group.outgoing.size()) });
+	}
+
+	std::vector<std::size_t> chunks;
+	std::vector<IndexedRowMove> reordered;
+	std::vector<unsigned char> seen(chunkSize);
+	std::vector<unsigned char> outgoingTail;
+	for (std::size_t index = 0; index < scatter.size(); ++index) {
+		auto& group = scatter[index];
+		const auto rows = batch.targets[index].source->mRows->entities.size();
+		const auto chunkCount = rows / chunkSize + (rows % chunkSize != 0);
+		if (group.needsGrouping) {
+			chunks.assign(chunkCount, 0);
+			for (const auto& move : group.outgoing) {
+				++chunks[move.source / chunkSize];
+			}
+			std::size_t offset = 0;
+			for (auto& count : chunks) {
+				const auto next = offset + count;
+				count = offset;
+				offset = next;
+			}
+			reordered.resize(group.outgoing.size());
+			for (const auto& move : group.outgoing) {
+				reordered[chunks[move.source / chunkSize]++] = move;
+			}
+			group.outgoing.swap(reordered);
+		}
+
+		const auto retained = rows - group.outgoing.size();
+		outgoingTail.assign(group.outgoing.size(), 0);
+		auto chunk = chunkCount;
+		for (const auto& move : group.outgoing) {
+			if (chunk != move.source / chunkSize) {
+				chunk = move.source / chunkSize;
+				std::ranges::fill(seen, 0);
+			}
+			if (std::exchange(seen[move.source % chunkSize], 1)) {
+				return std::nullopt;
+			}
+			if (move.source >= retained) {
+				outgoingTail[move.source - retained] = 1;
+			}
+		}
+
+		// Consume surviving tail rows once, leaving rows in the retained prefix in place.
+		group.compacted.reserve(std::min(retained, group.outgoing.size()));
+		auto tail = outgoingTail.size();
+		for (const auto& move : group.outgoing) {
+			if (move.source < retained) {
+				do {
+					--tail;
+				} while (outgoingTail[tail]);
+				group.compacted.push_back({ static_cast<std::uint32_t>(retained + tail), move.source });
+			}
+		}
+	}
+	return scatter;
+}
+
+void ComponentManager::commitIndexedScatter(const IndexedBatch& batch, std::span<IndexedScatterTarget> scatter) noexcept {
+	EntityRecords::PageCursor cursor;
+	for (std::size_t index = 0; index < scatter.size(); ++index) {
+		const auto& target = batch.targets[index];
+		auto& group = scatter[index];
+		auto& sourceRows = target.source->mRows->entities;
+		auto& targetRows = target.table->mRows->entities;
+		const auto first = targetRows.size();
+		group.nextDestination = static_cast<std::uint32_t>(first);
+		targetRows.resize(first + group.outgoing.size());
+		for (const auto& move : group.outgoing) {
+			targetRows[first + move.destination] = sourceRows[move.source];
+		}
+		for (const auto& column : target.plan->columns) {
+			column.source->transferIndexedRows(group.outgoing, group.compacted, *column.destination);
+		}
+		for (const auto& move : group.compacted) {
+			const auto entity = sourceRows[move.source];
+			sourceRows[move.destination] = entity;
+			mEntityRecords.at(entity, cursor).row = move.destination;
+		}
+		sourceRows.resize(sourceRows.size() - group.outgoing.size());
+	}
+	for (const auto& edit : batch.entries) {
+		edit.record->archetype = batch.targets[edit.targetIndex].table;
+		edit.record->row = scatter[edit.targetIndex].nextDestination++;
+	}
 }
 
 void ComponentManager::commitIndexedTransition(
