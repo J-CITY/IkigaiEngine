@@ -4,8 +4,8 @@ from collections import defaultdict
 from pyvis.network import Network
 
 # ==================== НАСТРОЙКИ СТРУКТУРЫ ====================
-ENGINE_DIR = "./src/engine"
-THIRD_PARTY_DIR = "./3rd"
+ENGINE_DIR = "../../src/engine"
+THIRD_PARTY_DIR = "../../3rd"
 # =============================================================
 
 def get_project_structure(engine_dir, third_party_dir):
