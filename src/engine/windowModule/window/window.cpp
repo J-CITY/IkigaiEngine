@@ -17,7 +17,7 @@
 #endif
 #if defined(USE_EDITOR) || USE_CHEATS
 #include "imgui.h"
-#include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
+#include "renderModule/backends/imgui/imguiBackend.h"
 #endif
 #ifdef VULKAN_BACKEND
 #include "renderModule/backends/vk/vulkanLoader.h"

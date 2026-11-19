@@ -12,10 +12,10 @@
 
 #include <resourceModule/textureManager.h>
 
-#include <resourceModule/serviceManager.h>
-#include <resourceModule/fileSystem/fileSystem.h>
+#include "renderModule/backends/imgui/imguiBackend.h"
 #include <renderModule/backends/interface/atlasInterface.h>
-#include "utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
+#include <resourceModule/fileSystem/fileSystem.h>
+#include <resourceModule/serviceManager.h>
 
 #include "renderModule/backends/interface/integerColorAttachment.h"
 

@@ -11,6 +11,7 @@ set(IKIGAI_MANIFEST_renderVk
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/vk/gpuDrivenVk.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/vk/helpers.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/vk/helpers.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/vk/imguiBackendVk.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/vk/indexBufferVk.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/vk/indexBufferVk.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/vk/materialVk.cpp"

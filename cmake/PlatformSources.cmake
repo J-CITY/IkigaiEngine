@@ -15,6 +15,9 @@ function(ikigai_filter_platform_sources headers_var sources_var platform)
     set(quest_excluded
         "engine/resourceModule/fileSystem/sdlFileSystem.cpp"
         # The Quest runtime has no ImGui view host.
+        "engine/renderModule/backends/gl/imguiBackendGl.cpp"
+        "engine/renderModule/backends/imgui/imguiBackend.cpp"
+        "engine/renderModule/backends/imgui/imguiBackend.h"
         "engine/uiModule/viewRenderer.cpp"
         "engine/utilsModule/imguiHelper/Dirent/dirent.h"
         "engine/utilsModule/imguiHelper/ImGuiFileBrowser.cpp"
@@ -25,12 +28,6 @@ function(ikigai_filter_platform_sources headers_var sources_var platform)
         "engine/utilsModule/imguiHelper/ImSequencer.h"
         "engine/utilsModule/imguiHelper/TextEditor.cpp"
         "engine/utilsModule/imguiHelper/TextEditor.h"
-        "engine/utilsModule/imguiHelper/imguiBackend/imguiBackend.cpp"
-        "engine/utilsModule/imguiHelper/imguiBackend/imguiBackend.h"
-        "engine/utilsModule/imguiHelper/imguiBackend/imguiBackendDx12.cpp"
-        "engine/utilsModule/imguiHelper/imguiBackend/imguiBackendGl.cpp"
-        "engine/utilsModule/imguiHelper/imguiBackend/imguiBackendMetal.mm"
-        "engine/utilsModule/imguiHelper/imguiBackend/imguiBackendVk.cpp"
         "engine/utilsModule/imguiHelper/imguiWidgets.cpp"
         "engine/utilsModule/imguiHelper/imguiWidgets.h"
         "engine/utilsModule/imguiHelper/imgui_neo_internal.cpp"
@@ -53,16 +50,16 @@ function(ikigai_filter_platform_sources headers_var sources_var platform)
 
     set(excluded)
     if(NOT USE_OPENGL AND NOT platform STREQUAL "android" AND NOT platform STREQUAL "quest")
-        list(APPEND excluded ${IKIGAI_MANIFEST_renderGl} "engine/utilsModule/imguiHelper/imguiBackend/imguiBackendGl.cpp")
+        list(APPEND excluded ${IKIGAI_MANIFEST_renderGl})
     endif()
     if(platform STREQUAL "android" OR platform STREQUAL "quest" OR platform STREQUAL "web" OR NOT USE_VULKAN)
-        list(APPEND excluded ${IKIGAI_MANIFEST_renderVk} "engine/utilsModule/imguiHelper/imguiBackend/imguiBackendVk.cpp")
+        list(APPEND excluded ${IKIGAI_MANIFEST_renderVk})
     endif()
     if(NOT platform STREQUAL "win" OR NOT USE_DX12)
-        list(APPEND excluded ${IKIGAI_MANIFEST_renderDx12} "engine/utilsModule/imguiHelper/imguiBackend/imguiBackendDx12.cpp")
+        list(APPEND excluded ${IKIGAI_MANIFEST_renderDx12})
     endif()
     if(NOT (platform STREQUAL "mac" OR platform STREQUAL "ios") OR NOT USE_METAL)
-        list(APPEND excluded ${IKIGAI_MANIFEST_renderMetal} "engine/utilsModule/imguiHelper/imguiBackend/imguiBackendMetal.mm")
+        list(APPEND excluded ${IKIGAI_MANIFEST_renderMetal})
     endif()
     if(NOT platform STREQUAL "quest")
         list(APPEND excluded ${quest_only})

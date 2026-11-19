@@ -10,6 +10,7 @@ set(IKIGAI_MANIFEST_renderMetal
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/frameBufferMetal.mm"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/gpuMemoryMetal.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/gpuMemoryMetal.mm"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/imguiBackendMetal.mm"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/materialMetal.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/materialMetal.mm"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/metal/meshMetal.h"

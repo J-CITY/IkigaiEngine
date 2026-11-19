@@ -6,6 +6,8 @@ set(IKIGAI_MANIFEST_renderModule
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/driverFactory.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/frameGeneration.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/fsrUpscalerCommon.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/imgui/imguiBackend.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/imgui/imguiBackend.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/interface/atlasInterface.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/interface/bindlessInterface.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/interface/driverInterface.cpp"

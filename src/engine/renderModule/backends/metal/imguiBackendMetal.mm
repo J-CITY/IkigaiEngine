@@ -1,11 +1,11 @@
 #ifdef METAL_BACKEND
-#include "imguiBackend.h"
-#include "windowModule/window/window.h"
-#include "renderModule/backends/metal/driverMetal.h"
-#include "renderModule/backends/interface/textureInterface.h"
-#include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_metal.h"
+#include "backends/imgui_impl_sdl3.h"
 #include "imgui.h"
+#include "renderModule/backends/imgui/imguiBackend.h"
+#include "renderModule/backends/interface/textureInterface.h"
+#include "renderModule/backends/metal/driverMetal.h"
+#include "windowModule/window/window.h"
 
 namespace IKIGAI::IMGUI {
 	void ConfigureImGuiContext();

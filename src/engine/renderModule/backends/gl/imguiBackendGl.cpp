@@ -1,5 +1,5 @@
 #ifdef OPENGL_BACKEND
-#include "imguiBackend.h"
+#include "renderModule/backends/imgui/imguiBackend.h"
 #include <SDL3/SDL.h>
 #if defined(__APPLE__)
 #include <TargetConditionals.h>

@@ -27,6 +27,7 @@ set(IKIGAI_MANIFEST_renderDx12
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/dx12/gpuMemoryDx12.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/dx12/immediateSubmitDx12.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/dx12/immediateSubmitDx12.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/dx12/imguiBackendDx12.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/dx12/indexBufferDx12.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/dx12/indexBufferDx12.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/dx12/materialDx12.cpp"

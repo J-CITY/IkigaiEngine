@@ -7,6 +7,7 @@ set(IKIGAI_MANIFEST_renderGl
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/frameBufferGl.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/gpuMemoryGl.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/gpuMemoryGl.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/imguiBackendGl.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/indexBufferGl.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/indexBufferGl.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/gl/materialGl.cpp"
