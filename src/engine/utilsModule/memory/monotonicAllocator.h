@@ -1,4 +1,5 @@
 #pragma once
+#include "allocationTracker.h"
 #include "resourceAllocator.h"
 
 namespace IKIGAI::MEMORY {
@@ -27,7 +28,7 @@ public:
 			throw std::invalid_argument("Invalid arena configuration");
 		}
 #if IKIGAI_ENABLE_MEMORY_TRACKING
-		(void)PROFILER::MemoryProfiler::instance();
+		(void)AllocationTracker::instance();
 #endif
 	}
 	~MonotonicAllocator() override {
@@ -53,7 +54,7 @@ public:
 				++mCount;
 #if IKIGAI_ENABLE_MEMORY_TRACKING
 				if (mTrackLogical) {
-					PROFILER::MemoryProfiler::instance().record({ result, this, bytes, alignment, mCategory });
+					AllocationTracker::instance().record({ result, this, bytes, alignment, mCategory });
 				}
 #endif
 				return result;
@@ -81,7 +82,7 @@ public:
 	void reset() noexcept {
 #if IKIGAI_ENABLE_MEMORY_TRACKING
 		if (mTrackLogical) {
-			PROFILER::MemoryProfiler::instance().releaseAllocator(this);
+			AllocationTracker::instance().releaseAllocator(this);
 		}
 #endif
 		for (auto& page : mPages) {

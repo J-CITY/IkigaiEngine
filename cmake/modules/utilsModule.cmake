@@ -57,6 +57,8 @@ set(IKIGAI_MANIFEST_utilsModule
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/log/logger.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/log/logger.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/log/loggerDefine.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/memory/allocationTracker.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/memory/allocationTracker.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/memory/allocator.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/memory/frameArena.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/memory/frameArena.h"

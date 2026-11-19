@@ -1,6 +1,6 @@
 #pragma once
+#include "allocationTracker.h"
 #include "allocator.h"
-#include "profilerModule/memoryProfiler.h"
 #include <utility>
 
 namespace IKIGAI::MEMORY {
@@ -11,7 +11,7 @@ public:
 		: mAllocator(std::forward<Args>(args)...) {
 #if IKIGAI_ENABLE_MEMORY_TRACKING
 		// Initialize bookkeeping before the first successful user allocation.
-		(void)PROFILER::MemoryProfiler::instance();
+		(void)AllocationTracker::instance();
 #endif
 	}
 	ProfiledAllocator(const ProfiledAllocator&) = delete;
@@ -20,16 +20,18 @@ public:
 		void* ptr = mAllocator.allocate(bytes);
 #if IKIGAI_ENABLE_MEMORY_TRACKING
 		// Zero means policy-default alignment, rather than an explicit request.
-		if (ptr)
-			PROFILER::MemoryProfiler::instance().record({ ptr, this, bytes, 0, Tag });
+		if (ptr) {
+			AllocationTracker::instance().record({ ptr, this, bytes, 0, Tag });
+		}
 #endif
 		return ptr;
 	}
 	void* allocate(std::size_t bytes, std::size_t alignment) override {
 		void* ptr = static_cast<IAllocator&>(mAllocator).allocate(bytes, alignment);
 #if IKIGAI_ENABLE_MEMORY_TRACKING
-		if (ptr)
-			PROFILER::MemoryProfiler::instance().record({ ptr, this, bytes, alignment, Tag });
+		if (ptr) {
+			AllocationTracker::instance().record({ ptr, this, bytes, alignment, Tag });
+		}
 #endif
 		return ptr;
 	}
@@ -37,12 +39,14 @@ public:
 #if IKIGAI_ENABLE_MEMORY_TRACKING
 		// Remove before releasing storage so another allocator/thread cannot
 		// reuse the address while the old record is still present.
-		auto record = PROFILER::MemoryProfiler::instance().take(ptr, this);
+		auto& tracker = AllocationTracker::instance();
+		auto record = tracker.take(ptr, this);
 		try {
 			mAllocator.deallocate(ptr);
 		} catch (...) {
-			if (record)
-				PROFILER::MemoryProfiler::instance().record(*record);
+			if (record) {
+				tracker.record(*record);
+			}
 			throw;
 		}
 #else

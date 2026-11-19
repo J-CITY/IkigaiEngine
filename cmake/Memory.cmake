@@ -13,6 +13,8 @@ if(NOT TARGET ikigai_memory)
     add_library(ikigai_memory STATIC
         "${IKIGAI_MEMORY_DIR}/memory.cpp"
         "${IKIGAI_MEMORY_DIR}/frameArena.cpp"
+        "${IKIGAI_MEMORY_DIR}/allocationTracker.cpp"
+        "${IKIGAI_MEMORY_DIR}/allocationTracker.h"
         "${IKIGAI_MEMORY_DIR}/allocator.h"
         "${IKIGAI_MEMORY_DIR}/frameArena.h"
         "${IKIGAI_MEMORY_DIR}/freeListAllocator.h"
@@ -27,7 +29,6 @@ if(NOT TARGET ikigai_memory)
         "${IKIGAI_MEMORY_DIR}/stackAllocator.h"
         "${IKIGAI_MEMORY_ROOT}/src/engine/profilerModule/gpuMemoryProfiler.cpp"
         "${IKIGAI_MEMORY_ROOT}/src/engine/profilerModule/gpuMemoryProfiler.h"
-        "${IKIGAI_MEMORY_ROOT}/src/engine/profilerModule/memoryProfiler.h"
         "${IKIGAI_MEMORY_ROOT}/src/engine/profilerModule/processMemory.cpp"
         "${IKIGAI_MEMORY_ROOT}/src/engine/profilerModule/processMemory.h")
     target_compile_features(ikigai_memory PUBLIC cxx_std_20)
