@@ -1,6 +1,7 @@
 #include "editorRender.h"
 #include "environmentWindow.h"
 #include "prefabEditor.h"
+#include "resourceModule/jsonLoader.h"
 #include "surfaceBrushWindow.h"
 
 #include "resourceEditorWindow.h"

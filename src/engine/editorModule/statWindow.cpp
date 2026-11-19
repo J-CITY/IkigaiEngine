@@ -5,13 +5,14 @@
 #ifdef USE_EDITOR
 
 #define IMGUI_DEFINE_MATH_OPERATORS
-#include "imgui_internal.h"
-#include "utilsModule/imguiHelper/imgui_neo_sequencer.h"
-#include "editorRender.h"
 #include "IconsFontAwesome5.h"
+#include "editorRender.h"
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "renderModule/backends/gl/materialGl.h"
+#include "resourceModule/jsonLoader.h"
 #include "resourceModule/materialManager.h"
+#include "utilsModule/imguiHelper/imgui_neo_sequencer.h"
 
 #include "sceneModule/sceneManager.h"
 #include "misc/cpp/imgui_stdlib.h"

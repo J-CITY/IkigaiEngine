@@ -7,8 +7,8 @@
 #include <utilsModule/result.h>
 
 #include "resourceModule/serializerInterface.h"
-#include "utilsModule/jsonLoader.h"
 #include "utilsModule/ref.h"
+#include "utilsModule/serialization/jsonError.h"
 
 // because need in all component
 #include "utilsModule/reflection/reflection.h"

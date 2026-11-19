@@ -1,27 +1,12 @@
 #include "jsonLoader.h"
 
+#include "fileSystem/fileSystem.h"
+#include "utilsModule/serviceManager.h"
 #include <algorithm>
 #include <optional>
 #include <utility>
 
 namespace IKIGAI::UTILS {
-JsonError::JsonError(Kind kind, std::string text, std::string path, std::vector<std::string> inheritanceChain)
-	: kind(kind)
-	, text(std::move(text))
-	, path(std::move(path))
-	, inheritanceChain(std::move(inheritanceChain)) {
-	if (!this->path.empty()) {
-		this->text += " [" + this->path + "]";
-	}
-	if (this->inheritanceChain.size() > 1) {
-		this->text += " (##parent chain: " + this->inheritanceChain.front();
-		for (std::size_t index = 1; index < this->inheritanceChain.size(); ++index) {
-			this->text += " -> " + this->inheritanceChain[index];
-		}
-		this->text += ")";
-	}
-}
-
 namespace {
 	using JsonResult = Result<nlohmann::json, JsonError>;
 	using ErrorKind = JsonError::Kind;
@@ -188,12 +173,6 @@ namespace JsonDetail {
 			return Err(*error);
 		}
 		return resolver.parse(text);
-	}
-
-	void ValidateFeatures(const nlohmann::json& data) {
-		SCRIPTING::ValidateScriptFeatures(data);
-		PHYSICS2D::validateFeatures(data);
-		PHYSICS::validateFeatures(data);
 	}
 }
 }

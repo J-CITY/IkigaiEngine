@@ -10,7 +10,6 @@
 #include "resourceModule/textureManager.h"
 #include "storageBufferGl.h"
 #include "uniformBufferGl.h"
-#include "utilsModule/jsonLoader.h"
 #include "utilsModule/visitorHelper.h"
 
 IKIGAI::RENDER::MaterialGl::MaterialGl(const MaterialResource& res)

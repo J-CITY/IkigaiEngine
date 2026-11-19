@@ -4,8 +4,8 @@
 #include "misc/cpp/imgui_stdlib.h"
 #include "renderModule/backends/interface/materialInterface.h"
 #include "resourceModule/fileSystem/fileSystem.h"
+#include "resourceModule/jsonLoader.h"
 #include "resourceModule/serviceManager.h"
-#include "utilsModule/jsonLoader.h"
 #include <algorithm>
 #include <future>
 

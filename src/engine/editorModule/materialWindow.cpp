@@ -1,6 +1,7 @@
 #include "materialWindow.h"
 #include "pbrMaterialEditor.h"
 #include "renderModule/backends/interface/materialInterface.h"
+#include "resourceModule/jsonLoader.h"
 
 #include "utilsModule/log/loggerDefine.h"
 #ifdef USE_EDITOR

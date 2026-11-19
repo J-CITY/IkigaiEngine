@@ -9,7 +9,7 @@
 #include "d3dx12/d3d12generatemips.h"
 #include "renderModule/backends/interface/atlasInterface.h"
 #include "renderModule/backends/interface/resourceStruct.h"
-#include "utilsModule/jsonLoader.h"
+#include "resourceModule/jsonLoader.h"
 #include "utilsModule/stdLoader.h"
 #include <algorithm>
 #include <filesystem>

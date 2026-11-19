@@ -18,6 +18,7 @@
 #endif
 #include "coreModule/ecs/componentCatalog.h"
 #include "sceneLoadingContext.h"
+#include "sceneObjectDescriptor.h"
 #include "utilsModule/log/loggerDefine.h"
 #include "utilsModule/time/loadTimer.h"
 #include <iterator>
@@ -333,11 +334,7 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 	std::unordered_map<int, std::size_t> ids;
 	for (auto& value : expanded.objects) {
 		state->control->check();
-		auto parsed = UTILS::FromJson<ECS::Object::Descriptor>(value);
-		if (parsed.isErr()) {
-			throw std::runtime_error(parsed.unwrapErr().text);
-		}
-		auto descriptor = parsed.unwrap();
+		auto descriptor = ReadSceneObjectDescriptor(value);
 		if (descriptor.Id <= 0 || !ids.emplace(descriptor.Id, context.descriptors.size()).second) {
 			throw std::runtime_error("Invalid or duplicate entity ID in scene");
 		}
@@ -702,11 +699,7 @@ Task<> SceneManager::instantiatePrefab(std::shared_ptr<SceneLoadState> state, in
 		std::vector<ECS::Object::Descriptor> descriptors;
 		for (auto value : expanded.objects) {
 			state->control->check();
-			auto parsed = UTILS::FromJson<ECS::Object::Descriptor>(value);
-			if (parsed.isErr()) {
-				throw std::runtime_error(parsed.unwrapErr().text);
-			}
-			auto descriptor = parsed.unwrap();
+			auto descriptor = ReadSceneObjectDescriptor(value);
 			for (const auto& component : descriptor.Components) {
 				const auto& record = ComponentRecord(component);
 				if (record.prepare) {

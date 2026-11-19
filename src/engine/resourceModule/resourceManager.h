@@ -17,7 +17,6 @@
 #include "utilsModule/assertion.h"
 #include "utilsModule/event.h"
 #include "utilsModule/idGenerator.h"
-#include "utilsModule/jsonLoader.h"
 #include "utilsModule/stringUtils.h"
 
 namespace IKIGAI {

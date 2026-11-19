@@ -3,9 +3,9 @@
 #include "coreModule/ecs/components/inputComponent.h"
 #include "ecsModule/world.h"
 #include "inputControlPath.h"
+#include "resourceModule/jsonLoader.h"
 #include "resourceModule/playerProfile.h"
 #include "resourceModule/serviceManager.h"
-#include "utilsModule/jsonLoader.h"
 #include "utilsModule/log/loggerDefine.h"
 #include <algorithm>
 #include <cctype>

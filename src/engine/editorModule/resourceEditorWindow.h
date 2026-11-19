@@ -1,7 +1,7 @@
 #pragma once
 #include "renderModule/backends/interface/resourceStruct.h"
 #include "renderModule/backends/interface/uniformTypes.h"
-#include "utilsModule/jsonLoader.h"
+#include "resourceModule/jsonLoader.h"
 #include "utilsModule/imguiHelper/imguiWidgets.h"
 #include "utilsModule/log/loggerDefine.h"
 #ifdef USE_EDITOR

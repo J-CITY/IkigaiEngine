@@ -5,7 +5,6 @@
 #include "shaderManager.h"
 #include "textureManager.h"
 #include "utilsModule/assertion.h"
-#include "utilsModule/jsonLoader.h"
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <renderModule/backends/interface/driverInterface.h>

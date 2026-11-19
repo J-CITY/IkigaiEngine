@@ -1,6 +1,6 @@
 #include "driverFactory.h"
 #include "renderModule/renderGraph/pipelineExecution.h"
-#include "utilsModule/jsonLoader.h"
+#include "resourceModule/jsonLoader.h"
 
 #include <algorithm>
 #include <cctype>

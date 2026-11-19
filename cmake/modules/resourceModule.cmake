@@ -30,6 +30,8 @@ set(IKIGAI_MANIFEST_resourceModule
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/fileWatcher.h"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/fontManager.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/fontManager.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/jsonLoader.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/jsonLoader.h"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/materialManager.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/materialManager.h"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/modelManager.cpp"

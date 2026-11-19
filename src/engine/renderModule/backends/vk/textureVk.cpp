@@ -5,10 +5,10 @@
 #include <iostream>
 #include <filesystem>
 
-#include "utilsModule/stdLoader.h"
-#include "utilsModule/jsonLoader.h"
-#include "utilsModule/log/loggerDefine.h"
 #include "driverVk.h"
+#include "resourceModule/jsonLoader.h"
+#include "utilsModule/log/loggerDefine.h"
+#include "utilsModule/stdLoader.h"
 
 #include <resourceModule/textureManager.h>
 

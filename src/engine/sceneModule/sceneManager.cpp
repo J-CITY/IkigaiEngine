@@ -1,5 +1,6 @@
 #include "sceneManager.h"
 #include "sceneLoadingContext.h"
+#include "sceneObjectDescriptor.h"
 #include "utilsModule/serialization/typedDescriptor.h"
 
 #include <coreModule/ecs/components/ambientSphereLight.h>
@@ -100,10 +101,7 @@ void SceneManager::loadFromFile(const std::string& sceneFilePath) {
 	auto expanded = DOCUMENT::Expand(document, read);
 	// Parse component descriptors before replacing the current scene as well.
 	for (auto value : expanded.objects) {
-		auto parsed = UTILS::FromJson<ECS::Object::Descriptor>(value);
-		if (parsed.isErr()) {
-			throw std::runtime_error(parsed.unwrapErr().text);
-		}
+		ReadSceneObjectDescriptor(value);
 	}
 	mTransitionState = SceneTransitionState::Idle;
 	unloadCurrentScene();

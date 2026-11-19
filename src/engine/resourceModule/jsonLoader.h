@@ -1,15 +1,7 @@
 #pragma once
-#include "physics2dModule/features.h"
-#include "physicsModule/features.h"
-#include "resourceModule/fileSystem/fileSystem.h"
-#include "result.h"
-#include "scriptModule/scriptFeatures.h"
-#include "serviceManager.h"
+#include "utilsModule/serialization/jsonSerde.h"
 #include <exception>
-#include <fstream>
-#include <iostream>
 #include <nlohmann/json.hpp>
-#include <serdepp/adaptor/nlohmann_json.hpp>
 #include <serdepp/serializer.hpp>
 #include <string>
 #include <vector>
@@ -17,20 +9,6 @@
 namespace IKIGAI::UTILS {
 inline const std::string PARENT_KEY = "##parent";
 inline const std::string PATCH_KEY = "##patch";
-
-struct JsonError {
-	enum class Kind { PARSE, FILE_NOT_EXIST, SEREALIZE, INVALID_PATH, FILE_READ, INVALID_PARENT, PARENT_CYCLE, PARENT_DEPTH };
-
-	JsonError() = default;
-	JsonError(Kind kind, std::string text, std::string path = {}, std::vector<std::string> inheritanceChain = {});
-
-	Kind kind = Kind::PARSE;
-	std::string text;
-	std::string path;
-	std::vector<std::string> inheritanceChain;
-};
-
-struct JsonOk { };
 
 // Supply the VFS path when the caller already knows the document's origin.
 Result<nlohmann::json, JsonError> ApplyPatches(const nlohmann::json& data, const std::string& sourcePath = {});
@@ -40,16 +18,6 @@ namespace JsonDetail {
 	Result<nlohmann::json, JsonError> ReadResolvedJson(const std::string& path, std::vector<std::string>* parentDependencies);
 	Result<nlohmann::json, JsonError> ParseResolvedJson(
 		const std::string& text, const std::string& sourcePath, std::vector<std::string>* parentDependencies);
-	void ValidateFeatures(const nlohmann::json& data);
-
-	template <class T> Result<T, JsonError> DeserializeResolved(nlohmann::json& data, const std::string& sourcePath) {
-		try {
-			ValidateFeatures(data);
-			return Ok(serde::deserialize<T>(data));
-		} catch (const std::exception& e) {
-			return Err(JsonError(JsonError::Kind::PARSE, e.what(), sourcePath));
-		}
-	}
 }
 
 template <class T> Result<T, JsonError> FromJson(nlohmann::json& data) {
@@ -58,7 +26,7 @@ template <class T> Result<T, JsonError> FromJson(nlohmann::json& data) {
 		return Err(resolved.unwrapErr());
 	}
 	data = resolved.unwrap();
-	return JsonDetail::DeserializeResolved<T>(data, {});
+	return DATA::DeserializeJson<T>(data);
 }
 
 template <class T> Result<JsonOk, JsonError> FromJson(T& obj, nlohmann::json& data) {
@@ -67,13 +35,7 @@ template <class T> Result<JsonOk, JsonError> FromJson(T& obj, nlohmann::json& da
 		return Err(resolved.unwrapErr());
 	}
 	data = resolved.unwrap();
-	try {
-		JsonDetail::ValidateFeatures(data);
-		obj = serde::deserialize<T>(data);
-		return Ok(JsonOk());
-	} catch (const std::exception& e) {
-		return Err(JsonError(JsonError::Kind::PARSE, e.what()));
-	}
+	return DATA::DeserializeJson(obj, data);
 }
 
 // The optional parentDependencies output is reset for each load and records normalized parent paths in traversal order.
@@ -86,7 +48,7 @@ Result<T, JsonError> FromJsonStr(
 		return Err(resolved.unwrapErr());
 	}
 	auto data = resolved.unwrap();
-	return JsonDetail::DeserializeResolved<T>(data, sourcePath);
+	return DATA::DeserializeJson<T>(data, sourcePath);
 }
 
 // parentDependencies has the same semantics as for FromJsonStr.
@@ -96,7 +58,7 @@ template <class T> Result<T, JsonError> FromJson(const std::string& path, std::v
 		return Err(resolved.unwrapErr());
 	}
 	auto data = resolved.unwrap();
-	return JsonDetail::DeserializeResolved<T>(data, path);
+	return DATA::DeserializeJson<T>(data, path);
 }
 
 template <class T> Result<nlohmann::json, JsonError> ToJson(const T& obj, const std::string& sourcePath = {}) {

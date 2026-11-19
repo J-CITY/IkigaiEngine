@@ -5,7 +5,6 @@
 #include "skeletalModule/skeleton.h"
 #include "skeletonManager.h"
 #include "utilsModule/assertion.h"
-#include "utilsModule/jsonLoader.h"
 #include <resourceModule/fileSystem/fileSystem.h>
 #include <stdexcept>
 

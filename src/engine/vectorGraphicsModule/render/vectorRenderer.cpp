@@ -5,7 +5,6 @@
 #include "renderModule/backends/meshFactory.h"
 #include "renderModule/render.h"
 #include "resourceModule/fontManager.h"
-#include "utilsModule/jsonLoader.h"
 #include <bit>
 #include <cstring>
 #include <cstdlib>

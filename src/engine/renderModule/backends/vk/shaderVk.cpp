@@ -15,7 +15,7 @@
 #include "uniformBufferVk.h"
 
 #include "../interface/reflectionStructs.h"
-#include "utilsModule/jsonLoader.h"
+#include "resourceModule/jsonLoader.h"
 #include "utilsModule/log/loggerDefine.h"
 #include <renderModule/backends/interface/resourceStruct.h>
 #include <resourceModule/fileSystem/fileSystem.h>

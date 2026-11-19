@@ -15,6 +15,7 @@
 #include "profilerModule/profiler.h"
 #include "profilerModule/profilerSpy.h"
 #include "profilerModule/trace.h"
+#include "sceneObjectDescriptor.h"
 #include "utilsModule/memory/frameArena.h"
 #if USE_PHYSICS_3D
 #include "coreModule/ecs/components/ragdollComponent.h"
@@ -44,6 +45,7 @@
 #include "renderModule/gpuScene.h"
 #include "renderModule/spatial/frustumBvh.h"
 #include "renderModule/spatial/frustumVisibility.h"
+#include "resourceModule/jsonLoader.h"
 #include "resourceModule/serviceManager.h"
 #include "taskModule/taskSystem.h"
 #include "utilsModule/log/loggerDefine.h"
@@ -587,11 +589,7 @@ std::shared_ptr<ECS::Object> Scene::appendDocument(const DOCUMENT::Expanded& doc
 	auto combined = serializeObjects();
 	for (auto value : document.objects) {
 		combined.push_back(value);
-		auto descriptor = UTILS::FromJson<ECS::Object::Descriptor>(value);
-		if (descriptor.isErr()) {
-			throw std::runtime_error(descriptor.unwrapErr().text);
-		}
-		descriptors.push_back(descriptor.unwrap());
+		descriptors.push_back(ReadSceneObjectDescriptor(value));
 	}
 	DOCUMENT::Validate(combined);
 	try {

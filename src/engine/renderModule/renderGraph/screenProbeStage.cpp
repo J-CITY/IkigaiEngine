@@ -4,8 +4,8 @@
 #include "coreModule/ecs/object.h"
 #include "renderModule/backends/interface/uniformBufferInterface.h"
 #include "renderModule/render.h"
+#include "resourceModule/jsonLoader.h"
 #include "sceneModule/scene.h"
-#include "utilsModule/jsonLoader.h"
 
 #include <algorithm>
 #include <bit>

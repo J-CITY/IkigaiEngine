@@ -3,10 +3,10 @@
 #include "coroutineModule/awaitables.h"
 #include "coroutineModule/scheduler.h"
 #include "fileSystem/fileSystem.h"
+#include "resourceModule/jsonLoader.h"
 #include "serviceManager.h"
 #include "taskModule/taskSystem.h"
 #include "textureManager.h"
-#include "utilsModule/jsonLoader.h"
 #include <algorithm>
 #include <chrono>
 #include <condition_variable>

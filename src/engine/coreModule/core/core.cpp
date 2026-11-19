@@ -24,9 +24,9 @@
 #include "resourceModule/serviceManager.h"
 #include "windowModule/window/window.h"
 #include "windowModule/windowManager.h"
+#include <resourceModule/jsonLoader.h>
 #include <stdexcept>
 #include <utilsModule/contentRoot.h>
-#include <utilsModule/jsonLoader.h>
 #include <utilsModule/log/logger.h>
 
 #include "../config.h"

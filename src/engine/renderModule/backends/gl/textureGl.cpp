@@ -7,11 +7,11 @@
 #include <stdexcept>
 #include <vector>
 
-#include "utilsModule/jsonLoader.h"
-#include "utilsModule/pathGetter.h"
-#include "utilsModule/stdLoader.h"
+#include "resourceModule/jsonLoader.h"
 #include "utilsModule/assertion.h"
 #include "utilsModule/log/loggerDefine.h"
+#include "utilsModule/pathGetter.h"
+#include "utilsModule/stdLoader.h"
 
 //#include "coreModule/ecs/components/transform.h"
 
