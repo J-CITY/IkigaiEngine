@@ -5,6 +5,7 @@
 include_guard(GLOBAL)
 get_filename_component(IKIGAI_SOURCE_ROOT "${CMAKE_CURRENT_LIST_DIR}/../src" ABSOLUTE)
 include("${CMAKE_CURRENT_LIST_DIR}/ModuleManifests.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/MemoryTracking.cmake")
 set(IKIGAI_IMPLEMENTATION_EXTENSIONS .c .cpp .cxx .m .mm)
 
 function(ikigai_add_engine_modules application)
@@ -49,6 +50,9 @@ function(ikigai_add_engine_modules application)
             # Boost usage requirements belong to the native network backend.
             if(module STREQUAL "networkModule" AND TARGET ikigai_boost_headers)
                 target_link_libraries(${owner} PRIVATE ikigai_boost_headers)
+            endif()
+            if(module STREQUAL "profilerModule")
+                target_link_libraries(${owner} PUBLIC ikigai_memory_tracking)
             endif()
             target_compile_features(${owner} PRIVATE cxx_std_20)
             set_target_properties(${owner} PROPERTIES POSITION_INDEPENDENT_CODE ON)

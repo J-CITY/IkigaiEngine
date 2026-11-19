@@ -1,7 +1,7 @@
 # Builds allocators, frame arenas and CPU allocation tracking.
-# All consumers share the tracking definition because it changes inline code and layouts.
 include_guard(GLOBAL)
-option(IKIGAI_ENABLE_MEMORY_TRACKING "Track engine CPU/GPU allocations; snapshots are captured on demand" OFF)
+include("${CMAKE_CURRENT_LIST_DIR}/MemoryTracking.cmake")
+
 option(IKIGAI_MEMORY_TESTS "Legacy allocator test attachment (configure testModule separately)" OFF)
 if(IKIGAI_MEMORY_TESTS)
     message(FATAL_ERROR "IKIGAI_MEMORY_TESTS no longer attaches tests to production. Configure the optional testModule separately.")
@@ -29,8 +29,7 @@ if(NOT TARGET ikigai_memory)
         "${IKIGAI_MEMORY_DIR}/stackAllocator.h")
     target_compile_features(ikigai_memory PUBLIC cxx_std_20)
     target_include_directories(ikigai_memory PUBLIC "${IKIGAI_MEMORY_ROOT}/src/engine")
-    target_compile_definitions(ikigai_memory PUBLIC
-        IKIGAI_ENABLE_MEMORY_TRACKING=$<BOOL:${IKIGAI_ENABLE_MEMORY_TRACKING}>)
+    target_link_libraries(ikigai_memory PUBLIC ikigai_memory_tracking)
     set_target_properties(ikigai_memory PROPERTIES
         POSITION_INDEPENDENT_CODE ON
         IKIGAI_SOURCE_DIRECTORY "${IKIGAI_MEMORY_DIR}")
