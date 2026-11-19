@@ -106,6 +106,8 @@ set(IKIGAI_MANIFEST_renderModule
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/materials/pbrMaterial.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/materials/pbrMaterialDescriptor.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/materials/pbrMaterialDescriptor.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/meshGenerator.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/meshGenerator.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/morphTarget.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/objects/boundingSphere.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/objects/boundingSphere.h"

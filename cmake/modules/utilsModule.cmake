@@ -79,8 +79,6 @@ set(IKIGAI_MANIFEST_utilsModule
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/memory/profiledAllocator.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/memory/resourceAllocator.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/memory/stackAllocator.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/meshGenerator.cpp"
-    "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/meshGenerator.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/nodableAnimation.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/pathGetter.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/ref.h"

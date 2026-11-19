@@ -1,8 +1,8 @@
 #include "meshGenerator.h"
 
-#include "log/loggerDefine.h"
-#include "renderModule/vertex.h"
-#include "stdLoader.h"
+#include "utilsModule/log/loggerDefine.h"
+#include "utilsModule/stdLoader.h"
+#include "vertex.h"
 #include <renderModule/backends/interface/meshInterface.h>
 #include <renderModule/backends/interface/modelInterface.h>
 #include <renderModule/backends/meshFactory.h>
