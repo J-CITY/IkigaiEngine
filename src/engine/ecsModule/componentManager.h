@@ -978,7 +978,7 @@ public:
 		std::vector<UTILS::WeakPtr<T>> res;
 
 		if (const auto* record = mEntityRecords.find(entity)) {
-			const auto& archetype = record.archetype;
+			const auto& archetype = record->archetype;
 
 			for (auto& [id, componentArr] : archetype->mComponentArrays) {
 				if (componentArr->contains(entity)) {
