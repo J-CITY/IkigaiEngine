@@ -24,6 +24,7 @@
 #include "resourceModule/serviceManager.h"
 #include "windowModule/window/window.h"
 #include "windowModule/windowManager.h"
+#include <iostream>
 #include <resourceModule/jsonLoader.h>
 #include <stdexcept>
 #include <utilsModule/contentRoot.h>
@@ -92,7 +93,7 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 	: nativeInstance(platform.nativeInstance)
 	, androidApp(platform.android) {
 	UTILS::RegisterGeneratedReflection();
-	UTILS::LoadTimer coreTiming("core");
+	UTILS::LoadTimer coreTiming("core", Config::PROFILE_LOADING);
 	UTILS::InitContentRoot();
 	if (!Config::ROOT.empty()) {
 		std::cout << "Content root: " << Config::ROOT << "\n";
@@ -244,7 +245,7 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 	RESOURCES::ServiceManager::Set<WINDOW::Window>(window.get());
 
 	{
-		UTILS::LoadTimer timing("driver");
+		UTILS::LoadTimer timing("driver", Config::PROFILE_LOADING);
 		driver = RENDER::CreateRenderDriver(RENDER::DriverInterface::settings.backend, *window);
 	}
 	if (!driver) {
@@ -350,7 +351,7 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 	auto startupInterpreter = std::make_unique<SCRIPTING::ScriptInterpreter>(Config::ROOT + Config::USER_ASSETS_PATH + "scripts/");
 #endif
 	{
-		UTILS::LoadTimer timing("renderer");
+		UTILS::LoadTimer timing("renderer", Config::PROFILE_LOADING);
 		auto gameRenderer = std::make_unique<RENDER::GameRenderer>(*this);
 		RESOURCES::ServiceManager::Set<RENDER::PrimitiveRender>(&gameRenderer->primitives());
 		renderer = std::move(gameRenderer);

@@ -95,6 +95,7 @@ set(IKIGAI_MANIFEST_utilsModule
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/stringPool.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/stringUtils.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/stringUtils.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/time/loadTimer.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/time/loadTimer.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/time/time.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/time/time.h"

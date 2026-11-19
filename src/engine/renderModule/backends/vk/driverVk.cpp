@@ -1,6 +1,7 @@
 #include "utilsModule/memory/resourceAllocator.h"
 
 #include "captureModule/screenshot.h"
+#include "coreModule/config.h"
 #include "driverVk.h"
 #include "profilerModule/trace.h"
 #include "renderModule/backends/driverFactory.h"
@@ -1324,7 +1325,7 @@ vk::raii::Pipeline DriverVk::createState(const State& pipeline_state) {
 		graphics_pipeline_create_info.setPNext(&feedbackInfo);
 	}
 
-	UTILS::LoadTimer timing("graphics-pipeline", pipeline_state.mShader->mPath);
+	UTILS::LoadTimer timing("graphics-pipeline", Config::PROFILE_LOADING, pipeline_state.mShader->mPath);
 	auto pipeline = mDevice.createGraphicsPipeline(*mPipelineCache ? &mPipelineCache : nullptr, graphics_pipeline_create_info);
 	if (mPipelineCacheFeedback && (feedback.flags & VK_PIPELINE_CREATION_FEEDBACK_VALID_BIT)) {
 		std::cerr << "PSO_DISK_CACHE backend=vulkan pipeline=graphics application_hit="
@@ -2942,7 +2943,7 @@ void DriverVk::EnsureComputePipelineState(vk::raii::CommandBuffer& cmd, const Sh
 			feedbackInfo.pPipelineCreationFeedback = &feedback;
 			info.setPNext(&feedbackInfo);
 		}
-		UTILS::LoadTimer timing("compute-pipeline", shader.mPath);
+		UTILS::LoadTimer timing("compute-pipeline", Config::PROFILE_LOADING, shader.mPath);
 		pipeline = mStates.emplace(key, mDevice.createComputePipeline(*mPipelineCache ? &mPipelineCache : nullptr, info)).first;
 		if (mPipelineCacheFeedback && (feedback.flags & VK_PIPELINE_CREATION_FEEDBACK_VALID_BIT)) {
 			std::cerr << "PSO_DISK_CACHE backend=vulkan pipeline=compute application_hit="

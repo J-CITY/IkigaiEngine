@@ -1,4 +1,5 @@
 #include "modelManager.h"
+#include "coreModule/config.h"
 #include "serviceManager.h"
 #include "utilsModule/time/loadTimer.h"
 #include <renderModule/backends/interface/modelInterface.h>
@@ -18,7 +19,7 @@ namespace IKIGAI::RESOURCES {
 
 COROUTINE::Task<ResourcePtr<RENDER::ModelInterface>> ModelLoader::createResourceTask(
 	std::string path, ELoadingType type, std::shared_ptr<ResourceLoadControl> control) {
-	UTILS::LoadTimer timing("model", path);
+	UTILS::LoadTimer timing("model", Config::PROFILE_LOADING, path);
 	control->check();
 	if (auto ready = getResource(path)) {
 		co_return ready;

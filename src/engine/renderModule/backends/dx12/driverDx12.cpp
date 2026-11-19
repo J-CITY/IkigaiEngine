@@ -1,5 +1,6 @@
 #include "driverDx12.h"
 #include "captureModule/screenshot.h"
+#include "coreModule/config.h"
 #include "profilerModule/trace.h"
 #include "renderModule/backends/driverFactory.h"
 #include "renderModule/backends/interface/integerColorAttachment.h"
@@ -9,6 +10,7 @@
 #include "utilsModule/memory/resourceAllocator.h"
 #include "utilsModule/time/loadTimer.h"
 #include "vertexFormatsDx12.h"
+#include <iostream>
 #ifdef IKIGAI_USE_STREAMLINE
 #include "../streamlineRuntime.h"
 #endif
@@ -2234,7 +2236,7 @@ void DriverDx12::ensurePipelineState(bool compute) {
 	IKIGAI_PROFILE_SCOPE("DX12 Resolve and Bind Pipeline");
 	auto cached = mStates.find(key);
 	if (cached == mStates.end()) {
-		UTILS::LoadTimer timing(compute ? "compute-pipeline" : "graphics-pipeline", mCurrentState.mShader->mPath);
+		UTILS::LoadTimer timing(compute ? "compute-pipeline" : "graphics-pipeline", Config::PROFILE_LOADING, mCurrentState.mShader->mPath);
 		cached = mStates.emplace(key, createNewState(mCurrentState)).first;
 	}
 	mCommandList->SetPipelineState(cached->second.Get());

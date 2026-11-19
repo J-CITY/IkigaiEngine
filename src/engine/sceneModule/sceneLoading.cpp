@@ -1,3 +1,4 @@
+#include "coreModule/config.h"
 #include "resourceModule/audioSourceManager.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/fontManager.h"
@@ -297,7 +298,7 @@ Task<> SceneManager::clearScene(Scene& scene) {
 }
 
 Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadState> state, bool lightweight) {
-	UTILS::LoadTimer timing("scene-build", state->path);
+	UTILS::LoadTimer timing("scene-build", Config::PROFILE_LOADING, state->path);
 	state->phase = "Reading";
 	auto file = ServiceManager::Get<FileSystem>().getFile(state->path, FileMode::READ);
 	if (!file || !file->isValid()) {
@@ -456,7 +457,7 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 }
 
 Task<> SceneManager::transition(std::shared_ptr<SceneLoadState> state) {
-	UTILS::LoadTimer timing("scene-transition", state->path);
+	UTILS::LoadTimer timing("scene-transition", Config::PROFILE_LOADING, state->path);
 	state->status = SceneLoadStatus::Running;
 	bool cancelled = false;
 	bool committed = false;

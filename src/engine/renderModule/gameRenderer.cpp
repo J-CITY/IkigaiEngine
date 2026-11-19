@@ -1,4 +1,5 @@
 #include "gameRenderer.h"
+#include "coreModule/config.h"
 #include "coreModule/ecs/components/facialAnimationComponent.h"
 #include "coreModule/ecs/systems/environmentSystem.h"
 #include "diagnostics/renderStatistics.h"
@@ -215,8 +216,8 @@ void GameRenderer::renderScene() {
 	}
 	auto& scene = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::SCENE_SYSTEM::SceneManager>().getCurrentScene();
 	std::unique_ptr<UTILS::LoadTimer> firstFrameTiming;
-	if (Config::PROFILE_LOADING && mRenderedScene.lock() != scene.lifetime) {
-		firstFrameTiming = std::make_unique<UTILS::LoadTimer>("scene-first-frame");
+	if (const bool profileLoading = Config::PROFILE_LOADING; profileLoading && mRenderedScene.lock() != scene.lifetime) {
+		firstFrameTiming = std::make_unique<UTILS::LoadTimer>("scene-first-frame", profileLoading);
 	}
 	auto& render = mContext.render;
 

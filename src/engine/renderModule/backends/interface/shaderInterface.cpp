@@ -1,4 +1,5 @@
 #include "shaderInterface.h"
+#include "coreModule/config.h"
 #include "driverInterface.h"
 #include "renderModule/vertex.h"
 #include "resourceStruct.h"
@@ -7,6 +8,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <iostream>
 #include <memory>
 #include <stdexcept>
 #include <tuple>
@@ -548,7 +550,7 @@ std::vector<uint32_t> IKIGAI::RENDER::CompileGlslToSpirv(
 			  { IKIGAI::RENDER::ShaderType::CLOSEST_HIT, EShLangClosestHit }, { IKIGAI::RENDER::ShaderType::ANY_HIT, EShLangAnyHit },
 			  { IKIGAI::RENDER::ShaderType::INTERSECTION, EShLangIntersect }, { IKIGAI::RENDER::ShaderType::CALLABLE, EShLangCallable } };
 
-	IKIGAI::UTILS::LoadTimer timing("glsl", std::to_string(static_cast<int>(stage)));
+	IKIGAI::UTILS::LoadTimer timing("glsl", IKIGAI::Config::PROFILE_LOADING, std::to_string(static_cast<int>(stage)));
 
 	// The last member of an SSBO keeps a runtime .length() even when the array
 	// is sized, so MoltenVK still asks for spvBufferSizeConstants. The GLSL file

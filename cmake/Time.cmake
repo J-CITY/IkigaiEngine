@@ -1,5 +1,4 @@
-# Builds the frame/simulation timer and exposes the header-only loading timer.
-# LoadTimer uses the existing inline Config values; neither timer needs a graphics SDK.
+# Builds the frame, simulation and loading timers without graphics SDKs.
 include_guard(GLOBAL)
 get_filename_component(IKIGAI_TIME_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(IKIGAI_TIME_DIR "${IKIGAI_TIME_ROOT}/src/engine/utilsModule/time")
@@ -7,6 +6,7 @@ set(IKIGAI_TIME_DIR "${IKIGAI_TIME_ROOT}/src/engine/utilsModule/time")
 add_library(ikigai_time STATIC
     "${IKIGAI_TIME_DIR}/time.cpp"
     "${IKIGAI_TIME_DIR}/time.h"
+    "${IKIGAI_TIME_DIR}/loadTimer.cpp"
     "${IKIGAI_TIME_DIR}/loadTimer.h")
 target_compile_features(ikigai_time PUBLIC cxx_std_20)
 target_include_directories(ikigai_time PUBLIC "${IKIGAI_TIME_ROOT}/src/engine")

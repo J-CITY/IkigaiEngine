@@ -1,4 +1,5 @@
 #include "shaderVk.h"
+#include "coreModule/config.h"
 #include "utilsModule/memory/resourceAllocator.h"
 #include "utilsModule/time/loadTimer.h"
 
@@ -260,7 +261,7 @@ bool IKIGAI::RENDER::ShaderVk::adoptReloadedShader(ShaderInterface& prepared) no
 void IKIGAI::RENDER::ShaderVk::clear() const { }
 
 void IKIGAI::RENDER::ShaderVk::create(const ShaderResource& res) {
-	UTILS::LoadTimer timing("shader", res.path);
+	UTILS::LoadTimer timing("shader", Config::PROFILE_LOADING, res.path);
 	configureResourceInterface(res);
 	if (!res.sources.empty()) {
 		res.spirvSources.clear();
