@@ -1,6 +1,6 @@
 #include "animation.h"
 
-#include "animationTimelineBind.h"
+#include "coreModule/ecs/animationTimelineBind.h"
 #include "utilsModule/event.h"
 #include "utilsModule/log/logger.h"
 #include "utilsModule/serviceManager.h"

@@ -3,8 +3,6 @@
 set(IKIGAI_MANIFEST_utilsModule
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/animation.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/animation.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/animationTimelineBind.cpp"
-    "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/animationTimelineBind.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/apple_compat.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/assertion.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/assertion.h"

@@ -1,6 +1,6 @@
 #include "animationTimelineBind.h"
 
-#include "coreModule/ecs/componentCatalog.h"
+#include "componentCatalog.h"
 
 namespace IKIGAI::ANIMATION {
 

@@ -4,10 +4,10 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #endif
 
+#include "animationTimelineBind.h"
 #include "coreModule/ecs/object.h"
 #include "coroutineModule/task.h"
 #include "resourceModule/jsonLoader.h"
-#include "utilsModule/animationTimelineBind.h"
 #include "utilsModule/reflection/reflection.h"
 #include "utilsModule/serialization/typedDescriptor.h"
 

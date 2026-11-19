@@ -1,6 +1,6 @@
 #include "animation.h"
 
-#include "animationTimelineBind.h"
+#include "coreModule/ecs/animationTimelineBind.h"
 #include "coreModule/ecs/components/transform.h"
 #include "sceneModule/sceneManager.h"
 #include "utilsModule/event.h"
