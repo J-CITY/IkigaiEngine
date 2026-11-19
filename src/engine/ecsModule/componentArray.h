@@ -1,19 +1,22 @@
 #pragma once
 
 #include "componentArrayInterface.h"
+#include "sparseRowIndex.h"
 #include "utilsModule/chunkList.h"
 #include "utilsModule/exeptions.h"
 #include <numeric>
+#include <optional>
 #include <stdexcept>
 #include <type_traits>
 #include <unordered_map>
 
 namespace IKIGAI::ECS {
-template <class T, template <class, class> class CONT = std::vector, unsigned CHUNK_SIZE = 100>
+template <class T, template <class, class> class CONT = std::vector, unsigned CHUNK_SIZE = 1024>
 class ComponentArray : public ComponentArrayInterface {
 	using Storage = UTILS::ChunkList<T, CONT, CHUNK_SIZE>;
 
 public:
+	static constexpr std::size_t chunk_size = CHUNK_SIZE;
 	ComponentArray() = default;
 	explicit ComponentArray(const typename Storage::allocator_type& allocator)
 		: componentArray(allocator) { }
@@ -38,7 +41,7 @@ public:
 
 	T removeData(Entity entity) {
 		requireIndependentRows();
-		const auto index = entityToIndexInArray.at(entity).index;
+		const auto index = independentSlot(entity).index;
 		T component(std::move(componentArray[index]));
 		eraseRow(entity, index);
 		return component;
@@ -63,7 +66,7 @@ public:
 	}
 
 	std::uint64_t getGeneration(Entity entity) const {
-		if (mRows) {
+		if (mRows || mSparseRows) {
 			const auto row = rowOf(entity);
 			return row == ArchetypeRows::missing ? 0 : mGenerations[row];
 		}
@@ -72,7 +75,7 @@ public:
 	}
 
 	const T* tryGetData(Entity entity, std::uint64_t generation) const {
-		if (mRows) {
+		if (mRows || mSparseRows) {
 			const auto row = rowOf(entity);
 			return row != ArchetypeRows::missing && mGenerations[row] == generation ? &componentArray[row] : nullptr;
 		}
@@ -109,15 +112,15 @@ public:
 
 	void entityDestroyed(Entity entity) override {
 		requireIndependentRows();
-		const auto entry = entityToIndexInArray.find(entity);
-		if (entry != entityToIndexInArray.end()) {
-			eraseRow(entity, entry->second.index);
+		const auto row = rowOf(entity);
+		if (row != ArchetypeRows::missing) {
+			eraseRow(entity, row);
 		}
 	}
 
 	void transferEntityTo(Entity entity, ComponentArrayInterface& destination) override {
 		requireIndependentRows();
-		const Slot slot = entityToIndexInArray.at(entity);
+		const Slot slot = independentSlot(entity);
 		const auto index = slot.index;
 		auto* other = dynamic_cast<ComponentArray*>(&destination);
 		if (!other) {
@@ -142,7 +145,11 @@ public:
 	}
 
 	std::shared_ptr<ComponentArrayInterface> createEmptyFromThis() override {
-		return std::make_shared<ComponentArray>(componentArray.get_allocator());
+		auto result = std::make_shared<ComponentArray>(componentArray.get_allocator());
+		if (mSparseRows) {
+			result->mSparseRows.emplace();
+		}
+		return result;
 	}
 
 	[[nodiscard]] bool contains(Entity entity) const override {
@@ -187,6 +194,7 @@ public:
 
 private:
 	friend class ComponentManager;
+	friend struct EcsBenchmarkAccess;
 
 	struct Slot {
 		std::size_t index = 0;
@@ -194,11 +202,34 @@ private:
 	};
 
 	std::size_t rowOf(Entity entity) const {
+		if (mSparseRows) {
+			return mSparseRows->find(entity.getUniqueId().value());
+		}
 		if (mRows) {
 			return mRows->find(entity);
 		}
 		const auto entry = entityToIndexInArray.find(entity);
 		return entry == entityToIndexInArray.end() ? ArchetypeRows::missing : entry->second.index;
+	}
+
+	Slot independentSlot(Entity entity) const {
+		if (!mSparseRows) {
+			return entityToIndexInArray.at(entity);
+		}
+		const auto row = mSparseRows->find(entity.getUniqueId().value());
+		if (row == SparseRowIndex::missing) {
+			throw std::out_of_range("Entity has no component in this column");
+		}
+		return { row, mGenerations[row] };
+	}
+
+	void setIndependentRow(Entity entity, std::size_t row) {
+		if (mSparseRows) {
+			mSparseRows->setRow(entity.getUniqueId().value(), row);
+		}
+		else {
+			entityToIndexInArray.at(entity).index = row;
+		}
 	}
 
 	void requireIndependentRows() const {
@@ -351,20 +382,37 @@ private:
 	}
 
 	T& append(Entity entity, T& component, std::uint64_t generation) {
-		const auto [entry, inserted] = entityToIndexInArray.try_emplace(entity, Slot { componentArray.size(), generation });
-		if (!inserted) {
-			throw std::logic_error("Component added to the same entity twice");
+		const auto row = componentArray.size();
+		auto legacyEntry = entityToIndexInArray.end();
+		if (mSparseRows) {
+			mSparseRows->insert(entity.getUniqueId().value(), row);
+		}
+		else {
+			const auto [entry, inserted] = entityToIndexInArray.try_emplace(entity, Slot { row, generation });
+			if (!inserted) {
+				throw std::logic_error("Component added to the same entity twice");
+			}
+			legacyEntry = entry;
 		}
 		try {
 			indexToEntity.push_back(entity);
-			try {
-				return componentArray.emplace_back(std::move(component));
-			} catch (...) {
-				indexToEntity.pop_back();
-				throw;
+			if (mSparseRows) {
+				mGenerations.push_back(generation);
 			}
+			return componentArray.emplace_back(std::move(component));
 		} catch (...) {
-			entityToIndexInArray.erase(entry);
+			if (indexToEntity.size() > row) {
+				indexToEntity.pop_back();
+			}
+			if (mSparseRows) {
+				if (mGenerations.size() > row) {
+					mGenerations.pop_back();
+				}
+				mSparseRows->erase(entity.getUniqueId().value());
+			}
+			else {
+				entityToIndexInArray.erase(legacyEntry);
+			}
 			throw;
 		}
 	}
@@ -373,7 +421,13 @@ private:
 		if constexpr (std::is_base_of_v<Component, T>) {
 			componentArray.back().invalidateWeakReferences();
 		}
-		entityToIndexInArray.erase(entity);
+		if (mSparseRows) {
+			mSparseRows->erase(entity.getUniqueId().value());
+			mGenerations.pop_back();
+		}
+		else {
+			entityToIndexInArray.erase(entity);
+		}
 		indexToEntity.pop_back();
 		componentArray.pop_back();
 	}
@@ -385,7 +439,10 @@ private:
 			removed = std::move(last);
 			relocateWeakReferences(removed, last);
 			const Entity lastEntity = indexToEntity.back();
-			entityToIndexInArray.at(lastEntity).index = index;
+			setIndependentRow(lastEntity, index);
+			if (mSparseRows) {
+				mGenerations[index] = mGenerations.back();
+			}
 			indexToEntity[index] = lastEntity;
 		}
 		popBack(entity);
@@ -401,12 +458,16 @@ private:
 		std::swap(selected, last);
 		relocateWeakReferences(selected, last);
 		std::swap(indexToEntity[index], indexToEntity[lastIndex]);
-		entityToIndexInArray.at(indexToEntity[index]).index = index;
-		entityToIndexInArray.at(indexToEntity[lastIndex]).index = lastIndex;
+		setIndependentRow(indexToEntity[index], index);
+		setIndependentRow(indexToEntity[lastIndex], lastIndex);
+		if (mSparseRows) {
+			std::swap(mGenerations[index], mGenerations[lastIndex]);
+		}
 	}
 
 	Storage componentArray;
 	std::unordered_map<Entity, Slot> entityToIndexInArray;
+	std::optional<SparseRowIndex> mSparseRows;
 	std::vector<Entity> indexToEntity;
 	std::shared_ptr<const ArchetypeRows> mRows;
 	std::vector<std::uint64_t> mGenerations;

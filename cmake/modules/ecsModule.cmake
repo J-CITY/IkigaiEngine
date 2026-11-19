@@ -14,6 +14,8 @@ set(IKIGAI_MANIFEST_ecsModule
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/events.h"
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/relationManager.h"
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/signature.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/sparseRowIndex.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/sparseRowIndex.h"
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemAccessConflict.h"
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemAccessScope.h"
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemBuilder.h"

@@ -572,6 +572,40 @@ private:
 		}
 	}
 
+	template <class T, class Func> static void visitPoolChunks(ComponentArray<T>& pool, Func&& func) {
+		const auto entities = pool.getEntities();
+		const auto chunkCount = pool.componentArray.chunk_count();
+		std::size_t firstRow = 0;
+		for (std::size_t chunk = 0; chunk < chunkCount; ++chunk) {
+			const auto values = pool.componentArray.chunk(chunk);
+			for (std::size_t offset = 0; offset < values.size(); ++offset) {
+				std::invoke(func, entities[firstRow + offset], values[offset]);
+			}
+			firstRow += values.size();
+		}
+	}
+
+	template <bool FirstLeads, class First, class Second, class Func>
+	static void visitSparsePair(const std::array<ComponentArrayInterface*, 2>& arrays, Func& func) {
+		using Leading = std::conditional_t<FirstLeads, First, Second>;
+		using Other = std::conditional_t<FirstLeads, Second, First>;
+		auto& leading = *static_cast<ComponentArray<RawType<Leading>>*>(arrays[FirstLeads ? 0 : 1]);
+		auto& other = *static_cast<ComponentArray<RawType<Other>>*>(arrays[FirstLeads ? 1 : 0]);
+		const auto& index = *other.mSparseRows;
+		visitPoolChunks(leading, [&](Entity entity, auto& leadingValue) {
+			const auto row = index.find(entity.getUniqueId().value());
+			if (row != SparseRowIndex::missing) {
+				auto& otherValue = other.componentArray[row];
+				if constexpr (FirstLeads) {
+					std::invoke(func, entity, static_cast<QueryReference<First>>(leadingValue), static_cast<QueryReference<Second>>(otherValue));
+				}
+				else {
+					std::invoke(func, entity, static_cast<QueryReference<First>>(otherValue), static_cast<QueryReference<Second>>(leadingValue));
+				}
+			}
+		});
+	}
+
 	template <bool DenseFirst, class First, class Second, class Func>
 	void visitIndexedPair(const std::array<ComponentArrayInterface*, 2>& arrays, const Archetype& table, Func& func) const {
 		using DenseTerm = std::conditional_t<DenseFirst, First, Second>;
@@ -672,6 +706,9 @@ public:
 		auto prototype = mIndexedRecords && type == StorageType::Archetype
 			? std::make_shared<ComponentArray<T>>(MEMORY::StlAllocator<T, MEMORY::Category::Component> { indexedChunkResource() })
 			: std::make_shared<ComponentArray<T>>();
+		if (type == StorageType::Sparse) {
+			prototype->mSparseRows.emplace();
+		}
 		auto& pools = type == StorageType::Archetype ? mDefaultArraysArchetype : mSparseArrays;
 		const auto registration = mComponentStorageType.emplace(id, type);
 		try {
@@ -1217,7 +1254,17 @@ public:
 			}
 		}
 		if (firstArchetype == count) {
-			visitRows<Components...>(arrays, rowAligned, *smallestSparse, func);
+			if constexpr (count == 2) {
+				if (arrays[0] == smallestSparse) {
+					visitSparsePair<true, Components...>(arrays, func);
+				}
+				else {
+					visitSparsePair<false, Components...>(arrays, func);
+				}
+			}
+			else {
+				visitRows<Components...>(arrays, rowAligned, *smallestSparse, func);
+			}
 			return;
 		}
 		const auto matches = [&](const Signature& signature) {
