@@ -30,9 +30,7 @@ include("${ENGINE_ROOT}/cmake/Memory.cmake")
 include("${ENGINE_ROOT}/cmake/Task.cmake")
 set(IKIGAI_SOURCE_ROOT "${ENGINE_ROOT}/src")
 include("${ENGINE_ROOT}/cmake/modules/ecsModule.cmake")
-add_library(ikigai_ecs_under_test STATIC
-    ${IKIGAI_MANIFEST_ecsModule}
-    "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/weakPtr.cpp")
+add_library(ikigai_ecs_under_test STATIC ${IKIGAI_MANIFEST_ecsModule})
 target_include_directories(ikigai_ecs_under_test PUBLIC "${IKIGAI_SOURCE_ROOT}/engine")
 target_link_libraries(ikigai_ecs_under_test PUBLIC ikigai_memory PRIVATE ikigai_logging ikigai_services ikigai_task)
 

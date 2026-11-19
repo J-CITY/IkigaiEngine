@@ -2,9 +2,9 @@
 #include <map>
 #include <memory>
 
+#include "ecsModule/weakPtr.h"
 #include "mathModule/math.h"
 #include "utilsModule/memory/resourceAllocator.h"
-#include "utilsModule/weakPtr.h"
 
 // #include <map>
 // #include "backends/interface/meshInterface.h"

@@ -1,6 +1,6 @@
 #pragma once
 #include "entityManager.h"
-#include "utilsModule/weakPtr.h"
+#include "weakPtr.h"
 #include <functional>
 #include <limits>
 #include <memory>

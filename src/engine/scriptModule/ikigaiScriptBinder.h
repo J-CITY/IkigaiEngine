@@ -1,9 +1,9 @@
 #pragma once
 #if USE_IKIGAI_SCRIPT
 #include <Library/ikigaiScript.h>
+#include <ecsModule/weakPtr.h>
 #include <ecsModule/world.h>
 #include <mathModule/math.h>
-#include <utilsModule/weakPtr.h>
 namespace IKIGAI::ECS {
 class Object;
 class ComponentBase;

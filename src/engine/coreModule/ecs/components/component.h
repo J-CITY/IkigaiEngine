@@ -3,8 +3,8 @@
 #include <chrono>
 #include <string>
 
+#include <ecsModule/weakPtr.h>
 #include <utilsModule/result.h>
-#include <utilsModule/weakPtr.h>
 
 #include "resourceModule/serializerInterface.h"
 #include "utilsModule/jsonLoader.h"

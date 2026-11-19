@@ -119,6 +119,4 @@ set(IKIGAI_MANIFEST_utilsModule
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/variables/variableContext.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/variables/variableContext.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/visitorHelper.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/weakPtr.cpp"
-    "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/weakPtr.h"
 )

@@ -23,6 +23,8 @@ set(IKIGAI_MANIFEST_ecsModule
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemManager.h"
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/utils.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/utils.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/weakPtr.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/weakPtr.h"
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/world.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/world.h"
 )

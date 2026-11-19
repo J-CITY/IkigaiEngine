@@ -7,9 +7,9 @@
 #include <vector>
 
 #include "coreModule/ecs/object.h"
+#include "ecsModule/weakPtr.h"
 #include "mathModule/curves.h"
 #include "sceneModule/sceneManager.h"
-#include "weakPtr.h"
 
 namespace IKIGAI::ANIMATION {
 namespace FUNC = MATH::CURVES::FUNC;

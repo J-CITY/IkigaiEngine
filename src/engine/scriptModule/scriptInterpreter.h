@@ -2,7 +2,7 @@
 #pragma once
 
 #include "ecsModule/componentHandle.h"
-#include "utilsModule/weakPtr.h"
+#include "ecsModule/weakPtr.h"
 #include <coreModule/ecs/components/scriptComponent.h>
 #include <cstdint>
 #include <memory>
