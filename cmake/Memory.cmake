@@ -1,4 +1,4 @@
-# Builds allocators, frame arenas and SDK-independent CPU/GPU memory accounting.
+# Builds allocators, frame arenas and CPU allocation tracking.
 # All consumers share the tracking definition because it changes inline code and layouts.
 include_guard(GLOBAL)
 option(IKIGAI_ENABLE_MEMORY_TRACKING "Track engine CPU/GPU allocations; snapshots are captured on demand" OFF)
@@ -26,11 +26,7 @@ if(NOT TARGET ikigai_memory)
         "${IKIGAI_MEMORY_DIR}/poolAllocator.h"
         "${IKIGAI_MEMORY_DIR}/profiledAllocator.h"
         "${IKIGAI_MEMORY_DIR}/resourceAllocator.h"
-        "${IKIGAI_MEMORY_DIR}/stackAllocator.h"
-        "${IKIGAI_MEMORY_ROOT}/src/engine/profilerModule/gpuMemoryProfiler.cpp"
-        "${IKIGAI_MEMORY_ROOT}/src/engine/profilerModule/gpuMemoryProfiler.h"
-        "${IKIGAI_MEMORY_ROOT}/src/engine/profilerModule/processMemory.cpp"
-        "${IKIGAI_MEMORY_ROOT}/src/engine/profilerModule/processMemory.h")
+        "${IKIGAI_MEMORY_DIR}/stackAllocator.h")
     target_compile_features(ikigai_memory PUBLIC cxx_std_20)
     target_include_directories(ikigai_memory PUBLIC "${IKIGAI_MEMORY_ROOT}/src/engine")
     target_compile_definitions(ikigai_memory PUBLIC
