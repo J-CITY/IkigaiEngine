@@ -1,8 +1,8 @@
 #include "systemManager.h"
 #include "commandBuffer.h"
-#include "resourceModule/serviceManager.h"
 #include "systemAccessConflict.h"
 #include "taskModule/taskSystem.h"
+#include "utilsModule/serviceManager.h"
 #include "world.h"
 
 #include <exception>
@@ -20,10 +20,10 @@ namespace {
 #ifdef __EMSCRIPTEN__
 		return nullptr;
 #else
-		if (!IKIGAI::RESOURCES::ServiceManager::Check<IKIGAI::TASK::TaskSystem>()) {
+		if (!UTILS::ServiceManager::Check<TASK::TaskSystem>()) {
 			return nullptr;
 		}
-		auto& tasks = RESOURCES::ServiceManager::Get<TASK::TaskSystem>();
+		auto& tasks = UTILS::ServiceManager::Get<TASK::TaskSystem>();
 		return !tasks.isFrameWorkerThread() && tasks.isReady() && tasks.getThreadCounts() > 0 ? &tasks : nullptr;
 #endif
 	}

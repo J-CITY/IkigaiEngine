@@ -2,9 +2,9 @@
 #include "physics2dModule/features.h"
 #include "physicsModule/features.h"
 #include "resourceModule/fileSystem/fileSystem.h"
-#include "resourceModule/serviceManager.h"
 #include "result.h"
 #include "scriptModule/scriptFeatures.h"
+#include "serviceManager.h"
 #include <exception>
 #include <fstream>
 #include <iostream>

@@ -1,8 +1,8 @@
 #include "components.h"
 #include "ecsModule/world.h"
-#include "resourceModule/serviceManager.h"
 #include "support/expect.h"
 #include "taskModule/taskSystem.h"
+#include "utilsModule/serviceManager.h"
 
 #include <array>
 #include <chrono>
@@ -112,10 +112,10 @@ void runSystemTests() {
 	if (started) {
 		struct TaskRegistration {
 			explicit TaskRegistration(TASK::TaskSystem& value) {
-				RESOURCES::ServiceManager::Set(&value);
+				UTILS::ServiceManager::Set(&value);
 			}
 			~TaskRegistration() {
-				RESOURCES::ServiceManager::Remove<TASK::TaskSystem>();
+				UTILS::ServiceManager::Remove<TASK::TaskSystem>();
 			}
 		} registration(tasks);
 		for (const auto layout : layouts) {

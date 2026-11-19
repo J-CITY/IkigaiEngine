@@ -1,7 +1,7 @@
 #pragma once
 
 #include "logger.h"
-#include "resourceModule/serviceManager.h"
+#include "utilsModule/serviceManager.h"
 
 #include <iostream>
 #include <sstream>
@@ -22,6 +22,6 @@
 		IKIGAI_COUT_ANDROID(_ikigaiCout.str());                                                                                                      \
 	} while (0)
 
-#define LOG_INFO IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::UTILS::LOGG::Logger>().info()
-#define LOG_WARNING IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::UTILS::LOGG::Logger>().warning()
-#define LOG_ERROR IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::UTILS::LOGG::Logger>().error()
+#define LOG_INFO IKIGAI::UTILS::ServiceManager::Get<IKIGAI::UTILS::LOGG::Logger>().info()
+#define LOG_WARNING IKIGAI::UTILS::ServiceManager::Get<IKIGAI::UTILS::LOGG::Logger>().warning()
+#define LOG_ERROR IKIGAI::UTILS::ServiceManager::Get<IKIGAI::UTILS::LOGG::Logger>().error()

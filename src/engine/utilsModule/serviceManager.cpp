@@ -1,7 +1,6 @@
-﻿#include "serviceManager.h"
+#include "serviceManager.h"
 
-using namespace IKIGAI;
-using namespace IKIGAI::RESOURCES;
-
+namespace IKIGAI::UTILS {
 std::mutex ServiceManager::MUTEX;
 std::map<std::type_index, ServiceType> ServiceManager::SERVICES;
+}

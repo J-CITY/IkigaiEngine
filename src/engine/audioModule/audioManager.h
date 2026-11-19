@@ -15,8 +15,7 @@
 #include "soloud.h"
 #include "soloud_wav.h"
 #include "soloud_wavstream.h"
-#include "utilsModule/singleton.h"
-
+#include "utilsModule/singletonService.h"
 
 namespace IKIGAI {
 namespace AUDIO {

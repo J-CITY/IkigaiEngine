@@ -54,7 +54,6 @@ set(IKIGAI_MANIFEST_resourceModule
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/resourceResolver.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/resourceResolver.h"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/serializerInterface.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/serviceManager.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/serviceManager.h"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/shaderManager.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/shaderManager.h"

@@ -53,7 +53,7 @@ namespace {
 
 		Result<std::string, JsonError> readText(const std::string& path) const {
 			try {
-				auto& filesystem = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>();
+				auto& filesystem = ServiceManager::Get<RESOURCES::FileSystem>();
 				auto file = filesystem.getFile(path);
 				if (!file || !file->isValid()) {
 					return Err(error(ErrorKind::FILE_NOT_EXIST, "Cannot open JSON file"));

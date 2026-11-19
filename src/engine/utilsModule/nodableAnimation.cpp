@@ -2,10 +2,10 @@
 
 #include "animationTimelineBind.h"
 #include "coreModule/ecs/components/transform.h"
-#include "resourceModule/serviceManager.h"
 #include "sceneModule/sceneManager.h"
 #include "utilsModule/event.h"
 #include "utilsModule/log/logger.h"
+#include "utilsModule/serviceManager.h"
 
 using namespace IKIGAI::ANIMATION;
 using namespace IKIGAI::MATH;
@@ -17,7 +17,7 @@ using namespace IKIGAI;
 template <class Setter, class Getter>
 bool bindTransformProperty(ECS::Entity id, std::string_view nodeName, std::string trackName, Setter set, Getter get, InterpolationType interpolation,
 	AnimationProperty& out) {
-	auto& scene = RESOURCES::ServiceManager::Get<SCENE_SYSTEM::SceneManager>().getCurrentScene();
+	auto& scene = UTILS::ServiceManager::Get<SCENE_SYSTEM::SceneManager>().getCurrentScene();
 	const auto object = scene.findObjectByID(id);
 	if (!object) {
 		LOG_ERROR << nodeName << ": missing object id " << id.getUniqueId().value();
@@ -234,7 +234,7 @@ void NodableAnimationNodeEvent::update(float dt) {
 
 	curTime += dt;
 	if (curTime >= time) {
-		RESOURCES::ServiceManager::Get<EVENT::EventBroadcaster>().run(eventId, EVENT::EventBroadcaster::Payload {});
+		UTILS::ServiceManager::Get<EVENT::EventBroadcaster>().run(eventId, EVENT::EventBroadcaster::Payload {});
 		status = Status::FINISH;
 	}
 }

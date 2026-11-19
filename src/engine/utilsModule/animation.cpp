@@ -1,9 +1,9 @@
 #include "animation.h"
 
 #include "animationTimelineBind.h"
-#include "resourceModule/serviceManager.h"
 #include "utilsModule/event.h"
 #include "utilsModule/log/logger.h"
+#include "utilsModule/serviceManager.h"
 
 #include <algorithm>
 #include <cmath>
@@ -432,7 +432,7 @@ void Animation::update(float dt) {
 					if (const auto frameIt = frames.find(frame); frameIt != frames.end()) {
 						if (const auto valueIt = frameIt->second.find(property.first); valueIt != frameIt->second.end()) {
 							if (const auto* eventName = std::get_if<std::string>(&valueIt->second)) {
-								RESOURCES::ServiceManager::Get<EVENT::EventBroadcaster>().run(*eventName, EVENT::EventBroadcaster::Payload {});
+								UTILS::ServiceManager::Get<EVENT::EventBroadcaster>().run(*eventName, EVENT::EventBroadcaster::Payload {});
 							}
 						}
 					}

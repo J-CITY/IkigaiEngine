@@ -1,7 +1,6 @@
 # Builds production logging channels, outputs and the stream-based logging API.
-# loggerDefine.h keeps its existing engine ServiceManager dependency; the logger
-# implementation is independent and does not pull serviceManager.cpp into this target.
 include_guard(GLOBAL)
+include("${CMAKE_CURRENT_LIST_DIR}/Services.cmake")
 get_filename_component(IKIGAI_LOGGING_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(IKIGAI_LOGGING_DIR "${IKIGAI_LOGGING_ROOT}/src/engine/utilsModule/log")
 
@@ -11,6 +10,7 @@ add_library(ikigai_logging STATIC
     "${IKIGAI_LOGGING_DIR}/loggerDefine.h")
 target_compile_features(ikigai_logging PUBLIC cxx_std_20)
 target_include_directories(ikigai_logging PUBLIC "${IKIGAI_LOGGING_ROOT}/src/engine")
+target_link_libraries(ikigai_logging PUBLIC ikigai_services)
 set_target_properties(ikigai_logging PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     IKIGAI_SOURCE_DIRECTORY "${IKIGAI_LOGGING_DIR}")
