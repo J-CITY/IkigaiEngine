@@ -5,6 +5,7 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "imgui.h"
 #include "misc/cpp/imgui_stdlib.h"
+#include "sceneModule/sceneManager.h"
 #include "utilsModule/animation.h"
 #include "utilsModule/imguiHelper/imguiWidgets.h"
 #include <magic_enum.hpp>

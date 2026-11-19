@@ -1,5 +1,6 @@
 #include "propertyAnimationComponent.h"
 
+#include "coreModule/ecs/animationTimelineBind.h"
 #include "coreModule/ecs/componentCatalog.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
@@ -61,7 +62,7 @@ void PropertyAnimationComponent::rebuildRuntimeAnimation() {
 		return;
 	}
 
-	mAnimation = ANIMATION::Animation::createFromDescriptor(descriptor, obj->getWorld());
+	mAnimation = ANIMATION::Animation::createFromDescriptor(descriptor, makeTimelineTrackBinder(obj->getWorld()));
 	if (!mAnimation) {
 		return;
 	}

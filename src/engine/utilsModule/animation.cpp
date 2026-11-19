@@ -1,8 +1,7 @@
 #include "animation.h"
 
-#include "coreModule/ecs/animationTimelineBind.h"
 #include "utilsModule/event.h"
-#include "utilsModule/log/logger.h"
+#include "utilsModule/log/loggerDefine.h"
 #include "utilsModule/serviceManager.h"
 
 #include <algorithm>
@@ -321,19 +320,15 @@ double Animation::frameToTime(int frame) const {
 	return static_cast<double>(frame) / static_cast<double>(FPS);
 }
 
-std::unique_ptr<Animation> Animation::createFromDescriptor(const TimelineAnimationDescriptor& desc, ECS::World& world) {
+std::unique_ptr<Animation> Animation::createFromDescriptor(const TimelineAnimationDescriptor& desc, const TimelineTrackBinder& bindTrack) {
 	auto animation = std::make_unique<Animation>(static_cast<unsigned int>(desc.framesCount), static_cast<unsigned int>(desc.FPS), desc.isLooped);
 	animation->trackDescriptors = desc.tracks;
 
-	for (const auto& track : desc.tracks) {
+	for (const auto& [trackName, track] : desc.tracks) {
 		AnimationProperty property;
-		// Event tracks have no target component and can carry the unset object ID.
-		const int objectId = track.second.componentName == "EVENT" ? 0 : track.second.objectId;
-		if (objectId < 0
-			|| !tryBindTimelineProperty(
-				world, ECS::Entity(ECS::Entity::ID(objectId)), track.second.componentName, track.second.propertyName, property, track.first)) {
-			LOG_WARNING << "Property animation: skipped track '" << track.first << "' (bind failed for " << track.second.componentName << '.'
-						<< track.second.propertyName << ')';
+		if (!bindTrack(track, trackName, property)) {
+			LOG_WARNING << "Property animation: skipped track '" << trackName << "' (bind failed for " << track.componentName << '.'
+						<< track.propertyName << ')';
 			continue;
 		}
 		animation->addProperty(std::move(property));

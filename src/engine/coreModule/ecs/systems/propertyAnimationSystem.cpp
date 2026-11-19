@@ -1,6 +1,7 @@
 #include "propertyAnimationSystem.h"
 
 #include "coreModule/ecs/components/propertyAnimationComponent.h"
+#include "ecsModule/world.h"
 #include "resourceModule/serviceManager.h"
 
 using namespace IKIGAI::ECS;

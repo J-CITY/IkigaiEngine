@@ -6,6 +6,7 @@
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "IconsFontAwesome5.h"
+#include "coreModule/ecs/animationTimelineBind.h"
 #include "editorRender.h"
 #include "imgui.h"
 #include "imgui_internal.h"
@@ -1029,16 +1030,25 @@ struct AnimationNodeEditor: public NodeEditor<NodeType, Node> {
             res = std::make_unique<IKIGAI::ANIMATION::NodableAnimationNodeWait>(desc.time);
         }break;
         case NodeType::Position: {
-            res = std::make_unique<IKIGAI::ANIMATION::NodableAnimationNodePos>(IKIGAI::ECS::Object::Id(IKIGAI::ECS::Object::Id::ID(desc.objId)), std::get<IKIGAI::MATH::Vector3f>(desc.value), desc.time, desc.curveType);
-            static_cast<IKIGAI::ANIMATION::NodableAnimationNodePos*>(res.get())->curve = desc.curve;
+			const auto target = std::get<IKIGAI::MATH::Vector3f>(desc.value);
+			const IKIGAI::ECS::Entity id { IKIGAI::ECS::Entity::ID(desc.objId) };
+			res = std::make_unique<IKIGAI::ANIMATION::NodableAnimationNodePos>(
+				id, target, desc.time, IKIGAI::ECS::bindNodableTransformTrack(id, IKIGAI::ECS::NodableTransformTrack::Position, desc.curveType));
+			static_cast<IKIGAI::ANIMATION::NodableAnimationNodePos*>(res.get())->curve = desc.curve;
         }break;
         case NodeType::Scale: {
-            res = std::make_unique<IKIGAI::ANIMATION::NodableAnimationNodeScale>(IKIGAI::ECS::Object::Id(IKIGAI::ECS::Object::Id::ID(desc.objId)), std::get<IKIGAI::MATH::Vector3f>(desc.value), desc.time, desc.curveType);
-            static_cast<IKIGAI::ANIMATION::NodableAnimationNodeScale*>(res.get())->curve = desc.curve;
+			const auto target = std::get<IKIGAI::MATH::Vector3f>(desc.value);
+			const IKIGAI::ECS::Entity id { IKIGAI::ECS::Entity::ID(desc.objId) };
+			res = std::make_unique<IKIGAI::ANIMATION::NodableAnimationNodeScale>(
+				id, target, desc.time, IKIGAI::ECS::bindNodableTransformTrack(id, IKIGAI::ECS::NodableTransformTrack::Scale, desc.curveType));
+			static_cast<IKIGAI::ANIMATION::NodableAnimationNodeScale*>(res.get())->curve = desc.curve;
         }break;
         case NodeType::Rotation: {
-            res = std::make_unique<IKIGAI::ANIMATION::NodableAnimationNodeRotate>(IKIGAI::ECS::Object::Id(IKIGAI::ECS::Object::Id::ID(desc.objId)), std::get<IKIGAI::MATH::Vector3f>(desc.value), desc.time, desc.curveType);
-            static_cast<IKIGAI::ANIMATION::NodableAnimationNodeRotate*>(res.get())->curve = desc.curve;
+			const auto target = std::get<IKIGAI::MATH::Vector3f>(desc.value);
+			const IKIGAI::ECS::Entity id { IKIGAI::ECS::Entity::ID(desc.objId) };
+			res = std::make_unique<IKIGAI::ANIMATION::NodableAnimationNodeRotate>(
+				id, target, desc.time, IKIGAI::ECS::bindNodableTransformTrack(id, IKIGAI::ECS::NodableTransformTrack::Rotation, desc.curveType));
+			static_cast<IKIGAI::ANIMATION::NodableAnimationNodeRotate*>(res.get())->curve = desc.curve;
         }break;
         case NodeType::Sequence:  {
             res = std::make_unique<IKIGAI::ANIMATION::NodableAnimationNodeSequence>();

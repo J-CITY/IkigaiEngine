@@ -1,40 +1,16 @@
 #include "animation.h"
 
-#include "coreModule/ecs/animationTimelineBind.h"
-#include "coreModule/ecs/components/transform.h"
-#include "sceneModule/sceneManager.h"
 #include "utilsModule/event.h"
-#include "utilsModule/log/logger.h"
 #include "utilsModule/serviceManager.h"
+
+#include <algorithm>
+#include <utility>
 
 using namespace IKIGAI::ANIMATION;
 using namespace IKIGAI::MATH;
 using namespace IKIGAI::MATH::CURVES;
 
 namespace {
-using namespace IKIGAI;
-
-template <class Setter, class Getter>
-bool bindTransformProperty(ECS::Entity id, std::string_view nodeName, std::string trackName, Setter set, Getter get, InterpolationType interpolation,
-	AnimationProperty& out) {
-	auto& scene = UTILS::ServiceManager::Get<SCENE_SYSTEM::SceneManager>().getCurrentScene();
-	const auto object = scene.findObjectByID(id);
-	if (!object) {
-		LOG_ERROR << nodeName << ": missing object id " << id.getUniqueId().value();
-		return false;
-	}
-	auto& world = object->getWorld();
-	const auto& components = *world.getComponentManager();
-	const auto handle = components.getComponentHandle<ECS::TransformComponent>(id);
-	if (!components.resolveComponent(handle)) {
-		LOG_ERROR << nodeName << ": object has no TransformComponent";
-		return false;
-	}
-	out = IKIGAI::ANIMATION::detail::makeComponentProperty<Vector3f>(
-		std::move(trackName), world.getComponentManagerWeak(), handle, set, get, interpolation);
-	return true;
-}
-
 float segmentProgress(const AnimationProperty& prop, const Curve& curve, float curTime, float duration) {
 	const float linearT = std::min(1.f, duration > 0.f ? curTime / duration : 1.f);
 	if (prop.getInterpolationType() == InterpolationType::CUSTOM) {
@@ -115,15 +91,15 @@ void NodableAnimationNodeSimultaneous::add(std::unique_ptr<NodableAnimationNode>
 	childs.push_back(std::move(node));
 }
 
-NodableAnimationNodePos::NodableAnimationNodePos(ECS::Object::Id id, Vector3f toPos, float time, InterpolationType interpolation)
+NodableAnimationNodePos::NodableAnimationNodePos(ECS::Entity id, Vector3f toPos, float time, std::optional<AnimationProperty> binding)
 	: id(id)
 	, toPos(toPos)
 	, time(time) {
-	if (!bindTransformProperty(id, "NodableAnimationNodePos", "propPos", &ECS::TransformComponent::setLocalPosition,
-			&ECS::TransformComponent::getLocalPosition, interpolation, prop)) {
+	if (!binding) {
 		status = Status::FINISH;
 		return;
 	}
+	prop = std::move(*binding);
 	fromPos = std::get<Vector3f>(prop.get());
 }
 
@@ -145,15 +121,15 @@ void NodableAnimationNodePos::update(float dt) {
 	}
 }
 
-NodableAnimationNodeScale::NodableAnimationNodeScale(ECS::Object::Id id, Vector3f to, float time, InterpolationType interpolation)
+NodableAnimationNodeScale::NodableAnimationNodeScale(ECS::Entity id, Vector3f to, float time, std::optional<AnimationProperty> binding)
 	: id(id)
 	, to(to)
 	, time(time) {
-	if (!bindTransformProperty(id, "NodableAnimationNodeScale", "propScale", &ECS::TransformComponent::setLocalScale,
-			&ECS::TransformComponent::getLocalScale, interpolation, prop)) {
+	if (!binding) {
 		status = Status::FINISH;
 		return;
 	}
+	prop = std::move(*binding);
 	from = std::get<Vector3f>(prop.get());
 }
 
@@ -174,15 +150,15 @@ void NodableAnimationNodeScale::update(float dt) {
 	}
 }
 
-NodableAnimationNodeRotate::NodableAnimationNodeRotate(ECS::Object::Id id, Vector3f to, float time, InterpolationType interpolation)
+NodableAnimationNodeRotate::NodableAnimationNodeRotate(ECS::Entity id, Vector3f to, float time, std::optional<AnimationProperty> binding)
 	: id(id)
 	, to(to)
 	, time(time) {
-	if (!bindTransformProperty(id, "NodableAnimationNodeRotate", "propRotate", &ECS::TransformComponent::setLocalRotationDeg,
-			&ECS::TransformComponent::getLocalRotationDeg, interpolation, prop)) {
+	if (!binding) {
 		status = Status::FINISH;
 		return;
 	}
+	prop = std::move(*binding);
 	from = std::get<Vector3f>(prop.get());
 	prop.setEulerShortestPath(true);
 }

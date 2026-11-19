@@ -2,14 +2,14 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
-#include "coreModule/ecs/object.h"
-#include "ecsModule/weakPtr.h"
+#include "ecsModule/entityManager.h"
 #include "mathModule/curves.h"
-#include "sceneModule/sceneManager.h"
 
 namespace IKIGAI::ANIMATION {
 namespace FUNC = MATH::CURVES::FUNC;
@@ -101,6 +101,8 @@ struct TimelineAnimationDescriptor {
 	}
 };
 
+using TimelineTrackBinder = std::function<bool(const TimelineAnimationTrackDescriptor&, std::string_view, AnimationProperty&)>;
+
 class AnimationBase
 //: public UTILS::ControlBlockHandler TODO: add component
 {
@@ -184,7 +186,8 @@ public:
 	double getDurationSeconds() const;
 	double frameToTime(int frame) const;
 
-	static std::unique_ptr<Animation> createFromDescriptor(const TimelineAnimationDescriptor& desc, ECS::World& world);
+	// The binder is used only during construction. Playback owns the resulting properties.
+	static std::unique_ptr<Animation> createFromDescriptor(const TimelineAnimationDescriptor& desc, const TimelineTrackBinder& bindTrack);
 
 public:
 	void update(float dt) override;
@@ -293,7 +296,7 @@ public:
 
 class NodableAnimationNodePos : public NodableAnimationNode {
 public:
-	ECS::Object::Id id;
+	ECS::Entity id;
 	MATH::Vector3f toPos {};
 
 	MATH::Vector3f fromPos {};
@@ -303,13 +306,13 @@ public:
 	Curve curve;
 	AnimationProperty prop;
 
-	NodableAnimationNodePos(ECS::Object::Id id, MATH::Vector3f toPos, float time, InterpolationType interpolation = InterpolationType::LINEAR);
+	NodableAnimationNodePos(ECS::Entity id, MATH::Vector3f toPos, float time, std::optional<AnimationProperty> binding);
 	void update(float dt) override;
 };
 
 class NodableAnimationNodeScale : public NodableAnimationNode {
 public:
-	ECS::Object::Id id;
+	ECS::Entity id;
 	MATH::Vector3f to {};
 
 	MATH::Vector3f from {};
@@ -319,13 +322,13 @@ public:
 	Curve curve;
 	AnimationProperty prop;
 
-	NodableAnimationNodeScale(ECS::Object::Id id, MATH::Vector3f to, float time, InterpolationType interpolation = InterpolationType::LINEAR);
+	NodableAnimationNodeScale(ECS::Entity id, MATH::Vector3f to, float time, std::optional<AnimationProperty> binding);
 	void update(float dt) override;
 };
 
 class NodableAnimationNodeRotate : public NodableAnimationNode {
 public:
-	ECS::Object::Id id;
+	ECS::Entity id;
 	MATH::Vector3f to {};
 
 	MATH::Vector3f from {};
@@ -335,7 +338,7 @@ public:
 	Curve curve;
 	AnimationProperty prop;
 
-	NodableAnimationNodeRotate(ECS::Object::Id id, MATH::Vector3f to, float time, InterpolationType interpolation = InterpolationType::LINEAR);
+	NodableAnimationNodeRotate(ECS::Entity id, MATH::Vector3f to, float time, std::optional<AnimationProperty> binding);
 	void update(float dt) override;
 };
 

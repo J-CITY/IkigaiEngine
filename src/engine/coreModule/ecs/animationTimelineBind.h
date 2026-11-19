@@ -2,6 +2,7 @@
 
 #include "ecsModule/world.h"
 #include "utilsModule/animation.h"
+#include "utilsModule/reflection/reflection.h"
 
 #include <optional>
 #include <string_view>
@@ -103,7 +104,10 @@ bool bindTimelineFromMembers(ECS::World& world, ECS::Entity id, std::string_view
 
 } // namespace IKIGAI::ANIMATION::detail
 
-namespace IKIGAI::ANIMATION {
-bool tryBindTimelineProperty(ECS::World& world, ECS::Entity id, std::string_view componentName, std::string_view propertyName, AnimationProperty& out,
-	std::string_view trackName);
+namespace IKIGAI::ECS {
+ANIMATION::TimelineTrackBinder makeTimelineTrackBinder(World& world);
+
+enum class NodableTransformTrack { Position, Scale, Rotation };
+std::optional<ANIMATION::AnimationProperty> bindNodableTransformTrack(
+	Entity id, NodableTransformTrack track, ANIMATION::InterpolationType interpolation);
 }
