@@ -83,7 +83,7 @@
 #include "resourceModule/skeletonManager.h"
 #include "resourceModule/skeletonStateGraphManager.h"
 #if USE_LUA
-#include "scriptModule/scriptInterpreter.h"
+#include "coreModule/scripting/scriptInterpreter.h"
 #endif
 #include "resourceModule/virtualMeshLoader.h"
 #include <coreModule/ecs/components/scriptComponent.h>

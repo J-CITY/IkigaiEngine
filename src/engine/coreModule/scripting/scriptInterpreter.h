@@ -11,6 +11,7 @@
 #include <vector>
 
 namespace IKIGAI::SCRIPTING {
+class LuaRuntime;
 class ScriptInterpreter {
 public:
 	explicit ScriptInterpreter(const std::string& scriptRootFolder);
@@ -43,8 +44,7 @@ private:
 	void attachFileWatch(TrackedScript& tracked, const ECS::ScriptComponent& component);
 	static void detachFileWatch(TrackedScript& tracked);
 
-	std::unique_ptr<sol::state> luaState;
-	sol::table sharedBindings {};
+	std::unique_ptr<LuaRuntime> runtime;
 	std::string scriptRootFolder;
 	std::vector<TrackedScript> scripts;
 	EVENT::EventListener mCreatedListener {};

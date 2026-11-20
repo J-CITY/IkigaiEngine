@@ -2,7 +2,6 @@
 
 #include "scriptComponent.h"
 #include "../object.h"
-#include <scriptModule/luaBinder.h>
 
 using namespace IKIGAI;
 using namespace IKIGAI::ECS;

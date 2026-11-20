@@ -13,7 +13,6 @@
 #include "ecsModule/commandBuffer.h"
 #include "ecsModule/world.h"
 #include "utilsModule/serialization/jsonValueAdaptor.h"
-#include <scriptModule/scriptInterpreter.h>
 #include <utilsModule/event.h>
 
 namespace IKIGAI::SCENE_SYSTEM {

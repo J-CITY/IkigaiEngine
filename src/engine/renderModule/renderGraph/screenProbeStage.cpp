@@ -4,8 +4,10 @@
 #include "coreModule/ecs/object.h"
 #include "renderModule/backends/interface/uniformBufferInterface.h"
 #include "renderModule/render.h"
+#include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/jsonLoader.h"
 #include "sceneModule/scene.h"
+#include "utilsModule/serviceManager.h"
 
 #include <algorithm>
 #include <bit>

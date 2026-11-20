@@ -1,12 +1,12 @@
 #if USE_IKIGAI_SCRIPT
 #include "ikigaiScriptRuntime.h"
-#include "ikigaiScriptBinder.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
 #include "scriptVfsPath.h"
 #include "utilsModule/log/loggerDefine.h"
 #include "utilsModule/stringUtils.h"
 #include <Library/exception.h>
+#include <Library/ikigaiScript.h>
 
 namespace IKIGAI::SCRIPTING {
 namespace {
@@ -20,25 +20,18 @@ namespace {
 struct IkigaiScriptRuntime::State {
 	std::string source;
 	IkigaiScript::IkigaiScriptInterpreter vm;
-	IkigaiScriptBinder bindings;
-	explicit State(bool (*cameraControlAllowed)())
-		: bindings(vm, cameraControlAllowed) { }
+	// Native functions can refer to their binding object until the VM is cleared.
+	std::shared_ptr<void> bindings;
 	~State() {
 		vm.clearState();
 	}
 };
 
-bool IkigaiScriptRuntime::loadFromVfs(ECS::Object& owner) {
+bool IkigaiScriptRuntime::loadFromVfs(const InstallBindings& installBindings) {
 	healthy = true;
 	try {
-		if (!state) {
-			state = std::make_unique<State>(cameraControlAllowed);
-		}
-		else {
-			state->source.clear();
-			state->vm.clearState();
-		}
-		state->vm.getGlobalScope()->insertVar("owner", state->bindings.object(owner));
+		state = std::make_unique<State>();
+		state->bindings = installBindings(state->vm);
 
 		const auto filename = IkigaiScriptVfsPath(path);
 		auto file = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().getFile(filename);
@@ -62,16 +55,14 @@ bool IkigaiScriptRuntime::loadFromVfs(ECS::Object& owner) {
 	return false;
 }
 
-IkigaiScriptRuntime::IkigaiScriptRuntime(ECS::Object& owner, const std::string& script, bool (*cameraControlAllowed)())
-	: path(script)
-	, cameraControlAllowed(cameraControlAllowed) {
-	loadFromVfs(owner);
+IkigaiScriptRuntime::IkigaiScriptRuntime(const std::string& script, const InstallBindings& installBindings)
+	: path(script) {
+	loadFromVfs(installBindings);
 }
 IkigaiScriptRuntime::~IkigaiScriptRuntime() = default;
 
-bool IkigaiScriptRuntime::reload(ECS::Object& owner) {
-	state = std::make_unique<State>(cameraControlAllowed);
-	return loadFromVfs(owner);
+bool IkigaiScriptRuntime::reload(const InstallBindings& installBindings) {
+	return loadFromVfs(installBindings);
 }
 
 void IkigaiScriptRuntime::call(const char* method) {

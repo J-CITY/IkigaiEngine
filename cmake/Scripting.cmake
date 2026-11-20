@@ -23,12 +23,12 @@ function(ikigai_configure_scripting target)
             "engine/coreModule/ecs/components/scriptComponent.cpp"
             "engine/coreModule/ecs/systems/scriptSystem.cpp"
             "engine/generated/scriptComponent.generated.cpp"
-            "engine/scriptModule/luaActorBinder.cpp"
-            "engine/scriptModule/luaBinder.cpp"
-            "engine/scriptModule/luaComponentBinder.cpp"
-            "engine/scriptModule/luaGlobalsBinder.cpp"
-            "engine/scriptModule/luaMathsBinder.cpp"
-            "engine/scriptModule/scriptInterpreter.cpp"
+            "engine/coreModule/scripting/luaActorBinder.cpp"
+            "engine/coreModule/scripting/luaBinder.cpp"
+            "engine/coreModule/scripting/luaComponentBinder.cpp"
+            "engine/coreModule/scripting/luaGlobalsBinder.cpp"
+            "engine/coreModule/scripting/luaMathsBinder.cpp"
+            "engine/coreModule/scripting/scriptInterpreter.cpp"
             "${CMAKE_BINARY_DIR}/generated/scriptComponent.generated.cpp")
         set_property(TARGET ${target} PROPERTY SOURCES "${sources}")
     endif()
@@ -40,8 +40,8 @@ function(ikigai_configure_scripting target)
         ikigai_exclude_sources(sources
             "engine/coreModule/ecs/components/ikigaiScriptComponent.cpp"
             "engine/generated/ikigaiScriptComponent.generated.cpp"
-            "engine/scriptModule/ikigaiScriptBinder.cpp"
-            "engine/scriptModule/ikigaiScriptMathsBinder.cpp"
+            "engine/coreModule/scripting/ikigaiScriptBinder.cpp"
+            "engine/coreModule/scripting/ikigaiScriptMathsBinder.cpp"
             "engine/scriptModule/ikigaiScriptRuntime.cpp"
             "${CMAKE_BINARY_DIR}/generated/ikigaiScriptComponent.generated.cpp")
         set_property(TARGET ${target} PROPERTY SOURCES "${sources}")

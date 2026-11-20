@@ -1,24 +1,28 @@
 #pragma once
 #if USE_IKIGAI_SCRIPT
+#include <functional>
 #include <memory>
 #include <string>
-namespace IKIGAI::ECS {
-class Object;
+namespace IkigaiScript {
+class IkigaiScriptInterpreter;
 }
 namespace IKIGAI::SCRIPTING {
 class IkigaiScriptRuntime {
+public:
+	using InstallBindings = std::function<std::shared_ptr<void>(IkigaiScript::IkigaiScriptInterpreter&)>;
+
+private:
 	struct State;
 	std::unique_ptr<State> state;
 	std::string path;
-	bool (*cameraControlAllowed)();
 	bool healthy = false;
 
-	bool loadFromVfs(ECS::Object& owner);
+	bool loadFromVfs(const InstallBindings& installBindings);
 
 public:
-	IkigaiScriptRuntime(ECS::Object& owner, const std::string& script, bool (*cameraControlAllowed)());
+	IkigaiScriptRuntime(const std::string& script, const InstallBindings& installBindings);
 	~IkigaiScriptRuntime();
-	bool reload(ECS::Object& owner);
+	bool reload(const InstallBindings& installBindings);
 	bool isOk() const {
 		return healthy;
 	}

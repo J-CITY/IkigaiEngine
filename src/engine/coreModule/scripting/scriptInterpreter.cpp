@@ -6,8 +6,9 @@
 #include <string>
 
 #include "luaBinder.h"
-#include "scriptFileWatcher.h"
-#include "scriptVfsPath.h"
+#include "scriptModule/luaRuntime.h"
+#include "scriptModule/scriptFileWatcher.h"
+#include "scriptModule/scriptVfsPath.h"
 
 #include <coreModule/ecs/components/scriptComponent.h>
 #include <coreModule/ecs/object.h>
@@ -68,11 +69,8 @@ ScriptInterpreter::~ScriptInterpreter() {
 }
 
 void ScriptInterpreter::createLuaContextAndBindGlobals() {
-	if (!luaState) {
-		luaState = std::make_unique<sol::state>();
-		luaState->open_libraries(sol::lib::base, sol::lib::math);
-		LuaBinder::CallBinders(*luaState);
-		sharedBindings = luaState->globals();
+	if (!runtime) {
+		runtime = std::make_unique<LuaRuntime>(LuaBinder::CallBinders);
 		checkOk = true;
 
 		pruneScripts();
@@ -89,7 +87,7 @@ void ScriptInterpreter::createLuaContextAndBindGlobals() {
 }
 
 void ScriptInterpreter::destroyLuaContext() {
-	if (luaState) {
+	if (runtime) {
 		for (auto& tracked : scripts) {
 			detachFileWatch(tracked);
 			if (auto* script = tracked.resolve()) {
@@ -98,8 +96,7 @@ void ScriptInterpreter::destroyLuaContext() {
 		}
 
 		// Registry references must be released while their Lua state is still alive.
-		sharedBindings = sol::lua_nil;
-		luaState.reset();
+		runtime.reset();
 		checkOk = false;
 	}
 }
@@ -107,7 +104,7 @@ void ScriptInterpreter::destroyLuaContext() {
 bool ScriptInterpreter::registerScript(TrackedScript& tracked, ECS::ScriptComponent& component) {
 	auto& world = RESOURCES::ServiceManager::Get<ECS::World>();
 	auto systemManager = world.getSystemManager();
-	const bool ok = systemManager->getSystem<ECS::ScriptSystem>("ScriptSystem")->registerToLuaContext(component, *luaState, sharedBindings);
+	const bool ok = systemManager->getSystem<ECS::ScriptSystem>("ScriptSystem")->registerToLuaContext(component, *runtime);
 	attachFileWatch(tracked, component);
 	return ok;
 }
@@ -125,7 +122,7 @@ void ScriptInterpreter::attachFileWatch(TrackedScript& tracked, const ECS::Scrip
 	}
 	const auto vfsPath = LuaScriptVfsPath(component.getScriptName());
 	tracked.fileWatchHandle = ScriptFileWatcher::watch(vfsPath, [this, handle = tracked.handle]() {
-		if (auto* tracked = findScript(handle); luaState && tracked) {
+		if (auto* tracked = findScript(handle); runtime && tracked) {
 			if (auto* script = tracked->resolve()) {
 				reloadScript(*tracked, *script);
 			}
@@ -149,7 +146,7 @@ void ScriptInterpreter::detachFileWatch(TrackedScript& tracked) {
 }
 
 void ScriptInterpreter::consider(UTILS::WeakPtr<ECS::ScriptComponent> script) {
-	if (!luaState || !script || script->getScriptName().empty()) {
+	if (!runtime || !script || script->getScriptName().empty()) {
 		return;
 	}
 	const auto identity = capture(*script);
@@ -177,13 +174,13 @@ void ScriptInterpreter::unconsider(UTILS::WeakPtr<ECS::ScriptComponent> script) 
 		detachFileWatch(*it);
 		scripts.erase(it);
 	}
-	if (luaState) {
+	if (runtime) {
 		unregisterScript(*script);
 	}
 }
 
 bool ScriptInterpreter::reloadScript(const UTILS::WeakPtr<ECS::ScriptComponent>& script) {
-	if (!luaState || !script) {
+	if (!runtime || !script) {
 		return false;
 	}
 	const auto identity = capture(*script);
@@ -211,7 +208,7 @@ bool ScriptInterpreter::reloadScript(TrackedScript& tracked, ECS::ScriptComponen
 }
 
 bool ScriptInterpreter::reloadScriptsAtVfsPath(const std::string& vfsPath) {
-	if (!luaState) {
+	if (!runtime) {
 		return false;
 	}
 	bool any = false;

@@ -6,6 +6,10 @@
 #include "ecsModule/systemManager.h"
 #include "utilsModule/log/loggerDefine.h"
 
+namespace IKIGAI::SCRIPTING {
+class LuaRuntime;
+}
+
 namespace IKIGAI::ECS {
 class Object;
 }
@@ -23,7 +27,7 @@ public:
 	void onFixedUpdate(ECS::World& world, ECS::CommandBuffer& cb, std::chrono::duration<double> dt) override;
 	void onLateUpdate(ECS::World& world, ECS::CommandBuffer& cb, std::chrono::duration<double> dt) override;
 
-	bool registerToLuaContext(ScriptComponent& component, sol::state& luaState, const sol::table& sharedBindings);
+	bool registerToLuaContext(ScriptComponent& component, SCRIPTING::LuaRuntime& runtime);
 	void unregisterFromLuaContext(ScriptComponent& component);
 	void invokeOnReload(ScriptComponent& component);
 

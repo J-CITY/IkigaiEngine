@@ -1,6 +1,9 @@
 #if USE_IKIGAI_SCRIPT
-#include "ikigaiScriptComponent.h"
+// Parse the script AST before Windows headers define the Yield macro.
+#include "coreModule/scripting/ikigaiScriptBinder.h"
+
 #include "coreModule/ecs/object.h"
+#include "ikigaiScriptComponent.h"
 #include "resourceModule/serviceManager.h"
 #include "scriptModule/ikigaiScriptRuntime.h"
 #include "scriptModule/scriptFileWatcher.h"
@@ -21,6 +24,14 @@ namespace {
 		}
 #endif
 		return focused;
+	}
+
+	SCRIPTING::IkigaiScriptRuntime::InstallBindings scriptBindings(Object& owner) {
+		return [&owner](IkigaiScript::IkigaiScriptInterpreter& vm) {
+			auto bindings = std::make_shared<SCRIPTING::IkigaiScriptBinder>(vm, canControlCamera);
+			vm.getGlobalScope()->insertVar("owner", bindings->object(owner));
+			return bindings;
+		};
 	}
 }
 
@@ -98,7 +109,7 @@ void IkigaiScriptComponent::ensureRuntime() {
 		return;
 	}
 	if (!path.empty() && !obj.get().weak_from_this().expired()) {
-		runtime = std::make_unique<SCRIPTING::IkigaiScriptRuntime>(obj.get(), path, canControlCamera);
+		runtime = std::make_unique<SCRIPTING::IkigaiScriptRuntime>(path, scriptBindings(obj.get()));
 		attachFileWatch();
 		if (awake) {
 			runtime->call("OnAwake");
@@ -120,7 +131,7 @@ void IkigaiScriptComponent::reloadScript() {
 		ensureRuntime();
 		return;
 	}
-	runtime->reload(obj.get());
+	runtime->reload(scriptBindings(obj.get()));
 	if (awake) {
 		runtime->call("OnAwake");
 	}

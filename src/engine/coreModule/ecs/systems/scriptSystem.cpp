@@ -4,6 +4,7 @@
 #include <resourceModule/fileSystem/fileSystem.h>
 #include <resourceModule/serviceManager.h>
 #include <sceneModule/sceneManager.h>
+#include <scriptModule/luaRuntime.h>
 #include <scriptModule/scriptVfsPath.h>
 #include <utilsModule/stringUtils.h>
 #ifdef __EMSCRIPTEN__
@@ -66,7 +67,7 @@ void IKIGAI::ECS::ScriptSystem::onLateUpdate(ECS::World& world, ECS::CommandBuff
 	}
 }
 
-bool IKIGAI::ECS::ScriptSystem::registerToLuaContext(ScriptComponent& component, sol::state& p_luaState, const sol::table& sharedBindings) {
+bool IKIGAI::ECS::ScriptSystem::registerToLuaContext(ScriptComponent& component, SCRIPTING::LuaRuntime& runtime) {
 	using namespace IKIGAI::SCRIPTING;
 
 	auto& object = component.getTable();
@@ -86,11 +87,9 @@ bool IKIGAI::ECS::ScriptSystem::registerToLuaContext(ScriptComponent& component,
 		return false;
 	}
 
-	component.scriptEnvironment = sol::environment(p_luaState, sol::create, sharedBindings);
-
 	const auto source = UTILS::NormalizeTextInput(file->readStr());
 	const auto chunkName = "@" + vfsPath;
-	auto result = p_luaState.safe_script(source, component.scriptEnvironment, sol::script_pass_on_error, chunkName);
+	auto result = runtime.execute(source, chunkName, component.scriptEnvironment);
 	if (!result.valid()) {
 		sol::error err = result;
 		LOG_ERROR << "Lua script '" << vfsPath << "': " << err.what();
