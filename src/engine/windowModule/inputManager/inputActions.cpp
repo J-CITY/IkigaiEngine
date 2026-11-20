@@ -1,10 +1,6 @@
 #include "inputActions.h"
 
 #include "inputControlPath.h"
-#include "resourceModule/jsonLoader.h"
-#include "resourceModule/playerProfile.h"
-#include "resourceModule/serviceManager.h"
-#include "utilsModule/log/loggerDefine.h"
 #include <algorithm>
 #include <cctype>
 #include <optional>
@@ -88,14 +84,9 @@ namespace {
 InputActions::InputActions(InputManager& inputManager)
 	: mInput(inputManager) { }
 
-bool InputActions::load(const std::string& path) {
-	auto result = UTILS::FromJson<InputConfig>(path);
-	if (result.isErr()) {
-		LOG_ERROR << "Failed to load input resource '" << path << "': " << result.unwrapErr().text;
-		return false;
-	}
+void InputActions::setConfig(InputConfig config) {
 	mMaps.clear();
-	for (auto& map : result.unwrap().maps) {
+	for (auto& map : config.maps) {
 		MapState state;
 		state.desc = std::move(map);
 		state.assetEnabled = state.desc.enabled;
@@ -103,56 +94,22 @@ bool InputActions::load(const std::string& path) {
 		mMaps[state.desc.name] = std::move(state);
 	}
 	rebuildActions();
-	return true;
 }
 
-bool InputActions::loadBindingOverrides(const std::string& path) {
-	std::optional<InputBindingOverrides> loaded;
-	if (RESOURCES::ServiceManager::Check<RESOURCES::PlayerProfileService>()) {
-		// A profile that never saved overrides has no file; reading it would throw on first run.
-		const auto profile = RESOURCES::ServiceManager::Get<RESOURCES::PlayerProfileService>().profile();
-		const auto bytes = profile.exists(path) ? profile.readFile(path) : std::vector<uint8_t> {};
-		if (!bytes.empty()) {
-			if (auto parsed = UTILS::FromJsonStr<InputBindingOverrides>(std::string(bytes.begin(), bytes.end())); parsed.isOk()) {
-				loaded = parsed.unwrap();
-			}
-		}
-	}
-	if (!loaded) {
-		if (auto parsed = UTILS::FromJson<InputBindingOverrides>(path); parsed.isOk()) {
-			loaded = parsed.unwrap();
-		}
-	}
-	if (!loaded) {
-		LOG_WARNING << "No input binding overrides loaded from '" << path << "'";
-		return false;
-	}
+void InputActions::setBindingOverrides(InputBindingOverrides overrides) {
 	mBindingOverrides.clear();
-	for (const auto& entry : loaded->overrides) {
-		mBindingOverrides[{ entry.map, entry.action, entry.bindingIndex }] = entry.binding;
+	for (auto& entry : overrides.overrides) {
+		mBindingOverrides[{ entry.map, entry.action, entry.bindingIndex }] = std::move(entry.binding);
 	}
 	rebuildActions();
-	return true;
 }
 
-bool InputActions::saveBindingOverrides(const std::string& path) const {
+InputBindingOverrides InputActions::getBindingOverrides() const {
 	InputBindingOverrides payload;
 	for (const auto& [key, binding] : mBindingOverrides) {
 		payload.overrides.push_back({ key.map, key.action, key.bindingIndex, binding });
 	}
-	auto result = UTILS::ToJsonStr(payload, 2);
-	if (result.isErr()) {
-		LOG_ERROR << "Failed to serialize input binding overrides: " << result.unwrapErr().text;
-		return false;
-	}
-	if (!RESOURCES::ServiceManager::Check<RESOURCES::PlayerProfileService>()) {
-		LOG_ERROR << "PlayerProfileService unavailable; cannot save binding overrides to '" << path << "'";
-		return false;
-	}
-	const auto& text = result.unwrap();
-	std::vector<uint8_t> bytes(text.begin(), text.end());
-	RESOURCES::ServiceManager::Get<RESOURCES::PlayerProfileService>().profile().writeFile(path, bytes).wait();
-	return true;
+	return payload;
 }
 
 void InputActions::enableMap(const std::string& name, bool enabled) {

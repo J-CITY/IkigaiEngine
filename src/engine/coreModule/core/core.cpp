@@ -49,6 +49,7 @@
 #include "resourceModule/serviceManager.h"
 #include "resourceModule/shaderManager.h"
 #include "resourceModule/textureManager.h"
+#include "inputActionStorage.h"
 #include "windowModule/inputManager/inputActions.h"
 #include "windowModule/inputManager/inputManager.h"
 #include <audioModule/audioManager.h>
@@ -240,8 +241,8 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 	sceneManager = std::make_unique<SCENE_SYSTEM::SceneManager>(Config::ENGINE_ASSETS_PATH);
 	inputManager = std::make_unique<INPUT_SYSTEM::InputManager>(*window);
 	inputActions = std::make_unique<INPUT_SYSTEM::InputActions>(*inputManager);
-	inputActions->load(INPUT_SYSTEM::DefaultInputResourcePath);
-	inputActions->loadBindingOverrides();
+	LoadInputActions(*inputActions);
+	LoadInputBindingOverrides(*inputActions);
 	RESOURCES::ServiceManager::Set<WINDOW::Window>(window.get());
 
 	{

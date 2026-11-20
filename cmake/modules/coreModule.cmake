@@ -9,6 +9,8 @@ set(IKIGAI_MANIFEST_coreModule
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/core.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/core.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/platformStartup.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/inputActionStorage.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/inputActionStorage.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/animationTimelineBind.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/animationTimelineBind.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/componentCatalog.cpp"

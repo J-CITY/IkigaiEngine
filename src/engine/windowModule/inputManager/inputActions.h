@@ -17,8 +17,6 @@
 
 namespace IKIGAI::INPUT_SYSTEM {
 inline constexpr const char* InputResourceExtension = ".input";
-inline constexpr const char* DefaultInputResourcePath = "/Configs/input.input";
-inline constexpr const char* DefaultBindingOverridesPath = "input.bindings.json";
 
 using ActionId = std::uint32_t;
 inline constexpr ActionId InvalidActionId = std::numeric_limits<ActionId>::max();
@@ -201,9 +199,9 @@ public:
 
 	explicit InputActions(InputManager& inputManager);
 
-	bool load(const std::string& path = DefaultInputResourcePath);
-	bool loadBindingOverrides(const std::string& path = DefaultBindingOverridesPath);
-	bool saveBindingOverrides(const std::string& path = DefaultBindingOverridesPath) const;
+	void setConfig(InputConfig config);
+	void setBindingOverrides(InputBindingOverrides overrides);
+	[[nodiscard]] InputBindingOverrides getBindingOverrides() const;
 	void enableMap(const std::string& name, bool enabled);
 	void prepareMaps(std::span<const std::reference_wrapper<const std::string>> activeMapNames);
 	void resolve(std::chrono::duration<double> dt);
