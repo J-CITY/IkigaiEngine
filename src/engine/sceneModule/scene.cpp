@@ -1,134 +1,83 @@
 #include "scene.h"
-#include "coreModule/ecs/components/capsuleColliderComponent.h"
-#include "coreModule/ecs/components/characterMotorComponent.h"
-#include "coreModule/ecs/components/skeletalStateGraphComponent.h"
-#include "coreModule/ecs/components/thirdPersonCameraComponent.h"
-#include "coreModule/ecs/components/traversalComponent.h"
-#include "coreModule/ecs/components/variableContextComponent.h"
-#include "coreModule/ecs/systems/behaviorTreeSystem.h"
-#include "coreModule/ecs/systems/characterSystem.h"
-#include "coreModule/ecs/systems/environmentSystem.h"
-#include "coreModule/ecs/systems/skeletalStateGraphSystem.h"
-#include "coreModule/ecs/systems/surfaceSystem.h"
-#include "coreModule/ecs/systems/variableContextSystem.h"
-#include "coreModule/testHooks.h"
 #include "sceneObjectDescriptor.h"
 #include "traceModule/trace.h"
-#if USE_PHYSICS_3D
-#include "coreModule/ecs/components/ragdollComponent.h"
-#include "coreModule/ecs/systems/destructionSystem.h"
-#include "coreModule/ecs/systems/physics3dSystem.h"
-#include "coreModule/ecs/systems/ragdollSystem.h"
-#endif
-#if USE_PHYSICS_2D
-#include "coreModule/ecs/systems/physics2dSystem.h"
-#endif
-
 #include <algorithm>
 #include <cstdint>
 #include <span>
-
-#include "coreModule/ecs/componentTypes.h"
 
 #include "coreModule/ecs/components/cameraComponent.h"
 #include "coreModule/ecs/object.h"
 #include "resourceModule/jsonLoader.h"
 #include "utilsModule/serviceManager.h"
 #include "utilsModule/log/loggerDefine.h"
+#include <stdexcept>
 #include <unordered_set>
+#include <utility>
 
 using namespace IKIGAI;
 using namespace IKIGAI::SCENE_SYSTEM;
 
-Scene::Scene(ECS::World* world, PhysicsFactories physics)
-	: mPhysicsFactories(std::move(physics))
+Scene::Scene(ECS::World* world, std::unique_ptr<SceneSimulation> simulation)
+	: mSimulation(std::move(simulation))
 	, mWorld(world) { }
-void Scene::setPhysicsFactories(PhysicsFactories physics) {
-#if USE_PHYSICS_2D
-	if (mPhysics2D) {
-		throw std::logic_error("Configure physics before creating the scene's world");
+
+SceneSimulation& Scene::requireSimulation() {
+	if (!mSimulation) {
+		throw std::logic_error("Scene has no engine simulation");
 	}
-#endif
-#if USE_PHYSICS_3D
-	if (mPhysics3D) {
-		throw std::logic_error("Configure physics before creating the scene's world");
-	}
-#endif
-	mPhysicsFactories = std::move(physics);
+	return *mSimulation;
 }
+
+void Scene::setPhysicsFactories(PhysicsFactories physics) {
+	requireSimulation().setPhysicsFactories(std::move(physics));
+}
+
 #if USE_PHYSICS_3D
 PHYSICS::PhysicWorld& Scene::physics3d() {
-	if (!mPhysics3D) {
-		mPhysics3D = std::make_unique<ECS::Physics3DSystem>(
-			*this, mPhysicsFactories.physics3d ? mPhysicsFactories.physics3d() : std::make_unique<PHYSICS::World>());
-	}
-	return mPhysics3D->simulation();
-}
-void Scene::stepPhysics3D(std::chrono::duration<double> dt, bool beginDestructionFrame) {
-	physics3d();
-	if (beginDestructionFrame) {
-		ECS::DestructionSystem::beginFrame(*this);
-	}
-	const bool destructionStep = !mPhysics3D->paused || mPhysics3D->singleStep;
-	if (destructionStep) {
-		ECS::DestructionSystem::beforePhysics(*this, float(dt.count()));
-		ECS::RagdollSystem::beforePhysics(*this, float(dt.count()));
-	}
-	ECS::CommandBuffer commands;
-	mPhysics3D->onFixedUpdate(getWorld(), commands, dt);
-	commands.execute();
-	if (mPhysics3D->lastStepSucceeded()) {
-		ECS::RagdollSystem::afterPhysics(*this);
-		ECS::DestructionSystem::afterPhysics(*this, float(dt.count()));
-	}
-	if (beginDestructionFrame) {
-		presentDestructibles(1);
-	}
-}
-bool Scene::physics3dPaused() const {
-	return mPhysics3D && mPhysics3D->paused;
-}
-void Scene::setPhysics3dPaused(bool paused) {
-	physics3d();
-	mPhysics3D->paused = paused;
-}
-void Scene::presentDestructibles(float alpha) {
-	ECS::DestructionSystem::present(*this, mPhysics3D && mPhysics3D->paused ? 1.f : alpha);
+	return requireSimulation().physics3d(*this);
 }
 std::shared_ptr<PHYSICS::PhysicWorld> Scene::physics3dShared() {
-	physics3d();
-	return mPhysics3D->sharedSimulation();
+	return requireSimulation().physics3dShared(*this);
+}
+void Scene::stepPhysics3D(std::chrono::duration<double> dt, bool beginDestructionFrame) {
+	requireSimulation().stepPhysics3D(*this, dt, beginDestructionFrame);
+}
+bool Scene::physics3dPaused() const {
+	return mSimulation && mSimulation->physics3dPaused();
+}
+void Scene::setPhysics3dPaused(bool paused) {
+	requireSimulation().setPhysics3dPaused(*this, paused);
+}
+void Scene::presentDestructibles(float alpha) {
+	if (mSimulation) {
+		mSimulation->presentDestructibles(*this, alpha);
+	}
 }
 #ifdef USE_EDITOR
 void Scene::drawPhysics3DDebug() {
-	if (mPhysics3D) {
-		mPhysics3D->drawDebug();
+	if (mSimulation) {
+		mSimulation->drawPhysics3DDebug();
 	}
 }
 #endif
 #endif
+
 #if USE_PHYSICS_2D
 PHYSICS2D::World& Scene::physics2d() {
-	if (!mPhysics2D) {
-		mPhysics2D = std::make_unique<ECS::Physics2DSystem>(
-			*this, mPhysicsFactories.physics2d ? mPhysicsFactories.physics2d() : std::make_unique<PHYSICS2D::World>());
-	}
-	return mPhysics2D->simulation();
+	return requireSimulation().physics2d(*this);
 }
 void Scene::stepPhysics2D(std::chrono::duration<double> dt) {
-	physics2d();
-	ECS::CommandBuffer commands;
-	mPhysics2D->onFixedUpdate(getWorld(), commands, dt);
-	commands.execute();
+	requireSimulation().stepPhysics2D(*this, dt);
 }
 #ifdef USE_EDITOR
 void Scene::drawPhysics2DDebug() {
-	if (mPhysics2D) {
-		mPhysics2D->drawDebug();
+	if (mSimulation) {
+		mSimulation->drawPhysics2DDebug();
 	}
 }
 #endif
 #endif
+
 ECS::World& Scene::getWorld() const {
 	return mWorld ? *mWorld : RESOURCES::ServiceManager::Get<ECS::World>();
 }
@@ -173,9 +122,8 @@ void Scene::go() {
 			o->onStart();
 		}
 	}
-	// Resolve the environment's typed light reference before scene loading reports success.
-	if (auto* environment = ECS::EnvironmentSystem::active(*this)) {
-		environment->update(*this, 0.0);
+	if (mSimulation) {
+		mSimulation->afterStart(*this);
 	}
 }
 
@@ -184,21 +132,23 @@ bool Scene::getIsExecute() const {
 }
 
 void Scene::beginSimulationFrame() {
-#if USE_PHYSICS_3D
-	ECS::DestructionSystem::beginFrame(*this);
-#endif
+	if (mSimulation) {
+		mSimulation->beginFrame(*this);
+	}
 }
 
 void Scene::simulateFixedStep(std::chrono::duration<double> dt) {
 	IKIGAI_PROFILE_SCOPE("Fixed Simulation Step");
 	fixedUpdate(dt);
 	getWorld().getSystemManager()->runFixedUpdate(dt);
+	if (mSimulation) {
 #if USE_PHYSICS_3D
-	stepPhysics3D(dt, false);
+		mSimulation->stepPhysics3D(*this, dt, false);
 #endif
 #if USE_PHYSICS_2D
-	stepPhysics2D(dt);
+		mSimulation->stepPhysics2D(*this, dt);
 #endif
+	}
 	finishFixedUpdate(dt);
 }
 
@@ -216,31 +166,14 @@ void Scene::simulateFrame(std::chrono::duration<double> dt, [[maybe_unused]] flo
 }
 
 void Scene::update(std::chrono::duration<double> dt) {
-	ECS::SurfaceSystem::beginFrame(*this);
-	ECS::EnvironmentSystem::update(*this, dt.count());
-#if USE_PHYSICS_3D
-	ECS::RagdollSystem::update(*this, std::clamp(float(dt.count()), 0.f, .1f));
-	ECS::CharacterSystem::update(*this, std::clamp(float(dt.count()), 0.f, .1f));
-	if (TESTHOOK::waitForFrame) {
-		TESTHOOK::waitForFrame(*this);
+	if (mSimulation) {
+		mSimulation->beforeObjectUpdate(*this, dt);
 	}
-#endif
-	for (auto& o : objects) {
-		o->onUpdate(dt);
+	for (auto& object : objects) {
+		object->onUpdate(dt);
 	}
-	// A scene owns its particle instances through its objects. No render pass ticks them.
-	for (auto& o : objects) {
-		if (o->getIsActive()) {
-			if (auto c = o->getComponent<ECS::ParticleSystem2DComponent>()) {
-				c->tick(dt.count());
-			}
-			if (auto c = o->getComponent<ECS::ParticleSystem3DComponent>()) {
-				c->tick(dt.count());
-			}
-			if (auto c = o->getComponent<ECS::SpriteParticleComponent>()) {
-				c->tick(dt.count());
-			}
-		}
+	if (mSimulation) {
+		mSimulation->afterObjectUpdate(*this, dt);
 	}
 }
 
@@ -250,24 +183,9 @@ void Scene::fixedUpdate(std::chrono::duration<double> dt) {
 	}
 }
 void Scene::finishFixedUpdate(std::chrono::duration<double> dt) {
-	// Called after ECS producers and physics have completed for this tick.
-	// Scene-local ordered systems. Bound properties may target any component;
-	// these phases deliberately run serially, after producers and before consumers.
-	ECS::BehaviorTreeSystem::applyCommands(*this);
-#if USE_PHYSICS_3D
-	ECS::CharacterSystem::fixedUpdate(*this, float(dt.count()));
-#endif
-	ECS::VariableContextSystem::update(*this);
-	ECS::BehaviorTreeSystem::update(*this, dt.count());
-	ECS::SkeletalStateGraphSystem::update(*this, float(dt.count()));
-#if USE_PHYSICS_3D
-	ECS::RagdollSystem::afterAnimation(*this, float(dt.count()));
-#endif
-#if USE_PHYSICS_3D
-	if (TESTHOOK::afterAnimation) {
-		TESTHOOK::afterAnimation(*this, float(dt.count()));
+	if (mSimulation) {
+		mSimulation->finishFixedUpdate(*this, dt);
 	}
-#endif
 }
 
 void Scene::lateUpdate(std::chrono::duration<double> dt) {

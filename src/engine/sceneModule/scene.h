@@ -8,40 +8,12 @@
 #include "coroutineModule/coroutineScope.h"
 #include "resourceModule/serializerInterface.h"
 #include "sceneDocument.h"
+#include "sceneSimulation.h"
 #include "utilsModule/ref.h"
-#if USE_PHYSICS_3D
-#include "destructionModule/destructionRuntime.h"
-#endif
-
 namespace IKIGAI::GUI {
 class GuiObject;
 }
-#if USE_PHYSICS_3D
-namespace IKIGAI::ECS {
-class Physics3DSystem;
-}
-namespace IKIGAI::PHYSICS {
-class PhysicWorld;
-}
-#endif
-#if USE_PHYSICS_2D
-namespace IKIGAI::ECS {
-class Physics2DSystem;
-}
-namespace IKIGAI::PHYSICS2D {
-class World;
-}
-#endif
-
 namespace IKIGAI::SCENE_SYSTEM {
-struct PhysicsFactories {
-#if USE_PHYSICS_2D
-	std::function<std::unique_ptr<PHYSICS2D::World>()> physics2d;
-#endif
-#if USE_PHYSICS_3D
-	std::function<std::unique_ptr<PHYSICS::PhysicWorld>()> physics3d;
-#endif
-};
 class Scene : public RESOURCES::Serializable {
 public:
 	struct Descriptor {
@@ -55,8 +27,11 @@ public:
 	};
 	class IdGenerator_ : public IdGenerator<ECS::Object> { };
 
-	explicit Scene(ECS::World* world = nullptr, PhysicsFactories physics = {});
+	explicit Scene(ECS::World* world = nullptr, std::unique_ptr<SceneSimulation> simulation = {});
 	void setPhysicsFactories(PhysicsFactories physics);
+	[[nodiscard]] SceneSimulation* simulation() noexcept {
+		return mSimulation.get();
+	}
 	Scene(const Descriptor& _descriptor);
 	virtual ~Scene();
 
@@ -80,8 +55,6 @@ public:
 	bool physics3dPaused() const;
 	void setPhysics3dPaused(bool paused);
 	void presentDestructibles(float alpha);
-	DESTRUCTION::RuntimeSettings destructionSettings {};
-	std::shared_ptr<DESTRUCTION::DestructionRuntime> destructionRuntime {};
 #ifdef USE_EDITOR
 	void drawPhysics3DDebug();
 #endif
@@ -167,13 +140,8 @@ public:
 	void restoreObjectPosition(int rootId, std::size_t objectIndex, int siblingIndex);
 
 private:
-	PhysicsFactories mPhysicsFactories;
-#if USE_PHYSICS_3D
-	std::unique_ptr<ECS::Physics3DSystem> mPhysics3D;
-#endif
-#if USE_PHYSICS_2D
-	std::unique_ptr<ECS::Physics2DSystem> mPhysics2D;
-#endif
+	std::unique_ptr<SceneSimulation> mSimulation;
+	SceneSimulation& requireSimulation();
 	void observeComponents(ECS::Object& object);
 	std::shared_ptr<ComponentChanges> mComponentChanges = std::make_shared<ComponentChanges>();
 	ECS::World* mWorld = nullptr;

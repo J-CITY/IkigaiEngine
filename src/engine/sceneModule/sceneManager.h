@@ -13,7 +13,8 @@ class SceneManager {
 public:
 	using LoadingSceneWarmup = std::function<COROUTINE::Task<>(std::shared_ptr<SceneLoadState>, std::vector<std::shared_ptr<void>>&)>;
 
-	SceneManager(const std::string& p_sceneRootFolder = "", PhysicsFactories physics = { }, bool profileLoading = false);
+	SceneManager(const std::string& p_sceneRootFolder = "", PhysicsFactories physics = {}, bool profileLoading = false,
+		SceneSimulationFactory simulationFactory = nullptr);
 	// Applies to subsequently created/loaded scenes, not existing worlds.
 	void setPhysicsFactoriesForNewScenes(PhysicsFactories physics) {
 		mPhysicsFactories = std::move(physics);
@@ -73,6 +74,8 @@ public:
 private:
 	PhysicsFactories mPhysicsFactories;
 	bool mProfileLoading = false;
+	SceneSimulationFactory mSimulationFactory = nullptr;
+	std::unique_ptr<SceneSimulation> makeSimulation(const nlohmann::json* document = nullptr) const;
 	LoadingSceneWarmup mLoadingSceneWarmup;
 	struct LoadContext;
 	struct LoadingSceneCache;

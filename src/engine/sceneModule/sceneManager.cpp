@@ -1,11 +1,7 @@
 #include "sceneManager.h"
 #include "sceneLoadingContext.h"
 #include "sceneObjectDescriptor.h"
-#include "utilsModule/serialization/typedDescriptor.h"
 
-#include <coreModule/ecs/components/ambientSphereLight.h>
-#include <coreModule/ecs/components/cameraComponent.h>
-#include <coreModule/ecs/components/directionalLight.h>
 #include <coreModule/ecs/object.h>
 
 #include "resourceModule/fileSystem/fileSystem.h"
@@ -20,9 +16,11 @@
 using namespace IKIGAI;
 using namespace IKIGAI::SCENE_SYSTEM;
 
-SceneManager::SceneManager(const std::string& p_sceneRootFolder, PhysicsFactories physics, bool profileLoading)
+SceneManager::SceneManager(
+	const std::string& p_sceneRootFolder, PhysicsFactories physics, bool profileLoading, SceneSimulationFactory simulationFactory)
 	: mPhysicsFactories(std::move(physics))
 	, mProfileLoading(profileLoading)
+	, mSimulationFactory(simulationFactory)
 	, m_sceneRootFolder(p_sceneRootFolder) {
 	loadEmptyScene();
 }
@@ -30,6 +28,14 @@ SceneManager::SceneManager(const std::string& p_sceneRootFolder, PhysicsFactorie
 SceneManager::~SceneManager() {
 	shutdownLoading();
 	unloadCurrentScene();
+}
+
+std::unique_ptr<SceneSimulation> SceneManager::makeSimulation(const nlohmann::json* document) const {
+	auto simulation = mSimulationFactory ? mSimulationFactory(mPhysicsFactories) : nullptr;
+	if (simulation && document) {
+		simulation->readSettings(*document);
+	}
+	return simulation;
 }
 
 void SceneManager::update() {
@@ -51,7 +57,7 @@ void SceneManager::update() {
 void SceneManager::loadEmptyScene() {
 	unloadCurrentScene();
 
-	m_currentScene = std::make_unique<Scene>(nullptr, mPhysicsFactories);
+	m_currentScene = std::make_unique<Scene>(nullptr, makeSimulation());
 
 	sceneLoadEvent.run();
 
@@ -61,22 +67,13 @@ void SceneManager::loadEmptyScene() {
 void SceneManager::loadDefaultScene() {
 	unloadCurrentScene();
 
-	m_currentScene = std::make_unique<Scene>(nullptr, mPhysicsFactories);
+	m_currentScene = std::make_unique<Scene>(nullptr, makeSimulation());
 
 	sceneLoadEvent.run();
 
-	auto directionalLight = m_currentScene->createObject("Directional Light");
-	directionalLight->addComponent<ECS::DirectionalLight>()->setIntensity(0.75f);
-	directionalLight->getTransform()->setLocalPosition({ 0.0f, 10.0f, 0.0f });
-	directionalLight->getTransform()->setLocalRotation(MATH::QuaternionF(MATH::Vector3 { 120.0f, -40.0f, 0.0f }));
-
-	auto ambientLight = m_currentScene->createObject("Ambient Light");
-	ambientLight->addComponent<ECS::AmbientSphereLight>()->setRadius(10000.0f);
-
-	auto camera = m_currentScene->createObject("Main Camera");
-	camera->addComponent<ECS::CameraComponent>();
-	camera->getTransform()->setLocalRotation(MATH::QuaternionF(MATH::Vector3f { 20.0f, 180.0f, 0.0f }));
-	camera->getTransform()->setLocalPosition({ 0.0f, 3.0f, 8.0f });
+	if (auto* simulation = m_currentScene->simulation()) {
+		simulation->populateDefaultScene(*m_currentScene);
+	}
 
 	m_currentScene->postLoad();
 }
@@ -95,10 +92,7 @@ void SceneManager::loadFromFile(const std::string& sceneFilePath) {
 	};
 	const auto document = read(sceneFilePath);
 	const auto pipeline = DOCUMENT::ReadRenderPipeline(document);
-#if USE_PHYSICS_3D
-	const auto destruction = DATA::readDescriptor<DESTRUCTION::RuntimeSettings>(document.value("Destruction", nlohmann::json::object()));
-	destruction.validate();
-#endif
+	auto simulation = makeSimulation(&document);
 	auto expanded = DOCUMENT::Expand(document, read);
 	// Parse component descriptors before replacing the current scene as well.
 	for (auto value : expanded.objects) {
@@ -106,11 +100,8 @@ void SceneManager::loadFromFile(const std::string& sceneFilePath) {
 	}
 	mTransitionState = SceneTransitionState::Idle;
 	unloadCurrentScene();
-	m_currentScene = std::make_unique<Scene>(nullptr, mPhysicsFactories);
+	m_currentScene = std::make_unique<Scene>(nullptr, std::move(simulation));
 	m_currentScene->renderPipelineAsset = pipeline;
-#if USE_PHYSICS_3D
-	m_currentScene->destructionSettings = destruction;
-#endif
 	m_currentScene->appendDocument(expanded);
 	m_currentScene->isSceneReady = true;
 	m_currentSceneSourcePath = sceneFilePath;
@@ -127,9 +118,9 @@ nlohmann::json SceneManager::serializeScene() const {
 	}
 	auto document = DOCUMENT::Compact(m_currentScene->serializeObjects(), m_currentScene->prefabInstances);
 	DOCUMENT::WriteRenderPipeline(document, m_currentScene->renderPipelineAsset);
-#if USE_PHYSICS_3D
-	document["Destruction"] = serde::serialize<nlohmann::json>(m_currentScene->destructionSettings);
-#endif
+	if (auto* simulation = m_currentScene->simulation()) {
+		simulation->writeSettings(document);
+	}
 	return document;
 }
 

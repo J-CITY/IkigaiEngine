@@ -117,6 +117,8 @@ set(IKIGAI_MANIFEST_coreModule
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/componentTypes.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/object.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/object.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/sceneSimulationHost.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/sceneSimulationHost.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/systems/audioSystem.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/systems/audioSystem.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/systems/behaviorTreeSystem.cpp"

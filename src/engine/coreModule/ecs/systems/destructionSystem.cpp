@@ -12,6 +12,7 @@
 #include "coreModule/ecs/components/skeletalComponent.h"
 #include "coreModule/ecs/components/surfaceComponent.h"
 #include "coreModule/ecs/object.h"
+#include "coreModule/ecs/sceneSimulationHost.h"
 #include "profilerModule/profiler.h"
 #include "profilerModule/profilerSpy.h"
 #include "renderModule/backends/meshFactory.h"
@@ -62,8 +63,8 @@ namespace {
 	}
 }
 void DestructionSystem::beginFrame(SCENE_SYSTEM::Scene& scene) {
-	if (scene.destructionRuntime) {
-		scene.destructionRuntime->beginFrame();
+	if (const auto& runtime = SceneDestructionRuntime(scene)) {
+		runtime->beginFrame();
 	}
 }
 void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
@@ -73,7 +74,9 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 	if (objects.empty()) {
 		return;
 	}
-	if (!scene.destructionRuntime) {
+	auto& sceneRuntime = SceneDestructionRuntime(scene);
+	const auto& limits = SceneDestructionSettings(scene);
+	if (!sceneRuntime) {
 		bool any = false;
 		for (auto& object : objects) {
 			any = any || bool(object->getComponent<DestructibleMeshComponent>());
@@ -81,8 +84,8 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 		if (!any) {
 			return;
 		}
-		scene.destructionSettings.validate();
-		scene.destructionRuntime = std::make_shared<DESTRUCTION::DestructionRuntime>([](auto work, auto complete) {
+		limits.validate();
+		sceneRuntime = std::make_shared<DESTRUCTION::DestructionRuntime>([](auto work, auto complete) {
 			if (!RESOURCES::ServiceManager::Check<TASK::TaskSystem>()) {
 				complete({ TASK::BackgroundOutcome::Rejected, TASK::BackgroundRejection::Unavailable });
 				return;
@@ -94,9 +97,8 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 			}
 		});
 	}
-	auto& runtime = *scene.destructionRuntime;
+	auto& runtime = *sceneRuntime;
 	auto& statistics = runtime.statistics;
-	const auto& limits = scene.destructionSettings;
 	const auto started = std::chrono::steady_clock::now();
 	const auto available = [&] {
 		return runtime.operations < limits.MaximumOperationsPerFrame
@@ -113,7 +115,7 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 		auto& c = *component;
 		c.mScene = &scene;
 		c.mSceneLifetime = scene.lifetime;
-		c.mRuntime = scene.destructionRuntime;
+		c.mRuntime = sceneRuntime;
 		if (!object->getIsActive()) {
 			if (c.mInstance || c.pendingRequests()) {
 				c.release();
@@ -498,6 +500,7 @@ void DestructionSystem::beforePhysics(SCENE_SYSTEM::Scene& scene, float) {
 void DestructionSystem::afterPhysics(SCENE_SYSTEM::Scene& scene, float dt) {
 	auto profile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("Destruction::afterPhysics") : nullptr;
 	auto world = scene.physics3dShared();
+	const auto& runtime = SceneDestructionRuntime(scene);
 	for (auto& object : scene.getObjects()) {
 		auto component = object->getComponent<DestructibleMeshComponent>();
 		if (!component || !component->mInstance) {
@@ -505,8 +508,8 @@ void DestructionSystem::afterPhysics(SCENE_SYSTEM::Scene& scene, float dt) {
 		}
 		auto& c = *component;
 		c.mInstance->advance(dt);
-		if (scene.destructionRuntime) {
-			auto& statistics = scene.destructionRuntime->statistics;
+		if (runtime) {
+			auto& statistics = runtime->statistics;
 			statistics.topologyBytes -= c.mTopologyBytes;
 			c.mTopologyBytes = 0;
 			for (const auto& piece : c.pieces()) {
@@ -518,8 +521,8 @@ void DestructionSystem::afterPhysics(SCENE_SYSTEM::Scene& scene, float dt) {
 		std::erase_if(c.mRenderPieces, [&](auto& render) {
 			auto found = std::find_if(c.pieces().begin(), c.pieces().end(), [&](const auto& piece) { return piece.id == render.id; });
 			if (found == c.pieces().end()) {
-				if (scene.destructionRuntime) {
-					scene.destructionRuntime->statistics.gpuBytes -= render.gpuBytes;
+				if (runtime) {
+					runtime->statistics.gpuBytes -= render.gpuBytes;
 				}
 				++scene.renderTopologyRevision;
 				dispose(scene, render.object);
@@ -548,7 +551,7 @@ void DestructionSystem::afterPhysics(SCENE_SYSTEM::Scene& scene, float dt) {
 			// Cut through an interior point. A tangent plane through the hit alone would often produce NoSplit.
 			auto* body = world->body(found->body);
 			c.slicePiece(found->id, (impact.point + body->getPosition()) * .5f, impact.normal);
-			c.mImpactCooldown = scene.destructionSettings.ImpactCooldown;
+			c.mImpactCooldown = SceneDestructionSettings(scene).ImpactCooldown;
 			break;
 		}
 	}

@@ -3,7 +3,6 @@
 #include "sceneLoadingContext.h"
 #include "sceneObjectDescriptor.h"
 #include "utilsModule/log/loggerDefine.h"
-#include "utilsModule/serialization/typedDescriptor.h"
 #include "utilsModule/serviceManager.h"
 #include "utilsModule/time/loadTimer.h"
 #include <iterator>
@@ -129,10 +128,7 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 	state->control->check();
 	auto json = nlohmann::json::parse(bytes);
 	const auto pipeline = DOCUMENT::ReadRenderPipeline(json);
-#if USE_PHYSICS_3D
-	const auto destruction = DATA::readDescriptor<DESTRUCTION::RuntimeSettings>(json.value("Destruction", nlohmann::json::object()));
-	destruction.validate();
-#endif
+	auto simulation = makeSimulation(&json);
 	const auto& entries = json.at("Objects");
 	state->phase = "Reading prefab dependencies";
 	const auto prefabCache = co_await PreloadPrefabs(DOCUMENT::PrefabPaths(entries), state->control);
@@ -228,11 +224,8 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 	}
 	state->control->check();
 	state->phase = "Creating objects";
-	context.scene = std::make_unique<Scene>(context.world.get(), mPhysicsFactories);
+	context.scene = std::make_unique<Scene>(context.world.get(), std::move(simulation));
 	context.scene->renderPipelineAsset = pipeline;
-#if USE_PHYSICS_3D
-	context.scene->destructionSettings = destruction;
-#endif
 	for (const auto& descriptor : context.descriptors) {
 		state->control->check();
 		context.scene->createDeferredObject(descriptor);

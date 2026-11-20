@@ -1,4 +1,5 @@
 #include "destructibleMeshComponent.h"
+#include "coreModule/ecs/sceneSimulationHost.h"
 #if USE_PHYSICS_3D
 #include "coreModule/ecs/object.h"
 #include "modelRenderer.h"
@@ -93,7 +94,7 @@ std::uint64_t DestructibleMeshComponent::setSupportAnchorEnabled(DESTRUCTION::Su
 	request.anchor = anchor;
 	request.enabled = enabled;
 	const auto id = request.id;
-	const auto limits = mScene && !mSceneLifetime.expired() ? mScene->destructionSettings : DESTRUCTION::RuntimeSettings {};
+	const auto limits = mScene && !mSceneLifetime.expired() ? SceneDestructionSettings(*mScene) : DESTRUCTION::RuntimeSettings {};
 	if (!anchor) {
 		request.error = "Support anchor ID must be nonzero";
 	}
@@ -128,7 +129,7 @@ std::optional<DESTRUCTION::SupportAnchorResult> DestructibleMeshComponent::suppo
 	return queued == mAnchorRequests.end() ? std::nullopt : std::optional { *queued };
 }
 void DestructibleMeshComponent::completeSupportAnchor(DESTRUCTION::SupportAnchorResult result) {
-	const auto maximum = mScene && !mSceneLifetime.expired() ? std::max(1u, mScene->destructionSettings.MaximumResults) : 64;
+	const auto maximum = mScene && !mSceneLifetime.expired() ? std::max(1u, SceneDestructionSettings(*mScene).MaximumResults) : 64;
 	while (mAnchorResults.size() >= maximum) {
 		mAnchorResults.pop_front();
 	}
@@ -140,7 +141,7 @@ std::uint64_t DestructibleMeshComponent::enqueue(DESTRUCTION::SliceRequest reque
 	pending.generation = mGeneration;
 	pending.slice = request;
 	pending.created = std::chrono::steady_clock::now();
-	const auto limits = mScene && !mSceneLifetime.expired() ? mScene->destructionSettings : DESTRUCTION::RuntimeSettings {};
+	const auto limits = mScene && !mSceneLifetime.expired() ? SceneDestructionSettings(*mScene) : DESTRUCTION::RuntimeSettings {};
 	if (mReset) {
 		complete(pending, DESTRUCTION::SliceStatus::Busy, "Destructible reset is pending");
 		return pending.id;
@@ -225,7 +226,7 @@ void DestructibleMeshComponent::complete(const PendingRequest& pending, DESTRUCT
 	}
 	mStatus = status;
 	mError = result.error;
-	const auto maximum = mScene && !mSceneLifetime.expired() ? std::max(1u, mScene->destructionSettings.MaximumResults) : 64;
+	const auto maximum = mScene && !mSceneLifetime.expired() ? std::max(1u, SceneDestructionSettings(*mScene).MaximumResults) : 64;
 	while (mResults.size() >= maximum) {
 		mResults.pop_front();
 	}

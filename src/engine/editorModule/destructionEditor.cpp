@@ -2,6 +2,7 @@
 #if defined(USE_EDITOR) && USE_PHYSICS_3D
 #include "coreModule/ecs/components/destructibleMeshComponent.h"
 #include "coreModule/ecs/object.h"
+#include "coreModule/ecs/sceneSimulationHost.h"
 #include "imgui.h"
 #include "sceneModule/sceneManager.h"
 #include "utilsModule/imguiHelper/ImGuizmo.h"
@@ -222,8 +223,8 @@ void DrawDestructionEditor(ECS::DestructibleMeshComponent& component) {
 		}
 		ImGui::TreePop();
 	}
-	if (scene.destructionRuntime && ImGui::TreeNode("Scene destruction budgets")) {
-		const auto& stats = scene.destructionRuntime->statistics;
+	if (const auto& runtime = ECS::SceneDestructionRuntime(scene); runtime && ImGui::TreeNode("Scene destruction budgets")) {
+		const auto& stats = runtime->statistics;
 		ImGui::Text("Jobs %u; CPU %.2f MiB; GPU %.2f MiB", stats.activeJobs, (stats.workingBytes + stats.topologyBytes) / 1048576.0,
 			stats.gpuBytes / 1048576.0);
 		ImGui::Text("GPU pending upload: %.2f MiB reserved", stats.gpuReservedBytes / 1048576.0);
