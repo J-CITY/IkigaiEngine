@@ -23,6 +23,7 @@
 #include "windowModule/inputManager/inputManager.h"
 #include "windowModule/window/window.h"
 #include <cmath>
+#include <functional>
 #include <iostream>
 #include <stdexcept>
 #include <vector>
@@ -226,7 +227,15 @@ void App::update(std::chrono::duration<double> dt) {
 		auto& input = RESOURCES::ServiceManager::Get<INPUT_SYSTEM::InputManager>();
 		input.beginInputFrame(dt);
 		auto& actions = RESOURCES::ServiceManager::Get<INPUT_SYSTEM::InputActions>();
-		actions.prepareMaps(RESOURCES::ServiceManager::Get<ECS::World>());
+		std::vector<std::reference_wrapper<const std::string>> activeMapNames;
+		if (auto* components = RESOURCES::ServiceManager::Get<ECS::World>().getComponentManager()) {
+			for (const auto& component : components->getComponentsArray<ECS::InputComponent>()) {
+				if (component.getActive() && !component.getMapName().empty()) {
+					activeMapNames.emplace_back(component.getMapName());
+				}
+			}
+		}
+		actions.prepareMaps(activeMapNames);
 		actions.resolve(dt);
 	}
 #endif

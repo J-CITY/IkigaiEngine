@@ -9,14 +9,11 @@
 #include <mathModule/math.h>
 #include <serdepp/attribute/default.hpp>
 #include <serdepp/serializer.hpp>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <utilsModule/reflection/reflection.h>
 #include <vector>
-
-namespace IKIGAI::ECS {
-class World;
-}
 
 namespace IKIGAI::INPUT_SYSTEM {
 inline constexpr const char* InputResourceExtension = ".input";
@@ -208,7 +205,7 @@ public:
 	bool loadBindingOverrides(const std::string& path = DefaultBindingOverridesPath);
 	bool saveBindingOverrides(const std::string& path = DefaultBindingOverridesPath) const;
 	void enableMap(const std::string& name, bool enabled);
-	void prepareMaps(ECS::World& world);
+	void prepareMaps(std::span<const std::reference_wrapper<const std::string>> activeMapNames);
 	void resolve(std::chrono::duration<double> dt);
 	void subscribe(Callback callback);
 

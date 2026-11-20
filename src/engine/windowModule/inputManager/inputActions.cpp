@@ -1,7 +1,5 @@
 #include "inputActions.h"
 
-#include "coreModule/ecs/components/inputComponent.h"
-#include "ecsModule/world.h"
 #include "inputControlPath.h"
 #include "resourceModule/jsonLoader.h"
 #include "resourceModule/playerProfile.h"
@@ -164,19 +162,13 @@ void InputActions::enableMap(const std::string& name, bool enabled) {
 	}
 }
 
-void InputActions::prepareMaps(ECS::World& world) {
+void InputActions::prepareMaps(std::span<const std::reference_wrapper<const std::string>> activeMapNames) {
 	for (auto& [name, map] : mMaps) {
 		map.activeThisFrame = map.assetEnabled;
 	}
-	auto* components = world.getComponentManager();
-	if (!components) {
-		return;
-	}
-	for (auto& component : components->getComponentsArray<ECS::InputComponent>()) {
-		if (component.getActive() && !component.getMapName().empty()) {
-			if (auto it = mMaps.find(component.getMapName()); it != mMaps.end()) {
-				it->second.activeThisFrame = true;
-			}
+	for (const auto activeMapName : activeMapNames) {
+		if (auto it = mMaps.find(activeMapName.get()); it != mMaps.end()) {
+			it->second.activeThisFrame = true;
 		}
 	}
 }
