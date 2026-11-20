@@ -59,6 +59,8 @@ set(IKIGAI_MANIFEST_renderModule
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/commands/renderCommand.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/commands/renderCommandBuffer.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/commands/renderCommandBuffer.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/diagnostics/gpuStageProfiler.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/diagnostics/gpuStageProfiler.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/diagnostics/renderStatistics.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/diagnostics/renderStatistics.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/drawable.cpp"

@@ -3,8 +3,6 @@
 set(IKIGAI_MANIFEST_profilerModule
     "${IKIGAI_SOURCE_ROOT}/engine/profilerModule/gpuMemoryProfiler.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/profilerModule/gpuMemoryProfiler.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/profilerModule/gpuStageProfiler.cpp"
-    "${IKIGAI_SOURCE_ROOT}/engine/profilerModule/gpuStageProfiler.h"
     "${IKIGAI_SOURCE_ROOT}/engine/profilerModule/memoryProfiler.h"
     "${IKIGAI_SOURCE_ROOT}/engine/profilerModule/processMemory.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/profilerModule/processMemory.h"

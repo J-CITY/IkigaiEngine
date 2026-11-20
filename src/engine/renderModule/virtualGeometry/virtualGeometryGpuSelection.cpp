@@ -1,11 +1,11 @@
 #include "virtualGeometryGpuSelection.h"
 
-#include "profilerModule/gpuStageProfiler.h"
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/backends/interface/storageBufferInterface.h"
 #include "renderModule/backends/interface/uniformBufferInterface.h"
 #include "renderModule/backends/interface/vertexBufferInterface.h"
 #include "renderModule/backends/meshFactory.h"
+#include "renderModule/diagnostics/gpuStageProfiler.h"
 #include "renderModule/render.h"
 #include "resourceModule/shaderManager.h"
 #include "virtualMeshAsset.h"

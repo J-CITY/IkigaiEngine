@@ -9,7 +9,7 @@
 #include <stdexcept>
 #include <utility>
 
-#include "profilerModule/gpuStageProfiler.h"
+#include "renderModule/diagnostics/gpuStageProfiler.h"
 #include "renderModule/render.h"
 #include "resourceModule/shaderManager.h"
 
