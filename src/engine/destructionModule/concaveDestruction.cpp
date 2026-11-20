@@ -18,7 +18,7 @@ namespace {
 		Vec3 normal {};
 	};
 	struct Corner {
-		Vertex vertex {};
+		FractureVertex vertex {};
 		unsigned id = 0;
 	};
 	struct Triangle {
@@ -81,8 +81,8 @@ namespace {
 		positions.reserve(mesh.vertices.size());
 		for (const auto& vertex : mesh.vertices) {
 			if (!finite(vertex.position) || !finite(vertex.normal) || !finite(vertex.tangent) || !finite(vertex.bitangent)
-				|| !std::isfinite(vertex.texCoord.x) || !std::isfinite(vertex.texCoord.y) || vertex.m_Weights.x != 0 || vertex.m_Weights.y != 0
-				|| vertex.m_Weights.z != 0 || vertex.m_Weights.w != 0) {
+				|| !std::isfinite(vertex.texCoord.x) || !std::isfinite(vertex.texCoord.y) || vertex.boneWeights.x != 0 || vertex.boneWeights.y != 0
+				|| vertex.boneWeights.z != 0 || vertex.boneWeights.w != 0) {
 				throw std::invalid_argument("Concave geometry requires finite, unskinned vertices");
 			}
 			positions.push_back(vertex.position);
@@ -104,8 +104,8 @@ namespace {
 		}
 		return result;
 	}
-	Vertex interpolate(const Vertex& a, const Vertex& b, float fraction) {
-		Vertex result {};
+	FractureVertex interpolate(const FractureVertex& a, const FractureVertex& b, float fraction) {
+		FractureVertex result {};
 		result.position = a.position + (b.position - a.position) * fraction;
 		result.texCoord = a.texCoord + (b.texCoord - a.texCoord) * fraction;
 		result.normal = unit(a.normal + (b.normal - a.normal) * fraction);
@@ -117,8 +117,8 @@ namespace {
 		}
 		return result;
 	}
-	Vertex capVertex(Vec3 position, Vec3 normal, Vec3 tangent, float uvScale) {
-		Vertex result {};
+	FractureVertex capVertex(Vec3 position, Vec3 normal, Vec3 tangent, float uvScale) {
+		FractureVertex result {};
 		result.position = position;
 		result.normal = normal;
 		result.tangent = tangent;
@@ -444,10 +444,10 @@ namespace {
 		}
 		return result;
 	}
-	bool sameAttributes(const Vertex& a, const Vertex& b) {
+	bool sameAttributes(const FractureVertex& a, const FractureVertex& b) {
 		return a.texCoord.x == b.texCoord.x && a.texCoord.y == b.texCoord.y && dot(a.normal - b.normal, a.normal - b.normal) == 0
 			&& dot(a.tangent - b.tangent, a.tangent - b.tangent) == 0 && dot(a.bitangent - b.bitangent, a.bitangent - b.bitangent) == 0
-			&& a.m_BoneIDs == b.m_BoneIDs;
+			&& a.boneIds == b.boneIds;
 	}
 	std::vector<FractureMesh> connectedMeshes(const std::vector<Triangle>& triangles, std::size_t positionCount, unsigned maximumPieces) {
 		std::vector<std::vector<std::size_t>> neighbors(triangles.size());
@@ -820,7 +820,7 @@ namespace {
 		}
 		return planes;
 	}
-	using Polygon = std::vector<Vertex>;
+	using Polygon = std::vector<FractureVertex>;
 	struct PolygonSplit {
 		Polygon inside {};
 		Polygon outside {};
@@ -877,7 +877,7 @@ namespace {
 		float epsilon = 0;
 		unsigned limit = 0;
 
-		Corner weld(Vertex vertex) {
+		Corner weld(FractureVertex vertex) {
 			auto found = std::find_if(mesh.positions.begin(), mesh.positions.end(),
 				[&](Vec3 position) { return (position - vertex.position).squareMagnitude() <= epsilon * epsilon; });
 			const auto id = static_cast<unsigned>(found - mesh.positions.begin());

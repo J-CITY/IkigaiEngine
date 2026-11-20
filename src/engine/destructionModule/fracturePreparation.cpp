@@ -158,7 +158,7 @@ PreparedFracture prepareFracture(const FractureSnapshot& snapshot, const std::at
 	return result;
 }
 std::size_t meshBytes(const FractureMesh& mesh) {
-	return mesh.vertices.size() * sizeof(Vertex) + mesh.indices.size() * sizeof(unsigned) + mesh.materials.size() * sizeof(unsigned);
+	return mesh.vertices.size() * sizeof(FractureVertex) + mesh.indices.size() * sizeof(unsigned) + mesh.materials.size() * sizeof(unsigned);
 }
 std::size_t pieceBytes(const FractureMesh& mesh, const COLLISION::Shape3D& shape) {
 	auto bytes = meshBytes(mesh);
@@ -184,7 +184,7 @@ std::vector<PreparedPiece::UploadBatch> prepareUploads(const FractureMesh& mesh)
 	std::vector<PreparedPiece::UploadBatch> result {};
 	for (const auto& [material, triangles] : groups) {
 		// Even completely unshared vertices fit one driver call within the minimum upload budget.
-		constexpr std::size_t trianglesPerBatch = 65536 / (3 * (sizeof(Vertex) + sizeof(unsigned)));
+		constexpr std::size_t trianglesPerBatch = 65536 / (3 * (FractureUploadVertexBytes + sizeof(unsigned)));
 		for (std::size_t start = 0; start < triangles.size(); start += trianglesPerBatch) {
 			PreparedPiece::UploadBatch batch {};
 			batch.material = material;

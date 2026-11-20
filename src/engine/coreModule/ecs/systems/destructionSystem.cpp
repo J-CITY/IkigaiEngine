@@ -23,6 +23,8 @@
 
 namespace IKIGAI::ECS {
 namespace {
+	static_assert(sizeof(Vertex) == DESTRUCTION::FractureUploadVertexBytes);
+
 	std::shared_ptr<Object> renderObject(SCENE_SYSTEM::Scene& scene, const std::vector<std::shared_ptr<RENDER::MaterialInterface>>& materials) {
 		auto model = RENDER::CreateEmptyModel();
 		if (!model) {
@@ -46,7 +48,13 @@ namespace {
 		return batch.vertices.size() * sizeof(Vertex) + batch.indices.size() * sizeof(unsigned);
 	}
 	void upload(Object& object, const DESTRUCTION::PreparedPiece::UploadBatch& batch) {
-		auto mesh = RENDER::CreateMesh(batch.vertices, batch.indices, batch.material);
+		std::vector<Vertex> vertices {};
+		vertices.reserve(batch.vertices.size());
+		for (const auto& vertex : batch.vertices) {
+			vertices.emplace_back(
+				vertex.position, vertex.texCoord, vertex.normal, vertex.tangent, vertex.bitangent, vertex.boneIds, vertex.boneWeights);
+		}
+		auto mesh = RENDER::CreateMesh(vertices, batch.indices, batch.material);
 		if (!mesh) {
 			throw std::runtime_error("Cannot upload fracture mesh");
 		}

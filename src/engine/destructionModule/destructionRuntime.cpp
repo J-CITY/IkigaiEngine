@@ -9,7 +9,7 @@ namespace {
 		// Includes source/output/cooked hulls, seams, cap and clipping scratch.
 		// Concave work caps total output triangles and total convex child triangles across the whole result.
 		const auto scratchFactor = concave ? 48 : 16;
-		return meshBytes(mesh) + std::size_t(maximumTriangles) * 3 * (sizeof(Vertex) + 64) * scratchFactor;
+		return meshBytes(mesh) + std::size_t(maximumTriangles) * 3 * (sizeof(FractureVertex) + 64) * scratchFactor;
 	}
 }
 void RuntimeSettings::validate() const {

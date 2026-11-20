@@ -14,8 +14,8 @@ namespace {
 		float length = value.magnitude();
 		return length > 1e-12f ? value * (1.f / length) : Vec3 {};
 	}
-	Vertex interpolate(const Vertex& a, const Vertex& b, float fraction) {
-		Vertex vertex {};
+	FractureVertex interpolate(const FractureVertex& a, const FractureVertex& b, float fraction) {
+		FractureVertex vertex {};
 		vertex.position = a.position + (b.position - a.position) * fraction;
 		vertex.texCoord = a.texCoord + (b.texCoord - a.texCoord) * fraction;
 		vertex.normal = unit(a.normal + (b.normal - a.normal) * fraction);
@@ -27,7 +27,7 @@ namespace {
 		}
 		return vertex;
 	}
-	void triangle(FractureMesh& mesh, Vertex a, Vertex b, Vertex c, unsigned material, float epsilon) {
+	void triangle(FractureMesh& mesh, FractureVertex a, FractureVertex b, FractureVertex c, unsigned material, float epsilon) {
 		if ((b.position - a.position).cross(c.position - a.position).squareMagnitude() <= epsilon * epsilon * epsilon * epsilon) {
 			return;
 		}
@@ -58,8 +58,8 @@ std::shared_ptr<const COLLISION::ConvexPolyhedron> validateMesh(const FractureMe
 	std::vector<Vec3> positions {};
 	for (const auto& vertex : mesh.vertices) {
 		if (!finite(vertex.position) || !finite(vertex.normal) || !finite(vertex.tangent) || !finite(vertex.bitangent)
-			|| !std::isfinite(vertex.texCoord.x) || !std::isfinite(vertex.texCoord.y) || vertex.m_Weights.x != 0 || vertex.m_Weights.y != 0
-			|| vertex.m_Weights.z != 0 || vertex.m_Weights.w != 0) {
+			|| !std::isfinite(vertex.texCoord.x) || !std::isfinite(vertex.texCoord.y) || vertex.boneWeights.x != 0 || vertex.boneWeights.y != 0
+			|| vertex.boneWeights.z != 0 || vertex.boneWeights.w != 0) {
 			throw std::invalid_argument("Fracture mesh must have finite, unskinned vertices");
 		}
 		positions.push_back(vertex.position);
@@ -100,7 +100,7 @@ SliceResult sliceMesh(const FractureMesh& mesh, Vec3 point, Vec3 normal, const S
 			}
 		};
 		for (size_t index = 0; index < mesh.indices.size(); index += 3) {
-			std::array<Vertex, 3> source {};
+			std::array<FractureVertex, 3> source {};
 			std::array<float, 3> distances {};
 			for (int corner = 0; corner < 3; ++corner) {
 				source[corner] = mesh.vertices[mesh.indices[index + corner]];
@@ -113,7 +113,7 @@ SliceResult sliceMesh(const FractureMesh& mesh, Vec3 point, Vec3 normal, const S
 				}
 			}
 			for (int side : { -1, 1 }) {
-				std::vector<Vertex> polygon {};
+				std::vector<FractureVertex> polygon {};
 				for (int edge = 0; edge < 3; ++edge) {
 					int next = (edge + 1) % 3;
 					float from = distances[edge] * side;
@@ -150,7 +150,7 @@ SliceResult sliceMesh(const FractureMesh& mesh, Vec3 point, Vec3 normal, const S
 		// Keep collinear boundary vertices: they match split source edges and avoid T junctions.
 		for (int side : { -1, 1 }) {
 			auto vertex = [&](Vec3 position) {
-				Vertex value {};
+				FractureVertex value {};
 				value.position = position;
 				value.normal = normal * float(-side);
 				value.tangent = axis;

@@ -8,6 +8,9 @@
 #include <optional>
 
 namespace IKIGAI::DESTRUCTION {
+// The upload adapter verifies this stride against the renderer's vertex format.
+inline constexpr std::size_t FractureUploadVertexBytes = 88;
+
 struct BoxCutout {
 	MATH::Vector3f halfExtents {};
 	MATH::QuaternionF orientation { 0, 0, 0, 1 };
@@ -35,7 +38,7 @@ struct PreparedPiece {
 	bool positiveSide = false;
 	struct UploadBatch {
 		unsigned material = 0;
-		std::vector<Vertex> vertices {};
+		std::vector<FractureVertex> vertices {};
 		std::vector<unsigned> indices {};
 	};
 	std::vector<UploadBatch> uploads {};

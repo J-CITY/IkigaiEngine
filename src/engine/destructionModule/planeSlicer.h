@@ -1,11 +1,21 @@
 #pragma once
 #include "collisionModule/convexPolyhedron.h"
-#include "renderModule/vertex.h"
+#include "mathModule/math.h"
+#include <array>
 #include <string>
 
 namespace IKIGAI::DESTRUCTION {
+struct FractureVertex {
+	MATH::Vector3f position {};
+	MATH::Vector2f texCoord {};
+	MATH::Vector3f normal {};
+	MATH::Vector3f tangent {};
+	MATH::Vector3f bitangent {};
+	std::array<int, 4> boneIds { -1, -1, -1, -1 };
+	MATH::Vector4f boneWeights {};
+};
 struct FractureMesh {
-	std::vector<Vertex> vertices {};
+	std::vector<FractureVertex> vertices {};
 	std::vector<unsigned> indices {};
 	std::vector<unsigned> materials {};
 };

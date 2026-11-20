@@ -78,7 +78,7 @@ namespace {
 				}
 				unsigned base = static_cast<unsigned>(mesh.vertices.size());
 				for (unsigned vertex = 0; vertex < part.mNumVertices; ++vertex) {
-					Vertex value {};
+					DESTRUCTION::FractureVertex value {};
 					auto convert = [](aiVector3D v) { return MATH::Vector3f { v.x, v.y, v.z }; };
 					value.position = convert(part.mVertices[vertex]);
 					value.normal = part.HasNormals() ? convert(part.mNormals[vertex]) : MATH::Vector3f {};
