@@ -4,6 +4,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -12,18 +13,14 @@
 #include <serdepp/attribute/default.hpp>
 #include <serdepp/serializer.hpp>
 
-#include "coreModule/ecs/components/virtualMeshRenderer.h"
 #include "renderModule/backends/interface/gpuFeatures.h"
 #include "renderModule/backends/interface/materialInterface.h"
 #include "renderModule/backends/interface/vertexLayout.h"
 #include "virtualGeometryGpuSelection.h"
+#include "virtualGeometryInstance.h"
 #include "virtualGeometrySelection.h"
 #include "virtualGeometrySelectionPath.h"
 #include "virtualGeometryStreaming.h"
-
-namespace IKIGAI::SCENE_SYSTEM {
-class Scene;
-}
 
 namespace IKIGAI::PROFILER {
 class GpuStageProfiler;
@@ -60,7 +57,7 @@ struct VirtualGeometrySettings {
 	bool FrustumCulling = true;
 	bool ConeCulling = true;
 	// NONE keeps each component's own DebugMode; another value overrides all instances.
-	ECS::VirtualMeshDebugMode DebugOverride = ECS::VirtualMeshDebugMode::NONE;
+	VirtualMeshDebugMode DebugOverride = VirtualMeshDebugMode::NONE;
 	// Multiplies every component threshold (quality scaling).
 	float ThresholdScale = 1.0f;
 	VirtualGeometrySelectionPath SelectionPath = VirtualGeometrySelectionPath::AUTO;
@@ -84,7 +81,7 @@ struct VirtualGeometrySettings {
 			.field(&VirtualGeometrySettings::FreezeLod, "FreezeLod", default_ { false })
 			.field(&VirtualGeometrySettings::FrustumCulling, "FrustumCulling", default_ { true })
 			.field(&VirtualGeometrySettings::ConeCulling, "ConeCulling", default_ { true })
-			.field(&VirtualGeometrySettings::DebugOverride, "DebugOverride", default_ { ECS::VirtualMeshDebugMode::NONE })
+			.field(&VirtualGeometrySettings::DebugOverride, "DebugOverride", default_ { VirtualMeshDebugMode::NONE })
 			.field(&VirtualGeometrySettings::ThresholdScale, "ThresholdScale", default_ { 1.0f })
 			.field(&VirtualGeometrySettings::SelectionPath, "SelectionPath", default_ { VirtualGeometrySelectionPath::AUTO })
 			.field(&VirtualGeometrySettings::HierarchyTraversal, "HierarchyTraversal", default_ { false })
@@ -238,7 +235,7 @@ public:
 	// Must run before any stage of the frame (uploads outside render passes). viewChunks receives fallback drawables
 	// for instances not drawn as clusters; shadowChunks receives fallback drawables of every shadow-casting instance
 	// (shadow maps, ray tracing and GI use the fallback mesh in M2).
-	void prepareFrame(RENDER::Renderer& renderer, SCENE_SYSTEM::Scene& scene, const VirtualGeometryFrameInput& input,
+	void prepareFrame(RENDER::Renderer& renderer, std::span<const VirtualGeometryInstance> instances, const VirtualGeometryFrameInput& input,
 		std::vector<RENDER::RenderChunk>& viewChunks, std::vector<RENDER::RenderChunk>& shadowChunks);
 	// Records the cluster draws of the frame into the currently bound G-buffer framebuffer (phase 1 with occlusion).
 	void drawGeometry(RENDER::Renderer& renderer, const VirtualGeometryDrawBindings& bindings);
@@ -333,7 +330,7 @@ private:
 		VirtualGeometryInstanceTransform Transform = {};
 		int OwnerId = 0;
 		float Threshold = 0.0f;
-		ECS::VirtualMeshDebugMode DebugMode = ECS::VirtualMeshDebugMode::NONE;
+		VirtualMeshDebugMode DebugMode = VirtualMeshDebugMode::NONE;
 	};
 
 	bool ensureClusterMaterial();
@@ -352,8 +349,7 @@ private:
 		const std::shared_ptr<RENDER::ShaderInterface>& visibilityShader = {});
 	bool ensureResolveMaterial(RENDER::Renderer& renderer);
 	bool mGpuFrameRecorded = false;
-	void appendFallback(ECS::VirtualMeshRenderer& component, const MATH::Matrix4f& world, const MATH::Matrix4f& previousWorld, int ownerId,
-		float distance, std::vector<RENDER::RenderChunk>& chunks) const;
+	void appendFallback(const VirtualGeometryInstance& instance, float distance, std::vector<RENDER::RenderChunk>& chunks) const;
 	void uploadFrame(RENDER::Renderer& renderer);
 	void copySurfaceUniforms(RENDER::MaterialInterface& target, const RENDER::MaterialInterface& surface);
 

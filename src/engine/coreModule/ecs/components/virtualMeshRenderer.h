@@ -2,6 +2,7 @@
 
 #include "component.h"
 #include "mathModule/math.h"
+#include "virtualGeometryModule/runtime/virtualMeshDebugMode.h"
 
 #include <cstdint>
 #include <memory>
@@ -18,8 +19,7 @@ class VirtualMeshAsset;
 }
 
 namespace IKIGAI::ECS {
-// Debug colouring of the virtual geometry G-buffer pass (written to Albedo).
-enum class VirtualMeshDebugMode { NONE = 0, CLUSTER = 1, LOD = 2, GROUP = 3 };
+using VirtualMeshDebugMode = VG::VirtualMeshDebugMode;
 
 // Static opaque mesh drawn from a cooked .vmesh by the virtual geometry renderer: clusters with an error-bounded
 // LOD DAG, selected per frame by screen-space error and drawn with indirect draws into the G-buffer. Backends or

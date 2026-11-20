@@ -146,4 +146,6 @@ set(IKIGAI_MANIFEST_renderModule
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/vectorGraphics/vectorRenderer.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/virtualGeometry/virtualGeometryPostStage.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/virtualGeometry/virtualGeometryPostStage.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/virtualGeometry/virtualGeometryScene.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/virtualGeometry/virtualGeometryScene.h"
 )

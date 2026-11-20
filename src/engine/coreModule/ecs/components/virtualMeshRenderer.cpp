@@ -5,6 +5,7 @@
 #include "resourceModule/materialManager.h"
 #include "resourceModule/modelManager.h"
 #include "resourceModule/serviceManager.h"
+#include "virtualGeometryModule/runtime/virtualGeometryInstance.h"
 #include "virtualGeometryModule/runtime/virtualMeshAsset.h"
 #include "virtualGeometryModule/runtime/virtualMeshLoader.h"
 
@@ -134,10 +135,7 @@ void VirtualMeshRenderer::setMaterial(uint32_t slot, std::shared_ptr<RENDER::Mat
 }
 
 std::shared_ptr<RENDER::MaterialInterface> VirtualMeshRenderer::getMaterial(uint32_t slot) const {
-	if (slot < mMaterials.size() && mMaterials[slot]) {
-		return mMaterials[slot];
-	}
-	return mMaterials.empty() ? nullptr : mMaterials.front();
+	return VG::ResolveVirtualMeshMaterial(mMaterials, slot);
 }
 
 const std::vector<std::shared_ptr<RENDER::MaterialInterface>>& VirtualMeshRenderer::getMaterials() const {

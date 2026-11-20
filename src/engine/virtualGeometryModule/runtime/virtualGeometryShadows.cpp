@@ -5,14 +5,10 @@
 #include <cstddef>
 #include <stdexcept>
 
-#include "coreModule/ecs/components/modelRenderer.h"
-#include "coreModule/ecs/components/virtualMeshRenderer.h"
-#include "ecsModule/world.h"
 #include "renderModule/backends/interface/modelInterface.h"
 #include "renderModule/backends/interface/textureInterface.h"
 #include "renderModule/drawable.h"
 #include "renderModule/render.h"
-#include "sceneModule/scene.h"
 #include "virtualMeshAsset.h"
 
 namespace IKIGAI::VG {
@@ -57,33 +53,26 @@ void ValidateVirtualGeometryShadowSettings(const VirtualGeometryShadowSettings& 
 	}
 }
 
-void VirtualGeometryShadows::prepare(SCENE_SYSTEM::Scene& scene, bool enabled) {
+void VirtualGeometryShadows::prepare(std::span<const VirtualGeometryInstance> instances, bool enabled) {
 	endFrame();
 	mStatistics = {};
 	if (!enabled) {
 		return;
 	}
-	auto& components = scene.getWorld().getComponentManager()->getComponentsArray<ECS::VirtualMeshRenderer>();
-	for (const auto& component : components) {
-		const auto& object = component.obj.get();
-		const auto& asset = component.getAsset();
-		if (!object.getIsVisible() || !object.getIsActive() || object.getComponent<ECS::ModelRenderer>() || !asset || !asset->hasClusterBuffers()
-			|| asset->streamsPages()) {
-			continue;
-		}
-		const auto fallback = component.getFallbackModel();
-		if (!fallback) {
+	for (const auto& instance : instances) {
+		const auto& asset = instance.Asset;
+		if (!instance.AllowClusterShadows || !asset || !asset->hasClusterBuffers() || asset->streamsPages() || !instance.Fallback) {
 			continue;
 		}
 		Candidate candidate;
 		candidate.Asset = asset;
-		candidate.Fallback = fallback;
-		candidate.OwnerId = static_cast<int>(object.getID().getUniqueId());
-		candidate.Threshold = component.getErrorThreshold();
+		candidate.Fallback = instance.Fallback;
+		candidate.OwnerId = static_cast<int>(instance.InstanceId);
+		candidate.Threshold = instance.ErrorThreshold;
 		bool hasCaster = false;
 		bool supported = true;
 		for (uint32_t slot = 0; slot < asset->materialSlotCount(); ++slot) {
-			const auto material = component.getMaterial(slot);
+			const auto material = ResolveVirtualMeshMaterial(instance.Materials, slot);
 			const bool casts = material && material->isCastShadow();
 			candidate.CastsShadow.push_back(casts);
 			if (!casts) {
@@ -98,7 +87,7 @@ void VirtualGeometryShadows::prepare(SCENE_SYSTEM::Scene& scene, bool enabled) {
 			hasCaster = true;
 		}
 		if (supported && hasCaster) {
-			candidate.Transform = MakeInstanceTransform(object.getTransform()->getTransform().getWorldMatrix(), false);
+			candidate.Transform = MakeInstanceTransform(instance.World, false);
 			mCandidates.push_back(std::move(candidate));
 		}
 	}

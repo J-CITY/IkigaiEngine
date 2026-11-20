@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <set>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -10,6 +11,7 @@
 #include <serdepp/serializer.hpp>
 
 #include "renderModule/backends/interface/renderEnums.h"
+#include "virtualGeometryInstance.h"
 #include "virtualGeometrySelection.h"
 
 namespace IKIGAI::RENDER {
@@ -20,9 +22,6 @@ class Renderer;
 class ShaderInterface;
 class StorageBufferInterface;
 class UniformBufferInterface;
-}
-namespace IKIGAI::SCENE_SYSTEM {
-class Scene;
 }
 
 namespace IKIGAI::VG {
@@ -55,7 +54,7 @@ struct VirtualGeometryShadowStatistics {
 
 class VirtualGeometryShadows final {
 public:
-	void prepare(SCENE_SYSTEM::Scene& scene, bool enabled);
+	void prepare(std::span<const VirtualGeometryInstance> instances, bool enabled);
 	void endFrame();
 	// Records a separate cut for one directional cascade. Any rejected caster stays on the fallback lane.
 	void record(RENDER::Renderer& renderer, const VirtualGeometryView& view, const VirtualGeometryShadowSettings& settings,

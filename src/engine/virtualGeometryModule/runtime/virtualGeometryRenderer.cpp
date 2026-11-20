@@ -1,7 +1,5 @@
 #include "virtualGeometryRenderer.h"
 
-#include "coreModule/ecs/object.h"
-#include "ecsModule/world.h"
 #include "profilerModule/profiler.h"
 #include "profilerModule/profilerSpy.h"
 #include "renderModule/backends/interface/driverInterface.h"
@@ -16,7 +14,6 @@
 #include "renderModule/render.h"
 #include "resourceModule/materialManager.h"
 #include "resourceModule/serviceManager.h"
-#include "sceneModule/scene.h"
 #include "virtualGeometrySoftwareRaster.h"
 #include "virtualMeshAsset.h"
 #include "virtualMeshPageSource.h"
@@ -204,7 +201,7 @@ void ValidateVirtualGeometrySettings(const VirtualGeometrySettings& settings) {
 		throw std::invalid_argument("VirtualGeometrySettings.SelectionPath must be AUTO, CPU or GPU");
 	}
 	const auto debug = static_cast<int>(settings.DebugOverride);
-	if (debug < static_cast<int>(ECS::VirtualMeshDebugMode::NONE) || debug > static_cast<int>(ECS::VirtualMeshDebugMode::GROUP)) {
+	if (debug < static_cast<int>(VirtualMeshDebugMode::NONE) || debug > static_cast<int>(VirtualMeshDebugMode::GROUP)) {
 		throw std::invalid_argument("VirtualGeometrySettings.DebugOverride is out of range");
 	}
 	const auto occlusionDebug = static_cast<int>(settings.OcclusionDebug);
@@ -506,29 +503,29 @@ void VirtualGeometryRenderer::copySurfaceUniforms(RENDER::MaterialInterface& tar
 	}
 }
 
-void VirtualGeometryRenderer::appendFallback(ECS::VirtualMeshRenderer& component, const MATH::Matrix4f& world, const MATH::Matrix4f& previousWorld,
-	int ownerId, float distance, std::vector<RENDER::RenderChunk>& chunks) const {
-	const auto model = component.getFallbackModel();
+void VirtualGeometryRenderer::appendFallback(
+	const VirtualGeometryInstance& instance, float distance, std::vector<RENDER::RenderChunk>& chunks) const {
+	const auto& model = instance.Fallback;
 	if (!model || chunks.empty()) {
 		return;
 	}
 	for (const auto& mesh : model->getMeshes()) {
-		auto material = component.getMaterial(static_cast<uint32_t>(mesh->getMaterialIndex()));
+		auto material = ResolveVirtualMeshMaterial(instance.Materials, static_cast<uint32_t>(mesh->getMaterialIndex()));
 		if (!material || (!material->getShader() && !material->isDeferred())) {
 			continue;
 		}
 		RENDER::Drawable drawable;
-		drawable.prevWorld = previousWorld;
-		drawable.world = world;
+		drawable.prevWorld = instance.PreviousWorld;
+		drawable.world = instance.World;
 		drawable.mesh = mesh;
 		drawable.material = std::move(material);
-		drawable.OwnerId = ownerId;
+		drawable.OwnerId = static_cast<int>(instance.InstanceId);
 		InsertDrawable(chunks.front(), distance, drawable);
 	}
 }
 
-void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYSTEM::Scene& scene, const VirtualGeometryFrameInput& input,
-	std::vector<RENDER::RenderChunk>& viewChunks, std::vector<RENDER::RenderChunk>& shadowChunks) {
+void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, std::span<const VirtualGeometryInstance> instances,
+	const VirtualGeometryFrameInput& input, std::vector<RENDER::RenderChunk>& viewChunks, std::vector<RENDER::RenderChunk>& shadowChunks) {
 	const auto start = std::chrono::steady_clock::now();
 	auto cpuProfile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("VirtualGeometry::prepareFrame") : nullptr;
 	endFrame();
@@ -537,7 +534,6 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 		mFrozenCuts.clear();
 		mFrozenLodViews.clear();
 	}
-	auto& components = scene.getWorld().getComponentManager()->getComponentsArray<ECS::VirtualMeshRenderer>();
 	const bool clusterPath = mSettings.Enabled && input.GeometryStageActive && IsVirtualGeometryGpuPathSupported() && ensureClusterMaterial();
 	mMaxDrawIndirectCount = clusterPath ? std::max(1u, renderer.gpuFeatures().MaxDrawIndirectCount) : 1u;
 	mActivePath = resolveSelectionPath(renderer, clusterPath, input.SelectionPath);
@@ -555,25 +551,17 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 		mStreaming->beginFrame(renderer, input.Frame);
 	}
 
-	for (auto& component : components) {
-		auto& object = component.obj;
-		if (!object->getIsVisible() || !object->getIsActive()) {
-			continue;
-		}
+	for (const auto& instance : instances) {
 		++mStatistics.Instances;
-		auto& transform = object->getTransform()->getTransform();
-		const auto world = transform.getWorldMatrix();
-		const auto previousWorld = component.advanceHistory(world, input.Frame);
-		const int ownerId = static_cast<int>(object->getID().getUniqueId());
-		const float distance = MATH::Vector3f::Distance(transform.getWorldPosition(), input.View.CameraPosition);
+		const float distance = MATH::Vector3f::Distance(instance.Position, input.View.CameraPosition);
 		// Shadow maps, ray tracing and GI see the fallback mesh (clustered shadow views are M6).
-		appendFallback(component, world, previousWorld, ownerId, distance, shadowChunks);
+		appendFallback(instance, distance, shadowChunks);
 
-		const auto& asset = component.getAsset();
+		const auto& asset = instance.Asset;
 		bool drawClusters = clusterPath && asset && (asset->hasClusterBuffers() || asset->streamsPages());
 		bool singleSided = true;
 		for (uint32_t slot = 0; drawClusters && slot < asset->materialSlotCount(); ++slot) {
-			const auto material = component.getMaterial(slot);
+			const auto material = ResolveVirtualMeshMaterial(instance.Materials, slot);
 			if (!material || material->isBlendable()) {
 				drawClusters = false;
 				break;
@@ -582,35 +570,34 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 		}
 		if (!drawClusters) {
 			++mStatistics.FallbackInstances;
-			appendFallback(component, world, previousWorld, ownerId, distance, viewChunks);
+			appendFallback(instance, distance, viewChunks);
 			continue;
 		}
 		++mStatistics.ClusterInstances;
 		InstanceCandidate candidate;
 		candidate.Materials.reserve(asset->materialSlotCount());
 		for (uint32_t slot = 0; slot < asset->materialSlotCount(); ++slot) {
-			candidate.Materials.push_back(component.getMaterial(slot));
+			candidate.Materials.push_back(ResolveVirtualMeshMaterial(instance.Materials, slot));
 		}
 		candidate.Asset = asset;
-		candidate.World = world;
-		candidate.PreviousWorld = previousWorld;
-		candidate.ContinuousHistory = component.hasContinuousHistory();
-		candidate.Transform = MakeInstanceTransform(world, singleSided);
-		candidate.OwnerId = ownerId;
-		candidate.Threshold = component.getErrorThreshold() * mSettings.ThresholdScale;
-		candidate.DebugMode = mSettings.DebugOverride != ECS::VirtualMeshDebugMode::NONE ? mSettings.DebugOverride : component.getDebugMode();
+		candidate.World = instance.World;
+		candidate.PreviousWorld = instance.PreviousWorld;
+		candidate.ContinuousHistory = instance.ContinuousHistory;
+		candidate.Transform = MakeInstanceTransform(instance.World, singleSided);
+		candidate.OwnerId = static_cast<int>(instance.InstanceId);
+		candidate.Threshold = instance.ErrorThreshold * mSettings.ThresholdScale;
+		candidate.DebugMode = mSettings.DebugOverride != VirtualMeshDebugMode::NONE ? mSettings.DebugOverride : instance.DebugMode;
 		if (visibilityEligible) {
 			const auto& buffers = asset->gpuBuffers();
 			visibilityEligible = !asset->streamsPages() && buffers.ResolveVertices && buffers.ResolveIndices
-				&& candidate.DebugMode == ECS::VirtualMeshDebugMode::NONE
-				&& IsBeyondNearPlane(asset->header().BoundingSphere, candidate.Transform, input)
+				&& candidate.DebugMode == VirtualMeshDebugMode::NONE && IsBeyondNearPlane(asset->header().BoundingSphere, candidate.Transform, input)
 				&& std::ranges::all_of(candidate.Materials, [](const auto& material) { return SupportsVisibilityMaterial(*material); });
 		}
 		if (asset->streamsPages()) {
 			if (mSettings.FreezeLod) {
 				--mStatistics.ClusterInstances;
 				++mStatistics.FallbackInstances;
-				appendFallback(component, world, previousWorld, ownerId, distance, viewChunks);
+				appendFallback(instance, distance, viewChunks);
 				continue;
 			}
 			if (mSettings.FrustumCulling && !IsInstanceVisible(asset->header().BoundingSphere, candidate.Transform, input.View)) {
@@ -628,13 +615,13 @@ void VirtualGeometryRenderer::prepareFrame(RENDER::Renderer& renderer, SCENE_SYS
 				}
 			}
 			if (mStreaming) {
-				candidate.StreamCut = mStreaming->select(renderer, asset, candidate.Transform, input.View, candidate.Threshold,
-					static_cast<uint64_t>(object->getID().getUniqueId()), input.ViewId, input.GpuProfiler);
+				candidate.StreamCut = mStreaming->select(
+					renderer, asset, candidate.Transform, input.View, candidate.Threshold, instance.InstanceId, input.ViewId, input.GpuProfiler);
 			}
 			if (!candidate.StreamCut) {
 				--mStatistics.ClusterInstances;
 				++mStatistics.FallbackInstances;
-				appendFallback(component, world, previousWorld, ownerId, distance, viewChunks);
+				appendFallback(instance, distance, viewChunks);
 				continue;
 			}
 			gpuSelection = false;

@@ -17,6 +17,7 @@
 #include "renderGraph/screenProbeStage.h"
 #include "utilsModule/time/loadTimer.h"
 #include "virtualGeometry/virtualGeometryPostStage.h"
+#include "virtualGeometry/virtualGeometryScene.h"
 #include "virtualGeometryModule/runtime/virtualGeometryRenderer.h"
 #include "virtualGeometryModule/runtime/virtualMeshAsset.h"
 #if USE_PHYSICS_3D
@@ -834,12 +835,14 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		virtualGeometryInput.ViewProjection = viewProjection;
 		virtualGeometryInput.PreviousViewProjection = mPreviousViewProjection;
 		virtualGeometryInput.FallbackTexture = mEmptyTexture;
-		virtualGeometry().prepareFrame(*mContext.render, scene, virtualGeometryInput, chunks, shadowChunks);
+		auto& geometry = virtualGeometry();
+		const bool useVgShadows = geometry.settings().Enabled && std::ranges::any_of(mRenderPipeline->mStages, [](const auto& stage) {
+			return stage->mDescriptor.Enabled && bool(stage->mVgShadowShader);
+		});
+		const auto instances = CollectVirtualGeometryInstances(scene, virtualGeometryInput.Frame, useVgShadows);
+		geometry.prepareFrame(*mContext.render, instances, virtualGeometryInput, chunks, shadowChunks);
+		mVirtualGeometryShadows.prepare(instances, useVgShadows);
 	}
-	const bool useVgShadows = virtualGeometry().settings().Enabled && std::ranges::any_of(mRenderPipeline->mStages, [](const auto& stage) {
-		return stage->mDescriptor.Enabled && bool(stage->mVgShadowShader);
-	});
-	mVirtualGeometryShadows.prepare(scene, useVgShadows);
 	for (auto i = mSkinningPoses.begin(); i != mSkinningPoses.end();) {
 		if (i->second.Frame + 1 < mFrameCount) {
 			i = mSkinningPoses.erase(i);

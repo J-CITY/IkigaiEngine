@@ -129,8 +129,8 @@ void ProfillerWindow::drawVirtualGeometry() {
     ImGui::SameLine(); changed |= ImGui::Checkbox("Freeze LOD", &settings.FreezeLod);
     int mode = static_cast<int>(settings.DebugOverride);
     if (ImGui::Combo("VG debug colours", &mode, "Per component\0Cluster\0LOD level\0Group\0")) {
-        settings.DebugOverride = static_cast<ECS::VirtualMeshDebugMode>(mode);
-        changed = true;
+		settings.DebugOverride = static_cast<VG::VirtualMeshDebugMode>(mode);
+		changed = true;
     }
     changed |= ImGui::SliderFloat("VG threshold scale", &settings.ThresholdScale, 0.0f, 16.0f);
 	int path = static_cast<int>(settings.SelectionPath);
