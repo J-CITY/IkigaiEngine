@@ -3,9 +3,9 @@
 #include "ikigaiScriptBinder.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
-#include "scriptSource.h"
 #include "scriptVfsPath.h"
 #include "utilsModule/log/loggerDefine.h"
+#include "utilsModule/stringUtils.h"
 #include <Library/exception.h>
 
 namespace IKIGAI::SCRIPTING {
@@ -43,7 +43,7 @@ bool IkigaiScriptRuntime::loadFromVfs(ECS::Object& owner) {
 		if (!file || !file->isValid()) {
 			throw std::runtime_error("Cannot open " + filename);
 		}
-		state->source = NormalizeScriptSource(file->readStr());
+		state->source = UTILS::NormalizeTextInput(file->readStr());
 		healthy = !state->vm.evaluate(state->source) && state->vm.__EXEPTION__ == IkigaiScript::ExceptionType::None;
 		if (!healthy) {
 			throw std::runtime_error(

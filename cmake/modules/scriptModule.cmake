@@ -23,6 +23,5 @@ set(IKIGAI_MANIFEST_scriptModule
     "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptFileWatcher.h"
     "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptInterpreter.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptInterpreter.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptSource.h"
     "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptVfsPath.h"
 )

@@ -2,7 +2,7 @@
 #if USE_IKIGAI_SCRIPT
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
-#include "scriptSource.h"
+#include "utilsModule/stringUtils.h"
 #include <Library/ikigaiScript.h>
 #endif
 
@@ -23,8 +23,9 @@ ContextPredicate::ContextPredicate(const std::string& path, const std::string& n
 	auto file = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().getFile(path);
 	if (!file || !file->isValid())
 		throw std::runtime_error("Cannot read predicate script: " + path);
-	if (state->vm.evaluate(NormalizeScriptSource(file->readStr())) || state->vm.__EXEPTION__ != IkigaiScript::ExceptionType::None)
+	if (state->vm.evaluate(UTILS::NormalizeTextInput(file->readStr())) || state->vm.__EXEPTION__ != IkigaiScript::ExceptionType::None) {
 		throw std::runtime_error("Predicate script compilation failed: " + path + ": " + state->vm.__DEBUG_OUT__);
+	}
 	const auto& functions = state->vm.getGlobalScope()->functions;
 	auto fn = functions.find(name);
 	if (fn == functions.end())

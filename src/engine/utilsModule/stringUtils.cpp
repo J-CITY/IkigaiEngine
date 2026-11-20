@@ -69,4 +69,24 @@ std::string ToUpper(std::string_view s) {
 bool IsFindInString(const std::string& s, const std::string& subs) {
 	return s.find(subs) != std::string::npos;
 }
+
+std::string NormalizeTextInput(std::string_view input) {
+	if (input.starts_with("\xef\xbb\xbf")) {
+		input.remove_prefix(3);
+	}
+	std::string result;
+	result.reserve(input.size());
+	for (std::size_t index = 0; index < input.size(); ++index) {
+		if (input[index] == '\r') {
+			result += '\n';
+			if (index + 1 < input.size() && input[index + 1] == '\n') {
+				++index;
+			}
+		}
+		else {
+			result += input[index];
+		}
+	}
+	return result;
+}
 }

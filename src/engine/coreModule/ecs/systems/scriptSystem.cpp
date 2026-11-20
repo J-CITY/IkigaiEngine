@@ -4,8 +4,8 @@
 #include <resourceModule/fileSystem/fileSystem.h>
 #include <resourceModule/serviceManager.h>
 #include <sceneModule/sceneManager.h>
-#include <scriptModule/scriptSource.h>
 #include <scriptModule/scriptVfsPath.h>
+#include <utilsModule/stringUtils.h>
 #ifdef __EMSCRIPTEN__
 #include <iostream>
 #endif
@@ -88,7 +88,7 @@ bool IKIGAI::ECS::ScriptSystem::registerToLuaContext(ScriptComponent& component,
 
 	component.scriptEnvironment = sol::environment(p_luaState, sol::create, sharedBindings);
 
-	const auto source = NormalizeScriptSource(file->readStr());
+	const auto source = UTILS::NormalizeTextInput(file->readStr());
 	const auto chunkName = "@" + vfsPath;
 	auto result = p_luaState.safe_script(source, component.scriptEnvironment, sol::script_pass_on_error, chunkName);
 	if (!result.valid()) {

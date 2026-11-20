@@ -1,4 +1,4 @@
-#include "scriptModule/scriptSource.h"
+#include "utilsModule/stringUtils.h"
 #include "view.h"
 #include <stdexcept>
 #if USE_LUA
@@ -148,7 +148,7 @@ namespace {
 				}
 				native(true).invoke(name, values);
 			});
-			auto result = vm.safe_script(SCRIPTING::NormalizeScriptSource(source), sol::script_pass_on_error);
+			auto result = vm.safe_script(UTILS::NormalizeTextInput(source), sol::script_pass_on_error);
 			if (!result.valid()) {
 				sol::error error = result;
 				throw std::runtime_error(error.what());
@@ -225,7 +225,7 @@ namespace {
 	public:
 		IkController(const std::string& input, std::shared_ptr<Controller> host)
 			: ScriptController(std::move(host))
-			, source(SCRIPTING::NormalizeScriptSource(input)) {
+			, source(UTILS::NormalizeTextInput(input)) {
 			auto bridge = vm.newModule("Host", 0, { });
 			vm.newFunction("Get", bridge, IkigaiScript::Lambda([this](const IkigaiScript::List& args) {
 				if (args.size() != 1)
