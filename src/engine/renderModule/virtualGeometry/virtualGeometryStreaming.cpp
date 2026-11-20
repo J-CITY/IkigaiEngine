@@ -1,7 +1,7 @@
 #include "virtualGeometryStreaming.h"
 #include "renderModule/render.h"
+#include "virtualGeometryModule/runtime/virtualMeshPageSource.h"
 #include "virtualMeshAsset.h"
-#include "virtualMeshPageSource.h"
 #include <algorithm>
 #include <iostream>
 #include <limits>

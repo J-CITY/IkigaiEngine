@@ -5,8 +5,8 @@
 #include "profilerModule/profiler.h"
 #include "renderModule/diagnostics/renderStatistics.h"
 #include "renderModule/gameRenderer.h"
+#include "renderModule/virtualGeometry/virtualGeometryRenderer.h"
 #include "resourceModule/serviceManager.h"
-#include "virtualGeometryModule/runtime/virtualGeometryRenderer.h"
 #include <algorithm>
 #include <array>
 #include <cfloat>

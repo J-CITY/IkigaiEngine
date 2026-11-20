@@ -2,7 +2,7 @@
 #include "interface/driverInterface.h"
 #include "interface/universalMesh.h"
 #include "utilsModule/memory/resourceAllocator.h"
-
+#include <stdexcept>
 
 #ifdef OPENGL_BACKEND
 #include "coreModule/graphicsWrapper.hpp"
@@ -140,6 +140,65 @@ std::shared_ptr<MeshInterface> CreateMesh(const MeshData& data, unsigned materia
 #endif
 	return IKIGAI::MEMORY::MakeShared<CustomMesh, IKIGAI::MEMORY::Category::Mesh>(data, materialIndex);
 }
+
+std::shared_ptr<VertexBufferInterface> CreateGpuDrivenVertexBuffer(
+	[[maybe_unused]] const void* data, [[maybe_unused]] size_t count, [[maybe_unused]] size_t stride) {
+	switch (DriverInterface::settings.backend) {
+#ifdef VULKAN_BACKEND
+	case RenderSettings::Backend::VULKAN:
+		return std::make_shared<VertexBufferVk>(const_cast<void*>(data), count, stride);
+#endif
+#ifdef DX12_BACKEND
+	case RenderSettings::Backend::DIRECTX12:
+		return std::make_shared<VertexBufferDx12>(const_cast<void*>(data), count, stride);
+#endif
+	default:
+		throw std::runtime_error("Virtual geometry vertex buffers require Vulkan or DirectX 12");
+	}
+}
+
+std::shared_ptr<IndexBufferInterface> CreateGpuDrivenIndexBuffer([[maybe_unused]] const uint32_t* data, [[maybe_unused]] size_t count) {
+	switch (DriverInterface::settings.backend) {
+#ifdef VULKAN_BACKEND
+	case RenderSettings::Backend::VULKAN:
+		return std::make_shared<IndexBufferVk>(const_cast<uint32_t*>(data), count, sizeof(uint32_t));
+#endif
+#ifdef DX12_BACKEND
+	case RenderSettings::Backend::DIRECTX12:
+		return std::make_shared<IndexBufferDx12>(const_cast<uint32_t*>(data), count, sizeof(uint32_t));
+#endif
+	default:
+		throw std::runtime_error("Virtual geometry index buffers require Vulkan or DirectX 12");
+	}
+}
+
+std::vector<StreamingMeshBufferSlot> CreateStreamingMeshBufferSlots(
+	size_t slotCount, size_t vertexCapacity, size_t vertexStride, size_t indexCapacity) {
+	std::vector<uint32_t> initialIndices;
+	switch (DriverInterface::settings.backend) {
+#ifdef VULKAN_BACKEND
+	case RenderSettings::Backend::VULKAN:
+		break;
+#endif
+#ifdef DX12_BACKEND
+	case RenderSettings::Backend::DIRECTX12:
+		// Keep the initial DX12 upload, sharing one zero-filled staging vector across all slots.
+		initialIndices.resize(indexCapacity);
+		break;
+#endif
+	default:
+		throw std::runtime_error("VG GPU page pool requires Vulkan or DirectX 12");
+	}
+
+	const auto* indices = initialIndices.empty() ? nullptr : initialIndices.data();
+	std::vector<StreamingMeshBufferSlot> slots;
+	slots.reserve(slotCount);
+	for (size_t slotIndex = 0; slotIndex < slotCount; ++slotIndex) {
+		slots.push_back({ CreateGpuDrivenVertexBuffer(nullptr, vertexCapacity, vertexStride), CreateGpuDrivenIndexBuffer(indices, indexCapacity) });
+	}
+	return slots;
+}
+
 std::shared_ptr<ModelInterface> CreateEmptyModel(const std::string& path) {
 	switch (DriverInterface::settings.backend) {
 #ifdef OPENGL_BACKEND

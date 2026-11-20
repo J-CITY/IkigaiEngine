@@ -82,7 +82,7 @@
 #if USE_LUA
 #include "scriptModule/scriptInterpreter.h"
 #endif
-#include "virtualGeometryModule/runtime/virtualMeshLoader.h"
+#include "resourceModule/virtualMeshLoader.h"
 #include <coreModule/ecs/components/scriptComponent.h>
 #include <renderModule/gameRenderer.h>
 

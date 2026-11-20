@@ -2,12 +2,12 @@
 
 #include "renderModule/backends/interface/materialInterface.h"
 #include "renderModule/backends/interface/modelInterface.h"
+#include "renderModule/virtualGeometry/virtualGeometryInstance.h"
+#include "renderModule/virtualGeometry/virtualMeshAsset.h"
 #include "resourceModule/materialManager.h"
 #include "resourceModule/modelManager.h"
 #include "resourceModule/serviceManager.h"
-#include "virtualGeometryModule/runtime/virtualGeometryInstance.h"
-#include "virtualGeometryModule/runtime/virtualMeshAsset.h"
-#include "virtualGeometryModule/runtime/virtualMeshLoader.h"
+#include "resourceModule/virtualMeshLoader.h"
 
 #include <cmath>
 #include <iostream>

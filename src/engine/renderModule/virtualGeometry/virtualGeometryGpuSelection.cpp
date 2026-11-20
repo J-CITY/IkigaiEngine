@@ -5,6 +5,7 @@
 #include "renderModule/backends/interface/storageBufferInterface.h"
 #include "renderModule/backends/interface/uniformBufferInterface.h"
 #include "renderModule/backends/interface/vertexBufferInterface.h"
+#include "renderModule/backends/meshFactory.h"
 #include "renderModule/render.h"
 #include "resourceModule/shaderManager.h"
 #include "virtualMeshAsset.h"
@@ -315,7 +316,7 @@ void VirtualGeometryGpuSelection::ensureCapacity(RENDER::Renderer& renderer, con
 		mDrawIndexCapacity = GrowCapacity(mDrawIndexCapacity, draws);
 		std::vector<uint32_t> identity(mDrawIndexCapacity);
 		std::iota(identity.begin(), identity.end(), 0u);
-		mDrawIndexStream = CreateVirtualGeometryVertexBuffer(identity.data(), identity.size(), sizeof(uint32_t));
+		mDrawIndexStream = RENDER::CreateGpuDrivenVertexBuffer(identity.data(), identity.size(), sizeof(uint32_t));
 	}
 	if (!mOccludedClusterBuffer || frame.Occlusion.OccludedCapacity > mOccludedCapacity) {
 		mOccludedCapacity = GrowCapacity(mOccludedCapacity, frame.Occlusion.OccludedCapacity);

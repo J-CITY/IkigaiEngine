@@ -1,7 +1,7 @@
 #pragma once
 
 #include "virtualGeometryModule/format/vmeshIO.h"
-#include "virtualGeometryResidency.h"
+#include "virtualGeometryModule/runtime/virtualGeometryResidency.h"
 
 #include <cstddef>
 #include <cstdint>

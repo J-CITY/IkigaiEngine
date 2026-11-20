@@ -1,7 +1,7 @@
 #include "virtualMeshLoader.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
-#include "virtualMeshPageSource.h"
+#include "virtualGeometryModule/runtime/virtualMeshPageSource.h"
 #include <cstring>
 #include <iostream>
 #include <stdexcept>

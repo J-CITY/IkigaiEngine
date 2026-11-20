@@ -1,5 +1,5 @@
 #include "virtualMeshAsset.h"
-#include "virtualMeshPageSource.h"
+#include "virtualGeometryModule/runtime/virtualMeshPageSource.h"
 
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/backends/interface/indexBufferInterface.h"
@@ -9,15 +9,6 @@
 #include "renderModule/backends/interface/vertexBufferInterface.h"
 #include "renderModule/backends/meshFactory.h"
 #include "virtualGeometryModule/format/vmeshEncoding.h"
-
-#ifdef VULKAN_BACKEND
-#include "renderModule/backends/vk/indexBufferVk.h"
-#include "renderModule/backends/vk/vertexBufferVk.h"
-#endif
-#ifdef DX12_BACKEND
-#include "renderModule/backends/dx12/indexBufferDx12.h"
-#include "renderModule/backends/dx12/vertexBufferDx12.h"
-#endif
 
 #include <stdexcept>
 #include <unordered_map>
@@ -51,40 +42,6 @@ namespace {
 		return Vertex(
 			{ source.Position[0], source.Position[1], source.Position[2] }, { source.Uv[0], source.Uv[1] }, normal, tangentVector, bitangent);
 	}
-
-	std::shared_ptr<RENDER::VertexBufferInterface> CreateVertexBuffer(const void* data, size_t count, size_t stride) {
-		switch (RENDER::DriverInterface::settings.backend) {
-#ifdef VULKAN_BACKEND
-		case RENDER::RenderSettings::Backend::VULKAN:
-			return std::make_shared<RENDER::VertexBufferVk>(const_cast<void*>(data), count, stride);
-#endif
-#ifdef DX12_BACKEND
-		case RENDER::RenderSettings::Backend::DIRECTX12:
-			return std::make_shared<RENDER::VertexBufferDx12>(const_cast<void*>(data), count, stride);
-#endif
-		default:
-			throw std::runtime_error("Virtual geometry vertex buffers require Vulkan or DirectX 12");
-		}
-	}
-
-	std::shared_ptr<RENDER::IndexBufferInterface> CreateIndexBuffer(const std::vector<uint32_t>& indices) {
-		switch (RENDER::DriverInterface::settings.backend) {
-#ifdef VULKAN_BACKEND
-		case RENDER::RenderSettings::Backend::VULKAN:
-			return std::make_shared<RENDER::IndexBufferVk>(indices);
-#endif
-#ifdef DX12_BACKEND
-		case RENDER::RenderSettings::Backend::DIRECTX12:
-			return std::make_shared<RENDER::IndexBufferDx12>(indices);
-#endif
-		default:
-			throw std::runtime_error("Virtual geometry index buffers require Vulkan or DirectX 12");
-		}
-	}
-}
-
-std::shared_ptr<RENDER::VertexBufferInterface> CreateVirtualGeometryVertexBuffer(const void* data, size_t count, size_t stride) {
-	return CreateVertexBuffer(data, count, stride);
 }
 
 bool IsVirtualGeometryGpuPathSupported() {
@@ -247,8 +204,8 @@ void VirtualMeshAsset::createClusterBuffers(const VMeshData& data, bool visibili
 	if (!driver || data.Vertices.empty() || data.Indices.empty()) {
 		return;
 	}
-	mGpu.Vertices = CreateVertexBuffer(data.Vertices.data(), data.Vertices.size(), sizeof(VMeshVertex));
-	mGpu.Indices = CreateIndexBuffer(data.Indices);
+	mGpu.Vertices = RENDER::CreateGpuDrivenVertexBuffer(data.Vertices.data(), data.Vertices.size(), sizeof(VMeshVertex));
+	mGpu.Indices = RENDER::CreateGpuDrivenIndexBuffer(data.Indices.data(), data.Indices.size());
 	mGpu.Clusters = driver->createStorageBuffer(data.Clusters.data(), data.Clusters.size(), sizeof(VMeshCluster), RENDER::BufferUsage::STORAGE);
 	if (!mHierarchy.Nodes.empty()) {
 		mGpu.HierarchyNodes = driver->createStorageBuffer(

@@ -12,7 +12,7 @@
 
 #include "renderModule/backends/interface/renderEnums.h"
 #include "virtualGeometryInstance.h"
-#include "virtualGeometrySelection.h"
+#include "virtualGeometryModule/runtime/virtualGeometrySelection.h"
 
 namespace IKIGAI::RENDER {
 struct Drawable;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "mathModule/math.h"
-#include "virtualMeshDebugMode.h"
+#include "virtualGeometryModule/runtime/virtualMeshDebugMode.h"
 
 #include <cstdint>
 #include <memory>

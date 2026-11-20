@@ -1,7 +1,7 @@
 #include "virtualMeshPageRequests.h"
 
 #include "taskModule/task.h"
-#include "virtualMeshPageSource.h"
+#include "virtualGeometryModule/runtime/virtualMeshPageSource.h"
 
 #include <algorithm>
 #include <atomic>

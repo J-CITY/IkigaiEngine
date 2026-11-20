@@ -18,7 +18,7 @@
 #include "renderModule/backends/interface/vertexLayout.h"
 #include "virtualGeometryGpuSelection.h"
 #include "virtualGeometryInstance.h"
-#include "virtualGeometrySelection.h"
+#include "virtualGeometryModule/runtime/virtualGeometrySelection.h"
 #include "virtualGeometrySelectionPath.h"
 #include "virtualGeometryStreaming.h"
 

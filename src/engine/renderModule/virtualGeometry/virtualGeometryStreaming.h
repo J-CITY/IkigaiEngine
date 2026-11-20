@@ -1,7 +1,7 @@
 #pragma once
+#include "virtualGeometryModule/runtime/virtualGeometryResidency.h"
+#include "virtualGeometryModule/runtime/virtualGeometrySelection.h"
 #include "virtualGeometryPageFeedback.h"
-#include "virtualGeometryResidency.h"
-#include "virtualGeometrySelection.h"
 #include "virtualMeshGpuPagePool.h"
 #include "virtualMeshPageRequests.h"
 #include <deque>

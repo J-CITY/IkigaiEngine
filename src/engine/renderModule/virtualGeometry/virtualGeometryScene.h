@@ -1,6 +1,6 @@
 #pragma once
 
-#include "virtualGeometryModule/runtime/virtualGeometryInstance.h"
+#include "renderModule/virtualGeometry/virtualGeometryInstance.h"
 
 #include <cstdint>
 #include <vector>

@@ -2,18 +2,10 @@
 
 #include "renderModule/backends/interface/indexBufferInterface.h"
 #include "renderModule/backends/interface/vertexBufferInterface.h"
+#include "renderModule/backends/meshFactory.h"
 #include "renderModule/frame/frameContext.h"
 #include "renderModule/render.h"
 #include "virtualGeometryModule/format/vmeshIO.h"
-
-#ifdef VULKAN_BACKEND
-#include "renderModule/backends/vk/indexBufferVk.h"
-#include "renderModule/backends/vk/vertexBufferVk.h"
-#endif
-#ifdef DX12_BACKEND
-#include "renderModule/backends/dx12/indexBufferDx12.h"
-#include "renderModule/backends/dx12/vertexBufferDx12.h"
-#endif
 
 #include <algorithm>
 #include <atomic>
@@ -108,28 +100,10 @@ VirtualMeshGpuPagePool::VirtualMeshGpuPagePool(RENDER::Renderer& renderer, Virtu
 	mSlots.resize(settings.SlotCount);
 	const size_t vertexCapacity = settings.MaxPageBytes / sizeof(VMeshVertex);
 	const size_t indexCapacity = settings.MaxPageBytes / sizeof(uint32_t);
-	switch (RENDER::DriverInterface::settings.backend) {
-#ifdef VULKAN_BACKEND
-	case RENDER::RenderSettings::Backend::VULKAN:
-		for (auto& slot : mSlots) {
-			slot.Vertices = std::make_shared<RENDER::VertexBufferVk>(nullptr, vertexCapacity, sizeof(VMeshVertex));
-			slot.Indices = std::make_shared<RENDER::IndexBufferVk>(nullptr, indexCapacity, sizeof(uint32_t));
-		}
-		break;
-#endif
-#ifdef DX12_BACKEND
-	case RENDER::RenderSettings::Backend::DIRECTX12: {
-		// The existing DX12 index constructor always records an initial copy.
-		std::vector<uint32_t> initialIndices(indexCapacity, 0u);
-		for (auto& slot : mSlots) {
-			slot.Vertices = std::make_shared<RENDER::VertexBufferDx12>(nullptr, vertexCapacity, sizeof(VMeshVertex));
-			slot.Indices = std::make_shared<RENDER::IndexBufferDx12>(initialIndices);
-		}
-		break;
-	}
-#endif
-	default:
-		throw std::runtime_error("VG GPU page pool requires Vulkan or DirectX 12");
+	auto buffers = RENDER::CreateStreamingMeshBufferSlots(mSlots.size(), vertexCapacity, sizeof(VMeshVertex), indexCapacity);
+	for (size_t slotIndex = 0; slotIndex < mSlots.size(); ++slotIndex) {
+		mSlots[slotIndex].Vertices = std::move(buffers[slotIndex].Vertices);
+		mSlots[slotIndex].Indices = std::move(buffers[slotIndex].Indices);
 	}
 }
 

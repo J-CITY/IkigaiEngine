@@ -36,6 +36,8 @@ set(IKIGAI_MANIFEST_resourceModule
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/materialManager.h"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/modelManager.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/modelManager.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/virtualMeshLoader.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/virtualMeshLoader.h"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/parser/assimpParser.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/parser/assimpParser.h"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/parser/importedModel.h"

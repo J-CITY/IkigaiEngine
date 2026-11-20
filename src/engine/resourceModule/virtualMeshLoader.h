@@ -1,7 +1,7 @@
 #pragma once
 
+#include "renderModule/virtualGeometry/virtualMeshAsset.h"
 #include "resourceModule/resourceManager.h"
-#include "virtualMeshAsset.h"
 
 namespace IKIGAI::VG {
 // Loads v1 and paged v2 meshes as fully resident assets. Supported v2 backing retains

@@ -22,8 +22,8 @@
 #include "renderGraph/pipelineExecution.h"
 #include "renderGraph/renderGraphDescriptor.h"
 #include "renderGraph/screenProbeSettings.h"
+#include "renderModule/virtualGeometry/virtualGeometryShadows.h"
 #include "utilsModule/memory/frameArena.h"
-#include "virtualGeometryModule/runtime/virtualGeometryShadows.h"
 #include <filesystem>
 #include <set>
 

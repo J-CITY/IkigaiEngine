@@ -15,11 +15,11 @@
 #include "profilerModule/trace.h"
 #include "renderGraph/computeStage.h"
 #include "renderGraph/screenProbeStage.h"
+#include "renderModule/virtualGeometry/virtualGeometryRenderer.h"
+#include "renderModule/virtualGeometry/virtualMeshAsset.h"
 #include "utilsModule/time/loadTimer.h"
 #include "virtualGeometry/virtualGeometryPostStage.h"
 #include "virtualGeometry/virtualGeometryScene.h"
-#include "virtualGeometryModule/runtime/virtualGeometryRenderer.h"
-#include "virtualGeometryModule/runtime/virtualMeshAsset.h"
 #if USE_PHYSICS_3D
 #include "physics/deformableRenderer.h"
 #endif

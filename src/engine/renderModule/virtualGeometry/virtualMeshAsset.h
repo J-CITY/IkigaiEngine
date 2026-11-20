@@ -6,9 +6,9 @@
 #include <string>
 #include <vector>
 
-#include "virtualGeometryHierarchy.h"
 #include "virtualGeometryModule/format/vmeshIO.h"
-#include "virtualGeometrySelection.h"
+#include "virtualGeometryModule/runtime/virtualGeometryHierarchy.h"
+#include "virtualGeometryModule/runtime/virtualGeometrySelection.h"
 
 namespace IKIGAI::RENDER {
 class IndexBufferInterface;
@@ -36,9 +36,6 @@ struct VirtualMeshGpuBuffers {
 
 // True when the active backend can draw clusters: Vulkan or DirectX 12 with indirect draws and buffer usage flags.
 bool IsVirtualGeometryGpuPathSupported();
-// Plain vertex buffer on the active Vulkan/DirectX 12 backend (throws elsewhere). Used for the cluster vertices
-// and for the per-draw index stream of the cluster renderer.
-std::shared_ptr<RENDER::VertexBufferInterface> CreateVirtualGeometryVertexBuffer(const void* data, size_t count, size_t stride);
 
 // Immutable runtime form of a .vmesh file. Owns the CPU cluster table used for LOD selection, the GPU buffers
 // used by the cluster renderer and a regular ModelInterface built from the fallback ranges (shadows, ray tracing,

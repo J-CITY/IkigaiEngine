@@ -2,7 +2,7 @@
 
 #include "renderModule/backends/interface/frameBufferInterface.h"
 #include "renderModule/backends/interface/textureInterface.h"
-#include "virtualGeometryModule/runtime/virtualMeshAsset.h"
+#include "renderModule/virtualGeometry/virtualMeshAsset.h"
 
 #include <algorithm>
 #include <set>

@@ -7,7 +7,7 @@
 #include <span>
 #include <vector>
 
-#include "virtualGeometrySelection.h"
+#include "virtualGeometryModule/runtime/virtualGeometrySelection.h"
 
 namespace IKIGAI::RENDER {
 class Renderer;

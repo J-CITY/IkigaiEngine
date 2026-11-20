@@ -9,14 +9,15 @@
 #include "renderModule/backends/interface/storageBufferInterface.h"
 #include "renderModule/backends/interface/textureInterface.h"
 #include "renderModule/backends/interface/vertexBufferInterface.h"
+#include "renderModule/backends/meshFactory.h"
 #include "renderModule/diagnostics/renderStatistics.h"
 #include "renderModule/drawable.h"
 #include "renderModule/render.h"
 #include "resourceModule/materialManager.h"
 #include "resourceModule/serviceManager.h"
+#include "virtualGeometryModule/runtime/virtualMeshPageSource.h"
 #include "virtualGeometrySoftwareRaster.h"
 #include "virtualMeshAsset.h"
-#include "virtualMeshPageSource.h"
 
 #include <algorithm>
 #include <cctype>
@@ -1058,7 +1059,7 @@ void VirtualGeometryRenderer::uploadFrame(RENDER::Renderer& renderer) {
 		mDrawIndexCapacity = GrowCapacity(mDrawIndexCapacity, mDrawCount);
 		std::vector<uint32_t> identity(mDrawIndexCapacity);
 		std::iota(identity.begin(), identity.end(), 0u);
-		mDrawIndexStream = CreateVirtualGeometryVertexBuffer(identity.data(), identity.size(), sizeof(uint32_t));
+		mDrawIndexStream = RENDER::CreateGpuDrivenVertexBuffer(identity.data(), identity.size(), sizeof(uint32_t));
 	}
 	UploadChunked(renderer, mInstanceBuffer, mInstances.data(), mInstances.size() * sizeof(InstanceGpu));
 	UploadChunked(renderer, mIndirectBuffer, commands.data(), commands.size() * sizeof(RENDER::DrawIndexedIndirectCommand));
