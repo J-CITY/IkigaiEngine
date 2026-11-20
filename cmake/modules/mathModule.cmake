@@ -4,6 +4,8 @@ set(IKIGAI_MANIFEST_mathModule
     "${IKIGAI_SOURCE_ROOT}/engine/mathModule/curves.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/mathModule/curves.h"
     "${IKIGAI_SOURCE_ROOT}/engine/mathModule/geometry/aabb.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/mathModule/geometry/frustumPlanes.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/mathModule/geometry/frustumPlanes.h"
     "${IKIGAI_SOURCE_ROOT}/engine/mathModule/math.h"
     "${IKIGAI_SOURCE_ROOT}/engine/mathModule/vector2.h"
 )

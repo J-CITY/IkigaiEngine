@@ -16,7 +16,6 @@
 #include "renderModule/backends/interface/gpuFeatures.h"
 #include "renderModule/backends/interface/materialInterface.h"
 #include "renderModule/backends/interface/vertexLayout.h"
-#include "renderModule/frustum.h"
 #include "virtualGeometryGpuSelection.h"
 #include "virtualGeometrySelection.h"
 #include "virtualGeometrySelectionPath.h"
@@ -202,20 +201,17 @@ struct VirtualGeometryGpuFrameRecord {
 		// Culling transform (current world) and LOD-test transform (frozen world under FreezeLod).
 		VirtualGeometryInstanceTransform Transform = {};
 		VirtualGeometryInstanceTransform LodTransform = {};
-		// LOD view (Frustum is null: the LOD test does not use it).
+		// LOD view without frustum planes.
 		VirtualGeometryView LodView = {};
 		float Threshold = 0.0f;
 	};
 	std::vector<Instance> Instances = {};
-	// Culling view of the frame; View.Frustum points to Frustum when HasFrustum.
-	RENDER::Frustum Frustum = {};
-	bool HasFrustum = false;
+	// Culling view of the frame, including its own copy of the frustum planes.
 	VirtualGeometryView View = {};
 	VirtualGeometrySelectionSettings Selection = {};
 };
 
-// Non-blocking capture of one GPU-selected frame (tests and debug tools): the inputs (Record; its View.Frustum is
-// null, use Record.Frustum) and readback tickets of the results.
+// Inputs and readback tickets for a non-blocking capture of one GPU-selected frame.
 struct VirtualGeometryGpuCapture {
 	VirtualGeometryGpuFrameRecord Record = {};
 	std::vector<VirtualGeometryGpuSegment> Segments = {};

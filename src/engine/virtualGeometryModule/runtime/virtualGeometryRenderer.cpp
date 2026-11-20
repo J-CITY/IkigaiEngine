@@ -277,7 +277,6 @@ VirtualGeometryGpuCapture VirtualGeometryRenderer::captureGpuSelection(RENDER::R
 		return capture;
 	}
 	capture.Record = mGpuFrameRecord;
-	capture.Record.View.Frustum = nullptr;
 	capture.Segments = mGpuFrame.Segments;
 	capture.Tickets = mGpuSelection.requestCapture(renderer, mGpuFrame);
 	return capture;
@@ -832,10 +831,7 @@ bool VirtualGeometryRenderer::buildGpuFrame(RENDER::Renderer& renderer, const Vi
 	frame.DrawCapacity = 0;
 	auto& record = mGpuFrameRecord;
 	record.Instances.clear();
-	record.HasFrustum = input.View.Frustum != nullptr;
-	record.Frustum = record.HasFrustum ? *input.View.Frustum : RENDER::Frustum {};
 	record.View = input.View;
-	record.View.Frustum = record.HasFrustum ? &record.Frustum : nullptr;
 	record.Selection.FrustumCulling = mSettings.FrustumCulling;
 	record.Selection.ConeCulling = mSettings.ConeCulling;
 
@@ -853,7 +849,7 @@ bool VirtualGeometryRenderer::buildGpuFrame(RENDER::Renderer& renderer, const Vi
 
 		VirtualGeometryInstanceTransform lodTransform = candidate.Transform;
 		VirtualGeometryView lodView = input.View;
-		lodView.Frustum = nullptr;
+		lodView.Frustum.reset();
 		float threshold = candidate.Threshold;
 		if (mSettings.FreezeLod) {
 			auto& frozen = mFrozenLodViews[candidate.OwnerId];
@@ -990,9 +986,9 @@ bool VirtualGeometryRenderer::buildGpuFrame(RENDER::Renderer& renderer, const Vi
 	auto& view = frame.View;
 	view = {};
 	view.FrustumCulling = mSettings.FrustumCulling && input.View.Frustum ? 1u : 0u;
-	if (input.View.Frustum) {
-		for (size_t plane = 0; plane < 6; ++plane) {
-			const auto values = input.View.Frustum->getPlane(plane);
+	if (const auto& frustum = input.View.Frustum) {
+		for (size_t plane = 0; plane < frustum->size(); ++plane) {
+			const auto& values = (*frustum)[plane];
 			std::copy(values.begin(), values.end(), view.Planes[plane]);
 		}
 	}

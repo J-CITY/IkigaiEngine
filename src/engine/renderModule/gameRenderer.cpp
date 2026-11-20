@@ -814,7 +814,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		VG::VirtualGeometryFrameInput virtualGeometryInput;
 		virtualGeometryInput.SelectionPath = mRenderPipeline->mDescriptor.Execution.DrivenMode;
 		virtualGeometryInput.View.CameraPosition = cameraPosition;
-		virtualGeometryInput.View.Frustum = &cameraComponent.getCamera().getFrustum();
+		virtualGeometryInput.View.Frustum = cameraComponent.getCamera().getFrustum().getPlanes();
 		virtualGeometryInput.View.Orthographic = cameraComponent.getProjectionMode() == Camera::ProjectionMode::ORTHOGRAPHIC;
 		virtualGeometryInput.View.ProjectionScale = float(renderSize.y) * unjitteredProjection.getData()[1 * 4 + 1] * 0.5f;
 		virtualGeometryInput.View.ZNear = cameraComponent.getNear();
@@ -1674,7 +1674,7 @@ void GameRenderer::captureShadows(PipelineStage& active, const std::vector<Rende
 			}
 			if (vgCasters) {
 				VG::VirtualGeometryView shadowView;
-				shadowView.Frustum = &vgFrustum;
+				shadowView.Frustum = vgFrustum.getPlanes();
 				shadowView.Orthographic = true;
 				shadowView.ProjectionScale = size.y / rows * proj(1, 1) * 0.5f;
 				const Depth depth { stage->mMaterial->isDepthTest() ? stage->mMaterial->getDepthFunc() : DepthFunction::ALWAYS,

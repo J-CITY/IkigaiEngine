@@ -1,21 +1,19 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
+#include "mathModule/geometry/frustumPlanes.h"
 #include "mathModule/math.h"
 #include "virtualGeometryModule/vmeshFormat.h"
-
-namespace IKIGAI::RENDER {
-class Frustum;
-}
 
 namespace IKIGAI::VG {
 // Camera parameters for screen-space error projection and culling (one view, CPU selection, M2).
 struct VirtualGeometryView {
 	MATH::Vector3f CameraPosition = {};
-	// World-space culling frustum; nullptr disables frustum culling.
-	const RENDER::Frustum* Frustum = nullptr;
+	// World-space planes. A missing frustum disables frustum culling.
+	std::optional<MATH::GEOMETRY::FrustumPlanes> Frustum = {};
 	// Pixels per unit of object-space error at unit view distance:
 	// perspective viewportHeightPx / (2 * tan(fovY / 2)), orthographic viewportHeightPx / orthoHeight.
 	// Both equal viewportHeightPx * Projection(1, 1) / 2.

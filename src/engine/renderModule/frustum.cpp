@@ -10,7 +10,7 @@ enum FrustumSide { RIGHT = 0, LEFT, BOTTOM, TOP, BACK, FRONT };
 
 enum PlaneData { A = 0, B, C, D };
 
-void normalizePlane(float frustum[6][4], int side) {
+void normalizePlane(MATH::GEOMETRY::FrustumPlanes& frustum, FrustumSide side) {
 	float magnitude = (float)sqrt(frustum[side][A] * frustum[side][A] + frustum[side][B] * frustum[side][B] + frustum[side][C] * frustum[side][C]);
 	frustum[side][A] /= magnitude;
 	frustum[side][B] /= magnitude;
@@ -75,12 +75,7 @@ bool Frustum::pointInFrustum(float x, float y, float z) const {
 }
 
 bool Frustum::sphereInFrustum(float x, float y, float z, float radius) const {
-	for (int i = 0; i < 6; i++) {
-		if (data[i][A] * x + data[i][B] * y + data[i][C] * z + data[i][D] <= -radius) {
-			return false;
-		}
-	}
-	return true;
+	return MATH::GEOMETRY::SphereIntersectsFrustum(data, x, y, z, radius);
 }
 
 bool Frustum::cubeInFrustum(float x, float y, float z, float size) const {
@@ -130,10 +125,14 @@ std::array<float, 4> Frustum::getNearPlane() const {
 }
 
 std::array<float, 4> Frustum::getPlane(size_t index) const {
-	if (index >= 6) {
+	if (index >= data.size()) {
 		throw std::out_of_range("Frustum::getPlane index");
 	}
-	return { data[index][0], data[index][1], data[index][2], data[index][3] };
+	return data[index];
+}
+
+const MATH::GEOMETRY::FrustumPlanes& Frustum::getPlanes() const {
+	return data;
 }
 
 std::array<float, 4> Frustum::getFarPlane() const {

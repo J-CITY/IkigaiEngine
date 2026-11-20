@@ -1,7 +1,5 @@
 #include "virtualGeometrySelection.h"
 
-#include "renderModule/frustum.h"
-
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -28,7 +26,7 @@ namespace {
 	}
 
 	bool SphereVisible(const MATH::Vector3f& center, float radius, const VirtualGeometryView& view) {
-		return !view.Frustum || view.Frustum->sphereInFrustum(center.x, center.y, center.z, radius);
+		return !view.Frustum || MATH::GEOMETRY::SphereIntersectsFrustum(*view.Frustum, center.x, center.y, center.z, radius);
 	}
 
 	// Exact bits of (error, sphere): clusters of one simplification group share them bit for bit.

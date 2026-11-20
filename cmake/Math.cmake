@@ -6,6 +6,8 @@ get_filename_component(IKIGAI_MATH_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 add_library(ikigai_math STATIC
     "${IKIGAI_MATH_ROOT}/src/engine/mathModule/curves.cpp"
     "${IKIGAI_MATH_ROOT}/src/engine/mathModule/curves.h"
+    "${IKIGAI_MATH_ROOT}/src/engine/mathModule/geometry/frustumPlanes.cpp"
+    "${IKIGAI_MATH_ROOT}/src/engine/mathModule/geometry/frustumPlanes.h"
     "${IKIGAI_MATH_ROOT}/src/engine/mathModule/math.h"
     "${IKIGAI_MATH_ROOT}/src/engine/mathModule/vector2.h"
     "${IKIGAI_MATH_ROOT}/src/engine/mathModule/geometry/aabb.h")

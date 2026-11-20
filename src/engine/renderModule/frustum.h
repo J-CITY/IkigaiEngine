@@ -2,6 +2,7 @@
 #include <array>
 // #include <coreModule/ecs/components/transform.h>
 
+#include "mathModule/geometry/frustumPlanes.h"
 #include "objects/boundingSphere.h"
 
 namespace IKIGAI {
@@ -32,11 +33,12 @@ namespace RENDER {
 		[[nodiscard]] std::array<float, 4> getFarPlane() const;
 		// Plane i of make() (A, B, C, D with A*x + B*y + C*z + D >= 0 inside), i in [0, 6).
 		[[nodiscard]] std::array<float, 4> getPlane(size_t index) const;
+		[[nodiscard]] const MATH::GEOMETRY::FrustumPlanes& getPlanes() const;
 		[[nodiscard]] COLLISION::TYPE boundingSphereInFrustumCollide(const BoundingSphere& boundingSphere, const ECS::Transform& transform) const;
 		COLLISION::TYPE boundingSphereInFrustumCollide(const BoundingSphere& boundingSphere) const;
 
 	private:
-		float data[6][4] = {};
+		MATH::GEOMETRY::FrustumPlanes data = {};
 	};
 }
 }
