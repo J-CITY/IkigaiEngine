@@ -142,6 +142,8 @@ set(IKIGAI_MANIFEST_renderModule
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/spine/spineDrawable.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/vertex.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/vertex.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/vectorGraphics/vectorRenderer.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/vectorGraphics/vectorRenderer.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/virtualGeometry/virtualGeometryPostStage.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/virtualGeometry/virtualGeometryPostStage.h"
 )

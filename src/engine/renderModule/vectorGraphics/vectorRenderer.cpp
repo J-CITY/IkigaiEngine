@@ -1,13 +1,13 @@
 #include "vectorRenderer.h"
-#include "../vectorContext.h"
 #include "coreModule/ecs/object.h"
 #include "coreModule/gui/components/vectorComponents.h"
 #include "renderModule/backends/meshFactory.h"
 #include "renderModule/render.h"
 #include "resourceModule/fontManager.h"
+#include "vectorGraphicsModule/vectorContext.h"
 #include <bit>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 
 namespace IKIGAI::VECTOR {

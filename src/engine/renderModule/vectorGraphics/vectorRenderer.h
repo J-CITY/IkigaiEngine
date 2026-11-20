@@ -1,7 +1,7 @@
 #pragma once
-#include "../text/fontResource.h"
 #include "renderModule/backends/interface/renderEnums.h"
 #include "renderModule/vertex.h"
+#include "vectorGraphicsModule/text/fontResource.h"
 #include <map>
 #include <memory>
 

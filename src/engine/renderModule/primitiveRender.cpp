@@ -1,8 +1,8 @@
 #include "primitiveRender.h"
 #include "render.h"
+#include "renderModule/vectorGraphics/vectorRenderer.h"
 #include "resourceModule/materialManager.h"
 #include "resourceModule/serviceManager.h"
-#include "vectorGraphicsModule/render/vectorRenderer.h"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>

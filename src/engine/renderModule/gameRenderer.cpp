@@ -48,13 +48,13 @@
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/light.h"
 #include "renderModule/render.h"
+#include "renderModule/vectorGraphics/vectorRenderer.h"
 #include "resourceModule/jsonLoader.h"
 #include "skeletalModule/animationOffset.h"
 #include "skeletalModule/animationTransform.h"
 #include "skeletalModule/iAnimationPlayable.h"
 #include "utilsModule/log/loggerDefine.h"
 #include "utilsModule/time/time.h"
-#include "vectorGraphicsModule/render/vectorRenderer.h"
 #include "windowModule/window/window.h"
 #include <algorithm>
 #include <cmath>
