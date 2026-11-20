@@ -31,6 +31,9 @@
 #include <emscripten.h>
 #endif
 #include "renderModule/backends/driverFactory.h"
+#if defined(USE_SDL) && defined(OPENGL_BACKEND)
+#include "renderModule/backends/gl/driverGl.h"
+#endif
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/gameRenderer.h"
 #ifdef USE_SDL
@@ -331,7 +334,22 @@ void App::update(std::chrono::duration<double> dt) {
 
 void App::postUpdate(std::chrono::duration<double> dt) {
 	IKIGAI_PROFILE_SCOPE("App Post-Update");
+#if defined(USE_SDL) && defined(OPENGL_BACKEND)
+	core.window->draw([this] {
+		auto& screenshots = CAPTURE::ScreenshotService::Get();
+#ifndef USING_GLES
+		if (!(SDL_GetWindowFlags(core.window->getSDLWindow()) & SDL_WINDOW_MINIMIZED)) {
+			screenshots.capture([this] { return RENDER::DriverGl::readBackbufferScreenshot(core.window->getPixelSize()); });
+		}
+#else
+		if (screenshots.pending()) {
+			screenshots.fail("Window screenshots require desktop OpenGL");
+		}
+#endif
+	});
+#else
 	core.window->draw();
+#endif
 #ifndef OCULUS
 	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL && core.render->hasActiveFrame()) {
 		// The GL window renders ImGui here. Include it in the serial completion boundary.

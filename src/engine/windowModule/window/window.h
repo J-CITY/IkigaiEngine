@@ -1,6 +1,7 @@
 #pragma once
 #include "windowModule/inputManager/gamepad/gamepad.h"
 #include <cstdint>
+#include <functional>
 #include <mathModule/math.h>
 #include <memory>
 #include <string>
@@ -123,7 +124,7 @@ public:
 	[[nodiscard]] bool hasFocus() const;
 
 	void pollEvent();
-	void draw() const;
+	void draw(const std::function<void()>& beforeSwap = {}) const;
 	void preUpdate();
 	void update();
 	[[nodiscard]] bool isClosed() const;

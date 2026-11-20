@@ -14,6 +14,10 @@
 #include "../interface/renderEnums.h"
 #include "vertexBufferGl.h"
 
+namespace IKIGAI::CAPTURE {
+struct ScreenshotImage;
+}
+
 namespace IKIGAI {
 namespace RENDER {
 	class StorageBufferGl;
@@ -76,6 +80,9 @@ namespace RENDER {
 		void setClearColor(float r, float g, float b, float a) override;
 		void clear(bool clearColor, bool clearDepth, bool clearStencil) override;
 		void draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) override;
+#ifndef USING_GLES
+		static CAPTURE::ScreenshotImage readBackbufferScreenshot(MATH::Vector2u size);
+#endif
 		std::vector<float> readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
 		void dispatch(uint32_t x, uint32_t y, uint32_t z) override;
 		BindlessCapabilities bindlessCapabilities() const override;

@@ -16,6 +16,12 @@
 
 #include "modelGl.h"
 
+#ifndef USING_GLES
+#include "captureModule/screenshot.h"
+#include <algorithm>
+#include <stdexcept>
+#endif
+
 constexpr GLenum FrontFaceTable[] = { GL_CW, GL_CCW };
 
 constexpr GLenum BlendFuncTable[] = { GL_FUNC_ADD, GL_FUNC_SUBTRACT, GL_FUNC_REVERSE_SUBTRACT, GL_MIN, GL_MAX };
@@ -331,6 +337,53 @@ void IKIGAI::RENDER::DriverGl::clear(bool clearColor, bool clearDepth, bool clea
 		glEnable(GL_SCISSOR_TEST);
 	}
 }
+
+#ifndef USING_GLES
+IKIGAI::CAPTURE::ScreenshotImage IKIGAI::RENDER::DriverGl::readBackbufferScreenshot(MATH::Vector2u size) {
+	if (size.x == 0 || size.y == 0) {
+		throw std::runtime_error("Screenshot window has no pixels");
+	}
+	CAPTURE::ScreenshotImage image { static_cast<int>(size.x), static_cast<int>(size.y), std::vector<uint8_t>(size_t(size.x) * size.y * 4) };
+	std::vector<uint8_t> pixels(image.rgba.size());
+	GLint readFramebuffer = 0;
+	GLint readBuffer = 0;
+	GLint pixelPackBuffer = 0;
+	GLint packAlignment = 0;
+	GLint packRowLength = 0;
+	GLint packSkipRows = 0;
+	GLint packSkipPixels = 0;
+	glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &readFramebuffer);
+	glGetIntegerv(GL_PIXEL_PACK_BUFFER_BINDING, &pixelPackBuffer);
+	glGetIntegerv(GL_PACK_ALIGNMENT, &packAlignment);
+	glGetIntegerv(GL_PACK_ROW_LENGTH, &packRowLength);
+	glGetIntegerv(GL_PACK_SKIP_ROWS, &packSkipRows);
+	glGetIntegerv(GL_PACK_SKIP_PIXELS, &packSkipPixels);
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+	glGetIntegerv(GL_READ_BUFFER, &readBuffer);
+	glReadBuffer(GL_BACK);
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, 0);
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
+	glPixelStorei(GL_PACK_ROW_LENGTH, 0);
+	glPixelStorei(GL_PACK_SKIP_ROWS, 0);
+	glPixelStorei(GL_PACK_SKIP_PIXELS, 0);
+	glReadPixels(0, 0, size.x, size.y, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+	glReadBuffer(readBuffer);
+	glBindFramebuffer(GL_READ_FRAMEBUFFER, readFramebuffer);
+	glBindBuffer(GL_PIXEL_PACK_BUFFER, pixelPackBuffer);
+	glPixelStorei(GL_PACK_ALIGNMENT, packAlignment);
+	glPixelStorei(GL_PACK_ROW_LENGTH, packRowLength);
+	glPixelStorei(GL_PACK_SKIP_ROWS, packSkipRows);
+	glPixelStorei(GL_PACK_SKIP_PIXELS, packSkipPixels);
+	const size_t stride = size_t(size.x) * 4;
+	for (int y = 0; y < image.height; ++y) {
+		std::copy_n(pixels.data() + size_t(image.height - 1 - y) * stride, stride, image.rgba.data() + size_t(y) * stride);
+	}
+	for (size_t i = 3; i < image.rgba.size(); i += 4) {
+		image.rgba[i] = 255;
+	}
+	return image;
+}
+#endif
 
 std::vector<float> IKIGAI::RENDER::DriverGl::readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) {
 #if !defined(USING_GLES)
