@@ -1,6 +1,6 @@
 #pragma once
 #include "component.h"
-#include "surfaceModule/surfaceFrame.h"
+#include "coreModule/ecs/surface/surfaceFrame.h"
 #include "surfaceModule/surfaceSettings.h"
 
 namespace IKIGAI::RENDER {

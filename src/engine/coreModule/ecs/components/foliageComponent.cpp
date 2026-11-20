@@ -1,10 +1,10 @@
 #include "foliageComponent.h"
 #include "coreModule/ecs/componentReference.inl"
+#include "coreModule/ecs/surface/surfaceJob.h"
+#include "coreModule/ecs/surface/surfaceRuntime.h"
 #include "renderModule/backends/interface/modelInterface.h"
 #include "resourceModule/materialManager.h"
 #include "resourceModule/modelManager.h"
-#include "surfaceModule/surfaceJob.h"
-#include "surfaceModule/surfaceRuntime.h"
 #include <algorithm>
 #include <unordered_set>
 

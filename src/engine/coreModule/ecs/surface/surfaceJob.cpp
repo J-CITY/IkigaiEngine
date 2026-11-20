@@ -1,14 +1,23 @@
 #include "surfaceJob.h"
+#include "surfaceModule/surfaceCancellation.h"
+#include "taskModule/taskSystem.h"
+#include "utilsModule/serviceManager.h"
 #include <mutex>
 #include <stdexcept>
 
 namespace IKIGAI::SURFACE {
 namespace {
-	class SurfaceBuildCancelled : public std::runtime_error {
-	public:
-		SurfaceBuildCancelled()
-			: std::runtime_error("Surface build cancelled") { }
-	};
+	void dispatchSurfaceBuild(std::function<void(std::stop_token)> work, std::function<void(const TASK::BackgroundResult&)> complete) {
+		if (!RESOURCES::ServiceManager::Check<TASK::TaskSystem>()) {
+			complete({ TASK::BackgroundOutcome::Rejected, TASK::BackgroundRejection::Unavailable });
+			return;
+		}
+		auto& tasks = RESOURCES::ServiceManager::Get<TASK::TaskSystem>();
+		auto ticket = tasks.dispatch("Surface build", std::move(work), complete);
+		if (!ticket.accepted()) {
+			complete(ticket.get());
+		}
+	}
 }
 struct BackgroundJob::State {
 	std::atomic_bool Cancelled = false;
@@ -78,10 +87,5 @@ std::any BackgroundJob::take() {
 		break;
 	}
 	throw std::runtime_error("Surface build failed");
-}
-void checkBuildCancellation(const std::atomic_bool* cancellation) {
-	if (cancellation && cancellation->load()) {
-		throw SurfaceBuildCancelled();
-	}
 }
 }

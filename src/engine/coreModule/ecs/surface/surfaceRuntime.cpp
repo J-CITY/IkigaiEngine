@@ -1,6 +1,10 @@
 #include "surfaceRuntime.h"
 #include "renderModule/backends/interface/modelInterface.h"
 #include "renderModule/backends/meshFactory.h"
+#include "renderModule/vertex.h"
+#include "surfaceFrame.h"
+#include "surfaceJob.h"
+#include "surfaceModule/surfaceCancellation.h"
 #include <algorithm>
 #include <limits>
 #include <set>
@@ -8,12 +12,31 @@
 
 namespace IKIGAI::SURFACE {
 namespace {
-	template <class Map, class Key>
-	std::shared_ptr<RENDER::ModelInterface> cacheModel(Map& models, const Key& key, const Geometry& geometry, unsigned megabytes, uint64_t stamp) {
+	std::shared_ptr<RENDER::ModelInterface> upload(const Geometry& geometry) {
+		auto result = RENDER::CreateEmptyModel();
+		for (const auto& part : geometry.Parts) {
+			if (!part.Indices.empty()) {
+				std::vector<Vertex> vertices;
+				vertices.reserve(part.Vertices.size());
+				for (const auto& vertex : part.Vertices) {
+					vertices.emplace_back(vertex.position, vertex.texCoord, vertex.normal, vertex.tangent, vertex.bitangent);
+				}
+				result->getMeshes().push_back(RENDER::CreateMesh(vertices, part.Indices, part.MaterialId));
+			}
+		}
+		result->computeBoundingSphere();
+		return result;
+	}
+	size_t modelBytes(const Geometry& geometry) {
 		size_t bytes = 0;
 		for (const auto& part : geometry.Parts) {
 			bytes += part.Vertices.size() * sizeof(Vertex) + part.Indices.size() * sizeof(unsigned);
 		}
+		return bytes;
+	}
+	template <class Map, class Key>
+	std::shared_ptr<RENDER::ModelInterface> cacheModel(Map& models, const Key& key, const Geometry& geometry, unsigned megabytes, uint64_t stamp) {
+		const auto bytes = modelBytes(geometry);
 		const size_t limit = size_t(megabytes) * 1024 * 1024;
 		if (bytes > limit) {
 			throw std::runtime_error("Surface mesh exceeds CacheMegabytes; lower resolution/chunk size or increase the cache");
@@ -44,16 +67,6 @@ const MATH::Matrix4f& FrameState::previous(const MATH::Matrix4f& world) {
 	}
 	LastWorld = world;
 	return PreviousWorld;
-}
-std::shared_ptr<RENDER::ModelInterface> upload(const Geometry& geometry) {
-	auto result = RENDER::CreateEmptyModel();
-	for (const auto& part : geometry.Parts) {
-		if (!part.Indices.empty()) {
-			result->getMeshes().push_back(RENDER::CreateMesh(part.Vertices, part.Indices, part.MaterialId));
-		}
-	}
-	result->computeBoundingSphere();
-	return result;
 }
 Terrain::Terrain(const Settings& settings)
 	: mSettings(settings) {
@@ -104,9 +117,7 @@ PreparedSurface prepareSurface(const Settings& settings, const std::vector<Terra
 		checkBuildCancellation(&cancellation);
 		const auto [x, z, lod] = key;
 		auto geometry = lod == std::numeric_limits<unsigned>::max() ? buildWater(settings, x, z) : buildTile(settings, x, z, lod, &cancellation);
-		for (const auto& part : geometry.Parts) {
-			bytes += part.Vertices.size() * sizeof(Vertex) + part.Indices.size() * sizeof(unsigned);
-		}
+		bytes += modelBytes(geometry);
 		if (bytes > size_t(settings.CacheMegabytes) * 1024 * 1024) {
 			throw std::runtime_error("Updated resident terrain exceeds CacheMegabytes");
 		}
@@ -211,56 +222,30 @@ std::optional<unsigned> Terrain::residentLod(unsigned x, unsigned z, unsigned re
 	return {};
 }
 VoxelWorld::VoxelWorld(const VoxelSettings& settings)
-	: mSettings(settings) {
-	settings.validate();
-}
+	: mData(settings) { }
 const VoxelSettings& VoxelWorld::settings() const {
-	return mSettings;
-}
-bool VoxelWorld::contains(int x, int y, int z) const {
-	return x >= 0 && y >= 0 && z >= 0 && x < int(mSettings.ChunksX * mSettings.ChunkSize) && y < int(mSettings.ChunksY * mSettings.ChunkSize)
-		&& z < int(mSettings.ChunksZ * mSettings.ChunkSize);
-}
-uint64_t VoxelWorld::key(int x, int y, int z) const {
-	return (uint64_t(x) * mSettings.ChunksY * mSettings.ChunkSize + uint64_t(y)) * mSettings.ChunksZ * mSettings.ChunkSize + uint64_t(z);
+	return mData.settings();
 }
 Block VoxelWorld::get(int x, int y, int z) const {
-	if (!contains(x, y, z)) {
-		return Block::Air;
-	}
-	const auto found = mEdits.find(key(x, y, z));
-	return found == mEdits.end() ? generatedBlock(mSettings, x, y, z) : found->second;
+	return mData.get(x, y, z);
 }
 void VoxelWorld::set(int x, int y, int z, Block block) {
-	if (!contains(x, y, z) || unsigned(block) > unsigned(Block::Water)) {
-		throw std::out_of_range("Invalid voxel coordinate/block type");
-	}
-	if (get(x, y, z) == block) {
+	if (!mData.set(x, y, z, block)) {
 		return;
 	}
-	const auto editKey = key(x, y, z);
-	if (!mEdits.contains(editKey) && mEdits.size() >= 1000000) {
-		throw std::runtime_error("Voxel edit budget exceeded");
-	}
-	if (block == generatedBlock(mSettings, x, y, z)) {
-		mEdits.erase(editKey);
-	}
-	else {
-		mEdits.insert_or_assign(editKey, block);
-	}
+	const auto chunkSize = settings().ChunkSize;
 	// An edit at a boundary changes the neighbour's exposed faces as well.
 	for (const auto delta : { MATH::Vector3f {}, { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } }) {
 		const int neighbourX = x + int(delta.x);
 		const int neighbourY = y + int(delta.y);
 		const int neighbourZ = z + int(delta.z);
-		if (contains(neighbourX, neighbourY, neighbourZ)) {
-			mModels.erase({ unsigned(neighbourX) / mSettings.ChunkSize, unsigned(neighbourY) / mSettings.ChunkSize,
-				unsigned(neighbourZ) / mSettings.ChunkSize });
+		if (mData.contains(neighbourX, neighbourY, neighbourZ)) {
+			mModels.erase({ unsigned(neighbourX) / chunkSize, unsigned(neighbourY) / chunkSize, unsigned(neighbourZ) / chunkSize });
 		}
 	}
 }
 std::shared_ptr<RENDER::ModelInterface> VoxelWorld::model(unsigned x, unsigned y, unsigned z, unsigned& budget) {
-	if (x >= mSettings.ChunksX || y >= mSettings.ChunksY || z >= mSettings.ChunksZ) {
+	if (x >= settings().ChunksX || y >= settings().ChunksY || z >= settings().ChunksZ) {
 		throw std::out_of_range("Invalid voxel chunk");
 	}
 	const auto key = std::tuple { x, y, z };
@@ -272,25 +257,17 @@ std::shared_ptr<RENDER::ModelInterface> VoxelWorld::model(unsigned x, unsigned y
 		return {};
 	}
 	--budget;
-	return cacheModel(mModels, key, buildVoxelChunk(mSettings, x, y, z, [this](int bx, int by, int bz) { return get(bx, by, bz); }),
-		mSettings.CacheMegabytes, ++mClock);
+	return cacheModel(mModels, key, buildVoxelChunk(settings(), x, y, z, [this](int bx, int by, int bz) { return get(bx, by, bz); }),
+		settings().CacheMegabytes, ++mClock);
 }
 void VoxelWorld::clearCache() {
 	mModels.clear();
 }
 void VoxelWorld::reset() {
-	mEdits.clear();
+	mData.reset();
 	clearCache();
 }
 std::vector<VoxelEdit> VoxelWorld::edits() const {
-	std::vector<std::pair<uint64_t, Block>> ordered(mEdits.begin(), mEdits.end());
-	std::sort(ordered.begin(), ordered.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-	std::vector<VoxelEdit> result;
-	const uint64_t depth = mSettings.ChunksZ * mSettings.ChunkSize;
-	const uint64_t height = mSettings.ChunksY * mSettings.ChunkSize;
-	for (const auto& [key, block] : ordered) {
-		result.push_back({ int(key / depth / height), int(key / depth % height), int(key % depth), block });
-	}
-	return result;
+	return mData.edits();
 }
 }

@@ -1,5 +1,4 @@
 #pragma once
-#include "renderModule/vertex.h"
 #include "surfaceCoverage.h"
 #include "surfaceSettings.h"
 #include <atomic>
@@ -14,9 +13,16 @@ struct Sample {
 	bool Submerged = false;
 	Coverage Cover = {};
 };
+struct SurfaceVertex {
+	MATH::Vector3f position = {};
+	MATH::Vector2f texCoord = {};
+	MATH::Vector3f normal = {};
+	MATH::Vector3f tangent = {};
+	MATH::Vector3f bitangent = {};
+};
 struct MeshPart {
 	unsigned MaterialId = 0;
-	std::vector<Vertex> Vertices = {};
+	std::vector<SurfaceVertex> Vertices = {};
 	std::vector<unsigned> Indices = {};
 };
 struct Geometry {

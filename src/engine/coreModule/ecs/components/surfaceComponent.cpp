@@ -1,7 +1,8 @@
 #include "surfaceComponent.h"
+#include "coreModule/ecs/surface/surfaceJob.h"
+#include "coreModule/ecs/surface/surfaceMaterial.h"
+#include "coreModule/ecs/surface/surfaceRuntime.h"
 #include "resourceModule/materialManager.h"
-#include "surfaceModule/surfaceMaterial.h"
-#include "surfaceModule/surfaceRuntime.h"
 #include <algorithm>
 
 namespace IKIGAI::ECS {

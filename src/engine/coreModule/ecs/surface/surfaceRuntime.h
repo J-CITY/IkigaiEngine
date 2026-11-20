@@ -1,20 +1,18 @@
 #pragma once
-#include "surfaceFrame.h"
-#include "surfaceGenerator.h"
-#include "surfaceJob.h"
+#include "surfaceModule/surfaceGenerator.h"
+#include "surfaceModule/voxelData.h"
 #include <chrono>
 #include <map>
 #include <memory>
 #include <optional>
 #include <set>
 #include <tuple>
-#include <unordered_map>
 
 namespace IKIGAI::RENDER {
 class ModelInterface;
 }
 namespace IKIGAI::SURFACE {
-std::shared_ptr<RENDER::ModelInterface> upload(const Geometry& geometry);
+class BackgroundJob;
 struct CachedModel {
 	std::shared_ptr<RENDER::ModelInterface> Model = {};
 	size_t Bytes = 0;
@@ -71,11 +69,8 @@ public:
 	std::vector<VoxelEdit> edits() const;
 
 private:
-	VoxelSettings mSettings = {};
-	std::unordered_map<uint64_t, Block> mEdits = {};
+	VoxelData mData;
 	std::map<std::tuple<unsigned, unsigned, unsigned>, CachedModel> mModels = {};
 	uint64_t mClock = 0;
-	uint64_t key(int x, int y, int z) const;
-	bool contains(int x, int y, int z) const;
 };
 }

@@ -4,13 +4,13 @@
 #include "coreModule/ecs/components/materialRenderer.h"
 #include "coreModule/ecs/components/surfaceComponent.h"
 #include "coreModule/ecs/object.h"
+#include "coreModule/ecs/surface/surfaceRuntime.h"
 #include "renderModule/backends/interface/meshInterface.h"
 #include "renderModule/backends/interface/modelInterface.h"
 #include "renderModule/drawable.h"
 #include "renderModule/frustum.h"
 #include "renderModule/instanceBatch.h"
 #include "sceneModule/scene.h"
-#include "surfaceModule/surfaceRuntime.h"
 #include <algorithm>
 #include <cmath>
 

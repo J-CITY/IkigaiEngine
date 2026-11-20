@@ -2,11 +2,11 @@
 #ifdef USE_EDITOR
 #include "coreModule/ecs/components/foliageComponent.h"
 #include "coreModule/ecs/components/surfaceComponent.h"
+#include "coreModule/ecs/surface/surfaceRuntime.h"
 #include "prefabEditor.h"
 #include "renderModule/backends/interface/textureInterface.h"
 #include "renderModule/gameRenderer.h"
 #include "surfaceModule/surfacePicking.h"
-#include "surfaceModule/surfaceRuntime.h"
 #include <algorithm>
 #include <cmath>
 #include <imgui.h>

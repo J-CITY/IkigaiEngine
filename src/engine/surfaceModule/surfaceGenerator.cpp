@@ -1,5 +1,5 @@
 #include "surfaceGenerator.h"
-#include "surfaceJob.h"
+#include "surfaceCancellation.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -42,12 +42,12 @@ namespace {
 		}
 		return result;
 	}
-	Vertex vertex(const Settings& settings, float x, float z) {
+	SurfaceVertex vertex(const Settings& settings, float x, float z) {
 		const auto surfaceNormal = normal(settings, x, z);
 		const auto tangent = MATH::Vector3f::Normalize({ surfaceNormal.y, -surfaceNormal.x, 0 });
 		return { { x, height(settings, x, z), z }, { x, z }, surfaceNormal, tangent, MATH::Vector3f::Cross(surfaceNormal, tangent) };
 	}
-	void triangle(MeshPart& part, Vertex a, Vertex b, Vertex c, float textureScale) {
+	void triangle(MeshPart& part, SurfaceVertex a, SurfaceVertex b, SurfaceVertex c, float textureScale) {
 		const unsigned offset = unsigned(part.Vertices.size());
 		for (auto value : { a, b, c }) {
 			value.texCoord *= textureScale;
@@ -55,7 +55,7 @@ namespace {
 		}
 		part.Indices.insert(part.Indices.end(), { offset, offset + 1, offset + 2 });
 	}
-	void terrainTriangle(const Settings& settings, Geometry& geometry, const Vertex& a, const Vertex& b, const Vertex& c) {
+	void terrainTriangle(const Settings& settings, Geometry& geometry, const SurfaceVertex& a, const SurfaceVertex& b, const SurfaceVertex& c) {
 		if (settings.Blend.Enabled) {
 			triangle(geometry.Parts[0], a, b, c, 1.0f);
 			return;
@@ -251,7 +251,7 @@ Geometry buildWater(const Settings& settings, unsigned tileX, unsigned tileZ) {
 	const float startX = (float(tileX) - settings.TilesX * .5f) * settings.TileSize;
 	const float startZ = (float(tileZ) - settings.TilesZ * .5f) * settings.TileSize;
 	auto waterVertex
-		= [&](float x, float z) -> Vertex { return { { x, settings.Water.Level, z }, { x, z }, { 0, 1, 0 }, { 1, 0, 0 }, { 0, 0, -1 } }; };
+		= [&](float x, float z) -> SurfaceVertex { return { { x, settings.Water.Level, z }, { x, z }, { 0, 1, 0 }, { 1, 0, 0 }, { 0, 0, -1 } }; };
 	const auto a = waterVertex(startX, startZ);
 	const auto b = waterVertex(startX, startZ + settings.TileSize);
 	const auto c = waterVertex(startX + settings.TileSize, startZ);

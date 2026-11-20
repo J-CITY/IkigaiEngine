@@ -1,5 +1,5 @@
 #include "chunkModelRenderer.h"
-#include "surfaceModule/surfaceRuntime.h"
+#include "coreModule/ecs/surface/surfaceRuntime.h"
 
 namespace IKIGAI::ECS {
 ChunkModelRenderer::ChunkModelRenderer(UTILS::Ref<Object> object)
