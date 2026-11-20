@@ -229,7 +229,7 @@ void RagdollSystem::update(SCENE_SYSTEM::Scene& scene, float dt) {
 				motor.rendered = c->mInstance->root().position;
 			}
 			if (auto model = object->getComponent<ModelRenderer>()) {
-				scene.updateInBVH(UTILS::WeakPtr<ComponentBase>(model.get()));
+				object->componentChangedEvent.run(model.get());
 			}
 		}
 	}

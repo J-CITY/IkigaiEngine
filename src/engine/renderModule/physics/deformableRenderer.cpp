@@ -101,13 +101,12 @@ void DeformableRenderer::update(SCENE_SYSTEM::Scene& scene) {
 		entry.mesh->setBoundingSphere(bounds);
 		entry.model->computeBoundingSphere();
 		entry.frame = mFrame;
-		scene.removeFromBVH(renderer);
 		if (renderer->getModel() != entry.model) {
 			renderer->setModel(entry.model);
 		}
-		// setModelEvent can insert the model; rebuild once with current bounds.
-		scene.removeFromBVH(renderer);
-		scene.addToBVH(renderer);
+		else {
+			object->componentChangedEvent.run(renderer);
+		}
 	}
 	std::erase_if(mEntries, [&](auto& e) { return e.second.frame != mFrame || e.second.lease.expired(); });
 }

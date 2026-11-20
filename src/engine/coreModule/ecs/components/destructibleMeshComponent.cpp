@@ -334,7 +334,7 @@ void DestructibleMeshComponent::release(bool clearDamage) {
 			}
 			if (mScene && !mSceneLifetime.expired()) {
 				if (auto renderer = piece.object->template getComponent<ModelRenderer>()) {
-					mScene->removeFromBVH(renderer.get());
+					mScene->notifyComponentChange(SCENE_SYSTEM::Scene::ComponentChange::Removed, renderer.get());
 				}
 			}
 			piece.object->dispose();

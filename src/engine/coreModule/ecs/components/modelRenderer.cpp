@@ -26,6 +26,7 @@ ModelRenderer::ModelRenderer(UTILS::Ref<ECS::Object> _obj, const Descriptor& _de
 void ModelRenderer::setModel(std::shared_ptr<RENDER::ModelInterface> model) {
 	this->m_model = model;
 	obj->setModelEvent.run();
+	obj->componentChangedEvent.run(this);
 }
 
 std::shared_ptr<RENDER::ModelInterface> ModelRenderer::getModel() const {
@@ -34,6 +35,7 @@ std::shared_ptr<RENDER::ModelInterface> ModelRenderer::getModel() const {
 
 void ModelRenderer::setFrustumBehaviour(EFrustumBehaviour mode) {
 	m_frustumBehaviour = mode;
+	obj->componentChangedEvent.run(this);
 }
 
 EFrustumBehaviour ModelRenderer::getFrustumBehaviour() const {
@@ -46,24 +48,24 @@ const RENDER::BoundingSphere& ModelRenderer::getCustomBoundingSphere() const {
 
 void ModelRenderer::setCustomBoundingSphere(const RENDER::BoundingSphere& boundingSphere) {
 	m_customBoundingSphere = boundingSphere;
+	obj->componentChangedEvent.run(this);
 }
 
 void ModelRenderer::setModelByPath(std::string path) {
 	m_model = path.empty() ? nullptr
 						   : RESOURCES::ServiceManager::Get<RESOURCES::ModelLoader>().loadResource(
 								 path, path.ends_with(".model") ? RESOURCES::ELoadingType::RESOURCE : RESOURCES::ELoadingType::FILE);
-	setFrustumBehaviour(IKIGAI::ECS::EFrustumBehaviour::CULL_MODEL);
-	auto bs = IKIGAI::RENDER::BoundingSphere();
-	bs.position = { 0.0f, 0.0f, 0.0f };
-	bs.radius = 1.0f;
-	setCustomBoundingSphere(bs);
+	m_frustumBehaviour = EFrustumBehaviour::CULL_MODEL;
+	m_customBoundingSphere = RENDER::BoundingSphere { { 0.0f, 0.0f, 0.0f }, 1.0f };
 	// obj->setModelEvent.run();
 	// TODO:: remove this dependence
-	auto mat = obj->getComponent<MaterialRenderer>();
-	if (!mat) {
-		return;
+	if (auto materials = obj->getComponent<MaterialRenderer>()) {
+		materials->updateMaterialList();
 	}
-	mat->updateMaterialList();
+	// The descriptor constructor runs before the component is registered.
+	if (const auto component = obj->getComponent<ModelRenderer>(); component && component.get() == this) {
+		obj->componentChangedEvent.run(this);
+	}
 }
 
 std::string ModelRenderer::getModelPath() const {

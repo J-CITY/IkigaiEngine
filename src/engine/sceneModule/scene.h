@@ -4,7 +4,6 @@
 #include <vector>
 
 #include <coreModule/ecs/object.h>
-#include <renderModule/drawable.h>
 
 #include "coroutineModule/coroutineScope.h"
 #include "resourceModule/serializerInterface.h"
@@ -34,20 +33,7 @@ class World;
 }
 #endif
 
-namespace IKIGAI::RENDER {
-class Camera;
-class Frustum;
-class Model;
-enum class CullingOptions;
-struct LightOGL;
-struct Drawable;
-struct GpuSceneSnapshot;
-}
-
 namespace IKIGAI::SCENE_SYSTEM {
-// Parallel bypasses the size threshold when a worker pool is available.
-enum class FrustumCullMode { Automatic, Serial, Parallel };
-
 struct PhysicsFactories {
 #if USE_PHYSICS_2D
 	std::function<std::unique_ptr<PHYSICS2D::World>()> physics2d;
@@ -146,37 +132,16 @@ public:
 	//[[nodiscard]] ECS::Object& getSkybox() const;
 	//[[nodiscard]] RESOURCES::CubeMap& getSkyboxTexture() const;
 
-	std::vector<std::shared_ptr<RENDER::MeshInterface>> getMeshesInFrustum(const RENDER::ModelInterface& model,
-		const RENDER::BoundingSphere& modelBoundingSphere, const ECS::Transform& modelTransform, const RENDER::Frustum& frustum,
-		RENDER::CullingOptions cullingOptions);
-
-	std::vector<IKIGAI::RENDER::RenderChunk> findDrawables(const MATH::Vector3f& p_cameraPosition, const RENDER::Camera& p_camera,
-		const RENDER::Frustum* p_customFrustum, std::shared_ptr<RENDER::MaterialInterface> p_defaultMaterial,
-		std::shared_ptr<MEMORY::IAllocator> allocationDomain = {});
-
-	std::vector<IKIGAI::RENDER::RenderChunk> findAndSortFrustumCulledBVHDrawables(const MATH::Vector3f& cameraPosition,
-		const RENDER::Frustum& frustum, std::shared_ptr<RENDER::MaterialInterface> defaultMaterial,
-		std::shared_ptr<MEMORY::IAllocator> allocationDomain = {});
-
-	std::vector<IKIGAI::RENDER::RenderChunk> findAndSortFrustumCulledDrawables(const MATH::Vector3f& cameraPosition, const RENDER::Frustum& frustum,
-		std::shared_ptr<RENDER::MaterialInterface> defaultMaterial, FrustumCullMode mode = FrustumCullMode::Automatic,
-		std::shared_ptr<MEMORY::IAllocator> allocationDomain = {});
-
-	std::vector<IKIGAI::RENDER::RenderChunk> findAndSortDrawables(const MATH::Vector3f& cameraPosition,
-		std::shared_ptr<RENDER::MaterialInterface> defaultMaterial, RENDER::GpuSceneSnapshot* gpuScene = nullptr,
-		std::shared_ptr<MEMORY::IAllocator> allocationDomain = {});
-
 	IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::CameraComponent> findMainCamera();
 	// Advance once after all views have recorded a game frame.
 	void commitRenderTransforms();
-	std::vector<RENDER::LightOGL> findLightData(std::vector<int>* objectIds = nullptr) const;
-	std::vector<RENDER::LightOGL> findLightDataInFrustum(const RENDER::Frustum& frustum, std::vector<int>* objectIds = nullptr);
 
 	std::vector<std::shared_ptr<IKIGAI::GUI::GuiObject>> guiObjs;
 
-	void addToBVH(UTILS::WeakPtr<ECS::ComponentBase> component);
-	void removeFromBVH(UTILS::WeakPtr<ECS::ComponentBase> component);
-	void updateInBVH(UTILS::WeakPtr<ECS::ComponentBase> component);
+	enum class ComponentChange { Added, Removed, Updated };
+	using ComponentChanges = EVENT::Event<ComponentChange, UTILS::WeakPtr<ECS::ComponentBase>>;
+	std::weak_ptr<ComponentChanges> componentChanges() const;
+	void notifyComponentChange(ComponentChange change, UTILS::WeakPtr<ECS::ComponentBase> component);
 
 	bool isSceneReady = false;
 	void postLoad();
@@ -209,9 +174,8 @@ private:
 #if USE_PHYSICS_2D
 	std::unique_ptr<ECS::Physics2DSystem> mPhysics2D;
 #endif
-	struct SpatialIndex;
-	std::unique_ptr<SpatialIndex> mSpatial;
-	SpatialIndex& spatial();
+	void observeComponents(ECS::Object& object);
+	std::shared_ptr<ComponentChanges> mComponentChanges = std::make_shared<ComponentChanges>();
 	ECS::World* mWorld = nullptr;
 	std::unique_ptr<COROUTINE::CoroutineScope> mCoroutineScope;
 	bool isExecute = false;

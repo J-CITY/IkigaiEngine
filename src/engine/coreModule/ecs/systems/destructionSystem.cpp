@@ -56,7 +56,7 @@ namespace {
 	}
 	void dispose(SCENE_SYSTEM::Scene& scene, const std::shared_ptr<Object>& object) {
 		if (auto renderer = object->getComponent<ModelRenderer>()) {
-			scene.removeFromBVH(renderer.get());
+			scene.notifyComponentChange(SCENE_SYSTEM::Scene::ComponentChange::Removed, renderer.get());
 		}
 		object->dispose();
 	}
@@ -571,7 +571,7 @@ void DestructionSystem::present(SCENE_SYSTEM::Scene& scene, float alpha) {
 			if ((oldPosition - position).squareMagnitude() > 1e-16f || oldRotation.x != rotation.x || oldRotation.y != rotation.y
 				|| oldRotation.z != rotation.z || oldRotation.w != rotation.w) {
 				transform.setLocalPose(position, rotation);
-				scene.updateInBVH(render.object->getComponent<ModelRenderer>().get());
+				scene.notifyComponentChange(SCENE_SYSTEM::Scene::ComponentChange::Updated, render.object->getComponent<ModelRenderer>().get());
 			}
 			transform.getTransform().setPrevWorldMatrix(render.poseReady ? previous : transform.getWorldMatrix());
 			render.poseReady = true;

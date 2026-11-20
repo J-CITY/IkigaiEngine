@@ -751,7 +751,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	mEnvironmentSun = std::move(sun);
 
 	const auto& cameraPosition = cameraComponent.obj->getTransform()->getWorldPosition();
-	auto chunks = scene.findDrawables(cameraPosition, cameraComponent.getCamera(), nullptr, mEmptyMaterial, drawableDomain);
+	auto chunks = mSceneRenderData.findDrawables(scene, cameraPosition, cameraComponent.getCamera(), nullptr, mEmptyMaterial, drawableDomain);
 	GpuSceneSnapshot* gpuSnapshot = nullptr;
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 	GpuSceneSnapshot ordinary;
@@ -774,7 +774,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		mGpuScene.reset();
 	}
 #endif
-	auto shadowChunks = scene.findAndSortDrawables(cameraPosition, mEmptyMaterial, gpuSnapshot, drawableDomain);
+	auto shadowChunks = mSceneRenderData.findAndSortDrawables(scene, cameraPosition, mEmptyMaterial, gpuSnapshot, drawableDomain);
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 	if (gpuSnapshot) {
 		IKIGAI_PROFILE_SCOPE("Prepare GPU Scene Draws");
@@ -879,7 +879,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		mRenderPipeline->mHistory.beginFrame();
 	}
 	if (rayTracingActive) {
-		auto lights = rayLightsNeeded ? scene.findLightData() : std::vector<LightOGL> {};
+		auto lights = rayLightsNeeded ? SceneRenderData::findLightData(scene) : std::vector<LightOGL> {};
 		if (lights.empty()) {
 			lights.resize(1);
 			lights[0].type = -1;
@@ -920,7 +920,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	if (HasTemporalDenoisers(*mRenderPipeline)) {
 		// Pipelines without a ray traced light list (hybrid-sp) detect light changes for their GI history here.
 		if (!(rayTracingActive && rayLightsNeeded)) {
-			DetectTemporalDenoiseLightChange(*mRenderPipeline, scene.findLightData());
+			DetectTemporalDenoiseLightChange(*mRenderPipeline, SceneRenderData::findLightData(scene));
 		}
 		UpdateTemporalDenoiseBuffers(*mContext.render, *mRenderPipeline, mFrameData.FrameState.x > .5f);
 	}
@@ -986,7 +986,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	if (mRenderPipeline->mDescriptor.SurfaceCache) {
 		const bool changed = mRenderPipeline->mDescriptor.ScreenProbes.SdfAtlas.empty()
 			? mRaySceneChanged
-			: UpdateSdfCacheLights(*mRenderPipeline, *mContext.render, scene.findLightData());
+			: UpdateSdfCacheLights(*mRenderPipeline, *mContext.render, SceneRenderData::findLightData(scene));
 		UpdateSurfaceCache(*mRenderPipeline, *mContext.render, mContext.sceneManager->getCurrentSceneSourcePath(), changed || sdfMoved);
 	}
 	mContext.render->updateUniformBuffer(mShadowUbo, mShadowData);
@@ -1730,7 +1730,7 @@ namespace {
 }
 
 void GameRenderer::updateLights(SCENE_SYSTEM::Scene& scene) {
-	auto lightMatrices = scene.findLightData(&mLightObjectIds);
+	auto lightMatrices = SceneRenderData::findLightData(scene, &mLightObjectIds);
 	if (lightMatrices.empty()) {
 		lightMatrices.push_back(LightOGL::Inactive());
 	}
@@ -1742,7 +1742,7 @@ void GameRenderer::updateLights(SCENE_SYSTEM::Scene& scene) {
 }
 
 void GameRenderer::updateLightsInFrustum(SCENE_SYSTEM::Scene& scene, const Frustum& frustum) {
-	auto lightMatrices = scene.findLightDataInFrustum(frustum, &mLightObjectIds);
+	auto lightMatrices = SceneRenderData::findLightDataInFrustum(scene, frustum, &mLightObjectIds);
 	if (lightMatrices.empty()) {
 		lightMatrices.push_back(LightOGL::Inactive());
 	}
