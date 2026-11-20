@@ -246,7 +246,7 @@ The ImGui editor provides a scene hierarchy, component inspector, transform gizm
 
 Attach Lua or IkigaiScript components to scenes. Define editor and debug windows in JSON with C++, Lua, or IkigaiScript controllers. In builds with JSON views enabled, **F8** opens the window manager.
 
-[Scripting module](src/engine/scriptModule) · [JSON view runtime](src/engine/uiModule)
+[Scripting module](src/engine/scriptModule) · [JSON view runtime](src/engine/imguiViewsModule)
 
 </details>
 

@@ -3,7 +3,7 @@
 #include "coreModule/ecs/components/cameraComponent.h"
 #include "coreModule/ecs/object.h"
 #include "sceneModule/sceneManager.h"
-#include "uiModule/viewStore.h"
+#include "imguiViewsModule/viewStore.h"
 #include "utilsModule/log/loggerDefine.h"
 #ifdef USE_EDITOR
 #include "editorModule/cameraTransformEdit.h"

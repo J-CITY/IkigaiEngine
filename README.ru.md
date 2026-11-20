@@ -246,7 +246,7 @@ cmake --build --preset windows-release --target IkigaiEngine
 
 К сценам можно подключать компоненты на Lua и IkigaiScript. Окна редактора и отладки описываются в JSON, а их контроллеры пишутся на C++, Lua или IkigaiScript. В сборках с поддержкой JSON-окон клавиша **F8** открывает менеджер окон.
 
-[Модуль скриптов](src/engine/scriptModule) · [Модуль JSON-окон](src/engine/uiModule)
+[Модуль скриптов](src/engine/scriptModule) · [Модуль JSON-окон](src/engine/imguiViewsModule)
 
 </details>
 

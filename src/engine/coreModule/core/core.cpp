@@ -17,7 +17,7 @@
 #include "coreModule/ecs/components/particleSystemComponent.h"
 #include "coroutineModule/scheduler.h"
 #include "resourceModule/particleManager.h"
-#include "uiModule/viewHost.h"
+#include "imguiViewsModule/viewHost.h"
 #include "utilsModule/assertion.h"
 #include "utilsModule/log/loggerDefine.h"
 

@@ -18,7 +18,7 @@ function(ikigai_filter_platform_sources headers_var sources_var platform)
         "engine/renderModule/backends/gl/imguiBackendGl.cpp"
         "engine/renderModule/backends/imgui/imguiBackend.cpp"
         "engine/renderModule/backends/imgui/imguiBackend.h"
-        "engine/uiModule/viewRenderer.cpp"
+        "engine/imguiViewsModule/viewRenderer.cpp"
         "engine/utilsModule/imguiHelper/Dirent/dirent.h"
         "engine/utilsModule/imguiHelper/ImGuiFileBrowser.cpp"
         "engine/utilsModule/imguiHelper/ImGuiFileBrowser.h"

@@ -31,7 +31,7 @@ set(IKIGAI_MODULE_MANIFEST_NAMES
     skeletalModule
     surfaceModule
     taskModule
-    uiModule
+    imguiViewsModule
     utilsModule
     vectorGraphicsModule
     virtualGeometryModule

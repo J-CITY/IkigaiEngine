@@ -17,7 +17,7 @@
 #include "sceneModule/sceneManager.h"
 #include "taskModule/taskSystem.h"
 #include "traceModule/trace.h"
-#include "uiModule/viewHost.h"
+#include "imguiViewsModule/viewHost.h"
 #include "utilsModule/time/time.h"
 #include "windowModule/inputManager/inputActions.h"
 #include "windowModule/inputManager/inputManager.h"
