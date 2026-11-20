@@ -56,6 +56,7 @@
 #include "inputActionStorage.h"
 #include "sceneResourcePreparation.h"
 #include "coreModule/ecs/sceneSimulationHost.h"
+#include "coreModule/ecs/systemBatchExecutor.h"
 #include "windowModule/inputManager/inputActions.h"
 #include "windowModule/inputManager/inputManager.h"
 #include <audioModule/audioManager.h>
@@ -320,7 +321,7 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 
 	audioManager = std::make_unique<AUDIO::AudioManager>();
 	audioSourceLoader = std::make_unique<RESOURCES::AudioSourceLoader>();
-	taskManger = std::make_unique<TASK::TaskSystem>();
+	taskManger = std::make_shared<TASK::TaskSystem>();
 	coroutineScheduler = std::make_unique<COROUTINE::Scheduler>();
 	coroutineScheduler->setErrorHandler([](const COROUTINE::TaskHandle& task) {
 		try {
@@ -333,7 +334,9 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 	});
 	RESOURCES::ServiceManager::Set<COROUTINE::Scheduler>(coroutineScheduler.get());
 	eventBroadcaster = std::make_unique<EVENT::EventBroadcaster>();
-	world = std::make_unique<ECS::World>();
+	const auto batchExecutor = ECS::makeTaskSystemBatchExecutor(taskManger);
+	world = std::make_unique<ECS::World>(ECS::ArchetypeLayout::PerColumn, batchExecutor);
+	sceneManager->setLoadingSceneBatchExecutor(batchExecutor);
 
 #ifndef __EMSCRIPTEN__
 	IKIGAI_VERIFY(taskManger->setup(), "Core startup failed to start task executors");

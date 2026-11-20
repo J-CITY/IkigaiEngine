@@ -1,8 +1,6 @@
 #include "systemManager.h"
 #include "commandBuffer.h"
 #include "systemAccessConflict.h"
-#include "taskModule/taskSystem.h"
-#include "utilsModule/serviceManager.h"
 #include "world.h"
 
 #include <exception>
@@ -16,18 +14,6 @@
 namespace IKIGAI::ECS {
 
 namespace {
-	TASK::TaskSystem* getTaskSystem() {
-#ifdef __EMSCRIPTEN__
-		return nullptr;
-#else
-		if (!UTILS::ServiceManager::Check<TASK::TaskSystem>()) {
-			return nullptr;
-		}
-		auto& tasks = UTILS::ServiceManager::Get<TASK::TaskSystem>();
-		return !tasks.isFrameWorkerThread() && tasks.isReady() && tasks.getThreadCounts() > 0 ? &tasks : nullptr;
-#endif
-	}
-
 	void WebEcsLog(const char* msg) {
 #ifdef __EMSCRIPTEN__
 		static int remaining = 24;
@@ -42,12 +28,13 @@ namespace {
 
 } // namespace
 
+SystemManager::SystemManager(World& world, SystemBatchExecutor executor)
+	: mWorld(world)
+	, mBatchExecutor(std::move(executor)) { }
+
 template <typename PhaseFunc> void SystemManager::runPhase(PhaseFunc&& phaseFunc) {
-	auto* tasks = getTaskSystem();
-	const auto runSystem = [this, &phaseFunc, tasks](System& system, CommandBuffer& buffer, bool allowImmediateStructuralChanges) {
-		if (!tasks) {
-			WebEcsLog(system.getName().c_str());
-		}
+	const auto runSystem = [this, &phaseFunc](System& system, CommandBuffer& buffer, bool allowImmediateStructuralChanges) {
+		WebEcsLog(system.getName().c_str());
 		ActiveCommandBufferScope scope(buffer, allowImmediateStructuralChanges && !system.mValidateAccess);
 		const SystemAccessScope access(!allowImmediateStructuralChanges || system.mValidateAccess, system.getName(), *mWorld.getComponentManager(),
 			system.mReads, system.mWrites, system.mResourceReads, system.mResourceWrites);
@@ -63,40 +50,30 @@ template <typename PhaseFunc> void SystemManager::runPhase(PhaseFunc&& phaseFunc
 		}
 
 		std::vector<CommandBuffer> buffers(batch.systems.size());
-		std::exception_ptr failure;
-		const auto observe = [&failure](auto&& work) {
-			try {
-				work();
-			} catch (...) {
-				if (!failure) {
-					failure = std::current_exception();
+		const auto runJob = [&](std::size_t index) { runSystem(*batch.systems[index], buffers[index], false); };
+		bool dispatched = false;
+		if (mBatchExecutor) {
+			std::vector<const char*> names;
+			names.reserve(batch.systems.size());
+			for (const auto& system : batch.systems) {
+				names.push_back(system->getName().c_str());
+			}
+			dispatched = mBatchExecutor(names, runJob);
+		}
+		if (!dispatched) {
+			std::exception_ptr failure;
+			for (std::size_t index = 0; index < batch.systems.size(); ++index) {
+				try {
+					runJob(index);
+				} catch (...) {
+					if (!failure) {
+						failure = std::current_exception();
+					}
 				}
 			}
-		};
-
-		if (tasks) {
-			std::vector<TASK::TaskHandle<void>> handles;
-			handles.reserve(batch.systems.size());
-			observe([&] {
-				for (size_t i = 0; i < batch.systems.size(); ++i) {
-					auto* system = batch.systems[i].get();
-					handles.push_back(
-						tasks->submit(system->getName().c_str(), -1, nullptr, [&, system, i] { runSystem(*system, buffers[i], false); }));
-				}
-			});
-			// Join all submitted systems before their captures go out of scope.
-			for (const auto& handle : handles) {
-				observe([&] { handle.mFuture->get(); });
+			if (failure) {
+				std::rethrow_exception(failure);
 			}
-		}
-		else {
-			for (size_t i = 0; i < batch.systems.size(); ++i) {
-				observe([&] { runSystem(*batch.systems[i], buffers[i], false); });
-			}
-		}
-
-		if (failure) {
-			std::rethrow_exception(failure);
 		}
 		// Structural edits become visible at the same boundary in either mode.
 		for (auto& buffer : buffers) {

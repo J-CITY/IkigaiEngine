@@ -2,6 +2,7 @@
 #include <memory>
 
 #include "entityManager.h"
+#include "systemBatchExecutor.h"
 #include "utilsModule/idGenerator.h"
 #include <string>
 
@@ -13,7 +14,7 @@ template <typename... Components> class SystemBuilder;
 class World : public IdGenerator<World> {
 public:
 	World();
-	explicit World(ArchetypeLayout layout);
+	explicit World(ArchetypeLayout layout, SystemBatchExecutor executor = {});
 	~World();
 
 	[[nodiscard]] ComponentManager* getComponentManager() const noexcept;

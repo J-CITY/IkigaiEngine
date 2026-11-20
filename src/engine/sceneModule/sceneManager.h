@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include "ecsModule/systemBatchExecutor.h"
 #include "scene.h"
 #include "sceneLoading.h"
 
@@ -24,6 +25,7 @@ public:
 	void setLoadingSceneWarmup(LoadingSceneWarmup warmup) {
 		mLoadingSceneWarmup = std::move(warmup);
 	}
+	void setLoadingSceneBatchExecutor(ECS::SystemBatchExecutor executor);
 
 	void update();
 	void loadFromFile(const std::string& sceneFilePath);
@@ -77,6 +79,7 @@ private:
 	SceneSimulationFactory mSimulationFactory = nullptr;
 	std::unique_ptr<SceneSimulation> makeSimulation(const nlohmann::json* document = nullptr) const;
 	LoadingSceneWarmup mLoadingSceneWarmup;
+	ECS::SystemBatchExecutor mLoadingSceneBatchExecutor;
 	struct LoadContext;
 	struct LoadingSceneCache;
 	std::unique_ptr<LoadContext> mBuild;

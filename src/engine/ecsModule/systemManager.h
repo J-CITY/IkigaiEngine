@@ -4,6 +4,7 @@
 #include "componentManager.h"
 #include "entityManager.h"
 #include "signature.h"
+#include "systemBatchExecutor.h"
 #include <algorithm>
 #include <functional>
 #include <memory>
@@ -101,8 +102,7 @@ public:
 		std::vector<std::shared_ptr<System>> systems;
 	};
 
-	SystemManager(World& world)
-		: mWorld(world) { }
+	explicit SystemManager(World& world, SystemBatchExecutor executor = {});
 
 	template <typename T, typename... Args> std::shared_ptr<T> registerSystem(Args&&... args) {
 		auto system = std::make_shared<T>(std::forward<Args>(args)...);
@@ -184,6 +184,7 @@ public:
 
 private:
 	World& mWorld;
+	SystemBatchExecutor mBatchExecutor;
 	std::unordered_map<std::string, std::shared_ptr<System>> mSystems;
 	std::vector<std::shared_ptr<System>> mSystemsOrder;
 	std::vector<Batch> mBatches;

@@ -7,9 +7,9 @@ namespace IKIGAI::ECS {
 World::World()
 	: World(ArchetypeLayout::PerColumn) { }
 
-World::World(ArchetypeLayout layout) {
+World::World(ArchetypeLayout layout, SystemBatchExecutor executor) {
 	mComponentsManager = std::make_shared<ComponentManager>(layout);
-	mSystemsManager = std::make_unique<SystemManager>(*this);
+	mSystemsManager = std::make_unique<SystemManager>(*this, std::move(executor));
 }
 
 World::~World() = default;

@@ -32,14 +32,15 @@ set(IKIGAI_SOURCE_ROOT "${ENGINE_ROOT}/src")
 include("${ENGINE_ROOT}/cmake/modules/ecsModule.cmake")
 add_library(ikigai_ecs_under_test STATIC ${IKIGAI_MANIFEST_ecsModule})
 target_include_directories(ikigai_ecs_under_test PUBLIC "${IKIGAI_SOURCE_ROOT}/engine")
-target_link_libraries(ikigai_ecs_under_test PUBLIC ikigai_memory PRIVATE ikigai_logging ikigai_services ikigai_task)
+target_link_libraries(ikigai_ecs_under_test PUBLIC ikigai_memory PRIVATE ikigai_logging)
 
 add_executable(ecs_tests
     unit/ecs/main.cpp
     unit/ecs/storage.cpp
-    unit/ecs/systems.cpp)
+    unit/ecs/systems.cpp
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/systemBatchExecutor.cpp")
 target_include_directories(ecs_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(ecs_tests PRIVATE ikigai_ecs_under_test ikigai_services ikigai_task)
+target_link_libraries(ecs_tests PRIVATE ikigai_ecs_under_test ikigai_task)
 add_test(NAME ecs_module COMMAND ecs_tests)
 set_tests_properties(ecs_module PROPERTIES TIMEOUT 30 LABELS unit)
 

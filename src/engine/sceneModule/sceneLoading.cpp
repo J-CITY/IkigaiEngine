@@ -388,12 +388,16 @@ SceneLoadHandle SceneManager::prepareLoadingScene(std::string path) {
 	return SceneLoadHandle(state);
 }
 
+void SceneManager::setLoadingSceneBatchExecutor(ECS::SystemBatchExecutor executor) {
+	mLoadingSceneBatchExecutor = std::move(executor);
+}
+
 Task<> SceneManager::cacheLoadingScene(std::shared_ptr<SceneLoadState> state) {
 	state->status = SceneLoadStatus::Running;
 	bool cancelled = false;
 	try {
 		mCacheBuild = std::make_unique<LoadContext>();
-		mCacheBuild->world = std::make_unique<ECS::World>();
+		mCacheBuild->world = std::make_unique<ECS::World>(ECS::ArchetypeLayout::PerColumn, mLoadingSceneBatchExecutor);
 		ECS::ComponentCatalog::instance().applyStorage(*mCacheBuild->world);
 		if (mLoadingSceneWarmup) {
 			co_await mLoadingSceneWarmup(state, mCacheBuild->resources);

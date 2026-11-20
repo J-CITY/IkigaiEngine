@@ -1,8 +1,8 @@
 #include "components.h"
+#include "coreModule/ecs/systemBatchExecutor.h"
 #include "ecsModule/world.h"
 #include "support/expect.h"
 #include "taskModule/taskSystem.h"
-#include "utilsModule/serviceManager.h"
 
 #include <array>
 #include <chrono>
@@ -52,8 +52,8 @@ namespace {
 		expect(count == 1 && sum == 8, "an edit targeting a destroyed entity is skipped");
 	}
 
-	void checkScheduling(ArchetypeLayout layout, bool withWorkers) {
-		World world { layout };
+	void checkScheduling(ArchetypeLayout layout, SystemBatchExecutor executor, bool withWorkers) {
+		World world { layout, std::move(executor) };
 		auto& components = *world.getComponentManager();
 		const auto entity = world.createEntity();
 		components.addComponents(entity, Position { 1 }, Velocity { 2 });
@@ -102,24 +102,17 @@ void runSystemTests() {
 	constexpr std::array layouts { ECS::ArchetypeLayout::PerColumn, ECS::ArchetypeLayout::SharedRows };
 	for (const auto layout : layouts) {
 		checkCommands(layout);
-		checkScheduling(layout, false);
+		checkScheduling(layout, {}, false);
 		checkAccessValidation(layout);
 	}
 
-	TASK::TaskSystem tasks;
-	const bool started = tasks.setup() && tasks.initialize() && tasks.getThreadCounts() > 0;
+	auto tasks = std::make_shared<TASK::TaskSystem>();
+	const bool started = tasks->setup() && tasks->initialize() && tasks->getThreadCounts() > 0;
 	expect(started, "frame workers start");
 	if (started) {
-		struct TaskRegistration {
-			explicit TaskRegistration(TASK::TaskSystem& value) {
-				UTILS::ServiceManager::Set(&value);
-			}
-			~TaskRegistration() {
-				UTILS::ServiceManager::Remove<TASK::TaskSystem>();
-			}
-		} registration(tasks);
+		const auto executor = makeTaskSystemBatchExecutor(tasks);
 		for (const auto layout : layouts) {
-			checkScheduling(layout, true);
+			checkScheduling(layout, executor, true);
 		}
 	}
 }

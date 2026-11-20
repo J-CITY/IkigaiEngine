@@ -18,6 +18,7 @@ set(IKIGAI_MANIFEST_ecsModule
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/sparseRowIndex.h"
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemAccessConflict.h"
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemAccessScope.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemBatchExecutor.h"
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemBuilder.h"
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemManager.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/ecsModule/systemManager.h"
