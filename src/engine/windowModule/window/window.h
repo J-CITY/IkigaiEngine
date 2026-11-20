@@ -88,6 +88,7 @@ public:
 
 	EVENT::Event<> appPauseEvent;
 	EVENT::Event<> appResumeEvent;
+	EVENT::Event<> beforeModeChangeEvent;
 
 	explicit Window(const WindowSettings& p_windowSettings, bool isMain = true, Window* sharedWindow = nullptr);
 	Window() = delete;

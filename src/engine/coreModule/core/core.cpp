@@ -268,6 +268,13 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 	if (!driver) {
 		throw std::runtime_error("Failed to create render driver");
 	}
+#ifdef USE_SDL
+	window->beforeModeChangeEvent.add([] {
+		if (auto* activeDriver = RENDER::DriverInterface::Get()) {
+			activeDriver->prepareWindowModeChange();
+		}
+	});
+#endif
 
 	std::unique_ptr<RENDER::RenderExecutorInterface> executor;
 	const auto execution = RENDER::DriverInterface::settings.execution;

@@ -141,6 +141,12 @@ void BindlessResourceTable::recycle(BindlessResourceHandle handle) {
 
 thread_local DriverInterface* DriverInterface::sReplayDriver = nullptr;
 
+DriverInterface::~DriverInterface() {
+	if (sActive == this) {
+		sActive = nullptr;
+	}
+}
+
 void DriverInterface::requireOwnerThread() const {
 	if (sReplayDriver != this) {
 		mOwner.requireCurrentThread();
@@ -175,6 +181,19 @@ void DriverInterface::prepareAccess() {
 	if (sReplayDriver != this && mAccessBoundary) {
 		mAccessBoundary();
 	}
+}
+
+void DriverInterface::prepareWindowModeChange() {
+	if (!mFrameGeneration) {
+		return;
+	}
+	if (mFrameGeneration->status().Technology == FrameGenerationType::DLSS) {
+		stopPresentation();
+		return;
+	}
+	mFrameGeneration->suspend();
+	mFrameGeneration->waitForPresents();
+	mFrameGenerationStatus = mFrameGeneration->status();
 }
 
 void DriverInterface::presentFrame() {

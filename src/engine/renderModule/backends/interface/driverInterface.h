@@ -134,7 +134,7 @@ protected:
 	static bool independentFills(std::span<const BufferFill> fills);
 
 public:
-	virtual ~DriverInterface() = default;
+	virtual ~DriverInterface();
 	void requireOwnerThread() const;
 	const GpuCompletionSource& completion() const noexcept {
 		return *mCompletion;
@@ -349,6 +349,7 @@ public:
 		++mRealFrameId;
 	}
 	virtual void latencySimulationEnd() { }
+	void prepareWindowModeChange();
 	void stopPresentation() {
 		mFrameGeneration.reset();
 		mFrameGenerationStatus = {};

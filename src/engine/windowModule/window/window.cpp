@@ -126,16 +126,7 @@ MATH::Vector2i Window::getMousePos() const {
 
 void Window::setSize(unsigned width, unsigned height) {
 	if (mIsMainWindow) {
-		if (auto* driver = RENDER::DriverInterface::Get(); driver && driver->mFrameGeneration) {
-			if (driver->mFrameGeneration->status().Technology == RENDER::FrameGenerationType::DLSS) {
-				driver->stopPresentation();
-			}
-			else {
-				driver->mFrameGeneration->suspend();
-				driver->mFrameGeneration->waitForPresents();
-				driver->mFrameGenerationStatus = driver->mFrameGeneration->status();
-			}
-		}
+		beforeModeChangeEvent.run();
 	}
 	switch (GetCurrentPlatform()) {
 	case Platform::IOS:
@@ -317,16 +308,7 @@ int Window::getRefreshRate() const {
 
 void Window::setFullscreen(bool val) {
 	if (mIsMainWindow) {
-		if (auto* driver = RENDER::DriverInterface::Get(); driver && driver->mFrameGeneration) {
-			if (driver->mFrameGeneration->status().Technology == RENDER::FrameGenerationType::DLSS) {
-				driver->stopPresentation();
-			}
-			else {
-				driver->mFrameGeneration->suspend();
-				driver->mFrameGeneration->waitForPresents();
-				driver->mFrameGenerationStatus = driver->mFrameGeneration->status();
-			}
-		}
+		beforeModeChangeEvent.run();
 	}
 	switch (GetCurrentPlatform()) {
 	case Platform::IOS:
