@@ -1,4 +1,4 @@
-#include "resourceModule/serviceManager.h"
+#include "utilsModule/serviceManager.h"
 #include "surfaceJob.h"
 #include "taskModule/taskSystem.h"
 

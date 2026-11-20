@@ -2,7 +2,7 @@
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/backends/interface/materialInterface.h"
 #include "renderModule/render.h"
-#include "resourceModule/serviceManager.h"
+#include "utilsModule/serviceManager.h"
 #include "surfaceCoverage.h"
 #include <stdexcept>
 
