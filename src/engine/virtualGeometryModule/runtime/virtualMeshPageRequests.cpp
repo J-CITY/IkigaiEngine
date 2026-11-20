@@ -1,6 +1,5 @@
 #include "virtualMeshPageRequests.h"
 
-#include "resourceModule/fileSystem/fileSystem.h"
 #include "taskModule/task.h"
 #include "virtualMeshPageSource.h"
 
@@ -34,9 +33,8 @@ struct VirtualMeshPageRequests::Request {
 				Completion.Data = source.readPage(Key.Page, stop);
 				Completion.Status = VirtualMeshPageReadStatus::Ready;
 			}
-		} catch (const RESOURCES::RangeFileError& error) {
-			Completion.Status = error.code() == RESOURCES::RangeFileErrorCode::Cancelled ? VirtualMeshPageReadStatus::Cancelled
-																						 : VirtualMeshPageReadStatus::IoError;
+		} catch (const VirtualMeshRangeError& error) {
+			Completion.Status = error.cancelled() ? VirtualMeshPageReadStatus::Cancelled : VirtualMeshPageReadStatus::IoError;
 			Completion.Failure = std::current_exception();
 		} catch (const VMeshFormatError&) {
 			Completion.Status = VirtualMeshPageReadStatus::InvalidData;

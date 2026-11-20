@@ -5,9 +5,22 @@
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
+#include <utility>
 
 namespace IKIGAI::VG {
 namespace {
+	VirtualMeshRangeReader AdaptRangeFile(std::shared_ptr<const RESOURCES::RangeFile> range) {
+		const auto fileSize = range->size();
+		auto read = [range = std::move(range)](uint64_t offset, std::size_t size, std::stop_token stop) {
+			try {
+				return range->read(offset, size, stop);
+			} catch (const RESOURCES::RangeFileError& error) {
+				throw VirtualMeshRangeError(error.what(), error.code() == RESOURCES::RangeFileErrorCode::Cancelled);
+			}
+		};
+		return { fileSize, std::move(read) };
+	}
+
 	std::shared_ptr<VirtualMeshAsset> CreateAsset(
 		const std::string& path, const VMeshData& data, std::shared_ptr<const VirtualMeshPageSource> source = {}, bool visibilityBuffers = false) {
 		auto asset = std::make_shared<VirtualMeshAsset>(path, data, IsVirtualGeometryGpuPathSupported(), std::move(source), visibilityBuffers);
@@ -44,7 +57,7 @@ std::shared_ptr<VirtualMeshAsset> VirtualMeshLoader::loadStreamedResource(const 
 			std::cout << "VG_STREAM_RESIDENT_COMPAT path=" << path << " reason=v1" << std::endl;
 			return loadResource(normalized, RESOURCES::ELoadingType::FILE);
 		}
-		auto source = VirtualMeshPageSource::Open(std::move(range));
+		auto source = VirtualMeshPageSource::Open(AdaptRangeFile(std::move(range)));
 		auto asset = std::make_shared<VirtualMeshAsset>(normalized, std::move(source));
 		mStreamedAssets[key] = asset;
 		return asset;
@@ -94,7 +107,7 @@ std::shared_ptr<VirtualMeshAsset> VirtualMeshLoader::createResidentResource(cons
 			uint32_t version = 0;
 			std::memcpy(&version, prefix.data() + sizeof(uint32_t), sizeof(version));
 			if (version == VMeshPagedVersion) {
-				auto source = VirtualMeshPageSource::Open(range);
+				auto source = VirtualMeshPageSource::Open(AdaptRangeFile(std::move(range)));
 				const auto data = source->readResident();
 				return CreateAsset(path, data, std::move(source), visibilityBuffers);
 			}
