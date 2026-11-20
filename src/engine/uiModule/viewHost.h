@@ -3,9 +3,18 @@
 #include "viewRenderer.h"
 #include "viewStore.h"
 #include <chrono>
+#include <functional>
+#include <string>
+#include <vector>
 
 namespace IKIGAI::UI {
 class ViewHost {
+public:
+	using ListViews = std::function<std::vector<std::string>()>;
+
+private:
+	ListViews mListViews;
+	ViewStore::Reader mRead;
 	std::chrono::steady_clock::time_point nextScan;
 	bool reloadRequested = true;
 	bool showManager = false;
@@ -14,6 +23,7 @@ class ViewHost {
 
 public:
 	ViewStore store;
+	ViewHost(ListViews listViews, ViewStore::Reader read);
 	void draw();
 	void reload() {
 		reloadRequested = true;

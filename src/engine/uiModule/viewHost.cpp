@@ -2,13 +2,10 @@
 #if USE_JSON_VIEWS && !defined(OCULUS)
 #include "imgui.h"
 #include "misc/cpp/imgui_stdlib.h"
-#include "resourceModule/fileSystem/fileSystem.h"
-#include "resourceModule/serviceManager.h"
 #include "utilsModule/log/loggerDefine.h"
-#include <algorithm>
-#include <cmath>
-#include <limits>
+#include <set>
 #include <stdexcept>
+#include <utility>
 
 namespace IKIGAI::UI {
 namespace {
@@ -26,31 +23,25 @@ namespace {
 		}
 	};
 }
+ViewHost::ViewHost(ListViews listViews, ViewStore::Reader read)
+	: mListViews(std::move(listViews))
+	, mRead(std::move(read)) { }
+
 void ViewHost::registerWidget(const std::string& name, std::function<void(const Node&, Controller&)> draw) {
-	if (name.empty() || !draw)
+	if (name.empty() || !draw) {
 		throw std::runtime_error("Custom widget needs a name and callback");
+	}
 	renderer.custom[name] = std::move(draw);
 	store.customWidgets.insert(name);
 	reload();
 }
 void ViewHost::scan(bool force) {
-	auto& fs = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>();
-	auto read = [&](const std::string& path) {
-		auto file = fs.getLiveFile(path);
-		if (!file || !file->isValid())
-			throw std::runtime_error("Cannot read " + path);
-		return file->readStr();
-	};
-	// Content polling also works for debug hosts with USE_EDITOR=OFF and for
-	// VFS mounts without native file timestamps. No work is done inside drawing.
 	std::set<std::string> discovered;
-	for (const auto& entry : fs.listLiveDirectory("/ui/windows")) {
-		if (entry.isDirectory || !entry.path.ends_with(".json"))
-			continue;
-		discovered.insert(entry.path);
-		const auto previousError = store.windows[entry.path].error;
-		store.reload(entry.path, read, force);
-		const auto& error = store.windows.at(entry.path).error;
+	for (const auto& path : mListViews()) {
+		discovered.insert(path);
+		const auto previousError = store.windows[path].error;
+		store.reload(path, mRead, force);
+		const auto& error = store.windows.at(path).error;
 		if (!error.empty() && error != previousError) {
 			LOG_ERROR << error;
 			showManager = true;

@@ -30,6 +30,8 @@
 #include <stdexcept>
 #include <utilsModule/contentRoot.h>
 #include <utilsModule/log/logger.h>
+#include <utility>
+#include <vector>
 
 #include "../config.h"
 #include "../ecs/systems/audioSystem.h"
@@ -424,7 +426,23 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 	editorRender = std::make_unique<EDITOR::EditorRender>();
 #endif
 #if USE_JSON_VIEWS && !defined(OCULUS)
-	viewHost = std::make_unique<UI::ViewHost>();
+	viewHost = std::make_unique<UI::ViewHost>(
+		[&files = *fileSystem] {
+			std::vector<std::string> paths;
+			for (auto& entry : files.listLiveDirectory("/ui/windows")) {
+				if (!entry.isDirectory && entry.path.ends_with(".json")) {
+					paths.push_back(std::move(entry.path));
+				}
+			}
+			return paths;
+		},
+		[&files = *fileSystem](const std::string& path) {
+			auto file = files.getLiveFile(path);
+			if (!file || !file->isValid()) {
+				throw std::runtime_error("Cannot read " + path);
+			}
+			return file->readStr();
+		});
 	RegisterCameraUiBindings(viewHost->store, *sceneManager);
 #endif
 
