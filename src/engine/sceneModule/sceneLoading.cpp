@@ -1,11 +1,10 @@
-#include "coreModule/config.h"
 #include "resourceModule/audioSourceManager.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/fontManager.h"
 #include "resourceModule/materialManager.h"
 #include "resourceModule/modelManager.h"
 #include "resourceModule/particleManager.h"
-#include "resourceModule/serviceManager.h"
+#include "utilsModule/serviceManager.h"
 #include "resourceModule/shaderManager.h"
 #include "resourceModule/skeletonAnimationManager.h"
 #include "resourceModule/skeletonBlendspaceManager.h"
@@ -298,7 +297,7 @@ Task<> SceneManager::clearScene(Scene& scene) {
 }
 
 Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadState> state, bool lightweight) {
-	UTILS::LoadTimer timing("scene-build", Config::PROFILE_LOADING, state->path);
+	UTILS::LoadTimer timing("scene-build", mProfileLoading, state->path);
 	state->phase = "Reading";
 	auto file = ServiceManager::Get<FileSystem>().getFile(state->path, FileMode::READ);
 	if (!file || !file->isValid()) {
@@ -457,7 +456,7 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 }
 
 Task<> SceneManager::transition(std::shared_ptr<SceneLoadState> state) {
-	UTILS::LoadTimer timing("scene-transition", Config::PROFILE_LOADING, state->path);
+	UTILS::LoadTimer timing("scene-transition", mProfileLoading, state->path);
 	state->status = SceneLoadStatus::Running;
 	bool cancelled = false;
 	bool committed = false;
@@ -536,7 +535,7 @@ Task<> SceneManager::transition(std::shared_ptr<SceneLoadState> state) {
 			mLoadingCache->scene->cancelTasks();
 		}
 		if (!state->error.empty()) {
-			if (Config::PROFILE_LOADING) {
+			if (mProfileLoading) {
 				IKIGAI_COUT("Scene loading failed: " << state->path << ": " << state->error);
 			}
 			else {
@@ -550,7 +549,7 @@ Task<> SceneManager::transition(std::shared_ptr<SceneLoadState> state) {
 		state->progress = 1.0;
 		state->phase = "Completed";
 		mTransitionState = SceneTransitionState::Idle;
-		if (Config::PROFILE_LOADING) {
+		if (mProfileLoading) {
 			IKIGAI_COUT("Scene loaded: " << state->path << "; objects=" << m_currentScene->getObjects().size());
 		}
 		sceneLoadEvent.run();

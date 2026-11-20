@@ -280,7 +280,7 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 	particleManager = std::make_unique<RESOURCES::ParticleLoader>();
 	shaderManager = std::make_unique<RESOURCES::ShaderLoader>();
 	materialManager = std::make_unique<RESOURCES::MaterialLoader>();
-	sceneManager = std::make_unique<SCENE_SYSTEM::SceneManager>(Config::ENGINE_ASSETS_PATH);
+	sceneManager = std::make_unique<SCENE_SYSTEM::SceneManager>(Config::ENGINE_ASSETS_PATH, SCENE_SYSTEM::PhysicsFactories {}, Config::PROFILE_LOADING);
 	inputManager = std::make_unique<INPUT_SYSTEM::InputManager>(*window);
 	inputActions = std::make_unique<INPUT_SYSTEM::InputActions>(*inputManager);
 	LoadInputActions(*inputActions);

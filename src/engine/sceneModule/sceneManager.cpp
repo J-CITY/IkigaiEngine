@@ -9,7 +9,7 @@
 #include <coreModule/ecs/object.h>
 
 #include "resourceModule/fileSystem/fileSystem.h"
-#include "resourceModule/serviceManager.h"
+#include "utilsModule/serviceManager.h"
 #include "utilsModule/log/loggerDefine.h"
 #include <algorithm>
 #include <fstream>
@@ -20,8 +20,9 @@
 using namespace IKIGAI;
 using namespace IKIGAI::SCENE_SYSTEM;
 
-SceneManager::SceneManager(const std::string& p_sceneRootFolder, PhysicsFactories physics)
+SceneManager::SceneManager(const std::string& p_sceneRootFolder, PhysicsFactories physics, bool profileLoading)
 	: mPhysicsFactories(std::move(physics))
+	, mProfileLoading(profileLoading)
 	, m_sceneRootFolder(p_sceneRootFolder) {
 	loadEmptyScene();
 }

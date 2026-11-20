@@ -7,7 +7,7 @@
 namespace IKIGAI::SCENE_SYSTEM {
 class SceneManager {
 public:
-	SceneManager(const std::string& p_sceneRootFolder = "", PhysicsFactories physics = { });
+	SceneManager(const std::string& p_sceneRootFolder = "", PhysicsFactories physics = { }, bool profileLoading = false);
 	// Applies to subsequently created/loaded scenes, not existing worlds.
 	void setPhysicsFactoriesForNewScenes(PhysicsFactories physics) {
 		mPhysicsFactories = std::move(physics);
@@ -62,6 +62,7 @@ public:
 
 private:
 	PhysicsFactories mPhysicsFactories;
+	bool mProfileLoading = false;
 	struct LoadContext;
 	struct LoadingSceneCache;
 	std::unique_ptr<LoadContext> mBuild;

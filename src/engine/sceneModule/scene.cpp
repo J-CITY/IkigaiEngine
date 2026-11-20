@@ -46,7 +46,7 @@
 #include "renderModule/spatial/frustumBvh.h"
 #include "renderModule/spatial/frustumVisibility.h"
 #include "resourceModule/jsonLoader.h"
-#include "resourceModule/serviceManager.h"
+#include "utilsModule/serviceManager.h"
 #include "taskModule/taskSystem.h"
 #include "utilsModule/log/loggerDefine.h"
 #include <unordered_map>
