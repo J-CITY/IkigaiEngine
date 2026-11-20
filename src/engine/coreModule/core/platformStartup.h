@@ -1,4 +1,5 @@
 #pragma once
+#include "cameraUiBindings.h"
 #include <memory>
 
 // Native process and Android app pointers without including a platform SDK.
@@ -13,5 +14,8 @@ struct PlatformStartup {
 	void* nativeInstance = nullptr;
 	android_app* android = nullptr;
 	CreateEditorFrontend createEditor = nullptr;
+#if USE_JSON_VIEWS && !defined(OCULUS)
+	CameraEditing cameraEditing {};
+#endif
 };
 }

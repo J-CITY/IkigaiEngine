@@ -34,6 +34,9 @@ struct ApplicationOptions {
 struct PlatformContext {
 	android_app* android = nullptr;
 	CreateEditorFrontend createEditor = nullptr;
+#if USE_JSON_VIEWS && !defined(OCULUS)
+	CameraEditing cameraEditing {};
+#endif
 };
 int RunApplication(int argc, char* argv[], PlatformContext platform = {});
 }

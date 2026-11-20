@@ -124,6 +124,9 @@ int RunApplication(int argc, char* argv[], PlatformContext platform) {
 		PlatformStartup startup;
 		startup.android = platform.android;
 		startup.createEditor = platform.createEditor;
+#if USE_JSON_VIEWS && !defined(OCULUS)
+		startup.cameraEditing = platform.cameraEditing;
+#endif
 #ifdef DX12_BACKEND
 		startup.nativeInstance = GetModuleHandleW(nullptr);
 #endif

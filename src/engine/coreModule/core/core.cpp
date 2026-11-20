@@ -447,7 +447,7 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 			}
 			return file->readStr();
 		});
-	RegisterCameraUiBindings(viewHost->store, *sceneManager);
+	RegisterCameraUiBindings(viewHost->store, *sceneManager, platform.cameraEditing);
 #endif
 
 	sceneManager->getCurrentScene().init();
