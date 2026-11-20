@@ -1,13 +1,13 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
-#include "virtualGeometryModule/cook/vmeshCookSettings.h"
 #include "virtualGeometryModule/format/vmeshIO.h"
+#include "vmeshCookSettings.h"
 
-// Offline virtual mesh cooker (CPU only). The implementation exists only in builds that define IKIGAI_VG_COOKER
-// (the Windows build links meshoptimizer); other platforms compile an empty translation unit.
+// Offline CPU virtual mesh cooker.
 namespace IKIGAI::VG {
 struct VMeshCookVertex {
 	float Position[3] = { 0.0f, 0.0f, 0.0f };
@@ -48,6 +48,9 @@ struct VMeshCookReport {
 	double FallbackSeconds = 0.0;
 	double TotalSeconds = 0.0;
 };
+
+// Hashes the source, import configuration, cooker and format revisions into a cache key.
+uint64_t MakeVMeshCookKey(uint64_t sourceHash, uint64_t settingsHash, uint64_t importFlags, const std::array<uint32_t, 4>& importerVersion);
 
 // Builds the full .vmesh content (vertices, level 0 clusters, cluster LOD DAG, fallback mesh) and validates it.
 // Throws std::invalid_argument for bad input/settings and VMeshFormatError if the result violates the contract.

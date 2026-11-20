@@ -6,7 +6,7 @@
 #include "sceneModule/sceneManager.h"
 #include "utilsModule/contentRoot.h"
 #if defined(IKIGAI_VG_COOKER)
-#include "virtualGeometryModule/cook/vmeshCookModel.h"
+#include "vmeshCookModel.h"
 #endif
 #include <argParse.h>
 #include <filesystem>

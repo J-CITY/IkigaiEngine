@@ -10,7 +10,6 @@
 #include <fstream>
 #include <iostream>
 #include <map>
-#include <meshoptimizer.h>
 #include <sstream>
 #include <vector>
 
@@ -22,8 +21,6 @@
 
 namespace IKIGAI::VG {
 namespace {
-	constexpr uint32_t CookToolRevision = 1u;
-
 	using ImportDependencies = std::map<std::string, std::array<uint64_t, 2>>;
 
 	uint64_t HashImportDependencies(const ImportDependencies& dependencies) {
@@ -38,12 +35,6 @@ namespace {
 			hash = HashVMeshBytes(fingerprint.data(), sizeof(fingerprint), hash);
 		}
 		return hash;
-	}
-
-	uint64_t MakeCookKey(uint64_t sourceHash, uint64_t settingsHash, RESOURCES::ModelParserFlags flags) {
-		const std::array<uint64_t, 10> parts { CookToolRevision, VMeshPagedVersion, VMeshVertexLayoutVersion, MESHOPTIMIZER_VERSION,
-			aiGetVersionMajor(), aiGetVersionMinor(), aiGetVersionPatch(), aiGetVersionRevision(), static_cast<uint64_t>(flags), settingsHash };
-		return HashVMeshBytes(parts.data(), sizeof(parts), HashVMeshBytes(&sourceHash, sizeof(sourceHash)));
 	}
 
 	std::vector<uint8_t> ReadNativeFile(const std::filesystem::path& path) {
@@ -164,7 +155,8 @@ int RunVMeshCookCommand(const VMeshCookCommand& command) {
 		VMeshData data;
 		VMeshCookReport report;
 		CookImportedModel(imported, settings, data, &report, sourceHash);
-		const uint64_t cookKey = MakeCookKey(sourceHash, data.Header.SettingsHash, importFlags);
+		const std::array<uint32_t, 4> importerVersion { aiGetVersionMajor(), aiGetVersionMinor(), aiGetVersionPatch(), aiGetVersionRevision() };
+		const uint64_t cookKey = MakeVMeshCookKey(sourceHash, data.Header.SettingsHash, static_cast<uint64_t>(importFlags), importerVersion);
 		WriteVMeshPagedFile(command.OutputPath, data, cookKey, settings.PageBytes);
 		const VMeshData verify = ReadVMeshFile(command.OutputPath);
 		const auto fileSize = std::filesystem::file_size(std::filesystem::u8path(command.OutputPath));

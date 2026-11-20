@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-#include "virtualGeometryModule/cook/vmeshCooker.h"
+#include "vmeshCooker.h"
 
 namespace IKIGAI::RESOURCES {
 struct ImportedModel;

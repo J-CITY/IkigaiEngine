@@ -1,6 +1,4 @@
-#include "virtualGeometryModule/cook/vmeshCooker.h"
-
-#if defined(IKIGAI_VG_COOKER)
+#include "vmeshCooker.h"
 
 #include <algorithm>
 #include <array>
@@ -14,10 +12,17 @@
 
 #include <meshoptimizer.h>
 
-#include "virtualGeometryModule/cook/vmeshCookTopology.h"
 #include "virtualGeometryModule/format/vmeshEncoding.h"
+#include "vmeshCookTopology.h"
 
 namespace IKIGAI::VG {
+uint64_t MakeVMeshCookKey(uint64_t sourceHash, uint64_t settingsHash, uint64_t importFlags, const std::array<uint32_t, 4>& importerVersion) {
+	constexpr uint32_t CookToolRevision = 1u;
+	const std::array<uint64_t, 10> parts { CookToolRevision, VMeshPagedVersion, VMeshVertexLayoutVersion, MESHOPTIMIZER_VERSION, importerVersion[0],
+		importerVersion[1], importerVersion[2], importerVersion[3], importFlags, settingsHash };
+	return HashVMeshBytes(parts.data(), sizeof(parts), HashVMeshBytes(&sourceHash, sizeof(sourceHash)));
+}
+
 namespace {
 	using Clock = std::chrono::steady_clock;
 	using COOK::CheckTopology;
@@ -912,5 +917,3 @@ void CookVMesh(const VMeshCookInput& input, const VMeshCookSettings& settings, V
 	cooker.run();
 }
 }
-
-#endif

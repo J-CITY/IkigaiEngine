@@ -63,11 +63,11 @@ add_library(spirv-reflect STATIC ${SPIRV_REFLECT_SRC})
 target_include_directories(spirv-reflect PUBLIC "${THIRD_PARTY_DIR}/SPIRV-Reflect")
 set_property(TARGET spirv-reflect PROPERTY FOLDER "3rd/SPIRV-Reflect")
 
-# 5b. meshoptimizer (virtual geometry cooker: clustering, simplification, cluster LOD)
-file(GLOB MESHOPTIMIZER_SRC "${THIRD_PARTY_DIR}/meshoptimizer/src/*.cpp" "${THIRD_PARTY_DIR}/meshoptimizer/src/meshoptimizer.h")
-add_library(meshoptimizer STATIC ${MESHOPTIMIZER_SRC})
-target_include_directories(meshoptimizer PUBLIC "${THIRD_PARTY_DIR}/meshoptimizer/src" "${THIRD_PARTY_DIR}/meshoptimizer")
-set_property(TARGET meshoptimizer PROPERTY FOLDER "3rd/meshoptimizer")
+# 5b. Optional offline virtual mesh cooker
+option(IKIGAI_ENABLE_VG_COOKER "Build the Windows virtual mesh cooker command" ON)
+if(IKIGAI_ENABLE_VG_COOKER)
+    include("${CMAKE_CURRENT_LIST_DIR}/../VMeshCooker.cmake")
+endif()
 
 # 6. ImGUI
 set(IMGUI_DIR "${THIRD_PARTY_DIR}/imgui")
@@ -242,8 +242,13 @@ endif()
 
 # Additional definitions
 ikigai_apply_feature_definitions(${APP_NAME})
-target_compile_definitions(${APP_NAME} PRIVATE IKIGAI_VG_COOKER)
-target_link_libraries(${APP_NAME} PRIVATE meshoptimizer)
+if(IKIGAI_ENABLE_VG_COOKER)
+    target_sources(${APP_NAME} PRIVATE
+        "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/vmeshCookModel.cpp"
+        "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/vmeshCookModel.h")
+    target_compile_definitions(${APP_NAME} PRIVATE IKIGAI_VG_COOKER)
+    target_link_libraries(${APP_NAME} PRIVATE ikigai_vmesh_cooker)
+endif()
 if(USE_EDITOR)
     target_compile_definitions(${APP_NAME} PRIVATE USE_EDITOR)
 endif()

@@ -1,7 +1,5 @@
 #include "vmeshCookTopology.h"
 
-#if defined(IKIGAI_VG_COOKER)
-
 #include <algorithm>
 #include <array>
 
@@ -195,5 +193,3 @@ bool CheckTopology(const std::vector<uint32_t>& merged, const std::vector<uint32
 	return lockIds.empty();
 }
 }
-
-#endif

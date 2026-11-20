@@ -1,14 +1,6 @@
 # Explicit source manifest for virtualGeometryModule.
 # Add new production files here; generated reflection files are owned by Codegen.cmake.
 set(IKIGAI_MANIFEST_virtualGeometryModule
-    "${IKIGAI_SOURCE_ROOT}/engine/virtualGeometryModule/cook/vmeshCooker.cpp"
-    "${IKIGAI_SOURCE_ROOT}/engine/virtualGeometryModule/cook/vmeshCooker.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/virtualGeometryModule/cook/vmeshCookModel.cpp"
-    "${IKIGAI_SOURCE_ROOT}/engine/virtualGeometryModule/cook/vmeshCookModel.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/virtualGeometryModule/cook/vmeshCookSettings.cpp"
-    "${IKIGAI_SOURCE_ROOT}/engine/virtualGeometryModule/cook/vmeshCookSettings.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/virtualGeometryModule/cook/vmeshCookTopology.cpp"
-    "${IKIGAI_SOURCE_ROOT}/engine/virtualGeometryModule/cook/vmeshCookTopology.h"
     "${IKIGAI_SOURCE_ROOT}/engine/virtualGeometryModule/format/vmeshEncoding.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/virtualGeometryModule/format/vmeshEncoding.h"
     "${IKIGAI_SOURCE_ROOT}/engine/virtualGeometryModule/format/vmeshIO.cpp"
