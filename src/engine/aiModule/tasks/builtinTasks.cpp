@@ -1,6 +1,6 @@
 #include "aiModule/navigation/pathQuery.h"
-#include "resourceModule/serviceManager.h"
 #include "taskParameters.h"
+#include "utilsModule/serviceManager.h"
 #include <cmath>
 
 namespace IKIGAI::AI {
@@ -76,8 +76,8 @@ namespace {
 				return local;
 			}
 		}
-		if (RESOURCES::ServiceManager::Check<PathQuery>()) {
-			return &RESOURCES::ServiceManager::Get<PathQuery>();
+		if (UTILS::ServiceManager::Check<PathQuery>()) {
+			return &UTILS::ServiceManager::Get<PathQuery>();
 		}
 		return nullptr;
 	}

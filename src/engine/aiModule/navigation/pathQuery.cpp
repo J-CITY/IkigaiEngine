@@ -1,5 +1,5 @@
 #include "pathQuery.h"
-#include "resourceModule/serviceManager.h"
+#include "utilsModule/serviceManager.h"
 #include <algorithm>
 #include <cmath>
 
@@ -87,8 +87,8 @@ std::optional<std::vector<MATH::Vector3f>> GridPathQuery::findPath(MATH::Vector3
 }
 void registerDefaultPathQuery() {
 	static StraightLinePathQuery query {};
-	if (!RESOURCES::ServiceManager::Check<PathQuery>()) {
-		RESOURCES::ServiceManager::Set<PathQuery>(&query);
+	if (!UTILS::ServiceManager::Check<PathQuery>()) {
+		UTILS::ServiceManager::Set<PathQuery>(&query);
 	}
 }
 }
