@@ -3,7 +3,7 @@
 #endif
 #include "timelineAnimationWindow.h"
 
-#include "coreModule/ecs/componentCatalog.h"
+#include "componentEditorCatalog.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/jsonLoader.h"
 #include "resourceModule/serviceManager.h"
@@ -962,9 +962,11 @@ IKIGAI::EDITOR::TimelineAnimationWindow::TimelineAnimationWindow() {
 	mAnimation = std::make_unique<IKIGAI::ANIMATION::Animation>(100, 60, false);
 }
 
-void getProp(const std::string& name, const IKIGAI::ECS::Object::Id& id, const std::string& componentName, const std::string& propName, Prop& prop);
-
 namespace {
+using Prop = IKIGAI::EDITOR::TimelineProperty;
+IKIGAI::EDITOR::TimelineProperties AllObjPropsInAnimation;
+IKIGAI::EDITOR::TimelineProperties ObjProps;
+
 std::string normalizeTrackAnimPath(std::string path) {
 	try {
 		return IKIGAI::SCENE_SYSTEM::DOCUMENT::Path(std::move(path));
@@ -987,7 +989,8 @@ bool bindTrackProperty(const IKIGAI::ANIMATION::TimelineAnimationTrackDescriptor
 	if (track.objectId < 0) {
 		return false;
 	}
-	getProp(track.objectName, IKIGAI::ECS::Object::Id(IKIGAI::ECS::Object::Id::ID(track.objectId)), track.componentName, track.propertyName, outProp);
+	IKIGAI::EDITOR::bindTimelineProperty(
+		track.objectName, IKIGAI::ECS::Object::Id(IKIGAI::ECS::Object::Id::ID(track.objectId)), track.componentName, track.propertyName, outProp);
 	return !outProp.propertyName.empty() && !outProp.animProp.getName().empty();
 }
 } // namespace
@@ -1028,14 +1031,6 @@ bool IKIGAI::EDITOR::TimelineAnimationWindow::saveToFile(const std::string& path
 	return true;
 }
 
-void getProps(const std::string& name, const IKIGAI::ECS::Object::Id& id, IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::ComponentBase> comp) {
-	IKIGAI::ECS::ComponentCatalog::instance().collectTimeline(name, id, comp);
-}
-
-void getProp(const std::string& name, const IKIGAI::ECS::Object::Id& id, const std::string& componentName, const std::string& propName, Prop& prop) {
-	IKIGAI::ECS::ComponentCatalog::instance().bindTimeline(name, id, componentName, propName, &prop);
-}
-
 std::shared_ptr<IKIGAI::ECS::Object> selectObject;
 void getObjectProps() {
 	if (!IKIGAI::EDITOR::EditorRender::GlobalState.mSelectObject) {
@@ -1054,7 +1049,7 @@ void getObjectProps() {
 	auto* manager = selectObject->getWorld().getComponentManager();
 	auto components = manager->getComponents<IKIGAI::ECS::ComponentBase>(objId);
 	for (auto& component : components) {
-		getProps(objName, objId, component);
+		IKIGAI::EDITOR::collectTimelineProperties(objName, objId, component, ObjProps);
 	}
 
 	Prop eventProp("", IKIGAI::ECS::Object::Id(IKIGAI::ECS::Object::Id::ID(0)), "EVENT", "",

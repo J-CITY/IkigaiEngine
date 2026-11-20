@@ -9,9 +9,6 @@
 #include "resourceModule/serviceManager.h"
 #include "windowModule/inputManager/inputManager.h"
 #include "windowModule/window/window.h"
-#ifdef USE_EDITOR
-#include <imgui.h>
-#endif
 namespace IKIGAI::ECS {
 ThirdPersonController::ThirdPersonController(UTILS::Ref<Object> o)
 	: ComponentBase(o) {
@@ -41,15 +38,10 @@ void ThirdPersonController::readInput(SCENE_SYSTEM::Scene& scene) {
 	if (!window.hasFocus() || input.wasKeyPressedThisFrame(K::KEY_ESCAPE)) {
 		camera->onDisable();
 	}
-	else if (input.wasMouseButtonPressedThisFrame(INPUT_SYSTEM::EMouseButton::MOUSE_BUTTON_LEFT)) {
-#ifdef USE_EDITOR
-		if (!ImGui::GetIO().WantCaptureMouse)
-#endif
-		{
-			camera->captured = true;
-			justCaptured = true;
-			window.setCursorVisible(false, true);
-		}
+	else if (input.wasMouseButtonPressedThisFrame(INPUT_SYSTEM::EMouseButton::MOUSE_BUTTON_LEFT) && !input.getUiCapture().mouse) {
+		camera->captured = true;
+		justCaptured = true;
+		window.setCursorVisible(false, true);
 	}
 	if (camera->captured) {
 		const auto mouse = justCaptured ? MATH::Vector2f { 0, 0 } : input.getMouseDelta();

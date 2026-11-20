@@ -51,6 +51,14 @@ InputManager::~InputManager() {
 #endif
 }
 
+void InputManager::setUiCaptureProvider(UiCaptureProvider provider) {
+	mUiCaptureProvider = provider;
+}
+
+InputManager::UiCapture InputManager::getUiCapture() const {
+	return mUiCaptureProvider ? mUiCaptureProvider() : UiCapture {};
+}
+
 void InputManager::beginInputFrame(std::chrono::duration<double> dt) {
 	mFrameDeltaSeconds = static_cast<float>(dt.count());
 	mSwipeRecognizer.beginFrame();

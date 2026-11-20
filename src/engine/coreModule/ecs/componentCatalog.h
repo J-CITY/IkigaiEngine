@@ -1,9 +1,5 @@
 #pragma once
 
-#ifdef USE_EDITOR
-#define IMGUI_DEFINE_MATH_OPERATORS
-#endif
-
 #include "animationTimelineBind.h"
 #include "coreModule/ecs/object.h"
 #include "coroutineModule/task.h"
@@ -57,11 +53,6 @@ public:
 		std::function<UTILS::WeakPtr<ComponentBase>(Object&)> resolve;
 		PrepareFn prepare;
 		std::function<bool(World&, Object::Id, std::string_view, std::string_view, ANIMATION::AnimationProperty&)> bindTimelineProperty;
-#ifdef USE_EDITOR
-		std::function<void(UTILS::WeakPtr<ComponentBase>)> inspect;
-		std::function<void(const std::string&, Object::Id, UTILS::WeakPtr<ComponentBase>)> collectTimeline;
-		std::function<void(const std::string&, Object::Id, const std::string&, const std::string&, void*)> bindTimeline;
-#endif
 	};
 
 	static ComponentCatalog& instance();
@@ -82,11 +73,6 @@ public:
 	UTILS::WeakPtr<ComponentBase> resolveOnObject(Object& object, std::string_view name) const;
 	bool tryBindTimelineProperty(World& world, Object::Id id, std::string_view componentName, std::string_view propertyName,
 		std::string_view trackName, ANIMATION::AnimationProperty& out) const;
-#ifdef USE_EDITOR
-	void inspectComponent(UTILS::WeakPtr<ComponentBase> component) const;
-	void collectTimeline(const std::string& name, Object::Id id, UTILS::WeakPtr<ComponentBase> component) const;
-	void bindTimeline(const std::string& name, Object::Id id, const std::string& componentName, const std::string& propertyName, void* prop) const;
-#endif
 
 private:
 	void add(Record record);
@@ -99,16 +85,6 @@ private:
 	std::unordered_map<std::type_index, std::size_t> mByType;
 };
 
-#ifdef USE_EDITOR
-}
-#include "editorModule/componentEditorHooks.h"
-namespace IKIGAI::ECS {
-#else
-template <class T> inline void BindComponentEditor(ComponentCatalog::Record&) { }
-#endif
-}
-
-namespace IKIGAI::ECS {
 template <class T> bool ComponentCatalog::enroll(StorageType storage, bool lightweight) {
 	Record record;
 	record.name = GetComponentName<T>();
@@ -165,7 +141,6 @@ template <class T> bool ComponentCatalog::enroll(StorageType storage, bool light
 		};
 		type->mMethods[configuration.name] = std::move(configuration);
 	}
-	BindComponentEditor<T>(record);
 	record.bindTimelineProperty
 		= [](World& world, Object::Id id, std::string_view propertyName, std::string_view trackName, ANIMATION::AnimationProperty& out) {
 			  return ANIMATION::detail::bindTimelineFromMembers<T>(world, id, propertyName, trackName, out);

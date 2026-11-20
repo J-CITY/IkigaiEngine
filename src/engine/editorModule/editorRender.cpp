@@ -27,6 +27,7 @@
 #include "treeWindow.h"
 #include "utilsModule/imguiHelper/ImGuiFileBrowser.h"
 #include "windowModule/inputManager/inputActions.h"
+#include "windowModule/inputManager/inputManager.h"
 #include <cstring>
 #include <list>
 
@@ -64,7 +65,11 @@ struct EditorRender::Internal {
 	}
 };
 
-EditorRender::~EditorRender() = default;
+EditorRender::~EditorRender() {
+	if (IKIGAI::RESOURCES::ServiceManager::Check<IKIGAI::INPUT_SYSTEM::InputManager>()) {
+		IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::INPUT_SYSTEM::InputManager>().setUiCaptureProvider(nullptr);
+	}
+}
 void EditorRender::openSurfaceBrushes() {
 	mData->mSurfaceBrushes.setOpen(true);
 }
@@ -119,6 +124,15 @@ EditorRender::EditorRender() {
 	// #ifdef DX12_BACKEND
 	//	auto& render =
 	// reinterpret_cast<IKIGAI::RENDER::GameRendererDx12&>(IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RENDER::GameRendererInterface>()); #endif
+	if (IKIGAI::RESOURCES::ServiceManager::Check<IKIGAI::INPUT_SYSTEM::InputManager>()) {
+		IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::INPUT_SYSTEM::InputManager>().setUiCaptureProvider([] {
+			if (ImGui::GetCurrentContext()) {
+				const auto& io = ImGui::GetIO();
+				return IKIGAI::INPUT_SYSTEM::InputManager::UiCapture { io.WantCaptureKeyboard, io.WantCaptureMouse };
+			}
+			return IKIGAI::INPUT_SYSTEM::InputManager::UiCapture {};
+		});
+	}
 }
 
 void EditorRender::draw() {

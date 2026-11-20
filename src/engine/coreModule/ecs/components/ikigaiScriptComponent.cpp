@@ -9,19 +9,17 @@
 #include "scriptModule/ikigaiScriptRuntime.h"
 #include "scriptModule/scriptFileWatcher.h"
 #include "scriptModule/scriptVfsPath.h"
+#include "windowModule/inputManager/inputManager.h"
 #include "windowModule/window/window.h"
-#if defined(USE_EDITOR) && !defined(OCULUS)
-#include "imgui.h"
-#endif
 
 namespace IKIGAI::ECS {
 namespace {
 	bool canControlCamera() {
 		const bool focused = RESOURCES::ServiceManager::Get<WINDOW::Window>().hasFocus();
-#if defined(USE_EDITOR) && !defined(OCULUS)
-		if (ImGui::GetCurrentContext()) {
-			const auto& io = ImGui::GetIO();
-			return focused && !io.WantCaptureKeyboard && !io.WantCaptureMouse;
+#if !defined(OCULUS)
+		if (focused && RESOURCES::ServiceManager::Check<INPUT_SYSTEM::InputManager>()) {
+			const auto capture = RESOURCES::ServiceManager::Get<INPUT_SYSTEM::InputManager>().getUiCapture();
+			return !capture.keyboard && !capture.mouse;
 		}
 #endif
 		return focused;

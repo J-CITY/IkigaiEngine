@@ -3,36 +3,19 @@
 #ifdef USE_EDITOR
 
 #define IMGUI_DEFINE_MATH_OPERATORS
+#include "componentEditorCatalog.h"
+#include "coreModule/ecs/animationTimelineBind.h"
 #include "imgui.h"
 #include "misc/cpp/imgui_stdlib.h"
 #include "sceneModule/sceneManager.h"
 #include "utilsModule/animation.h"
 #include "utilsModule/imguiHelper/imguiWidgets.h"
 #include <magic_enum.hpp>
-#include <map>
 #include <string>
+#include <typeindex>
+#include <unordered_map>
 
-struct Prop {
-	Prop() = default;
-	Prop(std::string objName, IKIGAI::ECS::Object::Id objId, std::string componentName, std::string propertyName,
-		IKIGAI::ANIMATION::AnimationProperty animProp, IKIGAI::ANIMATION::PropType defaultValue)
-		: objName(objName)
-		, objId(objId)
-		, componentName(componentName)
-		, propertyName(propertyName)
-		, animProp(animProp)
-		, defaultValue(defaultValue) { }
-
-	std::string objName;
-	IKIGAI::ECS::Object::Id objId { IKIGAI::ECS::Entity::ID(0) };
-	std::string componentName;
-	std::string propertyName;
-	IKIGAI::ANIMATION::AnimationProperty animProp;
-	IKIGAI::ANIMATION::PropType defaultValue;
-};
-
-inline std::map<std::string, Prop> AllObjPropsInAnimation;
-inline std::map<std::string, Prop> ObjProps;
+namespace IKIGAI::EDITOR::detail {
 
 template <class CLASS, class PTR> void widgetFloat4(CLASS* comp, IKIGAI::UTILS::MemberInfo<CLASS, PTR>& prop) {
 	const std::string& propName = prop.getName();
@@ -189,7 +172,7 @@ void widgetCombo(CLASS* comp, IKIGAI::UTILS::MemberInfo<CLASS, PTR>& prop) {
 	}
 }
 
-template <typename T> void getPropsImpl(IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::ComponentBase> comp) {
+template <typename T> void inspectMembers(IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::ComponentBase> comp) {
 	if (comp->getName() == IKIGAI::ECS::GetComponentName<T>()) {
 		auto props = T::GetMembers();
 		std::apply(
@@ -243,7 +226,8 @@ template <typename T> void getPropsImpl(IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::Comp
 }
 
 template <typename T>
-void getPropsImpl(const std::string& name, const IKIGAI::ECS::Object::Id& id, IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::ComponentBase> comp) {
+void collectTimelineMembers(
+	const std::string& name, IKIGAI::ECS::Object::Id id, IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::ComponentBase> comp, TimelineProperties& properties) {
 	using namespace IKIGAI;
 	const auto componentName = comp->getName();
 	if (componentName != ECS::GetComponentName<T>()) {
@@ -262,7 +246,8 @@ void getPropsImpl(const std::string& name, const IKIGAI::ECS::Object::Id& id, IK
 				ANIMATION::PropType defaultValue;
 				if (ANIMATION::detail::tryBindTimelineMember(
 						manager, handle, property, trackName, ANIMATION::InterpolationType::LINEAR, animationProperty, &defaultValue)) {
-					ObjProps[trackName] = Prop { name, id, componentName, propertyName, std::move(animationProperty), std::move(defaultValue) };
+					properties[trackName]
+						= TimelineProperty { name, id, componentName, propertyName, std::move(animationProperty), std::move(defaultValue) };
 				}
 			};
 			(collect(member), ...);
@@ -271,8 +256,8 @@ void getPropsImpl(const std::string& name, const IKIGAI::ECS::Object::Id& id, IK
 }
 
 template <typename T>
-void getPropsImpl(
-	const std::string& name, const IKIGAI::ECS::Object::Id& id, const std::string& componentName, const std::string& propName, Prop& prop) {
+void bindTimelineMember(
+	const std::string& name, IKIGAI::ECS::Object::Id id, const std::string& componentName, const std::string& propName, TimelineProperty& prop) {
 	using namespace IKIGAI;
 	if (componentName != ECS::GetComponentName<T>()) {
 		return;
@@ -287,19 +272,30 @@ void getPropsImpl(
 	ANIMATION::PropType defaultValue;
 	if (ANIMATION::detail::bindTimelineFromMembers<T>(
 			object->getWorld(), id, propName, trackName, animationProperty, ANIMATION::InterpolationType::CUSTOM, &defaultValue)) {
-		prop = Prop { name, id, componentName, propName, std::move(animationProperty), std::move(defaultValue) };
+		prop = TimelineProperty { name, id, componentName, propName, std::move(animationProperty), std::move(defaultValue) };
 	}
 }
 
-namespace IKIGAI::ECS {
-template <class T> void BindComponentEditor(ComponentCatalog::Record& record) {
-	record.inspect = [](UTILS::WeakPtr<ComponentBase> component) { getPropsImpl<T>(component); };
-	record.collectTimeline
-		= [](const std::string& name, Object::Id id, UTILS::WeakPtr<ComponentBase> component) { getPropsImpl<T>(name, id, component); };
-	record.bindTimeline = [](const std::string& name, Object::Id id, const std::string& componentName, const std::string& propertyName, void* prop) {
-		getPropsImpl<T>(name, id, componentName, propertyName, *static_cast<Prop*>(prop));
-	};
-}
+struct ComponentEditorHooks {
+	void (*inspect)(UTILS::WeakPtr<ECS::ComponentBase> component);
+	void (*collectTimeline)(
+		const std::string& name, ECS::Object::Id id, UTILS::WeakPtr<ECS::ComponentBase> component, TimelineProperties& properties);
+	void (*bindTimeline)(
+		const std::string& name, ECS::Object::Id id, const std::string& componentName, const std::string& propertyName, TimelineProperty& property);
+};
+
+using ComponentEditorRegistry = std::unordered_map<std::type_index, ComponentEditorHooks>;
+
+// Add new component editor bindings to the registration group for their feature.
+template <class... Components> void addComponentEditorHooks(ComponentEditorRegistry& registry) {
+	(registry.emplace(
+		 typeid(Components), ComponentEditorHooks { inspectMembers<Components>, collectTimelineMembers<Components>, bindTimelineMember<Components> }),
+		...);
 }
 
+void registerGameplayComponentEditors(ComponentEditorRegistry& registry);
+void registerGuiComponentEditors(ComponentEditorRegistry& registry);
+void registerPhysicsComponentEditors(ComponentEditorRegistry& registry);
+void registerRenderComponentEditors(ComponentEditorRegistry& registry);
+}
 #endif

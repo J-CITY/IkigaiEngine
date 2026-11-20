@@ -295,6 +295,15 @@ inline constexpr std::int64_t kMousePointerId = 0;
 
 class InputManager {
 public:
+	struct UiCapture {
+		bool keyboard = false;
+		bool mouse = false;
+	};
+	using UiCaptureProvider = UiCapture (*)();
+
+	void setUiCaptureProvider(UiCaptureProvider provider);
+	[[nodiscard]] UiCapture getUiCapture() const;
+
 	InputManager(WINDOW::Window& p_window);
 	~InputManager();
 
@@ -359,6 +368,7 @@ private:
 	INPUT::Gamepad* getGamepad(int id);
 
 	WINDOW::Window& mWindow;
+	UiCaptureProvider mUiCaptureProvider = nullptr;
 
 	EVENT::Event<>::ID mKeyPressedListener = EVENT::Event<>::ID(0);
 	EVENT::Event<>::ID mKeyReleasedListener = EVENT::Event<>::ID(0);

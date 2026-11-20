@@ -129,32 +129,4 @@ bool ComponentCatalog::tryBindTimelineProperty(World& world, Object::Id id, std:
 	return false;
 }
 
-#ifdef USE_EDITOR
-void ComponentCatalog::inspectComponent(UTILS::WeakPtr<ComponentBase> component) const {
-	if (!component) {
-		return;
-	}
-	if (const auto* record = findByType(typeid(*component)); record && record->inspect) {
-		record->inspect(component);
-	}
-}
-
-void ComponentCatalog::collectTimeline(const std::string& name, Object::Id id, UTILS::WeakPtr<ComponentBase> component) const {
-	if (!component) {
-		return;
-	}
-	if (const auto* record = findByType(typeid(*component)); record && record->collectTimeline) {
-		record->collectTimeline(name, id, component);
-	}
-}
-
-void ComponentCatalog::bindTimeline(
-	const std::string& name, Object::Id id, const std::string& componentName, const std::string& propertyName, void* prop) const {
-	if (const auto* record = findByName(componentName)) {
-		if (record->bindTimeline) {
-			record->bindTimeline(name, id, componentName, propertyName, prop);
-		}
-	}
-}
-#endif
 }

@@ -25,6 +25,7 @@
 
 #include "IconsFontAwesome5.h"
 #include "commandHistory.h"
+#include "componentEditorCatalog.h"
 #include "coreModule/ecs/componentCatalog.h"
 #include "coreModule/ecs/object.h"
 #include "ecsModule/weakPtr.h"
@@ -62,7 +63,7 @@ void addComponentForObject(std::shared_ptr<IKIGAI::ECS::Object> obj, std::string
 }
 
 void getProps(IKIGAI::UTILS::WeakPtr<IKIGAI::ECS::ComponentBase> comp) {
-	IKIGAI::ECS::ComponentCatalog::instance().inspectComponent(comp);
+	IKIGAI::EDITOR::inspectComponent(comp);
 }
 
 const std::string& drawSearchBox(const char* lable, const std::vector<std::string>& autocomplete) {
