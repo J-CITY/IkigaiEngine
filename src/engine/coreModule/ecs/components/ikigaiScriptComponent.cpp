@@ -1,10 +1,29 @@
 #if USE_IKIGAI_SCRIPT
 #include "ikigaiScriptComponent.h"
 #include "coreModule/ecs/object.h"
+#include "resourceModule/serviceManager.h"
 #include "scriptModule/ikigaiScriptRuntime.h"
 #include "scriptModule/scriptFileWatcher.h"
 #include "scriptModule/scriptVfsPath.h"
+#include "windowModule/window/window.h"
+#if defined(USE_EDITOR) && !defined(OCULUS)
+#include "imgui.h"
+#endif
+
 namespace IKIGAI::ECS {
+namespace {
+	bool canControlCamera() {
+		const bool focused = RESOURCES::ServiceManager::Get<WINDOW::Window>().hasFocus();
+#if defined(USE_EDITOR) && !defined(OCULUS)
+		if (ImGui::GetCurrentContext()) {
+			const auto& io = ImGui::GetIO();
+			return focused && !io.WantCaptureKeyboard && !io.WantCaptureMouse;
+		}
+#endif
+		return focused;
+	}
+}
+
 IkigaiScriptComponent::IkigaiScriptComponent(UTILS::Ref<Object> object)
 	: ComponentBase(object) {
 	__NAME__ = "IkigaiScriptComponent";
@@ -79,7 +98,7 @@ void IkigaiScriptComponent::ensureRuntime() {
 		return;
 	}
 	if (!path.empty() && !obj.get().weak_from_this().expired()) {
-		runtime = std::make_unique<SCRIPTING::IkigaiScriptRuntime>(obj.get(), path);
+		runtime = std::make_unique<SCRIPTING::IkigaiScriptRuntime>(obj.get(), path, canControlCamera);
 		attachFileWatch();
 		if (awake) {
 			runtime->call("OnAwake");

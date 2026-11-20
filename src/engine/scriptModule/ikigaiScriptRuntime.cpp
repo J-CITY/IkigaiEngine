@@ -20,7 +20,9 @@ namespace {
 struct IkigaiScriptRuntime::State {
 	std::string source;
 	IkigaiScript::IkigaiScriptInterpreter vm;
-	IkigaiScriptBinder bindings { vm };
+	IkigaiScriptBinder bindings;
+	explicit State(bool (*cameraControlAllowed)())
+		: bindings(vm, cameraControlAllowed) { }
 	~State() {
 		vm.clearState();
 	}
@@ -30,7 +32,7 @@ bool IkigaiScriptRuntime::loadFromVfs(ECS::Object& owner) {
 	healthy = true;
 	try {
 		if (!state) {
-			state = std::make_unique<State>();
+			state = std::make_unique<State>(cameraControlAllowed);
 		}
 		else {
 			state->source.clear();
@@ -60,14 +62,15 @@ bool IkigaiScriptRuntime::loadFromVfs(ECS::Object& owner) {
 	return false;
 }
 
-IkigaiScriptRuntime::IkigaiScriptRuntime(ECS::Object& owner, const std::string& script)
-	: path(script) {
+IkigaiScriptRuntime::IkigaiScriptRuntime(ECS::Object& owner, const std::string& script, bool (*cameraControlAllowed)())
+	: path(script)
+	, cameraControlAllowed(cameraControlAllowed) {
 	loadFromVfs(owner);
 }
 IkigaiScriptRuntime::~IkigaiScriptRuntime() = default;
 
 bool IkigaiScriptRuntime::reload(ECS::Object& owner) {
-	state = std::make_unique<State>();
+	state = std::make_unique<State>(cameraControlAllowed);
 	return loadFromVfs(owner);
 }
 

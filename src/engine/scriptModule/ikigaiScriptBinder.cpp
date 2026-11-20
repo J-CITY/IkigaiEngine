@@ -17,9 +17,6 @@
 #include "windowModule/inputManager/inputManager.h"
 #include "windowModule/window/window.h"
 #include <magic_enum.hpp>
-#if defined(USE_EDITOR) && !defined(OCULUS)
-#include "imgui.h"
-#endif
 
 namespace magic_enum::customize {
 template <> struct enum_range<IKIGAI::INPUT_SYSTEM::EKey> {
@@ -35,12 +32,12 @@ using namespace IKIGAI::INPUT_SYSTEM;
 using namespace IKIGAI::RESOURCES;
 using namespace IKIGAI::SCENE_SYSTEM;
 
-IkigaiScriptBinder::IkigaiScriptBinder(IkigaiScriptInterpreter& interpreter)
+IkigaiScriptBinder::IkigaiScriptBinder(IkigaiScriptInterpreter& interpreter, bool (*cameraControlAllowed)())
 	: vm(interpreter) {
 	bindMaths();
 	bindComponents();
 	bindActor();
-	bindGlobals();
+	bindGlobals(cameraControlAllowed);
 }
 IkigaiScriptBinder::V IkigaiScriptBinder::object(Object& owner) {
 	auto ref = owner.weak_from_this();
@@ -183,7 +180,7 @@ void IkigaiScriptBinder::bindComponents() {
 	member("GetRadius", &AmbientSphereLight::getRadius);
 	member("SetRadius", &AmbientSphereLight::setRadius);
 }
-void IkigaiScriptBinder::bindGlobals() {
+void IkigaiScriptBinder::bindGlobals(bool (*cameraControlAllowed)()) {
 	function("Math", "AsinDegrees",
 		[this](const Args& a) { return value(std::asin(std::clamp(read<float>(a.at(0)), -1.0f, 1.0f)) * float(180.0 / 3.141592653589793)); });
 	type<Scene>("Scene");
@@ -219,14 +216,7 @@ void IkigaiScriptBinder::bindGlobals() {
 		return value(Vector2f(float(p.x), float(p.y)));
 	});
 	function("Inputs", "HasFocus", [this](const Args&) { return value(ServiceManager::Get<WINDOW::Window>().hasFocus()); });
-	function("Inputs", "CanControlCamera", [this](const Args&) {
-		bool allowed = ServiceManager::Get<WINDOW::Window>().hasFocus();
-#if defined(USE_EDITOR) && !defined(OCULUS)
-		if (ImGui::GetCurrentContext())
-			allowed = allowed && !ImGui::GetIO().WantCaptureKeyboard && !ImGui::GetIO().WantCaptureMouse;
-#endif
-		return value(allowed);
-	});
+	function("Inputs", "CanControlCamera", [this, cameraControlAllowed](const Args&) { return value(cameraControlAllowed()); });
 	function(
 		"Inputs", "IsPressed", [this](const Args& a) { return value(ServiceManager::Get<InputActions>().isPressed(read<std::string>(a.at(0)))); });
 	function("Inputs", "WasPressedThisFrame",

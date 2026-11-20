@@ -43,12 +43,12 @@ public:
 		: vm(interpreter) {
 		bindMaths();
 	}
-	explicit IkigaiScriptBinder(IkigaiScript::IkigaiScriptInterpreter& interpreter);
+	IkigaiScriptBinder(IkigaiScript::IkigaiScriptInterpreter& interpreter, bool (*cameraControlAllowed)());
 	V object(ECS::Object& owner);
 	void bindMaths();
 	void bindActor();
 	void bindComponents();
-	void bindGlobals();
+	void bindGlobals(bool (*cameraControlAllowed)());
 
 	template <class T>
 	static constexpr bool vector = std::is_same_v<T, MATH::Vector2f> || std::is_same_v<T, MATH::Vector3f> || std::is_same_v<T, MATH::Vector4f>;

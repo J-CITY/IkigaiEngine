@@ -10,12 +10,13 @@ class IkigaiScriptRuntime {
 	struct State;
 	std::unique_ptr<State> state;
 	std::string path;
+	bool (*cameraControlAllowed)();
 	bool healthy = false;
 
 	bool loadFromVfs(ECS::Object& owner);
 
 public:
-	IkigaiScriptRuntime(ECS::Object& owner, const std::string& script);
+	IkigaiScriptRuntime(ECS::Object& owner, const std::string& script, bool (*cameraControlAllowed)());
 	~IkigaiScriptRuntime();
 	bool reload(ECS::Object& owner);
 	bool isOk() const {
