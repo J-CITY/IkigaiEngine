@@ -1,8 +1,6 @@
 # Explicit source manifest for aiModule.
 # Add new production files here; generated reflection files are owned by Codegen.cmake.
 set(IKIGAI_MANIFEST_aiModule
-    "${IKIGAI_SOURCE_ROOT}/engine/aiModule/adapters/characterBehaviorHost.cpp"
-    "${IKIGAI_SOURCE_ROOT}/engine/aiModule/adapters/characterBehaviorHost.h"
     "${IKIGAI_SOURCE_ROOT}/engine/aiModule/behaviorTree/behaviorTree.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/aiModule/behaviorTree/behaviorTree.h"
     "${IKIGAI_SOURCE_ROOT}/engine/aiModule/behaviorTree/behaviorTreeInstance.cpp"

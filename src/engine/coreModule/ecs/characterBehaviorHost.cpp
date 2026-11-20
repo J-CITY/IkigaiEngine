@@ -1,7 +1,7 @@
 #include "characterBehaviorHost.h"
-#include "coreModule/ecs/componentReference.inl"
-#include "coreModule/ecs/components/characterMotorComponent.h"
-#include "coreModule/ecs/components/thirdPersonController.h"
+#include "componentReference.inl"
+#include "components/characterMotorComponent.h"
+#include "components/thirdPersonController.h"
 #include <cmath>
 
 namespace IKIGAI::AI {

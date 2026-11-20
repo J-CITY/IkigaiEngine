@@ -1,6 +1,6 @@
 #include "behaviorTreeComponent.h"
-#include "aiModule/adapters/characterBehaviorHost.h"
 #include "blackboardComponent.h"
+#include "coreModule/ecs/characterBehaviorHost.h"
 #include "coreModule/ecs/componentReference.inl"
 #include "resourceModule/behaviorTreeManager.h"
 #include <iostream>

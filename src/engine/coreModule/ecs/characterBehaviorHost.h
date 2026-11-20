@@ -1,6 +1,6 @@
 #pragma once
 #include "aiModule/behaviorTree/behaviorTree.h"
-#include "coreModule/ecs/componentReference.h"
+#include "componentReference.h"
 
 namespace IKIGAI::AI {
 class CharacterBehaviorHost final : public ExecutionHost {

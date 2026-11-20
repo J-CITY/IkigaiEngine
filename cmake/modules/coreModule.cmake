@@ -20,6 +20,8 @@ set(IKIGAI_MANIFEST_coreModule
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/animationTimelineBind.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/componentCatalog.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/componentCatalog.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/characterBehaviorHost.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/characterBehaviorHost.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/componentReference.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/componentReference.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/ambientLight.cpp"
