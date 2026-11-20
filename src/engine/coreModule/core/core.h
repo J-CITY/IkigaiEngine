@@ -4,7 +4,13 @@
 #endif
 #include <memory>
 #include <string>
+#if defined(USE_SDL) && !defined(OCULUS) && (defined(USE_EDITOR) || USE_CHEATS)
+#include <utilsModule/event.h>
+#endif
 
+namespace IKIGAI::IMGUI {
+class IImGuiBackend;
+}
 namespace IKIGAI::UI {
 class ViewHost;
 }
@@ -124,6 +130,14 @@ namespace WINDOW {
 namespace IKIGAI {
 namespace CORE {
 	class Core final {
+#if defined(USE_SDL) && !defined(OCULUS) && (defined(USE_EDITOR) || USE_CHEATS)
+		struct ImGuiBackendDeleter {
+			WINDOW::Window* window = nullptr;
+			EVENT::EventListener eventListener {};
+			void operator()(IMGUI::IImGuiBackend* backend) const;
+		};
+#endif
+
 	public:
 		void* nativeInstance = nullptr;
 		android_app* androidApp = nullptr;
@@ -147,6 +161,10 @@ namespace CORE {
 		std::unique_ptr<COROUTINE::Scheduler> coroutineScheduler;
 		std::unique_ptr<EVENT::EventBroadcaster> eventBroadcaster;
 		std::unique_ptr<ECS::World> world;
+#if defined(USE_SDL) && !defined(OCULUS) && (defined(USE_EDITOR) || USE_CHEATS)
+		// Destroy the backend while the SDL window and render driver are still alive.
+		std::unique_ptr<IMGUI::IImGuiBackend, ImGuiBackendDeleter> imguiBackend { nullptr, ImGuiBackendDeleter {} };
+#endif
 #if USE_JSON_VIEWS && !defined(OCULUS)
 		std::unique_ptr<UI::ViewHost> viewHost;
 #endif

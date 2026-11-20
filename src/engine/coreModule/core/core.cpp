@@ -68,6 +68,9 @@
 #include "ecsModule/world.h"
 #include "editorModule/editorRender.h"
 #include "renderModule/backends/driverFactory.h"
+#if defined(USE_SDL) && !defined(OCULUS) && (defined(USE_EDITOR) || USE_CHEATS)
+#include "renderModule/backends/imgui/imguiBackend.h"
+#endif
 #include "renderModule/gameRenderer.h"
 #include "renderModule/render.h"
 #include "resourceModule/behaviorTreeManager.h"
@@ -89,6 +92,19 @@
 
 using namespace IKIGAI;
 using namespace IKIGAI::CORE;
+
+#if defined(USE_SDL) && !defined(OCULUS) && (defined(USE_EDITOR) || USE_CHEATS)
+void Core::ImGuiBackendDeleter::operator()(IMGUI::IImGuiBackend* backend) const {
+	if (eventListener.valid()) {
+		window->sdlEvent.removeListener(eventListener);
+	}
+	if (IMGUI::Get() == backend) {
+		IMGUI::SetActive(nullptr);
+	}
+	backend->shutdown();
+	delete backend;
+}
+#endif
 
 Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 	: nativeInstance(platform.nativeInstance)
@@ -360,8 +376,16 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 	IKIGAI_VERIFY(renderer, "Core startup requires an active game renderer");
 
 	std::cout << "Create render\n";
-#ifndef OCULUS
-	window->initImGUI();
+#if defined(USE_SDL) && !defined(OCULUS) && (defined(USE_EDITOR) || USE_CHEATS)
+	imguiBackend.reset(IMGUI::CreateImGuiBackend(RENDER::DriverInterface::settings.backend).release());
+	if (imguiBackend) {
+		if (imguiBackend->init(*window, *driver)) {
+			IMGUI::SetActive(imguiBackend.get());
+		}
+		auto& deleter = imguiBackend.get_deleter();
+		deleter.window = window.get();
+		deleter.eventListener = window->sdlEvent.add([backend = imguiBackend.get()](const SDL_Event& event) { backend->processEvent(&event); });
+	}
 #endif
 
 	RESOURCES::ServiceManager::Set<RENDER::GameRendererInterface>(static_cast<RENDER::GameRendererInterface*>(renderer.get()));
@@ -413,10 +437,8 @@ Core::~Core() {
 #if USE_JSON_VIEWS && !defined(OCULUS)
 	viewHost.reset();
 #endif
-#ifndef OCULUS
-	if (window) {
-		window->shutdownImGUI();
-	}
+#if defined(USE_SDL) && !defined(OCULUS) && (defined(USE_EDITOR) || USE_CHEATS)
+	imguiBackend.reset();
 #endif
 	// GPU resources and their loader callbacks must be released while both
 	// resource managers and the active backend still exist.

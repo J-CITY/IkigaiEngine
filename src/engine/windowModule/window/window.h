@@ -20,6 +20,7 @@
 #include <volk.h>
 #endif
 
+union SDL_Event;
 struct SDL_Window;
 
 namespace IKIGAI::WINDOW {
@@ -69,6 +70,7 @@ struct TouchFingerEvent {
 
 class Window {
 public:
+	EVENT::Event<const SDL_Event&> sdlEvent;
 	EVENT::Event<int> keyPressedEvent;
 	EVENT::Event<int> keyReleasedEvent;
 	EVENT::Event<int> mouseButtonPressedEvent;
@@ -125,8 +127,6 @@ public:
 
 	void pollEvent();
 	void draw(const std::function<void()>& beforeSwap = {}) const;
-	void preUpdate();
-	void update();
 	[[nodiscard]] bool isClosed() const;
 
 	void setCursorVisible(bool isVisible, bool isLock) const;
@@ -149,9 +149,6 @@ public:
 #ifdef METAL_BACKEND
 	void* getMetalLayer();
 #endif
-
-	void initImGUI();
-	void shutdownImGUI();
 
 private:
 	[[nodiscard]] WindowSettings& getSetting();

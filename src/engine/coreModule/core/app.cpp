@@ -34,6 +34,9 @@
 #if defined(USE_SDL) && defined(OPENGL_BACKEND)
 #include "renderModule/backends/gl/driverGl.h"
 #endif
+#if defined(USE_SDL) && !defined(OCULUS) && (defined(USE_EDITOR) || USE_CHEATS)
+#include "renderModule/backends/imgui/imguiBackend.h"
+#endif
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/gameRenderer.h"
 #ifdef USE_SDL
@@ -154,7 +157,13 @@ bool App::isRunning() const {
 
 void App::preUpdate(std::chrono::duration<double> dt) {
 	IKIGAI_PROFILE_SCOPE("App Pre-Update");
+#ifdef OCULUS
 	core.window->preUpdate();
+#elif defined(USE_SDL) && (defined(USE_EDITOR) || USE_CHEATS)
+	if (core.imguiBackend) {
+		core.imguiBackend->newFrame();
+	}
+#endif
 #if USE_PHYSICS_3D && defined(USE_EDITOR)
 	if (core.sceneManager->hasCurrentScene() && !core.sceneManager->isEditingLocked()) {
 		core.sceneManager->getCurrentScene().drawPhysics3DDebug();
@@ -258,7 +267,11 @@ void App::update(std::chrono::duration<double> dt) {
 		frameDriver->latencySimulationEnd();
 		frameDriver->latencySubmitBegin();
 	}
-	core.window->update();
+#if defined(USE_SDL) && (defined(USE_EDITOR) || USE_CHEATS)
+	if (core.imguiBackend) {
+		core.imguiBackend->endFrame();
+	}
+#endif
 #ifdef USE_SDL
 	presentationAllowed = !(SDL_GetWindowFlags(core.window->getSDLWindow()) & SDL_WINDOW_MINIMIZED);
 	if (!presentationAllowed) {
@@ -313,11 +326,7 @@ void App::update(std::chrono::duration<double> dt) {
 #endif
 #endif
 
-#ifndef OCULUS
-#ifndef VULKAN_BACKEND
-	// core.window->update();
-#endif
-#else
+#ifdef OCULUS
 	core.render->beginFrame();
 	core.window->update([this](XrCompositionLayerProjectionView& layerView, render_target_t& rtarget, XrPosef& stagePose, uint32_t viewID) {
 		static_cast<RENDER::GameRenderer*>(core.renderer.get())->renderSceneOculus(layerView, rtarget, stagePose, viewID);
@@ -336,6 +345,11 @@ void App::postUpdate(std::chrono::duration<double> dt) {
 	IKIGAI_PROFILE_SCOPE("App Post-Update");
 #if defined(USE_SDL) && defined(OPENGL_BACKEND)
 	core.window->draw([this] {
+#if !defined(OCULUS) && (defined(USE_EDITOR) || USE_CHEATS)
+		if (core.imguiBackend) {
+			core.imguiBackend->renderDrawData();
+		}
+#endif
 		auto& screenshots = CAPTURE::ScreenshotService::Get();
 #ifndef USING_GLES
 		if (!(SDL_GetWindowFlags(core.window->getSDLWindow()) & SDL_WINDOW_MINIMIZED)) {
@@ -352,7 +366,7 @@ void App::postUpdate(std::chrono::duration<double> dt) {
 #endif
 #ifndef OCULUS
 	if (RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL && core.render->hasActiveFrame()) {
-		// The GL window renders ImGui here. Include it in the serial completion boundary.
+		// Include the OpenGL overlay in the serial completion boundary.
 		core.render->submit();
 	}
 #endif

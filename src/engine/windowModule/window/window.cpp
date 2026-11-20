@@ -13,10 +13,6 @@
 #include <emscripten.h>
 #include <iostream>
 #endif
-#if defined(USE_EDITOR) || USE_CHEATS
-#include "imgui.h"
-#include "renderModule/backends/imgui/imguiBackend.h"
-#endif
 #ifdef VULKAN_BACKEND
 #include "renderModule/backends/vk/vulkanLoader.h"
 #include <SDL3/SDL_vulkan.h>
@@ -54,9 +50,6 @@ struct Window::Internal {
 	SDL_GLContext mContext = nullptr;
 	bool mIsFocus = true;
 	std::set<SDL_Gamepad*> mGamepads;
-#if defined(USE_EDITOR) || USE_CHEATS
-	std::unique_ptr<IMGUI::IImGuiBackend> mImGuiBackend;
-#endif
 
 	void addGamepad(SDL_Gamepad* gp) {
 		mGamepads.insert(gp);
@@ -97,7 +90,6 @@ Window::Window(const WindowSettings& p_windowSettings, bool isMain, Window* shar
 }
 
 Window::~Window() {
-	shutdownImGUI();
 #ifdef OPENGL_BACKEND
 	if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::OPENGL && mContext->mContext) {
 		SDL_GL_DestroyContext(mContext->mContext);
@@ -406,11 +398,7 @@ bool Window::hasFocus() const {
 void Window::pollEvent() {
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
-#if defined(USE_EDITOR) || USE_CHEATS
-		if (mContext->mImGuiBackend) {
-			mContext->mImGuiBackend->processEvent(&event);
-		}
-#endif
+		sdlEvent.run(event);
 		switch (event.type) {
 		case SDL_EVENT_QUIT:
 			mIsClose = true;
@@ -574,33 +562,11 @@ void Window::pollEvent() {
 
 void Window::draw(const std::function<void()>& beforeSwap) const {
 	if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::OPENGL) {
-#if defined(USE_EDITOR) || USE_CHEATS
-		if (mContext->mImGuiBackend) {
-			mContext->mImGuiBackend->renderDrawData();
-		}
-#endif
 		if (beforeSwap) {
 			beforeSwap();
 		}
 		SDL_GL_SwapWindow(mContext->mWindow);
 	}
-}
-
-// Call before draw imgui widgets
-void Window::preUpdate() {
-#if defined(USE_EDITOR) || USE_CHEATS
-	if (mContext->mImGuiBackend) {
-		mContext->mImGuiBackend->newFrame();
-	}
-#endif
-}
-
-void Window::update() {
-#if defined(USE_EDITOR) || USE_CHEATS
-	if (mContext->mImGuiBackend) {
-		mContext->mImGuiBackend->endFrame();
-	}
-#endif
 }
 
 bool Window::isClosed() const {
@@ -644,30 +610,6 @@ std::vector<const char*> Window::getSDLVulkanExtentions() {
 	return extensions;
 }
 #endif
-
-void Window::initImGUI() {
-#if defined(USE_EDITOR) || USE_CHEATS
-	if (!RENDER::DriverInterface::Get()) {
-		return;
-	}
-	mContext->mImGuiBackend = IMGUI::CreateImGuiBackend(mWindowSettings.renderBackend);
-	if (mContext->mImGuiBackend && mContext->mImGuiBackend->init(*this, *RENDER::DriverInterface::Get())) {
-		IMGUI::SetActive(mContext->mImGuiBackend.get());
-	}
-#endif
-}
-
-void Window::shutdownImGUI() {
-#if defined(USE_EDITOR) || USE_CHEATS
-	if (mContext && mContext->mImGuiBackend) {
-		if (IMGUI::Get() == mContext->mImGuiBackend.get()) {
-			IMGUI::SetActive(nullptr);
-		}
-		mContext->mImGuiBackend->shutdown();
-		mContext->mImGuiBackend.reset();
-	}
-#endif
-}
 
 ::SDL_Window* Window::getSDLWindow() const {
 	return mContext->mWindow;
@@ -809,7 +751,6 @@ void Window::create(Window* sharedWindow) {
 	// mMetalLayer can be stored in Window::Internal if we want, or created on the fly.
 	// But SDL_Metal_CreateView is already called in getMetalLayer if needed, or we just call it once here.
 #endif
-	// initImGUI();
 }
 #endif
 
