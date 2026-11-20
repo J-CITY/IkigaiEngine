@@ -1,27 +1,17 @@
 #include "window.h"
 #ifdef USE_SDL
-#include "renderModule/backends/interface/driverInterface.h"
 #include <SDL3/SDL.h>
+#include <map>
 #include <set>
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
 #endif
-#include "coreModule/platform.hpp"
 #include "utilsModule/log/loggerDefine.h"
+#include "utilsModule/platform.hpp"
 #include "windowModule/inputManager/inputManager.h"
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #include <iostream>
-#endif
-#ifdef VULKAN_BACKEND
-#include "renderModule/backends/vk/vulkanLoader.h"
-#include <SDL3/SDL_vulkan.h>
-#endif
-#ifdef METAL_BACKEND
-#include <SDL3/SDL_metal.h>
-#endif
-#ifdef DX12_BACKEND
-#include <Windows.h>
 #endif
 
 using namespace IKIGAI;
@@ -91,7 +81,7 @@ Window::Window(const WindowSettings& p_windowSettings, bool isMain, Window* shar
 
 Window::~Window() {
 #ifdef OPENGL_BACKEND
-	if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::OPENGL && mContext->mContext) {
+	if (mWindowSettings.surfaceKind == WindowSurfaceKind::OpenGL && mContext->mContext) {
 		SDL_GL_DestroyContext(mContext->mContext);
 		mContext->mContext = nullptr;
 	}
@@ -537,13 +527,13 @@ void Window::pollEvent() {
 			}
 		}
 	}
-	if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::OPENGL) {
+	if (mWindowSettings.surfaceKind == WindowSurfaceKind::OpenGL) {
 		SDL_GL_MakeCurrent(mContext->mWindow, mContext->mContext);
 	}
 }
 
 void Window::draw(const std::function<void()>& beforeSwap) const {
-	if (mWindowSettings.renderBackend == RENDER::RenderSettings::Backend::OPENGL) {
+	if (mWindowSettings.surfaceKind == WindowSurfaceKind::OpenGL) {
 		if (beforeSwap) {
 			beforeSwap();
 		}
@@ -572,27 +562,6 @@ std::pair<int, int> Window::getDrawableSize() {
 	return { viewportWidth, viewportHeight };
 }
 
-#ifdef VULKAN_BACKEND
-VkSurfaceKHR Window::createVulkanSurface(VkInstance instance) {
-	VkSurfaceKHR surface = VK_NULL_HANDLE;
-	if (!SDL_Vulkan_CreateSurface(mContext->mWindow, instance, nullptr, &surface)) {
-		printf("Failed to create Vulkan surface.\n");
-		throw;
-	}
-	return surface;
-}
-
-std::vector<const char*> Window::getSDLVulkanExtentions() {
-	std::vector<const char*> extensions;
-	Uint32 extensions_count = 0;
-	const char* const* names = SDL_Vulkan_GetInstanceExtensions(&extensions_count);
-	if (names) {
-		extensions.assign(names, names + extensions_count);
-	}
-	return extensions;
-}
-#endif
-
 ::SDL_Window* Window::getSDLWindow() const {
 	return mContext->mWindow;
 }
@@ -600,16 +569,6 @@ std::vector<const char*> Window::getSDLVulkanExtentions() {
 void* Window::getGLContext() const {
 	return mContext->mContext;
 }
-
-#ifdef METAL_BACKEND
-void* Window::getMetalLayer() {
-	static SDL_MetalView view = nullptr;
-	if (!view) {
-		view = SDL_Metal_CreateView(mContext->mWindow);
-	}
-	return SDL_Metal_GetLayer(view);
-}
-#endif
 
 WindowSettings& Window::getSetting() {
 	return mWindowSettings;
@@ -627,10 +586,10 @@ bool shouldDisplayFullScreen() {
 
 void Window::create(Window* sharedWindow) {
 	auto displaySize = getSize();
-	const auto backend = mWindowSettings.renderBackend;
+	const auto surface = mWindowSettings.surfaceKind;
 
 #ifdef OPENGL_BACKEND
-	if (backend == RENDER::RenderSettings::Backend::OPENGL) {
+	if (surface == WindowSurfaceKind::OpenGL) {
 #ifdef __EMSCRIPTEN__
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
@@ -679,18 +638,13 @@ void Window::create(Window* sharedWindow) {
 #endif
 
 	SDL_WindowFlags flags = static_cast<SDL_WindowFlags>(SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
-	if (backend == RENDER::RenderSettings::Backend::OPENGL) {
+	if (surface == WindowSurfaceKind::OpenGL) {
 		flags = static_cast<SDL_WindowFlags>(flags | SDL_WINDOW_OPENGL);
 	}
-	else if (backend == RENDER::RenderSettings::Backend::VULKAN) {
+	else if (surface == WindowSurfaceKind::Vulkan) {
 		flags = static_cast<SDL_WindowFlags>(flags | SDL_WINDOW_VULKAN);
-#if defined(__APPLE__) && defined(VULKAN_BACKEND)
-		if (const char* loader = RENDER::FindVulkanLoaderPath()) {
-			SDL_SetHint(SDL_HINT_VULKAN_LIBRARY, loader);
-		}
-#endif
 	}
-	else if (backend == RENDER::RenderSettings::Backend::METAL) {
+	else if (surface == WindowSurfaceKind::Metal) {
 		flags = static_cast<SDL_WindowFlags>(flags | SDL_WINDOW_METAL);
 	}
 	SDL_Window* _window { SDL_CreateWindow(mWindowSettings.title.c_str(), static_cast<int>(displaySize.x), static_cast<int>(displaySize.y), flags) };
@@ -704,13 +658,6 @@ void Window::create(Window* sharedWindow) {
 		SDL_SetWindowPosition(_window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
 	}
 
-#ifdef DX12_BACKEND
-	if (backend == RENDER::RenderSettings::Backend::DIRECTX12 && _window) {
-		SDL_PropertiesID props = SDL_GetWindowProperties(_window);
-		mHWND = static_cast<HWND>(SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
-	}
-#endif
-
 	if (::shouldDisplayFullScreen() || mWindowSettings.isFullscreen) {
 		mWindowSettings.isFullscreen = true;
 		SDL_SetWindowFullscreen(_window, true);
@@ -718,7 +665,7 @@ void Window::create(Window* sharedWindow) {
 	mContext->mWindow = _window;
 	mWindowID = SDL_GetWindowID(_window);
 #ifdef OPENGL_BACKEND
-	if (backend == RENDER::RenderSettings::Backend::OPENGL) {
+	if (surface == WindowSurfaceKind::OpenGL) {
 		if (sharedWindow) {
 			SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
 			SDL_GL_MakeCurrent(sharedWindow->mContext->mWindow, sharedWindow->mContext->mContext);
@@ -728,10 +675,6 @@ void Window::create(Window* sharedWindow) {
 			SDL_GL_MakeCurrent(mContext->mWindow, mContext->mContext);
 		}
 	}
-#endif
-#ifdef METAL_BACKEND
-	// mMetalLayer can be stored in Window::Internal if we want, or created on the fly.
-	// But SDL_Metal_CreateView is already called in getMetalLayer if needed, or we just call it once here.
 #endif
 }
 #endif

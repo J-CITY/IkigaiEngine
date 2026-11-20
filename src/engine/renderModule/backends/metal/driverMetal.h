@@ -15,6 +15,7 @@
 #include "textureMetal.h"
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
+#include <SDL3/SDL_metal.h>
 #include <dispatch/dispatch.h>
 
 namespace IKIGAI::RENDER {
@@ -168,6 +169,7 @@ private:
 	id<MTLCommandBuffer> mCurrentCommandBuffer = nil;
 	id<MTLRenderCommandEncoder> mCurrentEncoder = nil;
 	id<CAMetalDrawable> mCurrentDrawable = nil;
+	SDL_MetalView mMetalView = nullptr;
 	CAMetalLayer* mLayer = nil;
 	dispatch_semaphore_t mInFlightSemaphore = nullptr;
 	bool mHoldingFrame = false;

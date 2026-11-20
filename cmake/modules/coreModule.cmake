@@ -155,7 +155,5 @@ set(IKIGAI_MANIFEST_coreModule
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/gui/components/vectorComponents.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/gui/guiObject.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/gui/guiObject.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/platform.cpp"
-    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/platform.hpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/testHooks.h"
 )

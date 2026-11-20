@@ -4,7 +4,10 @@
 #include <functional>
 #include <mathModule/math.h>
 #include <memory>
+#include <serdepp/attribute/default.hpp>
+#include <serdepp/serializer.hpp>
 #include <string>
+#include <utility>
 #include <utilsModule/event.h>
 #include <vector>
 #ifdef OCULUS
@@ -12,18 +15,13 @@
 #include "util_oxr.h"
 #include <android/input.h>
 #endif
-#include "renderModule/backends/interface/driverInterface.h"
-#ifdef DX12_BACKEND
-#include <d3d12.h>
-#endif
-#ifdef VULKAN_BACKEND
-#include <volk.h>
-#endif
 
 union SDL_Event;
 struct SDL_Window;
 
 namespace IKIGAI::WINDOW {
+
+enum class WindowSurfaceKind { Native, OpenGL, Vulkan, Metal };
 
 struct WindowSettings {
 	bool isFullscreen = false;
@@ -37,7 +35,7 @@ struct WindowSettings {
 	std::string title;
 	MATH::Vector2u size = MATH::Vector2u(800, 600);
 	int refreshRate = 60;
-	RENDER::RenderSettings::Backend renderBackend = RENDER::RenderSettings::Backend::OPENGL;
+	WindowSurfaceKind surfaceKind = WindowSurfaceKind::OpenGL;
 
 	template <class Context> constexpr static auto serde(Context& context, WindowSettings& value) {
 		using Self = WindowSettings;
@@ -135,21 +133,6 @@ public:
 	std::pair<int, int> getDrawableSize();
 	::SDL_Window* getSDLWindow() const;
 	void* getGLContext() const;
-
-#ifdef DX12_BACKEND
-	HWND mHWND;
-	HWND getContextDX12() {
-		return mHWND;
-	}
-#endif
-
-#ifdef VULKAN_BACKEND
-	VkSurfaceKHR createVulkanSurface(VkInstance instance);
-	std::vector<const char*> getSDLVulkanExtentions();
-#endif
-#ifdef METAL_BACKEND
-	void* getMetalLayer();
-#endif
 
 private:
 	[[nodiscard]] WindowSettings& getSetting();

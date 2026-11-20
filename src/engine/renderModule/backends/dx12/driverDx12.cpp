@@ -44,6 +44,8 @@
 #include "utilsModule/log/loggerDefine.h"
 #include "vertexBufferDx12.h"
 #include "windowModule/window/window.h"
+#include <SDL3/SDL_properties.h>
+#include <SDL3/SDL_video.h>
 #include <dxgi1_6.h>
 #pragma comment(lib, "dxgi")
 
@@ -1500,6 +1502,8 @@ void DriverDx12::createSwapChain(unsigned int windowID, unsigned width, unsigned
 	ctx.mSwapChain.Reset();
 
 	auto& win = RESOURCES::ServiceManager::Get<WINDOW::Window>();
+	const SDL_PropertiesID windowProperties = SDL_GetWindowProperties(win.getSDLWindow());
+	const auto windowHandle = static_cast<HWND>(SDL_GetPointerProperty(windowProperties, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
 	ctx.width = width;
 	ctx.height = height;
 
@@ -1538,14 +1542,13 @@ void DriverDx12::createSwapChain(unsigned int windowID, unsigned width, unsigned
 		Microsoft::WRL::ComPtr<IDXGIFactory4> proxy;
 		proxy.Attach(static_cast<IDXGIFactory4*>(factory));
 		StreamlineRuntime::check(result, "slUpgradeInterface factory");
-		ThrowIfFailed(
-			proxy->CreateSwapChainForHwnd(presentationQueue, win.getContextDX12(), &descriptor, &fsDescriptor, nullptr, swapchain.GetAddressOf()));
+		ThrowIfFailed(proxy->CreateSwapChainForHwnd(presentationQueue, windowHandle, &descriptor, &fsDescriptor, nullptr, swapchain.GetAddressOf()));
 		ThrowIfFailed(swapchain.As(&ctx.mSwapChain));
 		return;
 	}
 #endif
 	ThrowIfFailed(
-		mDxgiFactory->CreateSwapChainForHwnd(presentationQueue, win.getContextDX12(), &descriptor, &fsDescriptor, nullptr, swapchain.GetAddressOf()));
+		mDxgiFactory->CreateSwapChainForHwnd(presentationQueue, windowHandle, &descriptor, &fsDescriptor, nullptr, swapchain.GetAddressOf()));
 
 	ThrowIfFailed(swapchain.As(&ctx.mSwapChain));
 }

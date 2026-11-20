@@ -86,6 +86,10 @@
 #include <coreModule/ecs/components/scriptComponent.h>
 #include <renderModule/gameRenderer.h>
 
+#if defined(__APPLE__) && defined(USE_SDL) && defined(VULKAN_BACKEND)
+#include "renderModule/backends/vk/vulkanLoader.h"
+#include <SDL3/SDL_hints.h>
+#endif
 #ifdef OCULUS
 #include <android_native_app_glue.h>
 #endif
@@ -239,7 +243,26 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 		|| windowSettings.refreshRate <= 0) {
 		throw std::runtime_error("Invalid window dimensions or refresh rate");
 	}
-	windowSettings.renderBackend = RENDER::DriverInterface::settings.backend;
+	using Backend = RENDER::RenderSettings::Backend;
+	switch (RENDER::DriverInterface::settings.backend) {
+	case Backend::OPENGL:
+		windowSettings.surfaceKind = WINDOW::WindowSurfaceKind::OpenGL;
+		break;
+	case Backend::VULKAN:
+		windowSettings.surfaceKind = WINDOW::WindowSurfaceKind::Vulkan;
+#if defined(__APPLE__) && defined(USE_SDL) && defined(VULKAN_BACKEND)
+		if (const char* loader = RENDER::FindVulkanLoaderPath()) {
+			SDL_SetHint(SDL_HINT_VULKAN_LIBRARY, loader);
+		}
+#endif
+		break;
+	case Backend::DIRECTX12:
+		windowSettings.surfaceKind = WINDOW::WindowSurfaceKind::Native;
+		break;
+	case Backend::METAL:
+		windowSettings.surfaceKind = WINDOW::WindowSurfaceKind::Metal;
+		break;
+	}
 
 	windowManager = std::make_unique<WINDOW::WindowManager>();
 #ifdef OCULUS

@@ -10,7 +10,7 @@
 #include "vertexFormatsVk.h"
 #ifdef IKIGAI_USE_STREAMLINE
 #include "../streamlineRuntime.h"
-#include <SDL3/SDL.h>
+#include <SDL3/SDL_properties.h>
 #include <vulkan/vulkan_win32.h>
 #endif
 #include "vulkanLoader.h"
@@ -19,9 +19,12 @@
 #endif
 // #include "Render/vk/raytracing/dw/include/macros.h"
 #ifdef VULKAN_BACKEND
+#include <SDL3/SDL_error.h>
+#include <SDL3/SDL_vulkan.h>
 #include <string>
 #include <string_view>
 #include <unordered_set>
+#include <vector>
 
 #include "backends/imgui_impl_vulkan.h"
 #include "renderModule/backends/imgui/imguiBackend.h"
@@ -412,7 +415,11 @@ void DriverVk::init() {
 	// #endif
 	//	};
 
-	auto extensions = win.getSDLVulkanExtentions();
+	std::vector<const char*> extensions;
+	Uint32 extensionCount = 0;
+	if (const char* const* names = SDL_Vulkan_GetInstanceExtensions(&extensionCount)) {
+		extensions.assign(names, names + extensionCount);
+	}
 	extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 	configureUpscalerInstanceExtensions(extensions);
 	if (enableValidation) {
@@ -849,9 +856,10 @@ void DriverVk::init() {
 		}
 		destroySurface = [this, runtime, destroy](VkSurfaceKHR s) { destroy(*mInstance, s, nullptr); };
 	}
-	else
 #endif
-		surface = win.createVulkanSurface(*mInstance);
+	if (surface == VK_NULL_HANDLE && !SDL_Vulkan_CreateSurface(win.getSDLWindow(), *mInstance, nullptr, &surface)) {
+		throw std::runtime_error(std::string("Failed to create Vulkan surface: ") + SDL_GetError());
+	}
 
 	SwapchainContextVk ctx;
 	ctx.surface = vk::raii::SurfaceKHR(mInstance, surface);

@@ -1,12 +1,14 @@
 #include "platform.hpp"
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 
 using namespace IKIGAI;
 
 Platform IKIGAI::GetCurrentPlatform() {
 #if defined(__EMSCRIPTEN__)
 	return Platform::EMSCRIPT;
-#elif __APPLE__
-#include "TargetConditionals.h"
+#elif defined(__APPLE__)
 #if TARGET_OS_IPHONE
 	return Platform::IOS;
 #else

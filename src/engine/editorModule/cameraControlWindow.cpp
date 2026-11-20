@@ -5,6 +5,7 @@
 #ifndef OCULUS
 #include "imgui.h"
 #endif
+#include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/gameRenderer.h"
 #include "sceneModule/sceneManager.h"
 

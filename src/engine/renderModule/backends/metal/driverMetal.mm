@@ -12,7 +12,8 @@
 #include <cstring>
 #include <sstream>
 
-#include <SDL3/SDL.h>
+#include <SDL3/SDL_metal.h>
+#include <SDL3/SDL_video.h>
 
 #include "deviceMetal.h"
 #include "frameBufferMetal.h"
@@ -200,7 +201,8 @@ namespace IKIGAI::RENDER {
 		mInFlightSemaphore = dispatch_semaphore_create(1);
 
 		auto& window = RESOURCES::ServiceManager::Get<WINDOW::Window>();
-		mLayer = (__bridge CAMetalLayer*)window.getMetalLayer();
+		mMetalView = SDL_Metal_CreateView(window.getSDLWindow());
+		mLayer = mMetalView ? (__bridge CAMetalLayer*)SDL_Metal_GetLayer(mMetalView) : nil;
 		if (!mLayer) {
 			LOG_ERROR << "Metal: SDL metal layer is missing";
 			return;
@@ -377,7 +379,6 @@ namespace IKIGAI::RENDER {
 			[mCurrentCommandBuffer commit];
 			[mCurrentCommandBuffer waitUntilCompleted];
 			mCurrentCommandBuffer = nil;
-			mCurrentDrawable = nil;
 		} else if (mHoldingFrame) {
 			dispatch_semaphore_signal(mInFlightSemaphore);
 			mHoldingFrame = false;
@@ -390,6 +391,12 @@ namespace IKIGAI::RENDER {
 		mStageTessFactors = nil;
 		mDepthTarget.reset();
 		mMsaaColor = nil;
+		mCurrentDrawable = nil;
+		mLayer = nil;
+		if (mMetalView) {
+			SDL_Metal_DestroyView(mMetalView);
+			mMetalView = nullptr;
+		}
 	}
 
 	void DriverMetal::resize(size_t width, size_t height) {

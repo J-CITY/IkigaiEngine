@@ -76,6 +76,8 @@ set(IKIGAI_MANIFEST_utilsModule
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/nodableAnimation.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/pathGetter.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/ref.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/platform.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/platform.hpp"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/reflection/reflection.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/reflection/reflection_macros.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/result.h"
