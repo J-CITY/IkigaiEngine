@@ -1,6 +1,5 @@
 #include "audioManager.h"
 
-#include "resourceModule/fileSystem/fileSystem.h"
 #include <limits>
 #include <stdexcept>
 #ifdef __EMSCRIPTEN__
@@ -25,14 +24,12 @@ IKIGAI::AUDIO::AudioManagerAL::~AudioManagerAL() {
 
 namespace IKIGAI::AUDIO {
 namespace {
-	std::string makeClipKey(const SoundConfig& config, uint64_t generation) {
-		return std::to_string(generation) + ":" + RESOURCES::FileSystem::normalizePath(config.pathSoundSource);
+	std::string makeClipKey(const ClipByteSource& source, const SoundConfig& config, uint64_t generation) {
+		return std::to_string(generation) + ":" + source.normalizePath(config.pathSoundSource);
 	}
 
-	std::shared_ptr<SoLoud::AudioSource> loadClip(const SoundConfig& config) {
-		auto& files = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>();
-		auto file = files.getFile(config.pathSoundSource);
-		auto bytes = file && file->isValid() ? file->read() : std::vector<uint8_t> {};
+	std::shared_ptr<SoLoud::AudioSource> loadClip(const ClipByteSource& source, const SoundConfig& config) {
+		auto bytes = source.read(config.pathSoundSource);
 		if (bytes.empty() || bytes.size() > std::numeric_limits<unsigned int>::max()) {
 			throw std::runtime_error("Missing, empty or oversized audio source: " + config.pathSoundSource);
 		}
@@ -67,8 +64,8 @@ AudioManagerAL::ClipCache& AudioManagerAL::clipCache(SoundType type) {
 }
 
 std::shared_ptr<SoLoud::AudioSource> AudioManagerAL::getClip(const SoundConfig& config) {
-	const auto generation = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().generation();
-	const auto key = makeClipKey(config, generation);
+	const auto& source = UTILS::ServiceManager::Get<const ClipByteSource>();
+	const auto key = makeClipKey(source, config, source.generation());
 	auto& cache = clipCache(config.type);
 	{
 		std::lock_guard lock(mClipMutex);
@@ -78,7 +75,7 @@ std::shared_ptr<SoLoud::AudioSource> AudioManagerAL::getClip(const SoundConfig& 
 			}
 		}
 	}
-	auto clip = loadClip(config);
+	auto clip = loadClip(source, config);
 	std::lock_guard lock(mClipMutex);
 	auto& entry = cache[key];
 	if (auto existing = entry.lock()) {
@@ -141,9 +138,10 @@ void AudioManagerAL::removeSource(SoundResource& source) {
 }
 
 AudioManagerAL::PreparedReload AudioManagerAL::prepareReload(const SoundResource& current, const SoundConfig& config, uint64_t generation) {
-	PreparedReload result { SoundResource(config.pathSoundSource, config), makeClipKey(config, generation) };
+	const auto& source = UTILS::ServiceManager::Get<const ClipByteSource>();
+	PreparedReload result { SoundResource(config.pathSoundSource, config), makeClipKey(source, config, generation) };
 	result.source.mixer = current.mixer;
-	result.source.clip = loadClip(config);
+	result.source.clip = loadClip(source, config);
 	{
 		std::lock_guard lock(mClipMutex);
 		clipCache(config.type).try_emplace(result.clipKey);

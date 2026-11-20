@@ -1,6 +1,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <mutex>
 #include <string>
@@ -8,6 +9,7 @@
 // #include <irrKlang.h>
 
 #include <unordered_set>
+#include <vector>
 
 #include "audioMixerSource.h"
 #include "audioSource.h"
@@ -19,6 +21,12 @@
 
 namespace IKIGAI {
 namespace AUDIO {
+	struct ClipByteSource {
+		std::uint64_t (*generation)();
+		std::string (*normalizePath)(std::string);
+		std::vector<std::uint8_t> (*read)(const std::string&);
+	};
+
 	struct Sound2d {
 		std::string path;
 	};

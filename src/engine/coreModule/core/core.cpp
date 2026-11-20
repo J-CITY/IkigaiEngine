@@ -132,6 +132,15 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 
 	fileSystem = std::make_unique<RESOURCES::FileSystem>();
 	RESOURCES::ServiceManager::Set<RESOURCES::FileSystem>(fileSystem.get());
+	static const AUDIO::ClipByteSource audioClips {
+		[] { return RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().generation(); },
+		RESOURCES::FileSystem::normalizePath,
+		[](const std::string& path) {
+			auto file = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().getFile(path);
+			return file && file->isValid() ? file->read() : std::vector<std::uint8_t> {};
+		},
+	};
+	UTILS::ServiceManager::Set(&audioClips);
 #ifdef USE_FILE_WATCHER
 	RESOURCES::FileWatcher::getInstance()->start();
 #endif
