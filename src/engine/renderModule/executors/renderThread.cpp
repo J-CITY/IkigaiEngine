@@ -1,6 +1,6 @@
 #include "renderThread.h"
 #include "coroutineModule/awaitables.h"
-#include "profilerModule/trace.h"
+#include "traceModule/trace.h"
 #include <chrono>
 #include <stdexcept>
 

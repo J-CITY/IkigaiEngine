@@ -1,6 +1,6 @@
 #include "task.h"
 
-#include "profilerModule/trace.h"
+#include "traceModule/trace.h"
 
 #include <algorithm>
 #include <cstring>

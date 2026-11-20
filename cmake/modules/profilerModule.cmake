@@ -13,5 +13,4 @@ set(IKIGAI_MANIFEST_profilerModule
     "${IKIGAI_SOURCE_ROOT}/engine/profilerModule/profilerReport.h"
     "${IKIGAI_SOURCE_ROOT}/engine/profilerModule/profilerSpy.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/profilerModule/profilerSpy.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/profilerModule/trace.h"
 )

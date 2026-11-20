@@ -1,7 +1,7 @@
 #include "deviceHealthDx12.h"
 
 #ifdef DX12_BACKEND
-#include "profilerModule/trace.h"
+#include "traceModule/trace.h"
 #include "utilsModule/crashReport.h"
 #include "windowMessageWait.h"
 #include <algorithm>

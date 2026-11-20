@@ -3,9 +3,9 @@
 #include <algorithm>
 #include <stdexcept>
 
-#include "profilerModule/trace.h"
 #include "renderModule/frustum.h"
 #include "taskModule/taskSystem.h"
+#include "traceModule/trace.h"
 
 namespace IKIGAI::RENDER {
 namespace {

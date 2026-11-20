@@ -3,9 +3,9 @@
 #include "captureModule/screenshot.h"
 #include "coreModule/config.h"
 #include "driverVk.h"
-#include "profilerModule/trace.h"
 #include "renderModule/backends/driverFactory.h"
 #include "renderModule/backends/interface/pipelineCacheStorage.h"
+#include "traceModule/trace.h"
 #include "utilsModule/time/loadTimer.h"
 #include "vertexFormatsVk.h"
 #ifdef IKIGAI_USE_STREAMLINE

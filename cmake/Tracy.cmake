@@ -1,7 +1,9 @@
 include_guard(GLOBAL)
 
 option(IKIGAI_ENABLE_TRACY "Build the engine with on-demand Tracy tracing" OFF)
-add_library(ikigai_trace INTERFACE)
+get_filename_component(IKIGAI_TRACE_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../src/engine" ABSOLUTE)
+add_library(ikigai_trace INTERFACE "${IKIGAI_TRACE_SOURCE_DIR}/traceModule/trace.h")
+target_include_directories(ikigai_trace INTERFACE "${IKIGAI_TRACE_SOURCE_DIR}")
 
 if(IKIGAI_ENABLE_TRACY)
     if(EMSCRIPTEN)

@@ -1,5 +1,5 @@
 #include "frameContext.h"
-#include "profilerModule/trace.h"
+#include "traceModule/trace.h"
 #include <algorithm>
 #include <stdexcept>
 #include <utility>

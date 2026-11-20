@@ -1,7 +1,7 @@
 #include "backends/interface/uniformBufferInterface.h"
 #include "executors/renderThread.h"
-#include "profilerModule/trace.h"
 #include "render.h"
+#include "traceModule/trace.h"
 #ifdef _WIN32
 #include <Windows.h>
 #endif

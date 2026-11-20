@@ -14,8 +14,8 @@
 #include "coreModule/testHooks.h"
 #include "profilerModule/profiler.h"
 #include "profilerModule/profilerSpy.h"
-#include "profilerModule/trace.h"
 #include "sceneObjectDescriptor.h"
+#include "traceModule/trace.h"
 #include "utilsModule/memory/frameArena.h"
 #if USE_PHYSICS_3D
 #include "coreModule/ecs/components/ragdollComponent.h"
