@@ -1,7 +1,5 @@
 #include "contextPredicate.h"
 #if USE_IKIGAI_SCRIPT
-#include "resourceModule/fileSystem/fileSystem.h"
-#include "resourceModule/serviceManager.h"
 #include "utilsModule/stringUtils.h"
 #include <Library/ikigaiScript.h>
 #endif
@@ -17,23 +15,26 @@ struct ContextPredicate::State {
 	}
 #endif
 };
-ContextPredicate::ContextPredicate(const std::string& path, const std::string& name)
+ContextPredicate::ContextPredicate(const std::string& path, const std::string& name, ReadScriptText& readText)
 	: state(std::make_unique<State>()) {
 #if USE_IKIGAI_SCRIPT
-	auto file = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().getFile(path);
-	if (!file || !file->isValid())
+	const auto source = readText(path);
+	if (!source) {
 		throw std::runtime_error("Cannot read predicate script: " + path);
-	if (state->vm.evaluate(UTILS::NormalizeTextInput(file->readStr())) || state->vm.__EXEPTION__ != IkigaiScript::ExceptionType::None) {
+	}
+	if (state->vm.evaluate(UTILS::NormalizeTextInput(*source)) || state->vm.__EXEPTION__ != IkigaiScript::ExceptionType::None) {
 		throw std::runtime_error("Predicate script compilation failed: " + path + ": " + state->vm.__DEBUG_OUT__);
 	}
 	const auto& functions = state->vm.getGlobalScope()->functions;
 	auto fn = functions.find(name);
-	if (fn == functions.end())
+	if (fn == functions.end()) {
 		throw std::runtime_error("Missing predicate function: " + name);
+	}
 	state->function = fn->second;
 #else
 	(void)path;
 	(void)name;
+	(void)readText;
 	throw std::runtime_error("Predicate scripts require USE_IKIGAI_SCRIPT");
 #endif
 }

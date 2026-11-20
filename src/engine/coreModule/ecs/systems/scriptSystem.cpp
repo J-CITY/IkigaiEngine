@@ -1,12 +1,10 @@
 #if USE_LUA
 #include "scriptSystem.h"
 #include <algorithm>
-#include <resourceModule/fileSystem/fileSystem.h>
 #include <resourceModule/serviceManager.h>
 #include <sceneModule/sceneManager.h>
 #include <scriptModule/luaRuntime.h>
 #include <scriptModule/scriptVfsPath.h>
-#include <utilsModule/stringUtils.h>
 #ifdef __EMSCRIPTEN__
 #include <iostream>
 #endif
@@ -77,8 +75,8 @@ bool IKIGAI::ECS::ScriptSystem::registerToLuaContext(ScriptComponent& component,
 	std::cout << "[web] lua load '" << scriptName << "' vfs=" << vfsPath << std::endl;
 	std::cout.flush();
 #endif
-	auto file = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().getFile(vfsPath);
-	if (!file || !file->isValid()) {
+	const auto source = runtime.loadSource(vfsPath);
+	if (!source) {
 		LOG_ERROR << "Lua script '" << vfsPath << "': file not found in VFS";
 #ifdef __EMSCRIPTEN__
 		std::cout << "[web] lua load FAILED " << vfsPath << " (missing in VFS)" << std::endl;
@@ -87,9 +85,8 @@ bool IKIGAI::ECS::ScriptSystem::registerToLuaContext(ScriptComponent& component,
 		return false;
 	}
 
-	const auto source = UTILS::NormalizeTextInput(file->readStr());
 	const auto chunkName = "@" + vfsPath;
-	auto result = runtime.execute(source, chunkName, component.scriptEnvironment);
+	auto result = runtime.execute(*source, chunkName, component.scriptEnvironment);
 	if (!result.valid()) {
 		sol::error err = result;
 		LOG_ERROR << "Lua script '" << vfsPath << "': " << err.what();

@@ -1,10 +1,9 @@
 #pragma once
 #if defined(USE_FILE_WATCHER)
-#include "resourceModule/fileWatcher.h"
-#include "utilsModule/event.h"
 #include <cstdint>
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -14,23 +13,28 @@ class ScriptFileWatcher {
 public:
 	using Handle = std::uint64_t;
 	using ReloadFn = std::function<void()>;
+	using Unsubscribe = std::function<void()>;
+	using ResolvePath = std::optional<std::string>(const std::string& vfsPath);
+	using Subscribe = Unsubscribe(const std::string& vfsPath, ReloadFn onModified);
 
-	static Handle watch(const std::string& vfsPath, ReloadFn onModified);
-	static void unwatch(Handle handle);
+	ScriptFileWatcher(ResolvePath& resolvePath, Subscribe& subscribe);
+	~ScriptFileWatcher();
+	Handle watch(const std::string& vfsPath, ReloadFn onModified);
+	void unwatch(Handle handle);
 
 private:
 	struct CallbackEntry {
 		ReloadFn reload {};
 	};
 	struct NativeSlot {
-		IKIGAI::EVENT::Event<RESOURCES::FileWatcher::FileStatus>::ID watchId {};
-		std::string vfsPath {};
+		Unsubscribe unsubscribe {};
 		std::vector<Handle> handles {};
 	};
 
-	static ScriptFileWatcher& instance();
 	void dispatchNative(const std::string& nativePath);
 
+	ResolvePath& resolvePath;
+	Subscribe& subscribe;
 	std::mutex mMutex {};
 	Handle mNextHandle = 0;
 	std::unordered_map<Handle, CallbackEntry> mCallbacks {};

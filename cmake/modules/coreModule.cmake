@@ -173,4 +173,6 @@ set(IKIGAI_MANIFEST_coreModule
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/scripting/luaMathsBinder.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/scripting/scriptInterpreter.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/scripting/scriptInterpreter.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/scripting/scriptResourceHost.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/scripting/scriptResourceHost.h"
 )

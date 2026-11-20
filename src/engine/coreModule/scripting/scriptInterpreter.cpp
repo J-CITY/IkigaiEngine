@@ -9,6 +9,7 @@
 #include "scriptModule/luaRuntime.h"
 #include "scriptModule/scriptFileWatcher.h"
 #include "scriptModule/scriptVfsPath.h"
+#include "scriptResourceHost.h"
 
 #include <coreModule/ecs/components/scriptComponent.h>
 #include <coreModule/ecs/object.h>
@@ -70,7 +71,7 @@ ScriptInterpreter::~ScriptInterpreter() {
 
 void ScriptInterpreter::createLuaContextAndBindGlobals() {
 	if (!runtime) {
-		runtime = std::make_unique<LuaRuntime>(LuaBinder::CallBinders);
+		runtime = std::make_unique<LuaRuntime>(readScriptFromVfs, LuaBinder::CallBinders);
 		checkOk = true;
 
 		pruneScripts();
@@ -121,7 +122,7 @@ void ScriptInterpreter::attachFileWatch(TrackedScript& tracked, const ECS::Scrip
 		return;
 	}
 	const auto vfsPath = LuaScriptVfsPath(component.getScriptName());
-	tracked.fileWatchHandle = ScriptFileWatcher::watch(vfsPath, [this, handle = tracked.handle]() {
+	tracked.fileWatchHandle = scriptFileWatcher().watch(vfsPath, [this, handle = tracked.handle]() {
 		if (auto* tracked = findScript(handle); runtime && tracked) {
 			if (auto* script = tracked->resolve()) {
 				reloadScript(*tracked, *script);
@@ -137,7 +138,7 @@ void ScriptInterpreter::attachFileWatch(TrackedScript& tracked, const ECS::Scrip
 void ScriptInterpreter::detachFileWatch(TrackedScript& tracked) {
 #if defined(USE_FILE_WATCHER)
 	if (tracked.fileWatchHandle != 0) {
-		ScriptFileWatcher::unwatch(tracked.fileWatchHandle);
+		scriptFileWatcher().unwatch(tracked.fileWatchHandle);
 		tracked.fileWatchHandle = 0;
 	}
 #else

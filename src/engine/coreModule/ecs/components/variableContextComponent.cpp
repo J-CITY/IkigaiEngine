@@ -1,5 +1,8 @@
 #include "variableContextComponent.h"
 #include "coreModule/ecs/componentReference.inl"
+#include "coreModule/scripting/scriptResourceHost.h"
+#include "resourceModule/fileSystem/fileSystem.h"
+#include "utilsModule/serviceManager.h"
 #include <algorithm>
 namespace IKIGAI::ECS {
 VariableContextComponent::VariableContextComponent(UTILS::Ref<Object> object)
@@ -127,7 +130,7 @@ void VariableContextComponent::prepare(SCENE_SYSTEM::Scene& scene) {
 				throw std::runtime_error("Script predicate output must be Bool");
 			}
 			const auto& script = *variable.Script;
-			auto predicate = std::make_shared<SCRIPTING::ContextPredicate>(script.Path, script.Function);
+			auto predicate = std::make_shared<SCRIPTING::ContextPredicate>(script.Path, script.Function, SCRIPTING::readScriptFromVfs);
 			std::vector<size_t> arguments;
 			for (const auto& name : script.Arguments) {
 				const auto argument = schema->key(name);

@@ -1,7 +1,5 @@
 #if USE_IKIGAI_SCRIPT
 #include "ikigaiScriptRuntime.h"
-#include "resourceModule/fileSystem/fileSystem.h"
-#include "resourceModule/serviceManager.h"
 #include "scriptVfsPath.h"
 #include "utilsModule/log/loggerDefine.h"
 #include "utilsModule/stringUtils.h"
@@ -34,11 +32,11 @@ bool IkigaiScriptRuntime::loadFromVfs(const InstallBindings& installBindings) {
 		state->bindings = installBindings(state->vm);
 
 		const auto filename = IkigaiScriptVfsPath(path);
-		auto file = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().getFile(filename);
-		if (!file || !file->isValid()) {
+		const auto source = readText(filename);
+		if (!source) {
 			throw std::runtime_error("Cannot open " + filename);
 		}
-		state->source = UTILS::NormalizeTextInput(file->readStr());
+		state->source = UTILS::NormalizeTextInput(*source);
 		healthy = !state->vm.evaluate(state->source) && state->vm.__EXEPTION__ == IkigaiScript::ExceptionType::None;
 		if (!healthy) {
 			throw std::runtime_error(
@@ -55,8 +53,9 @@ bool IkigaiScriptRuntime::loadFromVfs(const InstallBindings& installBindings) {
 	return false;
 }
 
-IkigaiScriptRuntime::IkigaiScriptRuntime(const std::string& script, const InstallBindings& installBindings)
-	: path(script) {
+IkigaiScriptRuntime::IkigaiScriptRuntime(const std::string& script, ReadScriptText& readText, const InstallBindings& installBindings)
+	: path(script)
+	, readText(readText) {
 	loadFromVfs(installBindings);
 }
 IkigaiScriptRuntime::~IkigaiScriptRuntime() = default;

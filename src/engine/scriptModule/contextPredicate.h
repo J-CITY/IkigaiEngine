@@ -1,4 +1,5 @@
 #pragma once
+#include "scriptSource.h"
 #include "utilsModule/expressions/expression.h"
 #include <memory>
 
@@ -10,7 +11,7 @@ class ContextPredicate {
 	std::unique_ptr<State> state;
 
 public:
-	ContextPredicate(const std::string& path, const std::string& function);
+	ContextPredicate(const std::string& path, const std::string& function, ReadScriptText& readText);
 	~ContextPredicate();
 	bool evaluate(const std::vector<DATA::Value>&);
 };

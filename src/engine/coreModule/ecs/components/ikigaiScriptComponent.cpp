@@ -3,6 +3,7 @@
 #include "coreModule/scripting/ikigaiScriptBinder.h"
 
 #include "coreModule/ecs/object.h"
+#include "coreModule/scripting/scriptResourceHost.h"
 #include "ikigaiScriptComponent.h"
 #include "resourceModule/serviceManager.h"
 #include "scriptModule/ikigaiScriptRuntime.h"
@@ -84,7 +85,7 @@ void IkigaiScriptComponent::attachFileWatch() {
 		return;
 	}
 	const auto vfsPath = SCRIPTING::IkigaiScriptVfsPath(path);
-	fileWatchHandle = SCRIPTING::ScriptFileWatcher::watch(vfsPath, [components = world.getComponentManagerWeak(), handle]() {
+	fileWatchHandle = SCRIPTING::scriptFileWatcher().watch(vfsPath, [components = world.getComponentManagerWeak(), handle]() {
 		if (const auto manager = components.lock()) {
 			if (auto* script = manager->resolveComponent(handle)) {
 				script->reloadScript();
@@ -97,7 +98,7 @@ void IkigaiScriptComponent::attachFileWatch() {
 void IkigaiScriptComponent::detachFileWatch() {
 #if defined(USE_FILE_WATCHER)
 	if (fileWatchHandle) {
-		SCRIPTING::ScriptFileWatcher::unwatch(*fileWatchHandle);
+		SCRIPTING::scriptFileWatcher().unwatch(*fileWatchHandle);
 		fileWatchHandle.reset();
 	}
 #endif
@@ -109,7 +110,7 @@ void IkigaiScriptComponent::ensureRuntime() {
 		return;
 	}
 	if (!path.empty() && !obj.get().weak_from_this().expired()) {
-		runtime = std::make_unique<SCRIPTING::IkigaiScriptRuntime>(path, scriptBindings(obj.get()));
+		runtime = std::make_unique<SCRIPTING::IkigaiScriptRuntime>(path, SCRIPTING::readScriptFromVfs, scriptBindings(obj.get()));
 		attachFileWatch();
 		if (awake) {
 			runtime->call("OnAwake");
