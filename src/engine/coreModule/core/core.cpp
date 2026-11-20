@@ -53,6 +53,7 @@
 #include "resourceModule/shaderManager.h"
 #include "resourceModule/textureManager.h"
 #include "inputActionStorage.h"
+#include "sceneResourcePreparation.h"
 #include "windowModule/inputManager/inputActions.h"
 #include "windowModule/inputManager/inputManager.h"
 #include <audioModule/audioManager.h>
@@ -395,6 +396,7 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 	AI::registerDefaultPathQuery();
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonBlendspaceLoader>(skeletonBlendspaceLoader.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonAnimationLoader>(skeletonAnimationLoader.get());
+	ConfigureSceneResourcePreparation(*sceneManager);
 
 #if USE_LUA
 	// If startup throws, close Lua before the Core members it depends on unwind.

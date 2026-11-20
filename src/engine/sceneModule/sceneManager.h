@@ -1,5 +1,9 @@
 #pragma once
+#include <functional>
+#include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "scene.h"
 #include "sceneLoading.h"
@@ -7,12 +11,18 @@
 namespace IKIGAI::SCENE_SYSTEM {
 class SceneManager {
 public:
+	using LoadingSceneWarmup = std::function<COROUTINE::Task<>(std::shared_ptr<SceneLoadState>, std::vector<std::shared_ptr<void>>&)>;
+
 	SceneManager(const std::string& p_sceneRootFolder = "", PhysicsFactories physics = { }, bool profileLoading = false);
 	// Applies to subsequently created/loaded scenes, not existing worlds.
 	void setPhysicsFactoriesForNewScenes(PhysicsFactories physics) {
 		mPhysicsFactories = std::move(physics);
 	}
 	~SceneManager();
+
+	void setLoadingSceneWarmup(LoadingSceneWarmup warmup) {
+		mLoadingSceneWarmup = std::move(warmup);
+	}
 
 	void update();
 	void loadFromFile(const std::string& sceneFilePath);
@@ -63,6 +73,7 @@ public:
 private:
 	PhysicsFactories mPhysicsFactories;
 	bool mProfileLoading = false;
+	LoadingSceneWarmup mLoadingSceneWarmup;
 	struct LoadContext;
 	struct LoadingSceneCache;
 	std::unique_ptr<LoadContext> mBuild;

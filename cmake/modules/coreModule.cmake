@@ -13,6 +13,8 @@ set(IKIGAI_MANIFEST_coreModule
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/platformStartup.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/inputActionStorage.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/inputActionStorage.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/sceneResourcePreparation.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/sceneResourcePreparation.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/animationTimelineBind.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/animationTimelineBind.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/componentCatalog.cpp"
