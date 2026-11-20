@@ -3077,9 +3077,11 @@ void DriverVk::presentFrame() try {
 		}
 	}
 	end();
-	if (IKIGAI::CAPTURE::ScreenshotService::Get().pending()) {
+	const auto& screenshot = IKIGAI::CAPTURE::ScreenshotService::Get();
+	auto& readback = screenshotReadback();
+	if (screenshot.pending() && (screenshot.textureName().empty() || readback.hasSource())) {
 		const bool bgra = mSurfaceFormat.format == vk::Format::eB8G8R8A8Unorm || mSurfaceFormat.format == vk::Format::eB8G8R8A8Srgb;
-		IKIGAI::CAPTURE::ScreenshotService::Get().captureTexture(*this, getCurrentFrame().mFrameBuffer->getTextures().at(0), bgra);
+		readback.captureBackbuffer(*this, getCurrentFrame().mFrameBuffer->getTextures().at(0), bgra);
 	}
 
 	const auto& render_complete_semaphore = getCurrentFrame().mRenderCompleteSemaphore;

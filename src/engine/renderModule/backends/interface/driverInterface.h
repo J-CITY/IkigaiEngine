@@ -1,6 +1,7 @@
 #pragma once
 #include "renderModule/frame/gpuCompletion.h"
 #include "renderModule/frame/renderOwner.h"
+#include "renderModule/screenshotReadback.h"
 #include "vertexLayout.h"
 
 #include <bitset>
@@ -350,6 +351,9 @@ public:
 	}
 	virtual void latencySimulationEnd() { }
 	void prepareWindowModeChange();
+	ScreenshotReadback& screenshotReadback() {
+		return mScreenshotReadback;
+	}
 	void stopPresentation() {
 		mFrameGeneration.reset();
 		mFrameGenerationStatus = {};
@@ -533,6 +537,7 @@ private:
 	static std::thread::id resourceOwnerThread() noexcept;
 	static thread_local DriverInterface* sReplayDriver;
 	RenderOwner mOwner {};
+	ScreenshotReadback mScreenshotReadback;
 	std::shared_ptr<GpuCompletionSource> mCompletion = std::make_shared<GpuCompletionSource>();
 	std::function<void()> mAccessBoundary {};
 	inline static DriverInterface* sActive = nullptr;

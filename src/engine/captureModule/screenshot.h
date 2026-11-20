@@ -1,22 +1,18 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
-#include <functional>
 #include <future>
-#include <memory>
 #include <string>
 #include <vector>
 
-namespace IKIGAI::RENDER {
-class DriverInterface;
-class TextureInterface;
-}
-
 namespace IKIGAI::CAPTURE {
 struct ScreenshotImage {
-	int width = 0, height = 0;
+	int width = 0;
+	int height = 0;
 	std::vector<uint8_t> rgba;
+	static std::size_t rgbaSize(int width, int height);
 	static ScreenshotImage fromFloats(int width, int height, const std::vector<float>& pixels, bool flipY = false, bool bgra = false);
 };
 
@@ -37,24 +33,19 @@ public:
 		return mResult.state == State::PENDING;
 	}
 	bool busy();
-	bool hasSource() const { return static_cast<bool>(mSource); }
 	const Result& status();
 	const std::string& textureName() const {
 		return mTextureName;
 	}
-	void setSource(std::shared_ptr<RENDER::TextureInterface> scene, std::shared_ptr<RENDER::TextureInterface> overlay = { });
-	void capture(const std::function<ScreenshotImage()>& readWindow);
-	void captureTexture(RENDER::DriverInterface& driver, std::shared_ptr<RENDER::TextureInterface> backbuffer, bool bgra = false);
+	void capture(ScreenshotImage image);
 	void fail(const std::string& error);
 	void wait();
 
 private:
 	ScreenshotService() = default;
 	void poll();
-	ScreenshotImage readSource(RENDER::DriverInterface& driver);
 	Result mResult;
 	std::string mTextureName;
-	std::shared_ptr<RENDER::TextureInterface> mSource, mOverlay;
 	std::future<Result> mWriter;
 };
 }

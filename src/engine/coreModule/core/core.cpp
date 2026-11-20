@@ -491,6 +491,9 @@ Core::~Core() {
 	}
 	RESOURCES::ServiceManager::Remove<TASK::TaskSystem>();
 	RESOURCES::ServiceManager::Remove<COROUTINE::Scheduler>();
+	if (driver) {
+		driver->screenshotReadback().reset();
+	}
 	CAPTURE::ScreenshotService::Get().wait();
 	if (render) {
 		render->shutdown();

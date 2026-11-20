@@ -90,6 +90,8 @@ set(IKIGAI_MANIFEST_renderModule
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/gameRendererInterface.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/sceneRenderData.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/sceneRenderData.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/screenshotReadback.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/screenshotReadback.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/gpuScene.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/gpuScene.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/gpuSceneMaterials.cpp"

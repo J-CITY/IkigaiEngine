@@ -339,11 +339,11 @@ namespace IKIGAI::RENDER {
 			}
 		}
 		auto& screenshot = CAPTURE::ScreenshotService::Get();
+		auto& readback = screenshotReadback();
 		// A named source becomes available after asynchronous scene loading finishes.
-		if (screenshot.pending() && (screenshot.textureName().empty() || screenshot.hasSource())) {
-			screenshot.capture([]() -> CAPTURE::ScreenshotImage {
-				throw std::runtime_error("Metal window screenshots require a pipeline texture source");
-			});
+		if (screenshot.pending() && (screenshot.textureName().empty() || readback.hasSource())) {
+			readback.capture(
+				*this, []() -> CAPTURE::ScreenshotImage { throw std::runtime_error("Metal window screenshots require a pipeline texture source"); });
 		}
 		end();
 		begin();

@@ -278,7 +278,10 @@ void GameRenderer::renderScene() {
 		// mDriver->applyStateMask(glState);
 	}
 	else {
-
+		auto& screenshot = CAPTURE::ScreenshotService::Get();
+		if (screenshot.pending() && !screenshot.textureName().empty()) {
+			render->getDriver()->screenshotReadback().fail("Screenshot pipeline texture was not produced: " + screenshot.textureName());
+		}
 		render->setClearColor(1.0f, 0.0f, 0.0f, 1.0f);
 		render->clear(true, true, false);
 	}
@@ -296,7 +299,7 @@ void GameRenderer::renderLoadingScene(SCENE_SYSTEM::Scene* scene) {
 	resetTemporalHistory(HistoryReason::SceneLoading);
 	mPreviousCamera = nullptr;
 	mSkinningPoses.clear();
-	CAPTURE::ScreenshotService::Get().setSource({}, {});
+	render.getDriver()->screenshotReadback().reset();
 	if (auto& driver = *render.getDriver(); driver.mFrameGeneration) {
 		driver.mFrameGeneration->suspend();
 		driver.mFrameGenerationStatus = driver.mFrameGeneration->status();
@@ -1277,7 +1280,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			auto& screenshot = CAPTURE::ScreenshotService::Get();
 			if (screenshot.pending() && screenshot.textureName().empty() && presentationDriver->mFrameGeneration
 				&& presentationDriver->mFrameGenerationStatus.Active && presentationDriver->mFrameGeneration->composesUI()) {
-				screenshot.setSource(f.Color, f.UI);
+				presentationDriver->screenshotReadback().setSource(f.Color, f.UI);
 			}
 			if (stage->mDescriptor.Unsupported == "ERROR" && !presentationDriver->mFrameGenerationStatus.Reason.empty()) {
 				throw UnsupportedFrameGeneration(presentationDriver->mFrameGenerationStatus.Reason);
@@ -1530,20 +1533,21 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 	submitCpuProfile.reset();
 	auto& screenshot = CAPTURE::ScreenshotService::Get();
 	if (screenshot.pending() && !screenshot.textureName().empty()) {
+		auto& readback = mContext.render->getDriver()->screenshotReadback();
 		const auto& name = screenshot.textureName();
 		const auto& descriptor = mRenderPipeline->mDescriptor;
 		const auto source = mRenderPipeline->mTextures.find(name);
 		if (source == mRenderPipeline->mTextures.end()) {
-			screenshot.fail("Unknown screenshot texture: " + name);
+			readback.fail("Unknown screenshot texture: " + name);
 		}
 		else if (descriptor.Graph.Enabled
 			&& std::find(descriptor.Graph.Exports.begin(), descriptor.Graph.Exports.end(), name) == descriptor.Graph.Exports.end()
 			&& std::none_of(descriptor.Textures.begin(), descriptor.Textures.end(),
 				[&](const auto& texture) { return texture.Name == name && texture.History; })) {
-			screenshot.fail("Screenshot texture is not exported by the render graph: " + name);
+			readback.fail("Screenshot texture is not exported by the render graph: " + name);
 		}
 		else {
-			screenshot.setSource(source->second);
+			readback.setSource(source->second);
 		}
 	}
 	mRenderPipeline->advanceHistory(*mContext.render);

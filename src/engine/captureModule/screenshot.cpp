@@ -1,5 +1,4 @@
 #include "screenshot.h"
-#include "renderModule/backends/interface/driverInterface.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -21,11 +20,6 @@
 
 namespace IKIGAI::CAPTURE {
 namespace {
-	size_t imageSize(int w, int h) {
-		if (w <= 0 || h <= 0 || w > std::numeric_limits<int>::max() / 4 || size_t(w) > std::numeric_limits<size_t>::max() / 4 / size_t(h))
-			throw std::runtime_error("Invalid screenshot dimensions");
-		return size_t(w) * size_t(h) * 4;
-	}
 	uint8_t byte(float value) {
 		if (!std::isfinite(value))
 			throw std::runtime_error("Non-finite screenshot pixels");
@@ -89,8 +83,9 @@ namespace {
 	}
 	ScreenshotService::Result save(ScreenshotImage image, std::filesystem::path path) {
 		try {
-			if (image.rgba.size() != imageSize(image.width, image.height))
+			if (image.rgba.size() != ScreenshotImage::rgbaSize(image.width, image.height)) {
 				throw std::runtime_error("Invalid screenshot buffer");
+			}
 			std::vector<uint8_t> encoded;
 			struct Output {
 				std::vector<uint8_t>& bytes;
@@ -118,8 +113,16 @@ namespace {
 	}
 }
 
+std::size_t ScreenshotImage::rgbaSize(int width, int height) {
+	if (width <= 0 || height <= 0 || width > std::numeric_limits<int>::max() / 4
+		|| size_t(width) > std::numeric_limits<size_t>::max() / 4 / size_t(height)) {
+		throw std::runtime_error("Invalid screenshot dimensions");
+	}
+	return size_t(width) * size_t(height) * 4;
+}
+
 ScreenshotImage ScreenshotImage::fromFloats(int width, int height, const std::vector<float>& pixels, bool flipY, bool bgra) {
-	ScreenshotImage image { width, height, std::vector<uint8_t>(imageSize(width, height)) };
+	ScreenshotImage image { width, height, std::vector<uint8_t>(rgbaSize(width, height)) };
 	if (pixels.size() != image.rgba.size())
 		throw std::runtime_error("Screenshot requires RGBA pixels");
 	for (int y = 0; y < height; ++y)
@@ -173,56 +176,22 @@ bool ScreenshotService::request(const std::filesystem::path& path, const std::st
 			throw std::runtime_error("Screenshot output must have a .png extension");
 		mResult = { State::PENDING, std::filesystem::absolute(output), { } };
 		mTextureName = texture;
-		mSource.reset();
-		mOverlay.reset();
 		return true;
 	} catch (const std::exception& e) {
 		fail(e.what());
 		return false;
 	}
 }
-void ScreenshotService::setSource(std::shared_ptr<RENDER::TextureInterface> scene, std::shared_ptr<RENDER::TextureInterface> overlay) {
-	if (pending()) {
-		mSource = std::move(scene);
-		mOverlay = std::move(overlay);
-	}
-}
 void ScreenshotService::fail(const std::string& error) {
 	mResult.state = State::FAILED;
 	mResult.error = error;
-	mSource.reset();
-	mOverlay.reset();
 	std::cerr << "SCREENSHOT_ERROR " << error << std::endl;
 }
-ScreenshotImage ScreenshotService::readSource(RENDER::DriverInterface& driver) {
-	const int w = static_cast<int>(mSource->getWidth()), h = static_cast<int>(mSource->getHeight());
-	auto pixels = driver.readTexture(mSource, 0, 0);
-	if (mOverlay) {
-		if (mOverlay->getWidth() != size_t(w) || mOverlay->getHeight() != size_t(h))
-			throw std::runtime_error("Screenshot UI size mismatch");
-		const auto overlay = driver.readTexture(mOverlay, 0, 0);
-		if (pixels.size() != imageSize(w, h) || overlay.size() != pixels.size())
-			throw std::runtime_error("Invalid screenshot composition inputs");
-		for (size_t i = 0; i < pixels.size(); i += 4)
-			for (size_t c = 0; c < 3; ++c)
-				pixels[i + c] = overlay[i + c] + pixels[i + c] * (1.0f - overlay[i + 3]);
-	}
-	return ScreenshotImage::fromFloats(w, h, pixels, RENDER::DriverInterface::settings.backend == RENDER::RenderSettings::Backend::OPENGL,
-		mSource->getFormat() == RENDER::PixelFormat::BGRA_INT);
-}
-void ScreenshotService::capture(const std::function<ScreenshotImage()>& readWindow) {
-	if (!pending())
+void ScreenshotService::capture(ScreenshotImage image) {
+	if (!pending()) {
 		return;
+	}
 	try {
-		ScreenshotImage image;
-		if (mSource)
-			image = readSource(*RENDER::DriverInterface::Get());
-		else if (!mTextureName.empty())
-			throw std::runtime_error("Screenshot pipeline texture was not produced: " + mTextureName);
-		else
-			image = readWindow();
-		mSource.reset();
-		mOverlay.reset();
 		mResult.state = State::SAVING;
 #ifdef __EMSCRIPTEN__
 		mResult = save(std::move(image), mResult.path);
@@ -232,12 +201,6 @@ void ScreenshotService::capture(const std::function<ScreenshotImage()>& readWind
 	} catch (const std::exception& e) {
 		fail(e.what());
 	}
-}
-void ScreenshotService::captureTexture(RENDER::DriverInterface& driver, std::shared_ptr<RENDER::TextureInterface> backbuffer, bool bgra) {
-	capture([&] {
-		return ScreenshotImage::fromFloats(
-			static_cast<int>(backbuffer->getWidth()), static_cast<int>(backbuffer->getHeight()), driver.readTexture(backbuffer, 0, 0), false, bgra);
-	});
 }
 void ScreenshotService::wait() {
 	if (mWriter.valid()) {

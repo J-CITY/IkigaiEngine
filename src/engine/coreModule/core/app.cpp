@@ -346,14 +346,14 @@ void App::postUpdate(std::chrono::duration<double> dt) {
 			core.imguiBackend->renderDrawData();
 		}
 #endif
-		auto& screenshots = CAPTURE::ScreenshotService::Get();
+		auto& readback = core.driver->screenshotReadback();
 #ifndef USING_GLES
 		if (!(SDL_GetWindowFlags(core.window->getSDLWindow()) & SDL_WINDOW_MINIMIZED)) {
-			screenshots.capture([this] { return RENDER::DriverGl::readBackbufferScreenshot(core.window->getPixelSize()); });
+			readback.capture(*core.driver, [this] { return RENDER::DriverGl::readBackbufferScreenshot(core.window->getPixelSize()); });
 		}
 #else
-		if (screenshots.pending()) {
-			screenshots.fail("Window screenshots require desktop OpenGL");
+		if (CAPTURE::ScreenshotService::Get().pending()) {
+			readback.fail("Window screenshots require desktop OpenGL");
 		}
 #endif
 	});

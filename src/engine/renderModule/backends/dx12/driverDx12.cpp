@@ -1228,10 +1228,12 @@ void DriverDx12::presentFrame() {
 	}
 
 	end();
-	if (CAPTURE::ScreenshotService::Get().pending()) {
+	const auto& screenshot = CAPTURE::ScreenshotService::Get();
+	auto& readback = screenshotReadback();
+	if (screenshot.pending() && (screenshot.textureName().empty() || readback.hasSource())) {
 		// Diagnostic readTexture uses a separate queue: finish rendering first.
 		waitForPresentedFrame();
-		CAPTURE::ScreenshotService::Get().captureTexture(*this, getDefaultFrameBuffer()->getTextures().at(0));
+		readback.captureBackbuffer(*this, getDefaultFrameBuffer()->getTextures().at(0));
 	}
 	bool vsync = settings.frameGeneration.vsync;
 	if (settings.presentMode != RenderSettings::PresentMode::DEFAULT) {
