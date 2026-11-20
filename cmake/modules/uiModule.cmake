@@ -1,7 +1,6 @@
 # Explicit source manifest for uiModule.
 # Add new production files here; generated reflection files are owned by Codegen.cmake.
 set(IKIGAI_MANIFEST_uiModule
-    "${IKIGAI_SOURCE_ROOT}/engine/uiModule/engineUiBindings.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/uiModule/scriptViewController.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/uiModule/view.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/uiModule/view.h"

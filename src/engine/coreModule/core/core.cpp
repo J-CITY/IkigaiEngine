@@ -11,6 +11,7 @@
 #include "coreModule/ecs/components/cloth2dComponent.h"
 #include "coreModule/ecs/components/forceField2dComponent.h"
 #endif
+#include "cameraUiBindings.h"
 #include "captureModule/screenshot.h"
 #include "coreModule/ecs/componentCatalog.h"
 #include "coreModule/ecs/components/particleSystemComponent.h"
@@ -424,6 +425,7 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 #endif
 #if USE_JSON_VIEWS && !defined(OCULUS)
 	viewHost = std::make_unique<UI::ViewHost>();
+	RegisterCameraUiBindings(viewHost->store, *sceneManager);
 #endif
 
 	sceneManager->getCurrentScene().init();

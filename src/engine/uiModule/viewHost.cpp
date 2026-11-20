@@ -26,9 +26,6 @@ namespace {
 		}
 	};
 }
-ViewHost::ViewHost() {
-	RegisterEngineUiBindings(store);
-}
 void ViewHost::registerWidget(const std::string& name, std::function<void(const Node&, Controller&)> draw) {
 	if (name.empty() || !draw)
 		throw std::runtime_error("Custom widget needs a name and callback");

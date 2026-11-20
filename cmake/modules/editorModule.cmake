@@ -3,6 +3,8 @@
 set(IKIGAI_MANIFEST_editorModule
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/cameraControlWindow.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/cameraControlWindow.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/editorModule/cameraTransformEdit.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/editorModule/cameraTransformEdit.h"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/commandHistory.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/commandHistory.h"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/componentEditorHooks.h"

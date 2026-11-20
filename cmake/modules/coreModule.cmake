@@ -4,6 +4,8 @@ set(IKIGAI_MANIFEST_coreModule
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/config.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/app.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/app.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/cameraUiBindings.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/cameraUiBindings.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/application.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/application.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/core.cpp"

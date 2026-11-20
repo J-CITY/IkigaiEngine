@@ -14,13 +14,11 @@ class ViewHost {
 
 public:
 	ViewStore store;
-	ViewHost();
 	void draw();
 	void reload() {
 		reloadRequested = true;
 	}
 	void registerWidget(const std::string& name, std::function<void(const Node&, Controller&)> draw);
 };
-void RegisterEngineUiBindings(ViewStore& store);
 }
 #endif
