@@ -15,7 +15,6 @@ set(IKIGAI_MANIFEST_physicsModule
     "${IKIGAI_SOURCE_ROOT}/engine/physicsModule/collisionPipeline.h"
     "${IKIGAI_SOURCE_ROOT}/engine/physicsModule/contacts.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/physicsModule/contacts.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/physicsModule/features.h"
     "${IKIGAI_SOURCE_ROOT}/engine/physicsModule/forceGenerator.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/physicsModule/forceGenerator.h"
     "${IKIGAI_SOURCE_ROOT}/engine/physicsModule/impactEvent.h"

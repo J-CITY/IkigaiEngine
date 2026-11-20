@@ -3,7 +3,6 @@
 set(IKIGAI_MANIFEST_physics2dModule
     "${IKIGAI_SOURCE_ROOT}/engine/physics2dModule/collision.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/physics2dModule/collisionPipeline.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/physics2dModule/features.h"
     "${IKIGAI_SOURCE_ROOT}/engine/physics2dModule/particles.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/physics2dModule/physics2d.h"
     "${IKIGAI_SOURCE_ROOT}/engine/physics2dModule/spatialGrid.h"
