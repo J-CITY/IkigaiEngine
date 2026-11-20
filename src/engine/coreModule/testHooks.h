@@ -1,9 +1,12 @@
 #pragma once
 
-#include "coreModule/ecs/components/characterMotorComponent.h"
-#include "coreModule/ecs/components/traversalComponent.h"
 #include "skeletalModule/animation.h"
 #include "skeletalModule/stateGraphIr.h"
+
+namespace IKIGAI::ECS {
+class CharacterMotorComponent;
+class TraversalComponent;
+}
 
 namespace IKIGAI::SCENE_SYSTEM {
 class Scene;

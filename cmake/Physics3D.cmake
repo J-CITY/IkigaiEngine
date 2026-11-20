@@ -80,8 +80,10 @@ function(ikigai_configure_physics3d target)
             "engine/coreModule/ecs/components/ragdollComponent.cpp"
             "engine/coreModule/ecs/systems/ragdollSystem.cpp"
             "engine/resourceModule/ragdollManager.cpp"
-            "engine/skeletalModule/ragdollDefinition.cpp"
-            "engine/skeletalModule/ragdollInstance.cpp")
+            "engine/ragdollModule/ragdollDefinition.cpp"
+            "engine/ragdollModule/ragdollDefinition.h"
+            "engine/ragdollModule/ragdollInstance.cpp"
+            "engine/ragdollModule/ragdollInstance.h")
         ikigai_exclude_sources(sources
             "engine/physicsModule/body.cpp"
             "engine/physicsModule/characterQueries.cpp"

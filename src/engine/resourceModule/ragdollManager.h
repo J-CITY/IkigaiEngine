@@ -1,7 +1,7 @@
 #pragma once
 #if USE_PHYSICS_3D
+#include "ragdollModule/ragdollDefinition.h"
 #include "resourceManager.h"
-#include "skeletalModule/ragdollDefinition.h"
 
 namespace IKIGAI::RESOURCES {
 struct RagdollResource {

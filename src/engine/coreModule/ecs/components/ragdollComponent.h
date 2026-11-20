@@ -2,8 +2,8 @@
 #if USE_PHYSICS_3D
 #include "component.h"
 #include "coreModule/ecs/componentReference.h"
+#include "ragdollModule/ragdollInstance.h"
 #include "resourceModule/ragdollManager.h"
-#include "skeletalModule/ragdollInstance.h"
 
 namespace IKIGAI::ECS {
 enum class RagdollState { Animated, Simulated };

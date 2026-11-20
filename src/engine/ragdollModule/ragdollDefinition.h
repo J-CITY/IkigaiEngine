@@ -1,7 +1,7 @@
 #pragma once
 #if USE_PHYSICS_3D
 #include "physicsModule/physicWorld.h"
-#include "skeleton.h"
+#include "skeletalModule/skeleton.h"
 #include <serdepp/adaptor/nlohmann_json.hpp>
 
 namespace IKIGAI::SKELETON {

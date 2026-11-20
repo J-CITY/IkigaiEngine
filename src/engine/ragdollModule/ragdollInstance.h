@@ -1,7 +1,7 @@
 #pragma once
 #if USE_PHYSICS_3D
-#include "iAnimationPlayable.h"
 #include "ragdollDefinition.h"
+#include "skeletalModule/iAnimationPlayable.h"
 
 namespace IKIGAI::SKELETON {
 struct RagdollFrame {
