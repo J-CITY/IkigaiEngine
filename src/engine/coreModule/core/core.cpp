@@ -1,4 +1,5 @@
 #include "core.h"
+#include "editorFrontend.h"
 #include "utilsModule/reflection/reflection_macros.h"
 #include "utilsModule/time/loadTimer.h"
 #if USE_PHYSICS_3D
@@ -71,7 +72,6 @@
 #include "coreModule/ecs/components/batchComponent.h"
 #include "coreModule/ecs/components/renderTargetComponent.h"
 #include "ecsModule/world.h"
-#include "editorModule/editorRender.h"
 #include "renderModule/backends/driverFactory.h"
 #if defined(USE_SDL) && !defined(OCULUS) && (defined(USE_EDITOR) || USE_CHEATS)
 #include "renderModule/backends/imgui/imguiBackend.h"
@@ -426,9 +426,9 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 #endif
 
 	RESOURCES::ServiceManager::Set<RENDER::GameRendererInterface>(static_cast<RENDER::GameRendererInterface*>(renderer.get()));
-#ifdef USE_EDITOR
-	editorRender = std::make_unique<EDITOR::EditorRender>();
-#endif
+	if (platform.createEditor) {
+		editorFrontend = platform.createEditor();
+	}
 #if USE_JSON_VIEWS && !defined(OCULUS)
 	viewHost = std::make_unique<UI::ViewHost>(
 		[&files = *fileSystem] {
@@ -496,9 +496,7 @@ Core::~Core() {
 #endif
 	// GPU resources and their loader callbacks must be released while both
 	// resource managers and the active backend still exist.
-#ifdef USE_EDITOR
-	editorRender.reset();
-#endif
+	editorFrontend.reset();
 #if USE_LUA
 	// Drop subscriptions and detach component tables before destroying their scene and ECS.
 	scriptInterpreter.reset();

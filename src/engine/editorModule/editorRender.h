@@ -1,6 +1,7 @@
 #pragma once
 #include "fileBrowser.h"
 #ifdef USE_EDITOR
+#include "coreModule/core/editorFrontend.h"
 #include <functional>
 #include <map>
 
@@ -23,7 +24,7 @@ namespace ECS {
 }
 
 namespace IKIGAI::EDITOR {
-class EditorRender {
+class EditorRender : public CORE::EditorFrontend {
 public:
 	struct GlobalState {
 		std::shared_ptr<ECS::Object> mSelectObject;
@@ -49,8 +50,8 @@ public:
 
 	std::unique_ptr<Internal> mData;
 
-	virtual ~EditorRender();
-	void draw();
+	~EditorRender() override;
+	void draw() override;
 	void openSurfaceBrushes();
 	void drawPopup();
 };

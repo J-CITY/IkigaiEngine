@@ -1,5 +1,8 @@
 #include "coreModule/core/application.h"
 #include "utilsModule/crashReport.h"
+#ifdef USE_EDITOR
+#include "editorModule/editorRender.h"
+#endif
 #ifndef OCULUS
 #ifdef USE_SDL
 #include <SDL3/SDL_main.h>
@@ -7,6 +10,10 @@
 
 int main(int argc, char* argv[]) {
 	IKIGAI::UTILS::CRASH::install();
-	return IKIGAI::CORE::RunApplication(argc, argv);
+	IKIGAI::CORE::PlatformContext platform;
+#ifdef USE_EDITOR
+	platform.createEditor = []() -> std::unique_ptr<IKIGAI::CORE::EditorFrontend> { return std::make_unique<IKIGAI::EDITOR::EditorRender>(); };
+#endif
+	return IKIGAI::CORE::RunApplication(argc, argv, platform);
 }
 #endif

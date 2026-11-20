@@ -1,8 +1,8 @@
 #pragma once
+#include "platformStartup.h"
 #include <optional>
 #include <string>
 
-struct android_app;
 namespace IKIGAI::CORE {
 struct ApplicationOptions {
 	std::string assetsDirectory;
@@ -33,6 +33,7 @@ struct ApplicationOptions {
 };
 struct PlatformContext {
 	android_app* android = nullptr;
+	CreateEditorFrontend createEditor = nullptr;
 };
 int RunApplication(int argc, char* argv[], PlatformContext platform = {});
 }

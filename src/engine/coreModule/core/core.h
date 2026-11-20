@@ -24,14 +24,6 @@ namespace IKIGAI::ECS {
 class World;
 }
 
-#ifdef USE_EDITOR
-namespace IKIGAI {
-namespace EDITOR {
-	class EditorRender;
-}
-}
-#endif
-
 namespace IKIGAI {
 namespace EVENT {
 	class EventBroadcaster;
@@ -169,9 +161,7 @@ namespace CORE {
 		std::unique_ptr<UI::ViewHost> viewHost;
 #endif
 
-#ifdef USE_EDITOR
-		std::unique_ptr<IKIGAI::EDITOR::EditorRender> editorRender;
-#endif
+		std::unique_ptr<EditorFrontend> editorFrontend;
 		std::unique_ptr<RESOURCES::ModelLoader> modelManager;
 		std::unique_ptr<RESOURCES::TextureLoader> textureManager;
 		std::unique_ptr<RESOURCES::ParticleLoader> particleManager;

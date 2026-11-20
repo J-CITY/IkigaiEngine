@@ -5,7 +5,8 @@
 #include "coreModule/testHooks.h"
 #include "coroutineModule/scheduler.h"
 #include "ecsModule/world.h"
-#include "editorModule/editorRender.h"
+#include "editorFrontend.h"
+#include "imguiViewsModule/viewHost.h"
 #include "networkModule/networkRuntime.h"
 #include "profilerModule/profiler.h"
 #include "profilerModule/profilerSpy.h"
@@ -17,7 +18,6 @@
 #include "sceneModule/sceneManager.h"
 #include "taskModule/taskSystem.h"
 #include "traceModule/trace.h"
-#include "imguiViewsModule/viewHost.h"
 #include "utilsModule/time/time.h"
 #include "windowModule/inputManager/inputActions.h"
 #include "windowModule/inputManager/inputManager.h"
@@ -179,13 +179,9 @@ void App::preUpdate(std::chrono::duration<double> dt) {
 		core.viewHost->draw();
 	}
 #endif
-#ifdef USE_EDITOR
-#ifndef OCULUS
-	if (core.editorRender && !core.sceneManager->isEditingLocked()) {
-		core.editorRender->draw();
+	if (core.editorFrontend && !core.sceneManager->isEditingLocked()) {
+		core.editorFrontend->draw();
 	}
-#endif
-#endif
 }
 
 void App::update(std::chrono::duration<double> dt) {

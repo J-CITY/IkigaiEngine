@@ -123,6 +123,7 @@ int RunApplication(int argc, char* argv[], PlatformContext platform) {
 #endif
 		PlatformStartup startup;
 		startup.android = platform.android;
+		startup.createEditor = platform.createEditor;
 #ifdef DX12_BACKEND
 		startup.nativeInstance = GetModuleHandleW(nullptr);
 #endif
