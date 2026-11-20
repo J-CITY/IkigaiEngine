@@ -18,7 +18,6 @@ set(IKIGAI_MANIFEST_scriptModule
     "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/luaGlobalsBinder.h"
     "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/luaMathsBinder.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/luaMathsBinder.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptFeatures.h"
     "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptFileWatcher.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptFileWatcher.h"
     "${IKIGAI_SOURCE_ROOT}/engine/scriptModule/scriptInterpreter.cpp"
