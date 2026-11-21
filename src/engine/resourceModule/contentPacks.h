@@ -18,5 +18,5 @@ void MountLooseAssets(FileSystem& files, const std::string& root, android_app* a
 std::vector<std::filesystem::path> ContentPackRoots(const std::string& root);
 
 // Disk lookup that follows mount precedence: game, then packs, then engine.
-std::string FindLooseAsset(const std::string& relative);
+std::string FindLooseAsset(const std::string& root, const std::string& relative);
 }

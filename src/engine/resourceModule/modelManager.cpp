@@ -1,5 +1,4 @@
 #include "modelManager.h"
-#include "coreModule/config.h"
 #include "serviceManager.h"
 #include "utilsModule/time/loadTimer.h"
 #include <renderModule/backends/interface/modelInterface.h>
@@ -10,7 +9,6 @@
 #include "taskModule/taskSystem.h"
 #include "utilsModule/pathGetter.h"
 
-#include "coreModule/ecs/components/transform.h"
 #include "renderModule/backends/interface/resourceStruct.h"
 #include "utilsModule/assertion.h"
 #include <renderModule/backends/interface/driverInterface.h>
@@ -19,7 +17,7 @@ namespace IKIGAI::RESOURCES {
 
 COROUTINE::Task<ResourcePtr<RENDER::ModelInterface>> ModelLoader::createResourceTask(
 	std::string path, ELoadingType type, std::shared_ptr<ResourceLoadControl> control) {
-	UTILS::LoadTimer timing("model", Config::PROFILE_LOADING, path);
+	UTILS::LoadTimer timing("model", mProfileLoading, path);
 	control->check();
 	if (auto ready = getResource(path)) {
 		co_return ready;
@@ -159,8 +157,7 @@ ResourcePtr<RENDER::ModelInterface> ModelLoader::Create(
 	auto data = file && file->isValid() ? file->read() : std::vector<uint8_t> {};
 	if (data.empty()) {
 		IKIGAI_COUT("Model file is missing or empty: '" << filepath << "'; opened: " << (file && file->isValid())
-														<< "; native path: " << fs.getAbsolutePath(filepath).value_or("<not found>")
-														<< "; content root: " << Config::ROOT);
+														<< "; native path: " << fs.getAbsolutePath(filepath).value_or("<not found>"));
 		return nullptr;
 	}
 

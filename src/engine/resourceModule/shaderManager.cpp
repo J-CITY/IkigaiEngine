@@ -1,8 +1,6 @@
 #include "shaderManager.h"
 
-#include "coreModule/ecs/components/transform.h"
 #include "fileWatcher.h"
-#include "renderModule/backends/gl/shaderGl.h"
 #include "renderModule/backends/interface/resourceStruct.h"
 #include "renderModule/backends/interface/shaderInterface.h"
 #include "renderModule/render.h"

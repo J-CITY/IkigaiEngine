@@ -19,6 +19,9 @@ namespace IKIGAI {
 namespace RESOURCES {
 	class ModelLoader : public ResourceManager<RENDER::ModelInterface, RENDER::ModelResource> {
 	public:
+		explicit ModelLoader(bool profileLoading = false)
+			: mProfileLoading(profileLoading) { }
+
 		static void Reload(RENDER::ModelInterface& model, const RENDER::ModelResource& config);
 		static ResourcePtr<RENDER::ModelInterface> CreateFromResource(
 			const std::string& path, UTILS::IAllocator* allocator = nullptr, RENDER::ModelDeleter deleter = nullptr);
@@ -34,6 +37,8 @@ namespace RESOURCES {
 		static ModelParserFlags getDefaultFlag();
 
 	private:
+		bool mProfileLoading = false;
+
 		COROUTINE::Task<ResourcePtr<RENDER::ModelInterface>> createResourceTask(
 			std::string path, ELoadingType type, std::shared_ptr<ResourceLoadControl> control) override;
 

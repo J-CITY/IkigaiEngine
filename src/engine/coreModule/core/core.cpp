@@ -287,7 +287,7 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 
 	std::cout << "Create Window\n";
 
-	modelManager = std::make_unique<RESOURCES::ModelLoader>();
+	modelManager = std::make_unique<RESOURCES::ModelLoader>(Config::PROFILE_LOADING);
 	textureManager = std::make_unique<RESOURCES::TextureLoader>();
 	particleManager = std::make_unique<RESOURCES::ParticleLoader>();
 	shaderManager = std::make_unique<RESOURCES::ShaderLoader>();

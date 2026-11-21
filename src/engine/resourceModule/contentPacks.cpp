@@ -1,6 +1,5 @@
 #include "contentPacks.h"
 
-#include "coreModule/config.h"
 #include "fileSystem/fileSystem.h"
 
 #include <algorithm>
@@ -107,7 +106,7 @@ std::vector<std::filesystem::path> ContentPackRoots(const std::string& root) {
 	return packs;
 }
 
-std::string FindLooseAsset(const std::string& relative) {
+std::string FindLooseAsset(const std::string& root, const std::string& relative) {
 	std::string trimmed = relative;
 	while (!trimmed.empty() && (trimmed.front() == '/' || trimmed.front() == '\\')) {
 		trimmed.erase(trimmed.begin());
@@ -117,16 +116,16 @@ std::string FindLooseAsset(const std::string& relative) {
 		std::error_code error;
 		return std::filesystem::is_regular_file(path, error) ? path.lexically_normal().string() : std::string {};
 	};
-	if (const auto game = candidate(std::filesystem::u8path(Config::ROOT + Config::USER_ASSETS_PATH)); !game.empty()) {
+	if (const auto game = candidate(std::filesystem::u8path(root) / "assets" / "game"); !game.empty()) {
 		return game;
 	}
-	auto packs = ContentPackRoots(Config::ROOT);
+	auto packs = ContentPackRoots(root);
 	std::reverse(packs.begin(), packs.end());
 	for (const auto& pack : packs) {
 		if (const auto found = candidate(pack); !found.empty()) {
 			return found;
 		}
 	}
-	return candidate(std::filesystem::u8path(Config::ROOT + Config::ENGINE_ASSETS_PATH));
+	return candidate(std::filesystem::u8path(root) / "assets" / "engine");
 }
 }
