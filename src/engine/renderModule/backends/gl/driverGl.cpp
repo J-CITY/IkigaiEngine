@@ -1,5 +1,6 @@
 #include "driverGl.h"
 #include "renderModule/backends/driverFactory.h"
+#include <cmath>
 
 #ifdef OPENGL_BACKEND
 #include "../interface/meshInterface.h"
@@ -690,10 +691,10 @@ void IKIGAI::RENDER::DriverGl::applyState() {
 			auto value = mScissor.value();
 
 			glEnable(GL_SCISSOR_TEST);
-			glScissor((GLint)glm::round(value.mPosition.x),
-				(GLint)glm::round(mHeight - value.mPosition.y - value.mSize.y), // TODO: need different calculations
+			glScissor((GLint)std::round(value.mPosition.x),
+				(GLint)std::round(mHeight - value.mPosition.y - value.mSize.y), // TODO: need different calculations
 																				// when render target
-				(GLint)glm::round(value.mSize.x), (GLint)glm::round(value.mSize.y));
+				(GLint)std::round(value.mSize.x), (GLint)std::round(value.mSize.y));
 		}
 		else {
 			glDisable(GL_SCISSOR_TEST);

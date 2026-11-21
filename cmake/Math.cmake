@@ -9,6 +9,8 @@ add_library(ikigai_math STATIC
     "${IKIGAI_MATH_ROOT}/src/engine/mathModule/geometry/frustumPlanes.cpp"
     "${IKIGAI_MATH_ROOT}/src/engine/mathModule/geometry/frustumPlanes.h"
     "${IKIGAI_MATH_ROOT}/src/engine/mathModule/math.h"
+    "${IKIGAI_MATH_ROOT}/src/engine/mathModule/simplexNoise.cpp"
+    "${IKIGAI_MATH_ROOT}/src/engine/mathModule/simplexNoise.h"
     "${IKIGAI_MATH_ROOT}/src/engine/mathModule/vector2.h"
     "${IKIGAI_MATH_ROOT}/src/engine/mathModule/geometry/aabb.h")
 target_compile_features(ikigai_math PUBLIC cxx_std_20)

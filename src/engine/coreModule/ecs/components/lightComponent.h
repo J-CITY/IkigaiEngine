@@ -1,6 +1,5 @@
 #pragma once
 
-// #include <glm/glm.hpp>
 
 #include "component.h"
 // #include "../../../game/TextureAtlas.h"

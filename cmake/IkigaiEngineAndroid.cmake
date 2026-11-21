@@ -184,7 +184,6 @@ endif()
 
 target_include_directories(main PRIVATE
     "${MAIN_SOURCE_DIR}/engine"
-    "${THIRD_PARTY_DIR}/glm"
     "${THIRD_PARTY_DIR}/serdepp/include"
     "${THIRD_PARTY_DIR}/magic_enum/include"
     "${THIRD_PARTY_DIR}/magic_enum/include/magic_enum"

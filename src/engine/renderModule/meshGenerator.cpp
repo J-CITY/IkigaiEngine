@@ -1,4 +1,5 @@
 #include "meshGenerator.h"
+#include "mathModule/simplexNoise.h"
 
 #include "utilsModule/log/loggerDefine.h"
 #include "utilsModule/stdLoader.h"
@@ -174,8 +175,6 @@ std::shared_ptr<RENDER::ModelInterface> MeshGenerator::CreateQuad() {
 
 // CUNCK
 
-#include <coreModule/glmWrapper.hpp>
-
 static const int transparent[16] = { 2, 0, 0, 0, 1, 0, 0, 0, 3, 4, 0, 0, 0, 0, 0, 0 };
 static const char* blocknames[16] = { "air", "dirt", "topsoil", "grass", "leaves", "wood", "stone", "sand", "water", "glass", "brick", "ore",
 	"woodrings", "white", "black", "x-y" };
@@ -303,7 +302,7 @@ float chunk::noise2d(float x, float y, int seed, int octaves, float persistence)
 	float scale = 1.0;
 
 	for (int i = 0; i < octaves; i++) {
-		sum += strength * glm::simplex(glm::vec2(x, y) * scale);
+		sum += strength * MATH::SimplexNoise(MATH::Vector2f(x, y) * scale);
 		scale *= 2.0;
 		strength *= persistence;
 	}
@@ -317,7 +316,7 @@ float chunk::noise3d_abs(float x, float y, float z, int seed, int octaves, float
 	float scale = 1.0;
 
 	for (int i = 0; i < octaves; i++) {
-		sum += strength * fabs(glm::simplex(glm::vec3(x, y, z) * scale));
+		sum += strength * fabs(MATH::SimplexNoise(MATH::Vector3f(x, y, z) * scale));
 		scale *= 2.0;
 		strength *= persistence;
 	}
@@ -791,7 +790,6 @@ void superchunk::update(
 					continue;
 				}
 
-				// glUniformMatrix4fv(uniform_mvp, 1, GL_FALSE, glm::value_ptr(mvp));
 				auto _c = c[x][y][z];
 				if (c[x][y][z]->render()) {
 					RENDER::Drawable drawable;

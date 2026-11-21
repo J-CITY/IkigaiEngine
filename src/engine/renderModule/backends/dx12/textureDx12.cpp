@@ -12,6 +12,7 @@
 #include "resourceModule/jsonLoader.h"
 #include "utilsModule/stdLoader.h"
 #include <algorithm>
+#include <bit>
 #include <filesystem>
 #include <stdexcept>
 
@@ -22,8 +23,6 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <functional>
-#include <coreModule/glmWrapper.hpp>
-
 
 using namespace IKIGAI;
 using namespace IKIGAI::RENDER;
@@ -36,7 +35,7 @@ struct IKIGAI::RENDER::AliasHeapDx12 {
 };
 
 static uint32_t GetMipCount(uint32_t width, uint32_t height) {
-	return static_cast<uint32_t>(glm::floor(glm::log2(static_cast<float>(glm::max(width, height))))) + 1;
+	return std::bit_width(std::max(width, height));
 }
 
 static bool LoadTextureImageFromVfs(const std::string& path, bool isFloat, int& width, int& height, int& channels, void*& outData) {

@@ -165,7 +165,6 @@ set(IKIGAI_MANIFEST_coreModule
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/systems/traversalSystem.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/systems/variableContextSystem.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/systems/variableContextSystem.h"
-    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/glmWrapper.hpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/graphicsWrapper.hpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/gui/components/spriteComponent.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/gui/components/spriteComponent.h"

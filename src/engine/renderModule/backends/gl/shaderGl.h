@@ -1,10 +1,9 @@
 #pragma once
 #ifdef OPENGL_BACKEND
-#include "profilerModule/gpuMemoryProfiler.h"
 #include "../interface/reflectionStructs.h"
 #include "../interface/shaderInterface.h"
-#include "coreModule/glmWrapper.hpp"
 #include "mathModule/math.h"
+#include "profilerModule/gpuMemoryProfiler.h"
 #include "renderModule/backends/interface/resourceStruct.h"
 #include <coreModule/graphicsWrapper.hpp>
 #include <unordered_map>
@@ -34,25 +33,17 @@ public:
   void setBool(const std::string &name, bool value) const;
   void setInt(const std::string &name, int value) const;
   void setFloat(const std::string &name, float value) const;
-  void setVec2(const std::string &name, const glm::vec2 &value) const;
-  void setVec2(const std::string &name, float x, float y) const;
+  void setVec2(const std::string& name, float x, float y) const;
   void setVec2(const std::string &name,
                const IKIGAI::MATH::Vector2f &vec) const;
-  void setVec3(const std::string &name, const glm::vec3 &value) const;
-  void setVec3(const std::string &name, float x, float y, float z) const;
+  void setVec3(const std::string& name, float x, float y, float z) const;
   void setVec3(const std::string &name,
                const IKIGAI::MATH::Vector3f &vec) const;
-  void setVec4(const std::string &name, const glm::vec4 &value) const;
-  void setVec4(const std::string &name, float x, float y, float z, float w);
+  void setVec4(const std::string& name, float x, float y, float z, float w);
   void setVec4(const std::string &name,
                const IKIGAI::MATH::Vector4f &vec) const;
-  void setMat2(const std::string &name, const glm::mat2 &mat) const;
-  void setMat3(const std::string &name, const glm::mat3 &mat) const;
-  void setMat3(const std::string &name,
-               const IKIGAI::MATH::Matrix3f &mat) const;
-  void setMat4(const std::string &name, const glm::mat4 &mat) const;
-  void setMat4(const std::string &name,
-               const IKIGAI::MATH::Matrix4f &mat) const;
+  void setMat3(const std::string& name, const IKIGAI::MATH::Matrix3f& mat) const;
+  void setMat4(const std::string& name, const IKIGAI::MATH::Matrix4f& mat) const;
   IKIGAI::MATH::Vector2f getUniformVec2(const std::string &name) const;
   IKIGAI::MATH::Vector3f getUniformVec3(const std::string &name) const;
   IKIGAI::MATH::Vector4f getUniformVec4(const std::string &name) const;

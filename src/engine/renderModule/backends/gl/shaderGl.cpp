@@ -443,19 +443,8 @@ void IKIGAI::RENDER::ShaderGl::setFloat(const std::string &name,
   glUniform1f(glGetUniformLocation(mId, name.c_str()), value);
 }
 
-void IKIGAI::RENDER::ShaderGl::setVec2(const std::string &name,
-                                       const glm::vec2 &value) const {
-  glUniform2fv(glGetUniformLocation(mId, name.c_str()), 1, &value[0]);
-}
-
-void IKIGAI::RENDER::ShaderGl::setVec2(const std::string &name, float x,
-                                       float y) const {
-  glUniform2f(glGetUniformLocation(mId, name.c_str()), x, y);
-}
-
-void IKIGAI::RENDER::ShaderGl::setVec3(const std::string &name,
-                                       const glm::vec3 &value) const {
-  glUniform3fv(glGetUniformLocation(mId, name.c_str()), 1, &value[0]);
+void IKIGAI::RENDER::ShaderGl::setVec2(const std::string& name, float x, float y) const {
+	glUniform2f(glGetUniformLocation(mId, name.c_str()), x, y);
 }
 
 void IKIGAI::RENDER::ShaderGl::setVec3(const std::string &name, float x,
@@ -463,32 +452,8 @@ void IKIGAI::RENDER::ShaderGl::setVec3(const std::string &name, float x,
   glUniform3f(glGetUniformLocation(mId, name.c_str()), x, y, z);
 }
 
-void IKIGAI::RENDER::ShaderGl::setVec4(const std::string &name,
-                                       const glm::vec4 &value) const {
-  glUniform4fv(glGetUniformLocation(mId, name.c_str()), 1, &value[0]);
-}
-
-void IKIGAI::RENDER::ShaderGl::setVec4(const std::string &name, float x,
-                                       float y, float z, float w) {
-  glUniform4f(glGetUniformLocation(mId, name.c_str()), x, y, z, w);
-}
-
-void IKIGAI::RENDER::ShaderGl::setMat2(const std::string &name,
-                                       const glm::mat2 &mat) const {
-  glUniformMatrix2fv(glGetUniformLocation(mId, name.c_str()), 1, GL_FALSE,
-                     &mat[0][0]);
-}
-
-void IKIGAI::RENDER::ShaderGl::setMat3(const std::string &name,
-                                       const glm::mat3 &mat) const {
-  glUniformMatrix3fv(glGetUniformLocation(mId, name.c_str()), 1, GL_FALSE,
-                     &mat[0][0]);
-}
-
-void IKIGAI::RENDER::ShaderGl::setMat4(const std::string &name,
-                                       const glm::mat4 &mat) const {
-  glUniformMatrix4fv(glGetUniformLocation(mId, name.c_str()), 1, GL_FALSE,
-                     &mat[0][0]);
+void IKIGAI::RENDER::ShaderGl::setVec4(const std::string& name, float x, float y, float z, float w) {
+	glUniform4f(glGetUniformLocation(mId, name.c_str()), x, y, z, w);
 }
 
 void IKIGAI::RENDER::ShaderGl::setVec2(

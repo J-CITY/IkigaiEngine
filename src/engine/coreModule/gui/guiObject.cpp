@@ -50,8 +50,8 @@ Font::Font(std::string fontPath, int size)
 		}
 		if (y + bitmap.rows > 1024)
 			break;
-		Characters[static_cast<char>(c)] = { glm::ivec2(bitmap.width, bitmap.rows), glm::ivec2(x, y),
-			glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top), static_cast<unsigned>(face->glyph->advance.x) };
+		Characters[static_cast<char>(c)] = { MATH::Vector2i(bitmap.width, bitmap.rows), MATH::Vector2i(x, y),
+			MATH::Vector2i(face->glyph->bitmap_left, face->glyph->bitmap_top), static_cast<unsigned>(face->glyph->advance.x) };
 		for (unsigned row = 0; row < bitmap.rows; ++row) {
 			const auto source = bitmap.pitch >= 0 ? bitmap.buffer + row * bitmap.pitch : bitmap.buffer + (bitmap.rows - 1 - row) * (-bitmap.pitch);
 			std::memcpy(pixels.data() + (y + row) * 1024 + x, source, bitmap.width);

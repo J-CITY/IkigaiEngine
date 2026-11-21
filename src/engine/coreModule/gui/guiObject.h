@@ -1,10 +1,8 @@
 #pragma once
+#include "mathModule/vector2.h"
 #include <ft2build.h>
-#include <glm/vec2.hpp>
-#include <glm/vec3.hpp>
 #include <memory>
 #include <string>
-
 
 #include "components/spriteComponent.h"
 #include <sceneModule/sceneManager.h>
@@ -27,9 +25,9 @@ namespace GUI {
 	class ComponentGui;
 
 	struct Character {
-		glm::ivec2 Size;
-		glm::ivec2 Start;
-		glm::ivec2 Bearing;
+		MATH::Vector2i Size;
+		MATH::Vector2i Start;
+		MATH::Vector2i Bearing;
 		unsigned int Advance;
 	};
 
