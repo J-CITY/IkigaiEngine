@@ -6,10 +6,6 @@
 #include "sceneModule/scene.h"
 #include <stdexcept>
 
-#ifdef USE_EDITOR
-#include <imgui.h>
-#endif
-
 using namespace IKIGAI;
 using namespace IKIGAI::ECS;
 namespace P = IKIGAI::PHYSICS2D;
@@ -324,64 +320,5 @@ void Physics2DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 		}
 	}
 }
-#ifdef USE_EDITOR
-void Physics2DSystem::drawDebug() {
-	auto& world = *mSimulation;
-	if (world.bodies().empty() && world.softBodies().empty() && world.fluids().empty()) {
-		return;
-	}
-	ImGui::SetNextWindowSize(ImVec2(850, 620), ImGuiCond_FirstUseEver);
-	if (!ImGui::Begin("2D Physics")) {
-		ImGui::End();
-		return;
-	}
-	ImGui::Checkbox("Pause", &paused);
-	ImGui::SameLine();
-	if (ImGui::Button("Step")) {
-		paused = true;
-		singleStep = true;
-	}
-	ImGui::SameLine();
-	ImGui::Checkbox("Sleeping", &world.settings.sleeping);
-	ImGui::Text("Bodies: %zu  Joints: %zu  Soft: %zu  Fluids: %zu", world.bodies().size(), world.joints().size(), world.softBodies().size(),
-		world.fluids().size());
-	static float zoom = 55;
-	static ImVec2 pan(0, 3);
-	static bool showGrid = true;
-	ImGui::SliderFloat("Pixels/unit", &zoom, 10, 160);
-	ImGui::Checkbox("Spatial grid", &showGrid);
-	ImGui::TextUnformatted("Drag with right mouse to pan. Red lines are contact normals.");
-	ImVec2 size = ImGui::GetContentRegionAvail();
-	size.x = std::max(size.x, 100.0f);
-	size.y = std::max(size.y, 200.0f);
-	ImVec2 origin = ImGui::GetCursorScreenPos();
-	ImGui::InvisibleButton("physics_canvas", size, ImGuiButtonFlags_MouseButtonRight);
-	if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Right)) {
-		auto delta = ImGui::GetIO().MouseDelta;
-		pan.x -= delta.x / zoom;
-		pan.y += delta.y / zoom;
-	}
-	auto* draw = ImGui::GetWindowDrawList();
-	draw->PushClipRect(origin, ImVec2(origin.x + size.x, origin.y + size.y), true);
-	draw->AddRectFilled(origin, ImVec2(origin.x + size.x, origin.y + size.y), IM_COL32(22, 27, 36, 255));
-	auto screen = [&](P::Vec2 p) { return ImVec2(origin.x + size.x / 2 + (p.x - pan.x) * zoom, origin.y + size.y / 2 - (p.y - pan.y) * zoom); };
-	if (showGrid) {
-		float cell = world.settings.cellSize;
-		float left = pan.x - size.x / (2 * zoom), right = pan.x + size.x / (2 * zoom), bottom = pan.y - size.y / (2 * zoom),
-			  top = pan.y + size.y / (2 * zoom);
-		for (float x = std::floor(left / cell) * cell; x <= right; x += cell) {
-			draw->AddLine(screen({ x, bottom }), screen({ x, top }), IM_COL32(42, 49, 62, 255));
-		}
-		for (float y = std::floor(bottom / cell) * cell; y <= top; y += cell) {
-			draw->AddLine(screen({ left, y }), screen({ right, y }), IM_COL32(42, 49, 62, 255));
-		}
-	}
-	auto colour = [](std::uint32_t c) { return IM_COL32(c >> 24, (c >> 16) & 255, (c >> 8) & 255, c & 255); };
-	world.debugDraw({ [&](P::Vec2 a, P::Vec2 b, std::uint32_t c) { draw->AddLine(screen(a), screen(b), colour(c), 1.5f); },
-		[&](P::Vec2 p, float radius, std::uint32_t c) { draw->AddCircle(screen(p), radius * zoom, colour(c), 20, 1.5f); } });
-	draw->PopClipRect();
-	ImGui::End();
-}
-#endif
 
 #endif

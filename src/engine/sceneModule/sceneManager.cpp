@@ -3,6 +3,10 @@
 #include "sceneObjectDescriptor.h"
 
 #include <coreModule/ecs/object.h>
+#if USE_PHYSICS_3D
+#include "destructionModule/destructionRuntimeSettings.h"
+#include "utilsModule/serialization/typedDescriptor.h"
+#endif
 
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "utilsModule/serviceManager.h"
@@ -11,7 +15,6 @@
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
-#include <utilsModule/pathGetter.h>
 
 using namespace IKIGAI;
 using namespace IKIGAI::SCENE_SYSTEM;
@@ -30,11 +33,14 @@ SceneManager::~SceneManager() {
 	unloadCurrentScene();
 }
 
-std::unique_ptr<SceneSimulation> SceneManager::makeSimulation(const nlohmann::json* document) const {
+std::unique_ptr<SceneSimulation> SceneManager::makeSimulation([[maybe_unused]] const nlohmann::json* document) const {
 	auto simulation = mSimulationFactory ? mSimulationFactory(mPhysicsFactories) : nullptr;
+#if USE_PHYSICS_3D
 	if (simulation && document) {
-		simulation->readSettings(*document);
+		simulation->setDestructionSettings(
+			DATA::readDescriptor<DESTRUCTION::RuntimeSettings>(document->value("Destruction", nlohmann::json::object())));
 	}
+#endif
 	return simulation;
 }
 
@@ -118,9 +124,11 @@ nlohmann::json SceneManager::serializeScene() const {
 	}
 	auto document = DOCUMENT::Compact(m_currentScene->serializeObjects(), m_currentScene->prefabInstances);
 	DOCUMENT::WriteRenderPipeline(document, m_currentScene->renderPipelineAsset);
-	if (auto* simulation = m_currentScene->simulation()) {
-		simulation->writeSettings(document);
+#if USE_PHYSICS_3D
+	if (const auto* simulation = m_currentScene->simulation()) {
+		document["Destruction"] = serde::serialize<nlohmann::json>(simulation->getDestructionSettings());
 	}
+#endif
 	return document;
 }
 

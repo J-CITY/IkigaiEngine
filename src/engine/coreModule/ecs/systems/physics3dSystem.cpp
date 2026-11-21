@@ -6,9 +6,6 @@
 #include "utilsModule/log/logger.h"
 #include <iostream>
 #include <set>
-#ifdef USE_EDITOR
-#include <imgui.h>
-#endif
 
 using namespace IKIGAI;
 using namespace IKIGAI::ECS;
@@ -391,45 +388,5 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 		}
 	}
 }
-#ifdef USE_EDITOR
-void Physics3DSystem::drawDebug() {
-	if (mSimulation->bodies().empty() && mSimulation->softBodies().empty() && mSimulation->fluids().empty() && mSimulation->forces.fields().empty()) {
-		return;
-	}
-	ImGui::SetNextWindowSize(ImVec2(480, 400), ImGuiCond_FirstUseEver);
-	if (!ImGui::Begin("3D Physics")) {
-		ImGui::End();
-		return;
-	}
-	ImGui::Checkbox("Paused", &paused);
-	ImGui::SameLine();
-	if (ImGui::Button("Step")) {
-		singleStep = true;
-	}
-	ImGui::SameLine();
-	if (ImGui::Button("Reset")) {
-		mSimulation->clear();
-	}
-	ImGui::Text("Bodies: %zu  Soft/cloth: %zu  Fluids: %zu  Fields: %zu", mSimulation->bodies().size(), mSimulation->softBodies().size(),
-		mSimulation->fluids().size(), mSimulation->forces.fields().size());
-	// An orthographic preview makes the simulation inspectable with any renderer.
-	static float scale = 80;
-	ImGui::SliderFloat("Preview scale", &scale, 10, 250);
-	auto size = ImGui::GetContentRegionAvail();
-	size.x = std::max(size.x, 100.0f);
-	size.y = std::max(size.y, 200.0f);
-	auto origin = ImGui::GetCursorScreenPos();
-	auto* draw = ImGui::GetWindowDrawList();
-	ImGui::InvisibleButton("physics3d_canvas", size);
-	draw->PushClipRect(origin, ImVec2(origin.x + size.x, origin.y + size.y), true);
-	auto project = [&](P::Vec3 p) {
-		return ImVec2(origin.x + size.x * 0.3f + (p.x + p.z * 0.35f) * scale, origin.y + size.y * 0.8f - (p.y + p.z * 0.2f) * scale);
-	};
-	mSimulation->debugDraw({ [&](auto a, auto b, std::uint32_t) { draw->AddLine(project(a), project(b), IM_COL32(210, 150, 240, 255)); },
-		[&](auto p, float r, std::uint32_t) { draw->AddCircle(project(p), std::max(1.0f, r * scale), IM_COL32(80, 170, 240, 255), 12); }, {} });
-	draw->PopClipRect();
-	ImGui::End();
-}
-#endif
 
 #endif // USE_PHYSICS_3D

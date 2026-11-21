@@ -9,6 +9,7 @@ set(IKIGAI_MANIFEST_destructionModule
     "${IKIGAI_SOURCE_ROOT}/engine/destructionModule/destructibleInstance.h"
     "${IKIGAI_SOURCE_ROOT}/engine/destructionModule/destructionRuntime.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/destructionModule/destructionRuntime.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/destructionModule/destructionRuntimeSettings.h"
     "${IKIGAI_SOURCE_ROOT}/engine/destructionModule/fracturePreparation.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/destructionModule/fracturePreparation.h"
     "${IKIGAI_SOURCE_ROOT}/engine/destructionModule/planeSlicer.cpp"

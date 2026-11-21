@@ -1,6 +1,8 @@
 # Explicit source manifest for editorModule.
 # Add new production files here; generated reflection files are owned by Codegen.cmake.
 set(IKIGAI_MANIFEST_editorModule
+    "${IKIGAI_SOURCE_ROOT}/engine/editorModule/physicsDebugWindow.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/editorModule/physicsDebugWindow.h"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/cameraControlWindow.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/cameraControlWindow.h"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/cameraTransformEdit.cpp"

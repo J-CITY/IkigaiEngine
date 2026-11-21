@@ -17,7 +17,6 @@
 #include "coreModule/ecs/systems/ragdollSystem.h"
 #include "coreModule/testHooks.h"
 #include "destructionModule/destructionRuntime.h"
-#include "utilsModule/serialization/typedDescriptor.h"
 #endif
 #if USE_PHYSICS_2D
 #include "coreModule/ecs/systems/physics2dSystem.h"
@@ -35,8 +34,6 @@ namespace {
 		explicit EngineSceneSimulation(PhysicsFactories physics)
 			: mPhysicsFactories(std::move(physics)) { }
 
-		void readSettings(const nlohmann::json& document) override;
-		void writeSettings(nlohmann::json& document) const override;
 		void populateDefaultScene(Scene& scene) override;
 		void afterStart(Scene& scene) override;
 		void beginFrame(Scene& scene) override;
@@ -53,8 +50,10 @@ namespace {
 		void setPhysics3dPaused(Scene& scene, bool paused) override;
 		void presentDestructibles(Scene& scene, float alpha) override;
 #ifdef USE_EDITOR
-		void drawPhysics3DDebug() override;
+		std::optional<PhysicsDebugState<PHYSICS::PhysicWorld>> physics3dDebug() override;
 #endif
+		void setDestructionSettings(const DESTRUCTION::RuntimeSettings& settings) override;
+		const DESTRUCTION::RuntimeSettings& getDestructionSettings() const override;
 		DESTRUCTION::RuntimeSettings destructionSettings {};
 		std::shared_ptr<DESTRUCTION::DestructionRuntime> destructionRuntime {};
 #endif
@@ -62,7 +61,7 @@ namespace {
 		PHYSICS2D::World& physics2d(Scene& scene) override;
 		void stepPhysics2D(Scene& scene, std::chrono::duration<double> dt) override;
 #ifdef USE_EDITOR
-		void drawPhysics2DDebug() override;
+		std::optional<PhysicsDebugState<PHYSICS2D::World>> physics2dDebug() override;
 #endif
 #endif
 
@@ -76,18 +75,15 @@ namespace {
 #endif
 	};
 
-	void EngineSceneSimulation::readSettings([[maybe_unused]] const nlohmann::json& document) {
 #if USE_PHYSICS_3D
-		auto settings = DATA::readDescriptor<DESTRUCTION::RuntimeSettings>(document.value("Destruction", nlohmann::json::object()));
+	void EngineSceneSimulation::setDestructionSettings(const DESTRUCTION::RuntimeSettings& settings) {
 		settings.validate();
 		destructionSettings = settings;
-#endif
 	}
-	void EngineSceneSimulation::writeSettings([[maybe_unused]] nlohmann::json& document) const {
-#if USE_PHYSICS_3D
-		document["Destruction"] = serde::serialize<nlohmann::json>(destructionSettings);
-#endif
+	const DESTRUCTION::RuntimeSettings& EngineSceneSimulation::getDestructionSettings() const {
+		return destructionSettings;
 	}
+#endif
 	void EngineSceneSimulation::populateDefaultScene(Scene& scene) {
 		auto directionalLight = scene.createObject("Directional Light");
 		directionalLight->addComponent<ECS::DirectionalLight>()->setIntensity(0.75f);
@@ -217,10 +213,11 @@ namespace {
 		return mPhysics3D->sharedSimulation();
 	}
 #ifdef USE_EDITOR
-	void EngineSceneSimulation::drawPhysics3DDebug() {
-		if (mPhysics3D) {
-			mPhysics3D->drawDebug();
+	std::optional<PhysicsDebugState<PHYSICS::PhysicWorld>> EngineSceneSimulation::physics3dDebug() {
+		if (!mPhysics3D) {
+			return std::nullopt;
 		}
+		return PhysicsDebugState<PHYSICS::PhysicWorld> { mPhysics3D->simulation(), mPhysics3D->paused, mPhysics3D->singleStep };
 	}
 #endif
 #endif
@@ -239,10 +236,11 @@ namespace {
 		commands.execute();
 	}
 #ifdef USE_EDITOR
-	void EngineSceneSimulation::drawPhysics2DDebug() {
-		if (mPhysics2D) {
-			mPhysics2D->drawDebug();
+	std::optional<PhysicsDebugState<PHYSICS2D::World>> EngineSceneSimulation::physics2dDebug() {
+		if (!mPhysics2D) {
+			return std::nullopt;
 		}
+		return PhysicsDebugState<PHYSICS2D::World> { mPhysics2D->simulation(), mPhysics2D->paused, mPhysics2D->singleStep };
 	}
 #endif
 #endif

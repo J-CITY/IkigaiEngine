@@ -6,7 +6,6 @@
 #include "textureManager.h"
 #include "utilsModule/assertion.h"
 #include <fstream>
-#include <nlohmann/json.hpp>
 #include <renderModule/backends/interface/driverInterface.h>
 #include <renderModule/backends/interface/materialInterface.h>
 #include <resourceModule/fileSystem/fileSystem.h>

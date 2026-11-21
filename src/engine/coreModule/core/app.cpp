@@ -6,6 +6,9 @@
 #include "coroutineModule/scheduler.h"
 #include "ecsModule/world.h"
 #include "editorFrontend.h"
+#ifdef USE_EDITOR
+#include "editorModule/physicsDebugWindow.h"
+#endif
 #include "imguiViewsModule/viewHost.h"
 #include "networkModule/networkRuntime.h"
 #include "profilerModule/profiler.h"
@@ -164,14 +167,9 @@ void App::preUpdate(std::chrono::duration<double> dt) {
 		core.imguiBackend->newFrame();
 	}
 #endif
-#if USE_PHYSICS_3D && defined(USE_EDITOR)
+#ifdef USE_EDITOR
 	if (core.sceneManager->hasCurrentScene() && !core.sceneManager->isEditingLocked()) {
-		core.sceneManager->getCurrentScene().drawPhysics3DDebug();
-	}
-#endif
-#if USE_PHYSICS_2D && defined(USE_EDITOR)
-	if (core.sceneManager->hasCurrentScene() && !core.sceneManager->isEditingLocked()) {
-		core.sceneManager->getCurrentScene().drawPhysics2DDebug();
+		EDITOR::DrawPhysicsDebug(core.sceneManager->getCurrentScene());
 	}
 #endif
 #if USE_JSON_VIEWS && !defined(OCULUS)

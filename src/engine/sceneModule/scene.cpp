@@ -53,13 +53,6 @@ void Scene::presentDestructibles(float alpha) {
 		mSimulation->presentDestructibles(*this, alpha);
 	}
 }
-#ifdef USE_EDITOR
-void Scene::drawPhysics3DDebug() {
-	if (mSimulation) {
-		mSimulation->drawPhysics3DDebug();
-	}
-}
-#endif
 #endif
 
 #if USE_PHYSICS_2D
@@ -69,13 +62,6 @@ PHYSICS2D::World& Scene::physics2d() {
 void Scene::stepPhysics2D(std::chrono::duration<double> dt) {
 	requireSimulation().stepPhysics2D(*this, dt);
 }
-#ifdef USE_EDITOR
-void Scene::drawPhysics2DDebug() {
-	if (mSimulation) {
-		mSimulation->drawPhysics2DDebug();
-	}
-}
-#endif
 #endif
 
 ECS::World& Scene::getWorld() const {

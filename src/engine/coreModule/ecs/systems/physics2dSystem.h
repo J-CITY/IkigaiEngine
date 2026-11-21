@@ -17,9 +17,7 @@ public:
 	}
 	bool paused = false;
 	bool singleStep = false;
-#ifdef USE_EDITOR
-	void drawDebug();
-#endif
+
 private:
 	SCENE_SYSTEM::Scene& mScene;
 	std::shared_ptr<PHYSICS2D::World> mSimulation;

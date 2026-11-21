@@ -55,16 +55,10 @@ public:
 	bool physics3dPaused() const;
 	void setPhysics3dPaused(bool paused);
 	void presentDestructibles(float alpha);
-#ifdef USE_EDITOR
-	void drawPhysics3DDebug();
-#endif
 #endif
 #if USE_PHYSICS_2D
 	PHYSICS2D::World& physics2d();
 	void stepPhysics2D(std::chrono::duration<double> dt);
-#ifdef USE_EDITOR
-	void drawPhysics2DDebug();
-#endif
 #endif
 
 	std::shared_ptr<ECS::Object> createObject();
