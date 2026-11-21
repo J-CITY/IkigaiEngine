@@ -7,9 +7,8 @@
 
 #include "coreModule/ecs/components/cameraComponent.h"
 #include "coreModule/ecs/object.h"
-#include "resourceModule/jsonLoader.h"
-#include "utilsModule/serviceManager.h"
 #include "utilsModule/log/loggerDefine.h"
+#include "utilsModule/serviceManager.h"
 #include <stdexcept>
 #include <unordered_set>
 #include <utility>
@@ -83,7 +82,7 @@ void Scene::cancelTasks() {
 Scene::Scene(const Descriptor& _descriptor)
 	: Scene() {
 	for (const auto& object : _descriptor.Objects) {
-		createObject(object);
+		createObject(ParseSceneObject(object));
 	}
 }
 
@@ -199,9 +198,12 @@ std::shared_ptr<IKIGAI::ECS::Object> Scene::createObject(ECS::Entity actorID, co
 	return instance;
 }
 
-std::shared_ptr<IKIGAI::ECS::Object> Scene::createObject(const ECS::Object::Descriptor& data) {
-	objects.push_back(MEMORY::MakeShared<ECS::Object, MEMORY::Category::Node>(data, &getWorld()));
-	auto& instance = objects.back();
+std::shared_ptr<IKIGAI::ECS::Object> Scene::createObject(const SceneObjectDescriptor& data) {
+	auto instance = MEMORY::MakeShared<ECS::Object, MEMORY::Category::Node>(data, &getWorld());
+	for (const auto& component : data.Components) {
+		AddSceneComponent(*instance, component);
+	}
+	objects.push_back(instance);
 	observeComponents(*instance);
 	if (isExecute) {
 		instance->setActive(data.IsActive);
@@ -272,7 +274,6 @@ void Scene::postLoadObject(ECS::Object& object) {
 
 std::shared_ptr<ECS::Object> Scene::createDeferredObject(const ECS::Object::Descriptor& descriptor) {
 	auto shell = descriptor;
-	shell.Components.clear();
 	shell.IsActive = false;
 	objects.push_back(MEMORY::MakeShared<ECS::Object, MEMORY::Category::Node>(shell, &getWorld(), true));
 	observeComponents(*objects.back());
@@ -315,11 +316,7 @@ nlohmann::json Scene::serializeObjects() const {
 		if (!visited.insert(object->getIDInt()).second) {
 			throw std::runtime_error("Scene hierarchy contains a cycle or duplicate ID");
 		}
-		auto json = UTILS::ToJson(object->getDescriptor());
-		if (json.isErr()) {
-			throw std::runtime_error(json.unwrapErr().text);
-		}
-		result.push_back(json.unwrap());
+		result.push_back(WriteSceneObject(*object));
 		auto children = object->getChildren();
 		for (auto it = children.rbegin(); it != children.rend(); ++it) {
 			stack.push_back(*it);
@@ -348,13 +345,15 @@ void Scene::unpackPrefab(int rootId) {
 	std::erase_if(prefabInstances, [rootId](const auto& instance) { return DOCUMENT::Id(instance.entry.at("Id")) == rootId; });
 }
 std::shared_ptr<ECS::Object> Scene::appendDocument(const DOCUMENT::Expanded& document) {
+	return appendDocument(document, ReadSceneObjectDescriptors(document.objects));
+}
+
+std::shared_ptr<ECS::Object> Scene::appendDocument(const DOCUMENT::Expanded& document, std::span<const SceneObjectDescriptor> descriptors) {
 	const auto first = objects.size();
 	const auto firstInstance = prefabInstances.size();
-	std::vector<ECS::Object::Descriptor> descriptors;
 	auto combined = serializeObjects();
-	for (auto value : document.objects) {
+	for (const auto& value : document.objects) {
 		combined.push_back(value);
-		descriptors.push_back(ReadSceneObjectDescriptor(value));
 	}
 	DOCUMENT::Validate(combined);
 	try {
@@ -365,7 +364,7 @@ std::shared_ptr<ECS::Object> Scene::appendDocument(const DOCUMENT::Expanded& doc
 			auto& object = objects[first + i];
 			object->setVisible(descriptors[i].IsVisible);
 			for (const auto& component : descriptors[i].Components) {
-				object->addSerializedComponent(component);
+				AddSceneComponent(*object, component);
 			}
 		}
 		for (std::size_t i = 0; i < descriptors.size(); ++i) {

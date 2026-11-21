@@ -1,11 +1,7 @@
 #include "object.h"
 
-#include "componentCatalog.h"
 #include "sceneModule/sceneManager.h"
 #include "utilsModule/log/loggerDefine.h"
-
-#include <algorithm>
-#include <execution>
 
 using namespace IKIGAI;
 using namespace IKIGAI::ECS;
@@ -28,23 +24,6 @@ Object::Descriptor Object::getDescriptor() const {
 	d.ParentId = getParentId();
 	d.IsActive = mIsActive;
 	d.IsVisible = mIsVisible;
-	std::vector<std::pair<std::string, nlohmann::json>> components;
-	const auto& catalog = ComponentCatalog::instance();
-	for (const auto& [type, handle] : mComponents) {
-		const auto* component = resolveStoredComponent(handle);
-		if (!component) {
-			continue;
-		}
-		const auto* record = catalog.findByType(type);
-		if (!record) {
-			continue;
-		}
-		components.emplace_back(record->name, record->write(*component));
-	}
-	std::sort(components.begin(), components.end(), [](const auto& left, const auto& right) { return left.first < right.first; });
-	for (auto& component : components) {
-		d.Components.push_back(std::move(component.second));
-	}
 	return d;
 }
 
@@ -67,9 +46,6 @@ Object::Object(const Descriptor& _descriptor, ECS::World* world, bool deferred)
 	setActive(_descriptor.IsActive);
 	setVisible(_descriptor.IsVisible);
 	getWorld().registerEntity(mEntity);
-	for (const auto& component : _descriptor.Components) {
-		ComponentCatalog::instance().read(*this, component);
-	}
 }
 
 Object::~Object() {
@@ -155,10 +131,6 @@ void Object::setName(const std::string& val) {
 
 void Object::setTag(const std::string& val) {
 	mTag = val;
-}
-
-void Object::addSerializedComponent(const nlohmann::json& descriptor) {
-	ComponentCatalog::instance().read(*this, descriptor);
 }
 
 void Object::activateLoaded() {

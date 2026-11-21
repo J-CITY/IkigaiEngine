@@ -46,14 +46,8 @@ Task<PrefabCache> PreloadPrefabs(std::vector<std::string> pending, std::shared_p
 	co_return cache;
 }
 
-const ECS::ComponentCatalog::Record& ComponentRecord(const nlohmann::json& component) {
-	const auto* record = ECS::ComponentCatalog::instance().findInJson(component);
-	if (!record) {
-		const auto key = DOCUMENT::ComponentTypeKey(component);
-		throw std::runtime_error("Unsupported scene component: " + key + " = " + component.at(key).get<std::string>()
-			+ ". Check that the component is registered and its feature is enabled in this build.");
-	}
-	return *record;
+const ECS::ComponentCatalog::Record& ComponentRecord(const SceneComponentDescriptor& component) {
+	return *ECS::ComponentCatalog::instance().findByType(component.type);
 }
 }
 
@@ -205,7 +199,7 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 			state->control->check();
 			const auto& record = ComponentRecord(component);
 			if (record.prepare) {
-				co_await record.prepare(component, state, context.resources);
+				co_await record.prepare(*component.value, state, context.resources);
 			}
 		}
 		state->progress = .1 + .4 * double(i + 1) / std::max<std::size_t>(1, context.descriptors.size());
@@ -235,7 +229,7 @@ Task<> SceneManager::buildScene(LoadContext& context, std::shared_ptr<SceneLoadS
 	for (std::size_t i = 0; i < context.descriptors.size(); ++i) {
 		for (const auto& component : context.descriptors[i].Components) {
 			state->control->check();
-			objects[i]->addSerializedComponent(component);
+			AddSceneComponent(*objects[i], component);
 			co_await YieldIfBudgetExceeded();
 		}
 		state->progress = .5 + .25 * double(i + 1) / std::max<std::size_t>(1, objects.size());
@@ -512,14 +506,14 @@ Task<> SceneManager::instantiatePrefab(std::shared_ptr<SceneLoadState> state, in
 		}
 		DOCUMENT::Validate(combined);
 		state->phase = "Loading prefab resources";
-		std::vector<ECS::Object::Descriptor> descriptors;
+		std::vector<SceneObjectDescriptor> descriptors;
 		for (auto value : expanded.objects) {
 			state->control->check();
 			auto descriptor = ReadSceneObjectDescriptor(value);
 			for (const auto& component : descriptor.Components) {
 				const auto& record = ComponentRecord(component);
 				if (record.prepare) {
-					co_await record.prepare(component, state, resources);
+					co_await record.prepare(*component.value, state, resources);
 				}
 			}
 			descriptors.push_back(std::move(descriptor));
@@ -549,7 +543,7 @@ Task<> SceneManager::instantiatePrefab(std::shared_ptr<SceneLoadState> state, in
 			auto object = target->getObjects()[firstObject + i];
 			for (const auto& component : descriptors[i].Components) {
 				state->control->check();
-				object->addSerializedComponent(component);
+				AddSceneComponent(*object, component);
 				co_await YieldIfBudgetExceeded();
 			}
 		}

@@ -1,7 +1,10 @@
 #include "sceneObjectDescriptor.h"
 
+#include "coreModule/ecs/componentCatalog.h"
 #include "resourceModule/jsonLoader.h"
+#include "sceneDocument.h"
 #include "utilsModule/serialization/jsonSerde.h"
+#include <algorithm>
 #include <initializer_list>
 #include <stdexcept>
 
@@ -49,7 +52,23 @@ namespace {
 #endif
 }
 
-ECS::Object::Descriptor ReadSceneObjectDescriptor(nlohmann::json& data) {
+SceneObjectDescriptor ParseSceneObject(const SceneObjectDocument& document) {
+	SceneObjectDescriptor descriptor { static_cast<const ECS::Object::Descriptor&>(document), {} };
+	descriptor.Components.reserve(document.Components.size());
+	const auto& catalog = ECS::ComponentCatalog::instance();
+	for (const auto& component : document.Components) {
+		const auto* record = catalog.findInJson(component);
+		if (!record) {
+			const auto key = DOCUMENT::ComponentTypeKey(component);
+			throw std::runtime_error("Unsupported scene component: " + key + " = " + component.at(key).get<std::string>()
+				+ ". Check that the component is registered and its feature is enabled in this build.");
+		}
+		descriptor.Components.push_back({ record->type, record->read(component) });
+	}
+	return descriptor;
+}
+
+SceneObjectDescriptor ReadSceneObjectDescriptor(nlohmann::json& data) {
 	auto resolved = UTILS::ApplyPatches(data);
 	if (resolved.isErr()) {
 		throw std::runtime_error(resolved.unwrapErr().text);
@@ -70,10 +89,43 @@ ECS::Object::Descriptor ReadSceneObjectDescriptor(nlohmann::json& data) {
 		"Scene requires 3D physics, but USE_PHYSICS_3D=OFF");
 #endif
 
-	auto descriptor = DATA::DeserializeJson<ECS::Object::Descriptor>(data);
+	auto descriptor = DATA::DeserializeJson<SceneObjectDocument>(data);
 	if (descriptor.isErr()) {
 		throw std::runtime_error(descriptor.unwrapErr().text);
 	}
-	return descriptor.unwrap();
+	return ParseSceneObject(descriptor.unwrap());
+}
+
+std::vector<SceneObjectDescriptor> ReadSceneObjectDescriptors(const nlohmann::json& objects) {
+	std::vector<SceneObjectDescriptor> descriptors;
+	descriptors.reserve(objects.size());
+	for (auto object : objects) {
+		descriptors.push_back(ReadSceneObjectDescriptor(object));
+	}
+	return descriptors;
+}
+
+void AddSceneComponent(ECS::Object& object, const SceneComponentDescriptor& component) {
+	ECS::ComponentCatalog::instance().findByType(component.type)->apply(object, *component.value);
+}
+
+nlohmann::json WriteSceneObject(const ECS::Object& object) {
+	SceneObjectDocument document { object.getDescriptor(), {} };
+	std::vector<std::pair<std::string_view, nlohmann::json>> components;
+	const auto& catalog = ECS::ComponentCatalog::instance();
+	for (const auto& [type, component] : object.getComponents()) {
+		if (const auto* record = catalog.findByType(type); component && record) {
+			components.emplace_back(record->name, record->write(*component));
+		}
+	}
+	std::sort(components.begin(), components.end(), [](const auto& left, const auto& right) { return left.first < right.first; });
+	for (auto& component : components) {
+		document.Components.push_back(std::move(component.second));
+	}
+	auto json = UTILS::ToJson(document);
+	if (json.isErr()) {
+		throw std::runtime_error(json.unwrapErr().text);
+	}
+	return json.unwrap();
 }
 }

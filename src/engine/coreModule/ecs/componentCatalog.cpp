@@ -79,14 +79,6 @@ const ComponentCatalog::Record* ComponentCatalog::findInJson(const nlohmann::jso
 	return found;
 }
 
-void ComponentCatalog::read(Object& object, const nlohmann::json& component) const {
-	const auto* record = findInJson(component);
-	if (!record) {
-		throw std::runtime_error("Component descriptor has no supported type key");
-	}
-	record->apply(object, component);
-}
-
 std::vector<std::string> ComponentCatalog::typeNames() const {
 	std::vector<std::string> names;
 	names.reserve(mRecords.size());

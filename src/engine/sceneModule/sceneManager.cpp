@@ -100,15 +100,12 @@ void SceneManager::loadFromFile(const std::string& sceneFilePath) {
 	const auto pipeline = DOCUMENT::ReadRenderPipeline(document);
 	auto simulation = makeSimulation(&document);
 	auto expanded = DOCUMENT::Expand(document, read);
-	// Parse component descriptors before replacing the current scene as well.
-	for (auto value : expanded.objects) {
-		ReadSceneObjectDescriptor(value);
-	}
+	const auto descriptors = ReadSceneObjectDescriptors(expanded.objects);
 	mTransitionState = SceneTransitionState::Idle;
 	unloadCurrentScene();
 	m_currentScene = std::make_unique<Scene>(nullptr, std::move(simulation));
 	m_currentScene->renderPipelineAsset = pipeline;
-	m_currentScene->appendDocument(expanded);
+	m_currentScene->appendDocument(expanded, descriptors);
 	m_currentScene->isSceneReady = true;
 	m_currentSceneSourcePath = sceneFilePath;
 	sceneLoadEvent.run();

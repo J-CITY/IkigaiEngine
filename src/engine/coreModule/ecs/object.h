@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <nlohmann/json.hpp>
 #include <span>
 #include <string>
 #include <typeindex>
@@ -12,7 +11,6 @@
 #include "components/transform.h"
 #include "ecsModule/commandBuffer.h"
 #include "ecsModule/world.h"
-#include "utilsModule/serialization/jsonValueAdaptor.h"
 #include <utilsModule/event.h>
 
 namespace IKIGAI::SCENE_SYSTEM {
@@ -25,24 +23,10 @@ public:
 	struct Descriptor {
 		std::string Name;
 		std::string Tag;
-		int Id;
-		int ParentId;
+		int Id = 0;
+		int ParentId = -1;
 		bool IsActive = false;
 		bool IsVisible = true;
-		std::vector<nlohmann::json> Components;
-
-		template <class Context> constexpr static auto serde(Context& context, Descriptor& value) {
-			using Self = Descriptor;
-			using namespace serde::attribute;
-			serde::serde_struct(context, value)
-				.field(&Self::Name, "Name")
-				.field(&Self::Tag, "Tag", default_ { "" })
-				.field(&Self::Id, "Id")
-				.field(&Self::ParentId, "ParentId", default_ { -1 })
-				.field(&Self::IsActive, "IsActive", default_ { true })
-				.field(&Self::IsVisible, "IsVisible", default_ { true })
-				.field(&Self::Components, "Components");
-		}
 	};
 
 	Descriptor getDescriptor() const;
@@ -56,7 +40,6 @@ public:
 	ECS::World& getWorld() const {
 		return *mWorld;
 	}
-	void addSerializedComponent(const nlohmann::json& descriptor);
 	void setPendingActive(bool active) {
 		mIsActive = active;
 	}

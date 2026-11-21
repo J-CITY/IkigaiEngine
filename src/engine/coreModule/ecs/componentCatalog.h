@@ -34,8 +34,8 @@ class VirtualMeshRenderer;
 // the old type list performed: storage, scene IO, references and reflection.
 class ComponentCatalog {
 public:
-	using PrepareFn
-		= std::function<COROUTINE::Task<>(const nlohmann::json&, std::shared_ptr<SCENE_SYSTEM::SceneLoadState>, std::vector<std::shared_ptr<void>>&)>;
+	using PrepareFn = std::function<COROUTINE::Task<>(
+		const ComponentBase::Descriptor&, std::shared_ptr<SCENE_SYSTEM::SceneLoadState>, std::vector<std::shared_ptr<void>>&)>;
 
 	struct Record {
 		std::string name;
@@ -46,7 +46,8 @@ public:
 		StorageType storage = StorageType::Sparse;
 		bool lightweight = false;
 		std::function<void(World&)> registerStorage;
-		std::function<void(Object&, const nlohmann::json&)> apply;
+		std::function<std::shared_ptr<const ComponentBase::Descriptor>(const nlohmann::json&)> read;
+		std::function<void(Object&, const ComponentBase::Descriptor&)> apply;
 		std::function<nlohmann::json(const ComponentBase&)> write;
 		std::function<void(Object&)> create;
 		std::function<void(Object&)> remove;
@@ -66,7 +67,6 @@ public:
 	const Record* findByName(std::string_view name) const;
 	const Record* findByType(std::type_index type) const;
 	const Record* findInJson(const nlohmann::json& component) const;
-	void read(Object& object, const nlohmann::json& component) const;
 	std::vector<std::string> typeNames() const;
 	void createOnObject(Object& object, std::string_view typeName) const;
 	void removeFromObject(Object& object, std::type_index type) const;
@@ -97,20 +97,19 @@ template <class T> bool ComponentCatalog::enroll(StorageType storage, bool light
 		throw std::logic_error("Component registration requires GetComponentName and GetType");
 	}
 	record.registerStorage = [storage](World& world) { world.getComponentManager()->template registerComponent<T>(storage); };
-	record.apply = [](Object& object, const nlohmann::json& component) {
+	record.read = [](const nlohmann::json& component) -> std::shared_ptr<const ComponentBase::Descriptor> {
 		auto document = component;
 		// GetComponentName is an explicit persistent ID; GetType is the legacy alias.
 		document[GetComponentName<T>() + "Type"] = GetType<T>();
-		typename T::Descriptor descriptor;
 		if constexpr (std::is_same_v<T, SurfaceComponent> || std::is_same_v<T, FoliageComponent> || std::is_same_v<T, ChunkModelRenderer>
 			|| std::is_same_v<T, VirtualMeshRenderer>) {
-			descriptor = DATA::readDescriptor<typename T::Descriptor>(std::move(document));
+			return std::make_shared<typename T::Descriptor>(DATA::readDescriptor<typename T::Descriptor>(std::move(document)));
 		}
 		else {
-			descriptor = serde::deserialize<typename T::Descriptor>(document);
+			return std::make_shared<typename T::Descriptor>(serde::deserialize<typename T::Descriptor>(document));
 		}
-		object.template addComponent<T>(static_cast<const ComponentBase::Descriptor&>(descriptor));
 	};
+	record.apply = [](Object& object, const ComponentBase::Descriptor& descriptor) { object.template addComponent<T>(descriptor); };
 	record.write = [](const ComponentBase& component) {
 		auto document = serde::serialize<nlohmann::json>(static_cast<const T&>(component).getDescriptor());
 		document[GetComponentName<T>() + "Type"] = GetComponentName<T>();

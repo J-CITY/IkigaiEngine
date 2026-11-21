@@ -22,7 +22,6 @@
 #include "resourceModule/skeletonStateGraphManager.h"
 #include "resourceModule/textureManager.h"
 #include "sceneModule/sceneManager.h"
-#include "utilsModule/serialization/typedDescriptor.h"
 #include "utilsModule/serviceManager.h"
 #if USE_PHYSICS_3D
 #include "coreModule/ecs/components/destructibleMeshComponent.h"
@@ -50,7 +49,8 @@ Task<> HoldResource(ResourceRequest<T> request, std::shared_ptr<SceneLoadState> 
 	resources.push_back(co_await request.wait());
 	state->control->check();
 }
-template <class D> Task<> PrepareComponent(D descriptor, std::shared_ptr<SceneLoadState> state, std::vector<std::shared_ptr<void>>& resources) {
+template <class D>
+Task<> PrepareComponent(const D& descriptor, std::shared_ptr<SceneLoadState> state, std::vector<std::shared_ptr<void>>& resources) {
 	if constexpr (std::is_same_v<D, ECS::ParticleSystem2DComponent::Descriptor> || std::is_same_v<D, ECS::ParticleSystem3DComponent::Descriptor>) {
 		co_await HoldResource(ServiceManager::Get<ParticleLoader>().requestResource(descriptor.EffectPath), state, resources);
 	}
@@ -163,38 +163,31 @@ template <class D> Task<> PrepareComponent(D descriptor, std::shared_ptr<SceneLo
 	co_return;
 }
 
+template <class T> void RegisterComponentPreparer() {
+	ECS::ComponentCatalog::instance().setPrepare(typeid(T),
+		[](const ECS::ComponentBase::Descriptor& descriptor, std::shared_ptr<SceneLoadState> state, std::vector<std::shared_ptr<void>>& resources) {
+			return PrepareComponent(static_cast<const typename T::Descriptor&>(descriptor), std::move(state), resources);
+		});
+}
+
 void EnsureComponentPreparers() {
 	static const bool ready = [] {
-		auto bind = [](std::type_index type, auto read) {
-			ECS::ComponentCatalog::instance().setPrepare(type,
-				[read](const nlohmann::json& json, std::shared_ptr<SceneLoadState> state, std::vector<std::shared_ptr<void>>& resources) -> Task<> {
-					auto document = json;
-					co_await PrepareComponent(read(document), state, resources);
-				});
-		};
-		bind(typeid(ECS::ParticleSystem2DComponent),
-			[](nlohmann::json& document) { return serde::deserialize<ECS::ParticleSystem2DComponent::Descriptor>(document); });
-		bind(typeid(ECS::ParticleSystem3DComponent),
-			[](nlohmann::json& document) { return serde::deserialize<ECS::ParticleSystem3DComponent::Descriptor>(document); });
-		bind(typeid(ECS::ModelRenderer), [](nlohmann::json& document) { return serde::deserialize<ECS::ModelRenderer::Descriptor>(document); });
-		bind(typeid(ECS::ModelLODRenderer), [](nlohmann::json& document) { return serde::deserialize<ECS::ModelLODRenderer::Descriptor>(document); });
-		bind(typeid(ECS::SurfaceComponent),
-			[](nlohmann::json& document) { return DATA::readDescriptor<ECS::SurfaceComponent::Descriptor>(document); });
-		bind(typeid(ECS::FoliageComponent),
-			[](nlohmann::json& document) { return DATA::readDescriptor<ECS::FoliageComponent::Descriptor>(document); });
-		bind(typeid(ECS::MaterialRenderer), [](nlohmann::json& document) { return serde::deserialize<ECS::MaterialRenderer::Descriptor>(document); });
-		bind(typeid(ECS::SpriteComponent), [](nlohmann::json& document) { return serde::deserialize<ECS::SpriteComponent::Descriptor>(document); });
+		RegisterComponentPreparer<ECS::ParticleSystem2DComponent>();
+		RegisterComponentPreparer<ECS::ParticleSystem3DComponent>();
+		RegisterComponentPreparer<ECS::ModelRenderer>();
+		RegisterComponentPreparer<ECS::ModelLODRenderer>();
+		RegisterComponentPreparer<ECS::SurfaceComponent>();
+		RegisterComponentPreparer<ECS::FoliageComponent>();
+		RegisterComponentPreparer<ECS::MaterialRenderer>();
+		RegisterComponentPreparer<ECS::SpriteComponent>();
 #if USE_PHYSICS_3D
-		bind(typeid(ECS::RagdollComponent), [](nlohmann::json& document) { return serde::deserialize<ECS::RagdollComponent::Descriptor>(document); });
-		bind(typeid(ECS::DestructibleMeshComponent),
-			[](nlohmann::json& document) { return serde::deserialize<ECS::DestructibleMeshComponent::Descriptor>(document); });
+		RegisterComponentPreparer<ECS::RagdollComponent>();
+		RegisterComponentPreparer<ECS::DestructibleMeshComponent>();
 #endif
-		bind(typeid(ECS::SkeletalComponent),
-			[](nlohmann::json& document) { return serde::deserialize<ECS::SkeletalComponent::Descriptor>(document); });
-		bind(typeid(ECS::SkeletalAnimationComponent),
-			[](nlohmann::json& document) { return serde::deserialize<ECS::SkeletalAnimationComponent::Descriptor>(document); });
-		bind(typeid(ECS::AudioComponent), [](nlohmann::json& document) { return serde::deserialize<ECS::AudioComponent::Descriptor>(document); });
-		bind(typeid(ECS::SdfTextComponent), [](nlohmann::json& document) { return serde::deserialize<ECS::SdfTextComponent::Descriptor>(document); });
+		RegisterComponentPreparer<ECS::SkeletalComponent>();
+		RegisterComponentPreparer<ECS::SkeletalAnimationComponent>();
+		RegisterComponentPreparer<ECS::AudioComponent>();
+		RegisterComponentPreparer<ECS::SdfTextComponent>();
 		return true;
 	}();
 	(void)ready;

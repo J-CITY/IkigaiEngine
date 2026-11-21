@@ -8,6 +8,7 @@
 #include "coroutineModule/coroutineScope.h"
 #include "resourceModule/serializerInterface.h"
 #include "sceneDocument.h"
+#include "sceneObjectDescriptor.h"
 #include "sceneSimulation.h"
 #include "utilsModule/ref.h"
 namespace IKIGAI::GUI {
@@ -17,7 +18,7 @@ namespace IKIGAI::SCENE_SYSTEM {
 class Scene : public RESOURCES::Serializable {
 public:
 	struct Descriptor {
-		std::vector<ECS::Object::Descriptor> Objects;
+		std::vector<SceneObjectDocument> Objects;
 
 		template <class Context> constexpr static auto serde(Context& context, Descriptor& value) {
 			using Self = Descriptor;
@@ -67,7 +68,7 @@ public:
 	std::shared_ptr<ECS::Object> createObjectBefore(ECS::Entity parentId, const std::string& p_name, const std::string& p_tag = "");
 	// std::shared_ptr<ECS::Object> _createObject(const std::string& p_name, const std::string& p_tag = "");
 	std::shared_ptr<ECS::Object> createObject(ECS::Entity actorID, const std::string& name, const std::string& tag = "");
-	std::shared_ptr<ECS::Object> createObject(const ECS::Object::Descriptor& data);
+	std::shared_ptr<ECS::Object> createObject(const SceneObjectDescriptor& data);
 	bool destroyObject(std::shared_ptr<ECS::Object> p_target);
 
 	std::shared_ptr<ECS::Object> findObjectByName(const std::string& p_name);
@@ -134,6 +135,8 @@ public:
 	void restoreObjectPosition(int rootId, std::size_t objectIndex, int siblingIndex);
 
 private:
+	friend class SceneManager;
+	std::shared_ptr<ECS::Object> appendDocument(const DOCUMENT::Expanded& document, std::span<const SceneObjectDescriptor> descriptors);
 	std::unique_ptr<SceneSimulation> mSimulation;
 	SceneSimulation& requireSimulation();
 	void observeComponents(ECS::Object& object);
