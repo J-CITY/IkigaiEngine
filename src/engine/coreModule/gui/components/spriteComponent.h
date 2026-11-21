@@ -28,7 +28,7 @@ namespace RENDER {
 }
 
 namespace GUI {
-	class Font;
+	struct Font;
 }
 }
 
