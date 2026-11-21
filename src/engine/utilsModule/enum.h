@@ -65,6 +65,12 @@ namespace Impl {
 
 template <class E>
 	requires isEnum<E>
+constexpr const auto& enumEntries() {
+	return Impl::Tokens<E>;
+}
+
+template <class E>
+	requires isEnum<E>
 constexpr auto enumToString(E e) {
 	auto it = std::ranges::find(Impl::Tokens<E>, e, &std::pair<Impl::sv, E>::second);
 	return it == Impl::Tokens<E>.end() ? Impl::sv { } : it->first;

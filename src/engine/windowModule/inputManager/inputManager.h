@@ -2,14 +2,15 @@
 
 #include "../window/window.h"
 #include "inputGestures.h"
+#include "utilsModule/enum.h"
 #include <chrono>
 #include <unordered_set>
 #include <utilsModule/event.h>
 #include <vector>
 
-namespace IKIGAI::INPUT_SYSTEM {
 #ifdef USE_SDL
-enum class EKey {
+// clang-format off
+IKIGAI_ENUM_NS(IKIGAI::INPUT_SYSTEM, EKey,
 	KEY_UNKNOWN = 0,
 	KEY_SPACE = 44,
 	KEY_APOSTROPHE = 49,
@@ -132,10 +133,12 @@ enum class EKey {
 	KEY_RIGHT_ALT = 230,
 	KEY_RIGHT_SUPER = 231,
 	KEY_MENU = 118
-};
+)
+// clang-format on
 #endif
 #ifdef OCULUS
-enum class EKey {
+// clang-format off
+IKIGAI_ENUM_NS(IKIGAI::INPUT_SYSTEM, EKey,
 	KEY_UNKNOWN = 0,
 	KEY_SPACE = 44,
 	KEY_APOSTROPHE = 49,
@@ -254,12 +257,12 @@ enum class EKey {
 	KEY_RIGHT_ALT = 230,
 	KEY_RIGHT_SUPER = 231,
 	KEY_MENU = 118
-};
+)
+// clang-format on
 #endif
-enum class EKeyState { KEY_UP = 0, KEY_DOWN = 1 };
-
 #ifdef USE_SDL
-enum class EMouseButton {
+// clang-format off
+IKIGAI_ENUM_NS(IKIGAI::INPUT_SYSTEM, EMouseButton,
 	MOUSE_BUTTON_1 = 4,
 	MOUSE_BUTTON_2 = 5,
 	MOUSE_BUTTON_3 = 6,
@@ -271,10 +274,12 @@ enum class EMouseButton {
 	MOUSE_BUTTON_LEFT = 1,
 	MOUSE_BUTTON_RIGHT = 3,
 	MOUSE_BUTTON_MIDDLE = 2
-};
+)
+// clang-format on
 #endif
 #ifdef OCULUS
-enum class EMouseButton {
+// clang-format off
+IKIGAI_ENUM_NS(IKIGAI::INPUT_SYSTEM, EMouseButton,
 	MOUSE_BUTTON_1 = 0,
 	MOUSE_BUTTON_2 = 1,
 	MOUSE_BUTTON_3 = 2,
@@ -286,9 +291,12 @@ enum class EMouseButton {
 	MOUSE_BUTTON_LEFT = 0,
 	MOUSE_BUTTON_RIGHT = 1,
 	MOUSE_BUTTON_MIDDLE = 2
-};
+)
+// clang-format on
 #endif
 
+namespace IKIGAI::INPUT_SYSTEM {
+enum class EKeyState { KEY_UP = 0, KEY_DOWN = 1 };
 enum class EMouseButtonState { MOUSE_UP = 0, MOUSE_DOWN = 1 };
 
 inline constexpr std::int64_t kMousePointerId = 0;

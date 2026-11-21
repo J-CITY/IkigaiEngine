@@ -12,17 +12,11 @@
 #include "resourceModule/materialManager.h"
 #include "resourceModule/modelManager.h"
 #include "sceneModule/sceneManager.h"
+#include "utilsModule/enum.h"
 #include "utilsModule/log/loggerDefine.h"
 #include "windowModule/inputManager/inputActions.h"
 #include "windowModule/inputManager/inputManager.h"
 #include "windowModule/window/window.h"
-#include <magic_enum.hpp>
-
-namespace magic_enum::customize {
-template <> struct enum_range<IKIGAI::INPUT_SYSTEM::EKey> {
-	static constexpr int min = -1, max = 512;
-};
-}
 
 namespace IKIGAI::SCRIPTING {
 using namespace IkigaiScript;
@@ -189,7 +183,7 @@ void IkigaiScriptBinder::bindGlobals(bool (*cameraControlAllowed)()) {
 	auto enumScope = [this](const char* name, auto sample, const std::string& prefix) {
 		using E = decltype(sample);
 		auto scope = vm.newModule(name, 0, { });
-		for (auto [e, label] : magic_enum::enum_entries<E>()) {
+		for (const auto& [label, e] : UTILS::enumEntries<E>()) {
 			auto key = std::string(label);
 			if (key.starts_with(prefix))
 				key.erase(0, prefix.size());
@@ -198,12 +192,7 @@ void IkigaiScriptBinder::bindGlobals(bool (*cameraControlAllowed)()) {
 	};
 	enumScope("Key", EKey { }, "KEY_");
 	enumScope("MouseButton", EMouseButton { }, "MOUSE_");
-	// GLFW and Quest use aliases; enum reflection reports only canonical names.
-	auto* buttons = vm.findModuleByName("MouseButton");
-	buttons->scope->insertVar("BUTTON_LEFT", value(EMouseButton::MOUSE_BUTTON_LEFT));
-	buttons->scope->insertVar("BUTTON_RIGHT", value(EMouseButton::MOUSE_BUTTON_RIGHT));
-	buttons->scope->insertVar("BUTTON_MIDDLE", value(EMouseButton::MOUSE_BUTTON_MIDDLE));
-	enumScope("ProjectionMode", RENDER::Camera::ProjectionMode { }, "");
+	enumScope("ProjectionMode", RENDER::Camera::ProjectionMode {}, "");
 	enumScope("FrustumBehaviour", EFrustumBehaviour { }, "");
 	function("Inputs", "GetKeyDown", [this](const Args& a) { return value(ServiceManager::Get<InputManager>().isKeyPressed(read<EKey>(a.at(0)))); });
 	function("Inputs", "GetKeyUp", [this](const Args& a) { return value(ServiceManager::Get<InputManager>().isKeyReleased(read<EKey>(a.at(0)))); });

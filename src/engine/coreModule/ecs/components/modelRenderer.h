@@ -6,13 +6,15 @@
 
 #include "reflectionModule/reflection_macros.h"
 #include "renderModule/meshGenerator.h"
+#include "utilsModule/enum.h"
+
+IKIGAI_ENUM_NS(IKIGAI::ECS, EFrustumBehaviour, DISABLED = 0, CULL_MODEL = 1, CULL_MESHES = 2, CULL_CUSTOM = 3)
 
 namespace IKIGAI::ECS {
 class Object;
 }
 
 namespace IKIGAI::ECS {
-enum class EFrustumBehaviour { DISABLED = 0, CULL_MODEL = 1, CULL_MESHES = 2, CULL_CUSTOM = 3 };
 IKI_CLASS(Groups = [Component])
 class ModelRenderer : public ComponentBase {
 	IKI_GENERATED_BODY(ModelRenderer)

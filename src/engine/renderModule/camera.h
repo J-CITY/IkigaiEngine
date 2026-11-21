@@ -3,12 +3,15 @@
 
 #include "frustum.h"
 #include "mathModule/math.h"
+#include "utilsModule/enum.h"
+
+IKIGAI_ENUM_NS(IKIGAI::RENDER, ProjectionMode, ORTHOGRAPHIC, PERSPECTIVE)
 
 namespace IKIGAI {
 namespace RENDER {
 	class Camera {
 	public:
-		enum class ProjectionMode { ORTHOGRAPHIC, PERSPECTIVE };
+		using ProjectionMode = RENDER::ProjectionMode;
 
 		Camera();
 		void cacheMatrices(unsigned int winWidth, unsigned int winHeight, const MATH::Vector3f& position, const MATH::QuaternionF& rotation);
