@@ -1,4 +1,5 @@
 #pragma once
+#include <unordered_map>
 #include <vector>
 
 #define IMGUI_DEFINE_MATH_OPERATORS

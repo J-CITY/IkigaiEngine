@@ -1,5 +1,5 @@
 #pragma once
-// Lightweight canonical Vector2 math. Include math.h when serde is needed.
+// Lightweight canonical Vector2 math.
 #include <array>
 #include <cmath>
 #include <stdexcept>
@@ -206,8 +206,7 @@ template <typename T> struct Vector2 {
 		x = y = 0;
 	}
 
-	// Serialization is defined by math.h; this header has no serde dependency.
-	template <class Context> constexpr static auto serde(Context& context, Vector2& value);
+	template <class Context> constexpr static void serde(Context& context, Vector2& value);
 };
 
 template <class T> Vector2<T> operator*(const float f, const Vector2<T>& V) {

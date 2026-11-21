@@ -1,7 +1,7 @@
 #pragma once
 
+#include "utilsModule/serialization/jsonAdapters.h"
 #include <nlohmann/json.hpp>
-#include <serdepp/adaptor/nlohmann_json.hpp>
 #include <string_view>
 
 // nlohmann::json is iterable, so serdepp classifies it as a sequence and the generic adapter recurses

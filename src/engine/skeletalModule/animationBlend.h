@@ -1,6 +1,7 @@
 #pragma once
 
 #include "skeleton.h"
+#include <memory>
 
 namespace IKIGAI::SKELETON {
 class AnimBlend {

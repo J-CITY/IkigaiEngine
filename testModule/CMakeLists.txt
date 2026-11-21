@@ -6,6 +6,7 @@ enable_testing()
 
 get_filename_component(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 include("${ENGINE_ROOT}/cmake/Math.cmake")
+include("${ENGINE_ROOT}/cmake/JsonSerde.cmake")
 
 add_executable(math_tests
 	main.cpp
@@ -19,7 +20,7 @@ add_executable(math_tests
 	unit/math/curves.cpp)
 
 # Exercise the production library and its propagated public requirements.
-target_link_libraries(math_tests PRIVATE ikigai_math)
+target_link_libraries(math_tests PRIVATE ikigai_math ikigai_json_serde)
 target_include_directories(math_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_test(NAME math_module COMMAND math_tests)

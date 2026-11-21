@@ -10,6 +10,7 @@
 
 #include "ecsModule/entityManager.h"
 #include "mathModule/curves.h"
+#include <serdepp/serializer.hpp>
 
 namespace IKIGAI::ANIMATION {
 namespace FUNC = MATH::CURVES::FUNC;

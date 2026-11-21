@@ -2,8 +2,12 @@
 #include "vector2.h"
 #include <array>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
 
 #if defined(__SSE__) || defined(_M_IX86) || defined(_M_X64)
 #include <xmmintrin.h>
@@ -12,35 +16,6 @@
 #include <arm_neon.h>
 #define IKIGAI_USE_NEON
 #endif
-
-#include <nlohmann/json.hpp>
-#include <serdepp/attribute/default.hpp>
-#include <serdepp/serializer.hpp>
-
-namespace serde {
-template <typename E, size_t SIZE> struct serde_adaptor<nlohmann::json, std::array<E, SIZE>, type::seq_t> {
-	static void from(nlohmann::json& s, std::string_view key, std::array<E, SIZE>& arr) {
-		auto& table = key.empty() ? s : s.at(std::string { key });
-		if (!table.is_array() || table.size() != SIZE) {
-			throw std::invalid_argument("Expected an array with exactly " + std::to_string(SIZE) + " elements");
-		}
-		int i = 0;
-		for (auto& value : table) {
-			arr[i] = std::move(deserialize<E>(value));
-			++i;
-		}
-	}
-
-	static void into(nlohmann::json& s, std::string_view key, const std::array<E, SIZE>& data) {
-		nlohmann::json& arr = key.empty() ? s : s[std::string { key }];
-		int i = 0;
-		for (auto& value : data) {
-			arr[i] = std::move(serialize<nlohmann::json>(value));
-			++i;
-		}
-	}
-};
-}
 
 namespace IKIGAI::MATH {
 template <class T> struct Quaternion;
@@ -59,12 +34,6 @@ template <typename T> constexpr auto TO_DEGREES(const T& value) {
 
 inline bool CMP(float a, float b, float eps = 0.00001f) {
 	return fabs(a - b) < eps;
-}
-
-template <typename T> template <class Context> constexpr auto Vector2<T>::serde(Context& context, Vector2& value) {
-	using Self = Vector2;
-	using namespace serde::attribute;
-	serde::serde_struct(context, value).field(&Self::x, "X").field(&Self::y, "Y");
 }
 
 // Vector3d
@@ -423,11 +392,7 @@ template <typename T> struct Vector3 {
 		throw std::out_of_range("Vector2: out of range");
 	}
 
-	template <class Context> constexpr static auto serde(Context& context, Vector3& value) {
-		using Self = Vector3;
-		using namespace serde::attribute;
-		serde::serde_struct(context, value).field(&Self::x, "X").field(&Self::y, "Y").field(&Self::z, "Z");
-	}
+	template <class Context> constexpr static void serde(Context& context, Vector3& value);
 };
 
 template <typename T> Vector3<T> operator*(const float f, const Vector3<T>& V) {
@@ -1324,11 +1289,7 @@ template <typename T> struct Vector4 {
 		}
 	}
 
-	template <class Context> constexpr static auto serde(Context& context, Vector4& value) {
-		using Self = Vector4;
-		using namespace serde::attribute;
-		serde::serde_struct(context, value).field(&Self::x, "X").field(&Self::y, "Y").field(&Self::z, "Z").field(&Self::w, "W");
-	}
+	template <class Context> constexpr static void serde(Context& context, Vector4& value);
 };
 
 template <class T> Vector4<T> operator*(const float f, const Vector4<T>& V) {
@@ -1735,11 +1696,7 @@ public:
 		return Vector3(matrix.data[column], matrix.data[column + 3], matrix.data[column + 6]);
 	}
 
-	template <class Context> constexpr static auto serde(Context& context, Matrix3& value) {
-		using Self = Matrix3;
-		using namespace serde::attribute;
-		serde::serde_struct(context, value).field(&Self::data, "Data");
-	}
+	template <class Context> constexpr static void serde(Context& context, Matrix3& value);
 };
 template <class T> Matrix3<T> operator*(const float f, const Matrix3<T>& V) {
 	return V * f;
@@ -2380,11 +2337,7 @@ public:
 		return Frustum;
 	}
 
-	template <class Context> constexpr static auto serde(Context& context, Matrix4& value) {
-		using Self = Matrix4;
-		using namespace serde::attribute;
-		serde::serde_struct(context, value).field(&Self::data, "Data");
-	}
+	template <class Context> constexpr static void serde(Context& context, Matrix4& value);
 };
 
 template <class T> Matrix4<T> operator*(const float f, const Matrix4<T>& V) {

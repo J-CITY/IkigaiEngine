@@ -3,7 +3,7 @@
 
 #include "mathModule/math.h"
 
-#include <serdepp/adaptor/nlohmann_json.hpp>
+#include "utilsModule/serialization/jsonAdapters.h"
 
 using IKIGAI::MATH::Vector3f;
 using IKIGAI::TEST::expect;

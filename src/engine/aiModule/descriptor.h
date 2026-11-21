@@ -1,7 +1,7 @@
 #pragma once
+#include "utilsModule/serialization/jsonAdapters.h"
 #include "utilsModule/serialization/typedDescriptor.h"
 #include <nlohmann/json.hpp>
-#include <serdepp/adaptor/nlohmann_json.hpp>
 #include <serdepp/serde.hpp>
 #include <stdexcept>
 

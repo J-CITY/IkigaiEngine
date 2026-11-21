@@ -99,16 +99,7 @@ struct Curve {
 
 	IKIGAI::MATH::Vector2f mLeftYOffset;
 
-	template <class Context> constexpr static auto serde(Context& context, Curve& value) {
-		using Self = Curve;
-		using namespace serde::attribute;
-		serde::serde_struct(context, value)
-			.field(&Self::mLeft, "Left")
-			.field(&Self::mRight, "Right")
-			.field(&Self::mLeftTangent, "LeftTangent")
-			.field(&Self::mRightTangent, "RightTangent")
-			.field(&Self::mLeftYOffset, "LeftYOffset");
-	}
+	template <class Context> constexpr static void serde(Context& context, Curve& value);
 };
 
 inline Curve makeUnitBezierCurve() {

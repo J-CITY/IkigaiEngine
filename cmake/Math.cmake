@@ -13,13 +13,6 @@ add_library(ikigai_math STATIC
     "${IKIGAI_MATH_ROOT}/src/engine/mathModule/geometry/aabb.h")
 target_compile_features(ikigai_math PUBLIC cxx_std_20)
 target_include_directories(ikigai_math PUBLIC "${IKIGAI_MATH_ROOT}/src/engine")
-# math.h exposes serde descriptors and nlohmann types. serde's public headers
-# additionally include nameof and magic_enum, so consumers need these paths too.
-target_include_directories(ikigai_math SYSTEM PUBLIC
-    "${IKIGAI_MATH_ROOT}/3rd/serdepp/include"
-    "${IKIGAI_MATH_ROOT}/3rd/json/include"
-    "${IKIGAI_MATH_ROOT}/3rd/nameof/include"
-    "${IKIGAI_MATH_ROOT}/3rd/magic_enum/include/magic_enum")
 set_target_properties(ikigai_math PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     IKIGAI_SOURCE_DIRECTORY "${IKIGAI_MATH_ROOT}/src/engine/mathModule")

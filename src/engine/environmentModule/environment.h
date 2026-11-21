@@ -1,7 +1,7 @@
 #pragma once
 #include "mathModule/math.h"
+#include "utilsModule/serialization/jsonAdapters.h"
 #include <array>
-#include <serdepp/adaptor/nlohmann_json.hpp>
 #include <serdepp/serializer.hpp>
 
 namespace IKIGAI::ENVIRONMENT {

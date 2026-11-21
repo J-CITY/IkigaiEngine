@@ -2,7 +2,7 @@
 #if USE_PHYSICS_3D
 #include "physicsModule/physicWorld.h"
 #include "skeletalModule/skeleton.h"
-#include <serdepp/adaptor/nlohmann_json.hpp>
+#include "utilsModule/serialization/jsonAdapters.h"
 
 namespace IKIGAI::SKELETON {
 struct RagdollRotation {

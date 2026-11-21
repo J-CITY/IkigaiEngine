@@ -81,6 +81,7 @@ set(IKIGAI_MANIFEST_utilsModule
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/reflection/reflection.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/reflection/reflection_macros.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/result.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/serialization/jsonAdapters.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/serialization/jsonError.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/serialization/jsonError.h"
     "${IKIGAI_SOURCE_ROOT}/engine/utilsModule/serialization/jsonSerde.h"

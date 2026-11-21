@@ -3,6 +3,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <nameof.hpp>
 #include <optional>
 #include <stdexcept>
 #include <string>

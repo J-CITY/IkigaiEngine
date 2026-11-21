@@ -1,8 +1,8 @@
 #pragma once
 #include "fracturePreparation.h"
 #include "physicsModule/physicWorld.h"
+#include "utilsModule/serialization/jsonAdapters.h"
 #include <cstdint>
-#include <serdepp/adaptor/nlohmann_json.hpp>
 #include <type_traits>
 
 namespace IKIGAI::DESTRUCTION {

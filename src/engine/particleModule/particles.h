@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <nlohmann/json_fwd.hpp>
 #include <string>
 #include <vector>
 

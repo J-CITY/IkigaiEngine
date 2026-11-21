@@ -1,5 +1,6 @@
 #include "particles.h"
 #include <limits>
+#include <nlohmann/json.hpp>
 #include <set>
 
 namespace IKIGAI::PARTICLES {

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "mathModule/math.h"
+#include "utilsModule/serialization/jsonAdapters.h"
 #include <nlohmann/json.hpp>
-#include <serdepp/adaptor/nlohmann_json.hpp>
 #include <serdepp/serializer.hpp>
 #include <string>
 #include <vector>

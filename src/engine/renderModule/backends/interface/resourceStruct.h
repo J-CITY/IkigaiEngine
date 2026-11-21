@@ -1,8 +1,8 @@
 #pragma once
 #include "renderModule/materials/deformationDescriptor.h"
 #include "renderModule/materials/pbrMaterialDescriptor.h"
+#include "utilsModule/serialization/jsonAdapters.h"
 #include <optional>
-#include <serdepp/adaptor/nlohmann_json.hpp>
 #include <serdepp/attribute/make_optional.hpp>
 #include <serdepp/serializer.hpp>
 #include <string>

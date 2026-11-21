@@ -2,9 +2,9 @@
 #include "characterAnimation.h"
 #include "stateGraphDescriptor.h"
 #include "utilsModule/expressions/expressionDescriptor.h"
+#include "utilsModule/serialization/jsonAdapters.h"
 #include <algorithm>
 #include <cmath>
-#include <serdepp/adaptor/nlohmann_json.hpp>
 #include <set>
 #include <stdexcept>
 #include <utility>

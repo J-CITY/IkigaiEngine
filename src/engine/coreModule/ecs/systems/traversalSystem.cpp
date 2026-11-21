@@ -2,13 +2,13 @@
 #if USE_PHYSICS_3D
 #include "coreModule/ecs/components/characterMotorComponent.h"
 #include "coreModule/ecs/components/traversalComponent.h"
+#include "coreModule/testHooks.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
 #include "resourceModule/skeletonAnimationManager.h"
 #include "resourceModule/skeletonManager.h"
 #include "sceneModule/scene.h"
-#include <serdepp/adaptor/nlohmann_json.hpp>
-#include "coreModule/testHooks.h"
+#include "utilsModule/serialization/jsonAdapters.h"
 #include <set>
 namespace IKIGAI::ECS {
 using namespace PHYSICS::CHARACTER;

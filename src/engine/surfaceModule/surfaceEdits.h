@@ -1,6 +1,6 @@
 #pragma once
 #include "mathModule/math.h"
-#include <serdepp/adaptor/nlohmann_json.hpp>
+#include "utilsModule/serialization/jsonAdapters.h"
 #include <serdepp/attribute/default.hpp>
 #include <serdepp/serializer.hpp>
 #include <string>

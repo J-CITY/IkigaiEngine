@@ -1,9 +1,9 @@
 #pragma once
 #include "fracturePreparation.h"
 #include "taskModule/backgroundTicket.h"
+#include "utilsModule/serialization/jsonAdapters.h"
 #include <atomic>
 #include <deque>
-#include <serdepp/adaptor/nlohmann_json.hpp>
 #include <stop_token>
 
 namespace IKIGAI::DESTRUCTION {

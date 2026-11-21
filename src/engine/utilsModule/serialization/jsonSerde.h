@@ -2,9 +2,9 @@
 
 #include "jsonError.h"
 #include "utilsModule/result.h"
+#include "utilsModule/serialization/jsonAdapters.h"
 #include <exception>
 #include <nlohmann/json.hpp>
-#include <serdepp/adaptor/nlohmann_json.hpp>
 #include <serdepp/serializer.hpp>
 
 namespace IKIGAI::UTILS {

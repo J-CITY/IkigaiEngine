@@ -1,9 +1,9 @@
 #include "expression.h"
 #include "expressionDescriptor.h"
+#include "utilsModule/serialization/jsonAdapters.h"
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <serdepp/adaptor/nlohmann_json.hpp>
 #include <stdexcept>
 
 namespace IKIGAI::DATA {

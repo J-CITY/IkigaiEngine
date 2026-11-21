@@ -1,6 +1,6 @@
 #pragma once
 #include "mathModule/math.h"
-#include <serdepp/adaptor/nlohmann_json.hpp>
+#include "utilsModule/serialization/jsonAdapters.h"
 #include <serdepp/serializer.hpp>
 
 namespace IKIGAI::RENDER {
