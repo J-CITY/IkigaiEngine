@@ -1,45 +1,44 @@
 #pragma once
 
-#include <glm/mat3x3.hpp>
-#include <glm/vec3.hpp>
+#include "mathModule/math.h"
 #include <vector>
 
 
 #define EULER_INTEGRATION
 // #define ACCURATE_EULER_INTEGRATION
 
-float Dot(const glm::vec3& l, const glm::vec3& r);
-float Magnitude(const glm::vec3& v);
-glm::vec3 Normalized(const glm::vec3& v);
-void Normalize(glm::vec3& v);
-float MagnitudeSq(const glm::vec3& v);
+float Dot(const IKIGAI::MATH::Vector3f& l, const IKIGAI::MATH::Vector3f& r);
+float Magnitude(const IKIGAI::MATH::Vector3f& v);
+IKIGAI::MATH::Vector3f Normalized(const IKIGAI::MATH::Vector3f& v);
+void Normalize(IKIGAI::MATH::Vector3f& v);
+float MagnitudeSq(const IKIGAI::MATH::Vector3f& v);
 
 struct OBB {
-	glm::vec3 position;
-	glm::vec3 size; // HALF SIZE!
-	glm::mat3 orientation;
+	IKIGAI::MATH::Vector3f position {};
+	IKIGAI::MATH::Vector3f size {}; // HALF SIZE!
+	IKIGAI::MATH::Matrix3f orientation = IKIGAI::MATH::Matrix3f::Identity;
 
 	inline OBB()
 		: size(1, 1, 1) { }
-	inline OBB(const glm::vec3& p, const glm::vec3& s)
+	inline OBB(const IKIGAI::MATH::Vector3f& p, const IKIGAI::MATH::Vector3f& s)
 		: position(p)
 		, size(s) { }
-	inline OBB(const glm::vec3& p, const glm::vec3& s, const glm::mat3& o)
+	inline OBB(const IKIGAI::MATH::Vector3f& p, const IKIGAI::MATH::Vector3f& s, const IKIGAI::MATH::Matrix3f& o)
 		: position(p)
 		, size(s)
 		, orientation(o) { }
 };
 class ClothParticle {
-	glm::vec3 position;
-	glm::vec3 oldPosition;
-	glm::vec3 forces;
+	IKIGAI::MATH::Vector3f position {};
+	IKIGAI::MATH::Vector3f oldPosition {};
+	IKIGAI::MATH::Vector3f forces {};
 
-	glm::vec3 gravity;
+	IKIGAI::MATH::Vector3f gravity {};
 	float friction;
 	float bounce;
 
 #ifdef EULER_INTEGRATION
-	glm::vec3 velocity = glm::vec3(0);
+	IKIGAI::MATH::Vector3f velocity {};
 #endif
 	float mass;
 
@@ -51,15 +50,15 @@ public:
 	void ApplyForces();
 	void SolveConstraints(const std::vector<OBB>& constraints);
 
-	void SetPosition(const glm::vec3& pos);
-	glm::vec3 GetPosition();
+	void SetPosition(const IKIGAI::MATH::Vector3f& pos);
+	IKIGAI::MATH::Vector3f GetPosition();
 
 	void SetBounce(float b);
 	float GetBounce();
 
-	void AddImpulse(const glm::vec3& impulse);
+	void AddImpulse(const IKIGAI::MATH::Vector3f& impulse);
 	float InvMass();
 	void SetMass(float m);
-	glm::vec3 GetVelocity();
+	IKIGAI::MATH::Vector3f GetVelocity();
 	void SetFriction(float f);
 };

@@ -17,7 +17,7 @@ public:
 
 public:
 	// Public API
-	void Initialize(int gridSize, float distance, const glm::vec3& position);
+	void Initialize(int gridSize, float distance, const IKIGAI::MATH::Vector3f& position);
 
 	void SetStructuralSprings(float k, float b);
 	void SetShearSprings(float k, float b);

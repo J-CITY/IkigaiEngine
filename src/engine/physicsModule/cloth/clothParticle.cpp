@@ -1,37 +1,35 @@
 #include "clothParticle.h"
 #include <cmath>
+#include <limits>
 #include <stdexcept>
-
-#include <glm/mat3x3.hpp>
-#include <glm/vec3.hpp>
 
 struct Line;
 
-float Dot(const glm::vec3& l, const glm::vec3& r) {
-	return l.x * r.x + l.y * r.y + l.z * r.z;
+float Dot(const IKIGAI::MATH::Vector3f& l, const IKIGAI::MATH::Vector3f& r) {
+	return IKIGAI::MATH::Vector3f::Dot(l, r);
 }
 
-float Magnitude(const glm::vec3& v) {
-	return sqrtf(Dot(v, v));
+float Magnitude(const IKIGAI::MATH::Vector3f& v) {
+	return IKIGAI::MATH::Vector3f::Length(v);
 }
 
-glm::vec3 Normalized(const glm::vec3& v) {
+IKIGAI::MATH::Vector3f Normalized(const IKIGAI::MATH::Vector3f& v) {
 	float length = Magnitude(v);
-	return length > 1e-8f ? v / length : glm::vec3(0);
+	return length > 1e-8f ? v * (1.f / length) : IKIGAI::MATH::Vector3f {};
 }
-void Normalize(glm::vec3& v) {
+void Normalize(IKIGAI::MATH::Vector3f& v) {
 	v = Normalized(v);
 }
-float MagnitudeSq(const glm::vec3& v) {
-	return Dot(v, v);
+float MagnitudeSq(const IKIGAI::MATH::Vector3f& v) {
+	return IKIGAI::MATH::Vector3f::LengthSquare(v);
 }
 
 struct Line {
-	glm::vec3 start;
-	glm::vec3 end;
+	IKIGAI::MATH::Vector3f start;
+	IKIGAI::MATH::Vector3f end;
 
 	inline Line() { }
-	inline Line(const glm::vec3& s, const glm::vec3& e)
+	inline Line(const IKIGAI::MATH::Vector3f& s, const IKIGAI::MATH::Vector3f& e)
 		: start(s)
 		, end(e) { }
 };
@@ -39,12 +37,12 @@ float LengthSq(const Line& line) {
 	return MagnitudeSq(line.start - line.end);
 }
 struct Ray {
-	glm::vec3 origin;
-	glm::vec3 direction;
+	IKIGAI::MATH::Vector3f origin;
+	IKIGAI::MATH::Vector3f direction;
 
 	inline Ray()
 		: direction(0.0f, 0.0f, 1.0f) { }
-	inline Ray(const glm::vec3& o, const glm::vec3& d)
+	inline Ray(const IKIGAI::MATH::Vector3f& o, const IKIGAI::MATH::Vector3f& d)
 		: origin(o)
 		, direction(d) {
 		NormalizeDirection();
@@ -55,8 +53,8 @@ struct Ray {
 };
 
 struct RaycastResult {
-	glm::vec3 point;
-	glm::vec3 normal;
+	IKIGAI::MATH::Vector3f point;
+	IKIGAI::MATH::Vector3f normal;
 	float t;
 	bool hit;
 };
@@ -66,18 +64,18 @@ void ResetRaycastResult(RaycastResult* outResult) {
 	if (outResult != 0) {
 		outResult->t = -1;
 		outResult->hit = false;
-		outResult->normal = glm::vec3(0, 0, 1);
-		outResult->point = glm::vec3(0, 0, 0);
+		outResult->normal = IKIGAI::MATH::Vector3f(0, 0, 1);
+		outResult->point = IKIGAI::MATH::Vector3f(0, 0, 0);
 	}
 }
 
 struct AABB {
-	glm::vec3 position;
-	glm::vec3 size; // HALF SIZE!
+	IKIGAI::MATH::Vector3f position;
+	IKIGAI::MATH::Vector3f size; // HALF SIZE!
 
 	inline AABB()
 		: size(1, 1, 1) { }
-	inline AABB(const glm::vec3& p, const glm::vec3& s)
+	inline AABB(const IKIGAI::MATH::Vector3f& p, const IKIGAI::MATH::Vector3f& s)
 		: position(p)
 		, size(s) { }
 };
@@ -85,19 +83,17 @@ struct AABB {
 bool Raycast(const OBB& obb, const Ray& ray, RaycastResult* outResult) {
 	ResetRaycastResult(outResult);
 
-	const float o[9] = { obb.orientation[0][0], obb.orientation[0][1], obb.orientation[0][2], obb.orientation[1][0], obb.orientation[1][1],
-		obb.orientation[1][2], obb.orientation[2][0], obb.orientation[2][1], obb.orientation[2][2] };
 	const float size[3] = { obb.size[0], obb.size[1], obb.size[2] };
 
-	glm::vec3 p = obb.position - ray.origin;
+	IKIGAI::MATH::Vector3f p = obb.position - ray.origin;
 
-	glm::vec3 X(o[0], o[1], o[2]);
-	glm::vec3 Y(o[3], o[4], o[5]);
-	glm::vec3 Z(o[6], o[7], o[8]);
+	const auto X = IKIGAI::MATH::Matrix3f::GetColumn(obb.orientation, 0);
+	const auto Y = IKIGAI::MATH::Matrix3f::GetColumn(obb.orientation, 1);
+	const auto Z = IKIGAI::MATH::Matrix3f::GetColumn(obb.orientation, 2);
 
-	glm::vec3 f(Dot(X, ray.direction), Dot(Y, ray.direction), Dot(Z, ray.direction));
+	IKIGAI::MATH::Vector3f f(Dot(X, ray.direction), Dot(Y, ray.direction), Dot(Z, ray.direction));
 
-	glm::vec3 e(Dot(X, p), Dot(Y, p), Dot(Z, p));
+	IKIGAI::MATH::Vector3f e(Dot(X, p), Dot(Y, p), Dot(Z, p));
 
 #if 1
 	float t[6] = { 0, 0, 0, 0, 0, 0 };
@@ -169,7 +165,7 @@ bool Raycast(const OBB& obb, const Ray& ray, RaycastResult* outResult) {
 		outResult->t = t_result;
 		outResult->point = ray.origin + ray.direction * t_result;
 
-		glm::vec3 normals[] = {
+		IKIGAI::MATH::Vector3f normals[] = {
 			X, // +x
 			X * -1.0f, // -x
 			Y, // +y
@@ -187,17 +183,17 @@ bool Raycast(const OBB& obb, const Ray& ray, RaycastResult* outResult) {
 	return true;
 }
 struct Sphere {
-	glm::vec3 position;
+	IKIGAI::MATH::Vector3f position;
 	float radius;
 
 	inline Sphere()
 		: radius(1.0f) { }
-	inline Sphere(const glm::vec3& p, float r)
+	inline Sphere(const IKIGAI::MATH::Vector3f& p, float r)
 		: position(p)
 		, radius(r) { }
 };
-glm::vec3 ClosestPoint(const Line& line, const glm::vec3& point) {
-	glm::vec3 lVec = line.end - line.start; // Line Vector
+IKIGAI::MATH::Vector3f ClosestPoint(const Line& line, const IKIGAI::MATH::Vector3f& point) {
+	IKIGAI::MATH::Vector3f lVec = line.end - line.start; // Line Vector
 	// Project "point" onto the "Line Vector", computing:
 	// closest(t) = start + t * (end - start)
 	// T is how far along the line the projected point is
@@ -208,42 +204,42 @@ glm::vec3 ClosestPoint(const Line& line, const glm::vec3& point) {
 	// Return projected position of t
 	return line.start + lVec * t;
 }
-bool PointOnLine(const glm::vec3& point, const Line& line) {
-	glm::vec3 closest = ClosestPoint(line, point);
+bool PointOnLine(const IKIGAI::MATH::Vector3f& point, const Line& line) {
+	IKIGAI::MATH::Vector3f closest = ClosestPoint(line, point);
 	float distanceSq = MagnitudeSq(closest - point);
 	return CMP(distanceSq, 0.0f);
 }
-bool PointOnRay(const glm::vec3& point, const Ray& ray) {
-	if (point == ray.origin) {
+bool PointOnRay(const IKIGAI::MATH::Vector3f& point, const Ray& ray) {
+	if (point.x == ray.origin.x && point.y == ray.origin.y && point.z == ray.origin.z) {
 		return true;
 	}
 
-	glm::vec3 norm = point - ray.origin;
+	IKIGAI::MATH::Vector3f norm = point - ray.origin;
 	Normalize(norm);
 	float diff = Dot(norm, ray.direction); // Direction is normalized
 	// If BOTH vectors point in the same direction, diff should be 1
 	return CMP(diff, 1.0f);
 }
-bool PointInSphere(const glm::vec3& point, const Sphere& sphere) {
+bool PointInSphere(const IKIGAI::MATH::Vector3f& point, const Sphere& sphere) {
 	return MagnitudeSq(point - sphere.position) < sphere.radius * sphere.radius;
 }
 
-glm::vec3 GetMin(const AABB& aabb) {
-	glm::vec3 p1 = aabb.position + aabb.size;
-	glm::vec3 p2 = aabb.position - aabb.size;
+IKIGAI::MATH::Vector3f GetMin(const AABB& aabb) {
+	IKIGAI::MATH::Vector3f p1 = aabb.position + aabb.size;
+	IKIGAI::MATH::Vector3f p2 = aabb.position - aabb.size;
 
-	return glm::vec3(fminf(p1.x, p2.x), fminf(p1.y, p2.y), fminf(p1.z, p2.z));
+	return IKIGAI::MATH::Vector3f(fminf(p1.x, p2.x), fminf(p1.y, p2.y), fminf(p1.z, p2.z));
 }
 
-glm::vec3 GetMax(const AABB& aabb) {
-	glm::vec3 p1 = aabb.position + aabb.size;
-	glm::vec3 p2 = aabb.position - aabb.size;
+IKIGAI::MATH::Vector3f GetMax(const AABB& aabb) {
+	IKIGAI::MATH::Vector3f p1 = aabb.position + aabb.size;
+	IKIGAI::MATH::Vector3f p2 = aabb.position - aabb.size;
 
-	return glm::vec3(fmaxf(p1.x, p2.x), fmaxf(p1.y, p2.y), fmaxf(p1.z, p2.z));
+	return IKIGAI::MATH::Vector3f(fmaxf(p1.x, p2.x), fmaxf(p1.y, p2.y), fmaxf(p1.z, p2.z));
 }
-bool PointInAABB(const glm::vec3& point, const AABB& aabb) {
-	glm::vec3 min = GetMin(aabb);
-	glm::vec3 max = GetMax(aabb);
+bool PointInAABB(const IKIGAI::MATH::Vector3f& point, const AABB& aabb) {
+	IKIGAI::MATH::Vector3f min = GetMin(aabb);
+	IKIGAI::MATH::Vector3f max = GetMax(aabb);
 
 	if (point.x < min.x || point.y < min.y || point.z < min.z) {
 		return false;
@@ -254,12 +250,11 @@ bool PointInAABB(const glm::vec3& point, const AABB& aabb) {
 
 	return true;
 }
-bool PointInOBB(const glm::vec3& point, const OBB& obb) {
-	glm::vec3 dir = point - obb.position;
+bool PointInOBB(const IKIGAI::MATH::Vector3f& point, const OBB& obb) {
+	IKIGAI::MATH::Vector3f dir = point - obb.position;
 
 	for (int i = 0; i < 3; ++i) {
-		const float orientation[3] = { obb.orientation[i][0], obb.orientation[i][1], obb.orientation[i][2] };
-		glm::vec3 axis(orientation[0], orientation[1], orientation[2]);
+		const auto axis = IKIGAI::MATH::Matrix3f::GetColumn(obb.orientation, i);
 
 		float distance = Dot(dir, axis);
 
@@ -293,7 +288,7 @@ ClothParticle::ClothParticle() {
 	// type = RIGIDBODY_TYPE_PARTICLE;
 	friction = 0.95f;
 	bounce = 0.7f;
-	gravity = glm::vec3(0.0f, -9.82f, 0.0f);
+	gravity = IKIGAI::MATH::Vector3f(0.0f, -9.82f, 0.0f);
 
 #ifdef EULER_INTEGRATION
 	mass = 1.0f;
@@ -305,9 +300,9 @@ void ClothParticle::Update(float deltaTime) {
 		return;
 #ifdef EULER_INTEGRATION
 	oldPosition = position;
-	glm::vec3 acceleration = forces * InvMass();
+	IKIGAI::MATH::Vector3f acceleration = forces * InvMass();
 #ifdef ACCURATE_EULER_INTEGRATION
-	glm::vec3 oldVelocity = velocity;
+	IKIGAI::MATH::Vector3f oldVelocity = velocity;
 	velocity = velocity * std::pow(friction, deltaTime * 60) + acceleration * deltaTime;
 	position = position + (oldVelocity + velocity) * 0.5f * deltaTime;
 #else
@@ -315,7 +310,7 @@ void ClothParticle::Update(float deltaTime) {
 	position = position + velocity * deltaTime;
 #endif
 #else
-	glm::vec3 velocity = position - oldPosition;
+	IKIGAI::MATH::Vector3f velocity = position - oldPosition;
 	oldPosition = position;
 	float deltaSquare = deltaTime * deltaTime;
 	position = position + (velocity * friction + forces * deltaSquare);
@@ -342,9 +337,9 @@ void ClothParticle::SolveConstraints(const std::vector<OBB>& constraints) {
 		if (Linetest(constraints[i], traveled)) {
 			// if (PointInOBB(position, constraints[i])) {
 #ifndef EULER_INTEGRATION
-			glm::vec3 velocity = position - oldPosition;
+			IKIGAI::MATH::Vector3f velocity = position - oldPosition;
 #endif
-			glm::vec3 direction = Normalized(velocity);
+			IKIGAI::MATH::Vector3f direction = Normalized(velocity);
 			Ray ray(oldPosition, direction);
 			RaycastResult result;
 
@@ -352,8 +347,8 @@ void ClothParticle::SolveConstraints(const std::vector<OBB>& constraints) {
 				// Place object just a little above collision result
 				position = result.point + result.normal * 0.3f;
 
-				glm::vec3 vn = result.normal * Dot(result.normal, velocity);
-				glm::vec3 vt = velocity - vn;
+				IKIGAI::MATH::Vector3f vn = result.normal * Dot(result.normal, velocity);
+				IKIGAI::MATH::Vector3f vt = velocity - vn;
 
 #ifdef EULER_INTEGRATION
 				oldPosition = position;
@@ -367,12 +362,12 @@ void ClothParticle::SolveConstraints(const std::vector<OBB>& constraints) {
 	}
 }
 
-void ClothParticle::SetPosition(const glm::vec3& pos) {
+void ClothParticle::SetPosition(const IKIGAI::MATH::Vector3f& pos) {
 	position = pos;
 	oldPosition = pos;
 }
 
-glm::vec3 ClothParticle::GetPosition() {
+IKIGAI::MATH::Vector3f ClothParticle::GetPosition() {
 	return position;
 }
 
@@ -384,11 +379,11 @@ float ClothParticle::GetBounce() {
 	return bounce;
 }
 
-void ClothParticle::AddImpulse(const glm::vec3& impulse) {
+void ClothParticle::AddImpulse(const IKIGAI::MATH::Vector3f& impulse) {
 #ifdef EULER_INTEGRATION
 	velocity = velocity + impulse;
 #else
-	glm::vec3 velocity = position - oldPosition;
+	IKIGAI::MATH::Vector3f velocity = position - oldPosition;
 	velocity = velocity + impulse;
 	if (impulse.x > 0 || impulse.y > 0 || impulse.z > 0) {
 		int a = 0;
@@ -410,7 +405,7 @@ void ClothParticle::SetMass(float m) {
 	mass = m;
 }
 
-glm::vec3 ClothParticle::GetVelocity() {
+IKIGAI::MATH::Vector3f ClothParticle::GetVelocity() {
 #ifdef EULER_INTEGRATION
 	return velocity;
 #else

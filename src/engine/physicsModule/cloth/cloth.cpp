@@ -2,7 +2,7 @@
 #include <cmath>
 #include <stdexcept>
 
-void ClothObj::Initialize(int gridSize, float distance, const glm::vec3& position) {
+void ClothObj::Initialize(int gridSize, float distance, const IKIGAI::MATH::Vector3f& position) {
 	if (gridSize < 3 || gridSize > 256 || !std::isfinite(distance) || distance <= 0)
 		throw std::invalid_argument("Cloth grid requires 3..256 vertices per side and positive spacing");
 	float k = 1.0f;
@@ -30,7 +30,7 @@ void ClothObj::Initialize(int gridSize, float distance, const glm::vec3& positio
 			float x_pos = ((float)x - halfSize) * distance + position.x;
 			float z_pos = ((float)z - halfSize) * distance + position.z;
 
-			verts[i]->SetPosition(glm::vec3(x_pos, position.y, z_pos));
+			verts[i]->SetPosition(IKIGAI::MATH::Vector3f(x_pos, position.y, z_pos));
 			verts[i]->SetMass(1.0f);
 			verts[i]->SetBounce(0.0f);
 			verts[i]->SetFriction(0.9f);

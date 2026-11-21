@@ -1,7 +1,5 @@
 #include "spring.h"
 
-#include <glm/vec3.hpp>
-
 Spring::Spring(float _k, float _b, float len) {
 	k = _k;
 	b = _b;
@@ -27,8 +25,8 @@ void Spring::SetConstants(float _k, float _b) {
 }
 
 void Spring::ApplyForce(float dt) {
-	glm::vec3 relPos = p2->GetPosition() - p1->GetPosition();
-	glm::vec3 relVel = p2->GetVelocity() - p1->GetVelocity();
+	IKIGAI::MATH::Vector3f relPos = p2->GetPosition() - p1->GetPosition();
+	IKIGAI::MATH::Vector3f relVel = p2->GetVelocity() - p1->GetVelocity();
 
 	// Prevent underflow
 	for (int i = 0; i < 3; ++i) {
@@ -39,13 +37,13 @@ void Spring::ApplyForce(float dt) {
 	float distance = Magnitude(relPos);
 	if (distance < 1e-8f || dt <= 0)
 		return;
-	glm::vec3 direction = relPos / distance;
+	IKIGAI::MATH::Vector3f direction = relPos * (1.f / distance);
 	float x = distance - restingLength;
 	float v = Dot(relVel, direction);
 
 	float F = (-k * x) + (-b * v);
 
-	glm::vec3 impulse = direction * (F * dt);
+	IKIGAI::MATH::Vector3f impulse = direction * (F * dt);
 	p1->AddImpulse(impulse * -p1->InvMass());
 	p2->AddImpulse(impulse * p2->InvMass());
 }
