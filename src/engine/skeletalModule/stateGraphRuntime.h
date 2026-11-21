@@ -3,18 +3,18 @@
 #include "animationInstance.h"
 #include "stateGraphIr.h"
 #include "utilsModule/environment.h"
-#include "utilsModule/expressions/expression.h"
-#include "utilsModule/expressions/stateMachine.h"
-#include <functional>
 #include <map>
-#include <nlohmann/json.hpp>
 #include <vector>
 
 namespace IKIGAI::SKELETON {
+struct StateGraphParameter {
+	std::string name;
+	UTILS::VarValue defaultValue;
+	bool trigger = false;
+};
+
 // Immutable, validated and preloaded. Instances own all clocks and samplers.
 struct StateGraphDefinition {
-	using Json = nlohmann::json;
-	Json document;
 	DATA::Symbols symbols;
 	std::vector<DATA::Expression> expressions;
 	struct Binding {
@@ -24,18 +24,15 @@ struct StateGraphDefinition {
 	};
 	std::vector<Binding> bindings;
 	size_t parameterCount = 0, builtinStart = 0;
-	std::vector<std::string> parameters;
+	std::vector<StateGraphParameter> parameters;
 	StateGraphIR ir;
 	std::shared_ptr<Skeleton> skeleton;
 	std::map<std::string, std::shared_ptr<Animation>> clips;
 	std::vector<std::string> dependencies;
-	static std::shared_ptr<const StateGraphDefinition> compile(
-		const Json&, std::shared_ptr<Skeleton>, const std::function<std::shared_ptr<Animation>(const std::string&)>&);
 };
 
 class StateGraphRuntime : public DATA::StateMachineInstance {
 public:
-	using Json = nlohmann::json;
 	StateGraphRuntime(std::shared_ptr<const StateGraphDefinition>, std::shared_ptr<UTILS::Environment>);
 	StateGraphRuntime(const StateGraphRuntime&);
 	void update(float dt);
@@ -52,7 +49,7 @@ public:
 	const std::string& previousState() const {
 		return mPreviousState;
 	}
-	const Json& lastTransition() const {
+	const std::string& lastTransitionText() const {
 		return mLastTransition;
 	}
 	const std::map<std::string, float>& syncPhases() const {
@@ -64,8 +61,8 @@ public:
 	float blendWeight() const {
 		return mBlendDuration > 0 ? std::min(1.f, mBlendTime / mBlendDuration) : 1.f;
 	}
-	const Json& definition() const {
-		return mDefinition->document;
+	const std::vector<StateGraphParameter>& parameters() const {
+		return mDefinition->parameters;
 	}
 	const StateGraphIR& ir() const {
 		return mDefinition->ir;
@@ -73,7 +70,6 @@ public:
 	const CompiledState& activeState() const {
 		return mDefinition->ir.states.at(mStateIndex);
 	}
-	const Json& metadata() const;
 	std::shared_ptr<UTILS::Environment> environment() const {
 		return mEnvironment;
 	}
@@ -112,7 +108,7 @@ private:
 	std::vector<AnimationEventDispatch> mPendingEvents;
 	bool mSnapshotBlend = false;
 	Pose mOutput {}, mPreviousPose {}, mLayerScratch {};
-	Json mLastTransition;
+	std::string mLastTransition;
 	MATH::Vector3f mPoseOffset {};
 	AnimBlend mBlend;
 };

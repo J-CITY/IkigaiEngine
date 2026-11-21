@@ -63,20 +63,12 @@ void SkeletalStateGraphComponent::update(SCENE_SYSTEM::Scene& scene, float dt) {
 		instance->setReloadPolicy(SKELETON::SkeletalStateGraphInstance::ReloadPolicy::OwnerValidated);
 		revision = resource->revision;
 	}
-	auto compileBindings = [&](const nlohmann::json& parameters, UTILS::Environment& schema) {
+	auto compileBindings = [&](const std::vector<SKELETON::StateGraphParameter>& parameters, UTILS::Environment& schema) {
 		std::vector<Binding> candidate;
-		for (const auto& [name, p] : parameters.items()) {
-			auto value = DATA::defaultValue(p.at("Type"));
-			const auto expected = DATA::typeOf(value);
-			if (auto f = std::get_if<float>(&value)) {
-				schema.declare(name, *f);
-			}
-			else if (auto i = std::get_if<int>(&value)) {
-				schema.declare(name, *i);
-			}
-			else if (auto flag = std::get_if<bool>(&value)) {
-				schema.declare(name, *flag, p.at("Type") == "trigger");
-			}
+		for (const auto& parameter : parameters) {
+			const auto& name = parameter.name;
+			const auto expected = std::visit([](auto value) { return DATA::typeOf(DATA::Value(value)); }, parameter.defaultValue);
+			schema.declare(name, parameter.defaultValue, parameter.trigger);
 			if (!settings.Bindings.contains(name)) {
 				throw std::runtime_error("Unbound graph parameter: " + name);
 			}
@@ -88,10 +80,10 @@ void SkeletalStateGraphComponent::update(SCENE_SYSTEM::Scene& scene, float dt) {
 		}
 		return candidate;
 	};
-	if (resource->revision != revision && !instance->runtime()->metadata().value("LockTransitions", false)) {
+	if (resource->revision != revision && !instance->runtime()->activeState().lockTransitions) {
 		try {
 			auto schema = *environment;
-			auto candidate = compileBindings(resource->definition->document.at("Parameters"), schema);
+			auto candidate = compileBindings(resource->definition->parameters, schema);
 			std::string error;
 			if (!instance->runtime()->replace(resource->definition, error)) {
 				throw std::runtime_error(error);
@@ -107,7 +99,7 @@ void SkeletalStateGraphComponent::update(SCENE_SYSTEM::Scene& scene, float dt) {
 	}
 	if (!boundContext || boundContext.get() != context.get()) {
 		auto schema = *environment;
-		bindings = compileBindings(instance->runtime()->definition().at("Parameters"), schema);
+		bindings = compileBindings(instance->runtime()->parameters(), schema);
 		boundContext = UTILS::WeakPtr<ComponentBase>(static_cast<ComponentBase*>(context.get()));
 		lastTick = 0;
 	}

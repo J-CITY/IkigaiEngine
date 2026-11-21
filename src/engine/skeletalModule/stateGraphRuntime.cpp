@@ -1,421 +1,27 @@
 #include "stateGraphRuntime.h"
 #include "characterAnimation.h"
-#include "stateGraphDescriptor.h"
-#include "utilsModule/expressions/expressionDescriptor.h"
-#include "utilsModule/serialization/jsonAdapters.h"
 #include <algorithm>
 #include <cmath>
-#include <set>
 #include <stdexcept>
 #include <utility>
 
 namespace IKIGAI::SKELETON {
 namespace {
-	using Json = nlohmann::json;
 	void require(bool valid, const std::string& message) {
 		if (!valid) {
 			throw std::runtime_error("State graph: " + message);
 		}
 	}
-	const std::map<std::string, std::pair<int, int>> operators
-		= { { "+", { 2, 2 } }, { "-", { 2, 2 } }, { "*", { 2, 2 } }, { "/", { 2, 2 } }, { "abs", { 1, 1 } }, { "min", { 2, 2 } }, { "max", { 2, 2 } },
-			  { "clamp", { 3, 3 } }, { ">", { 2, 2 } }, { "<", { 2, 2 } }, { ">=", { 2, 2 } }, { "<=", { 2, 2 } }, { "==", { 2, 2 } },
-			  { "!=", { 2, 2 } }, { "and", { 2, 32 } }, { "or", { 2, 32 } }, { "not", { 1, 1 } }, { "if", { 3, 3 } } };
-	UTILS::VarValue parameterValue(const Json& p) {
-		const auto type = p.at("Type").get<std::string>();
-		if (p.contains("Default")) {
-			const auto& d = p.at("Default");
-			require(type == "float" ? d.is_number() : type == "int" ? d.is_number_integer() : d.is_boolean(), "parameter default has wrong type");
-		}
-		if (type == "float") {
-			return p.value("Default", 0.f);
-		}
-		if (type == "int") {
-			return p.value("Default", 0);
-		}
-		if (type == "bool" || type == "trigger") {
-			return p.value("Default", false);
-		}
-		throw std::runtime_error("State graph: unknown parameter type " + type);
-	}
-	void declareParameters(const Json& doc, UTILS::Environment& env) {
-		for (const auto& [name, p] : doc.at("Parameters").items()) {
-			env.declare(name, parameterValue(p), p.at("Type") == "trigger");
-		}
-	}
-	CompiledClipMeta readClipMeta(const std::string& name, const Json& c) {
-		CompiledClipMeta meta;
-		meta.name = name;
-		try {
-			auto document = c;
-			const auto desc = serde::deserialize<ClipDescriptor>(document);
-			meta.loop = desc.Loop;
-			meta.phaseOffset = desc.PhaseOffset;
-			meta.rootMode = parseClipRootMode(desc.RootMode);
-			meta.rootMotion = parseRootMotionPolicy(desc.RootMotion);
-			meta.removeYaw = desc.RemoveYaw;
-			for (const auto& event : desc.Events) {
-				require(std::isfinite(event.Time), "invalid clip event time in " + name);
-				meta.events.push_back({ event.Time, event.Name });
-			}
-		} catch (const std::exception&) {
-			meta.loop = c.value("Loop", true);
-			meta.phaseOffset = c.value("PhaseOffset", 0.f);
-			meta.rootMode = parseClipRootMode(c.value("RootMode", std::string("in-place")));
-			meta.rootMotion = parseRootMotionPolicy(c.value("RootMotion", std::string("in-pose")));
-			meta.removeYaw = c.value("RemoveYaw", false);
-		}
-		return meta;
-	}
-}
-
-std::shared_ptr<const StateGraphDefinition> StateGraphDefinition::compile(
-	const Json& doc, std::shared_ptr<Skeleton> skeleton, const std::function<std::shared_ptr<Animation>(const std::string&)>& load) {
-	require(doc.value("Version", 0) == 2, "unsupported Version (expected 2)");
-	require(bool(skeleton), "missing skeleton");
-	require(skeleton->getNumJolts() <= MAXBONES, "skeleton exceeds pose capacity");
-	require(skeleton->getNumJolts() == skeleton->joints().size(), "inconsistent skeleton joint count");
-	for (size_t i = 0; i < skeleton->joints().size(); ++i) {
-		require(skeleton->joints()[i].parentIndex < int(i), "skeleton must be ordered by parent");
-	}
-	auto result = std::make_shared<StateGraphDefinition>();
-	result->document = doc;
-	result->skeleton = std::make_shared<Skeleton>(*skeleton);
-	result->dependencies = doc.value("Dependencies", std::vector<std::string> {});
-	UTILS::Environment env;
-	declareParameters(doc, env);
-	for (const auto* name : { "StateTime", "NormalizedTime", "Duration", "Finished" }) {
-		require(!doc.at("Parameters").contains(name) && (!doc.contains("Bindings") || !doc.at("Bindings").contains(name)),
-			"reserved parameter name " + std::string(name));
-	}
-	const auto bindings = doc.value("Bindings", Json::object());
-	std::set<std::string> visiting;
-	std::function<void(const Json&, int)> expression;
-	expression = [&](const Json& e, int depth) {
-		require(depth < 64, "expression cycle or nesting exceeds 64");
-		if (e.is_boolean() || e.is_number()) {
-			require(!e.is_number() || std::isfinite(e.get<double>()), "non-finite constant");
-			return;
-		}
-		if (e.is_string()) {
-			const auto name = e.get<std::string>();
-			if (name == "StateTime" || name == "NormalizedTime" || name == "Finished" || name == "Duration") {
-				return;
-			}
-			if (bindings.contains(name)) {
-				require(visiting.insert(name).second, "binding cycle at " + name);
-				const auto& binding = bindings.at(name);
-				expression(binding.is_object() ? binding.at("Expression") : binding, depth + 1);
-				visiting.erase(name);
-			}
-			else {
-				require(env.hasVariable(name), "undeclared parameter " + name);
-			}
-			return;
-		}
-		require(e.is_array() && !e.empty() && e[0].is_string(), "invalid expression " + e.dump());
-		const auto op = e[0].get<std::string>();
-		const auto it = operators.find(op);
-		require(it != operators.end(), "unknown operator " + op);
-		require(e.size() >= size_t(it->second.first + 1) && e.size() <= size_t(it->second.second + 1), "wrong arity for " + op);
-		for (size_t i = 1; i < e.size(); ++i) {
-			expression(e[i], depth + 1);
-		}
-	};
-	for (const auto& [name, e] : bindings.items()) {
-		require(!env.hasVariable(name), "binding shadows parameter " + name);
-		if (e.is_object()) {
-			const float response = e.value("Smoothing", 0.f);
-			require(std::isfinite(response) && response >= 0, "invalid binding Smoothing");
-			expression(e.at("Expression"), 0);
-		}
-		else {
-			expression(e, 0);
-		}
-	}
-	const auto& clips = doc.at("Clips");
-	require(clips.is_object() && !clips.empty(), "Clips must be a nonempty object");
-	const auto rig = doc.value("Rig", Json::object());
-	const int root = skeleton->findJointIndex(rig.value("Root", std::string("Hips")));
-	const float scale = rig.value("UnitsToMeters", .01f);
-	require(scale > 0 && std::isfinite(scale), "invalid rig scale");
-	result->ir.rig.rootJoint = root;
-	result->ir.rig.unitsToMeters = scale;
-	result->ir.rig.rootHeight = rig.value("RootHeight", 90.f);
-	if (doc.contains("Rig")) {
-		require(root >= 0, "missing rig root joint");
-		for (const auto key : { "Feet", "Hands" }) {
-			if (rig.contains(key)) {
-				for (const auto& joint : rig.at(key)) {
-					require(skeleton->findJointIndex(joint.get<std::string>()) >= 0, "missing rig joint " + joint.get<std::string>());
-				}
-			}
-		}
-	}
-	std::map<std::string, uint16_t> clipIndex;
-	for (const auto& [name, c] : clips.items()) {
-		auto source = load(c.at("Path").get<std::string>());
-		require(bool(source), "cannot load clip " + name);
-		require(source->ticksPerSecond > 0 && source->durationInTicks > 0, "invalid clip duration: " + name);
-		auto prepared = std::make_shared<Animation>(*source);
-		require(prepared->channels.size() <= skeleton->getNumJolts(), "clip has incompatible joint count: " + name);
-		require(std::any_of(prepared->channels.begin(), prepared->channels.end(),
-					[](const auto& ch) { return !ch.translationKeyframes.empty() || !ch.rotationKeyframes.empty() || !ch.scaleKeyframes.empty(); }),
-			"clip contains no matching animated joints: " + name);
-		for (size_t i = 0; i < prepared->channels.size(); ++i) {
-			if (!prepared->channels[i].jointName.empty()) {
-				require(trimmedName(prepared->channels[i].jointName) == trimmedName(skeleton->joints()[i].name), "clip joint mismatch: " + name);
-			}
-		}
-		auto meta = readClipMeta(name, c);
-		const auto mode = c.value("RootMode", std::string("in-place"));
-		require(mode == "in-place" || mode == "stairs" || mode == "flat" || mode == "traversal" || mode == "authored", "unknown RootMode: " + mode);
-		if (root >= 0 && root < int(prepared->channels.size())) {
-			auto& channel = prepared->channels[root];
-			auto& keys = channel.translationKeyframes;
-			if (!keys.empty() && mode != "traversal" && mode != "authored") {
-				const auto first = keys.front(), last = keys.back();
-				for (auto& k : keys) {
-					k.translation.x = 0;
-					k.translation.z = 0;
-					if (mode == "stairs") {
-						k.translation.y
-							-= (last.translation.y - first.translation.y) * float((k.time - first.time) / std::max(.0001, last.time - first.time));
-					}
-					if (mode == "flat") {
-						k.translation.y = rig.value("RootHeight", 90.f);
-					}
-				}
-			}
-			if (c.value("RemoveYaw", false)) {
-				for (auto& key : channel.rotationKeyframes) {
-					const auto forward = key.rotation * MATH::Vector3f { 0, 0, 1 };
-					key.rotation = MATH::QuaternionF(MATH::Vector3f { 0, -std::atan2(forward.x, forward.z) * 57.2957795f, 0 }) * key.rotation;
-				}
-			}
-		}
-		clipIndex[name] = uint16_t(result->ir.clips.size());
-		result->ir.clips.push_back(meta);
-		result->clips.emplace(name, std::move(prepared));
-		result->dependencies.push_back(c.at("Path"));
-		require(std::isfinite(meta.phaseOffset), "invalid PhaseOffset");
-	}
-	const auto& states = doc.at("States");
-	require(states.is_object() && !states.empty(), "empty States");
-	require(states.contains(doc.at("InitialState").get<std::string>()), "missing InitialState");
-	auto transition = [&](const Json& t) {
-		require(states.contains(t.at("Target").get<std::string>()), "unknown transition target");
-		expression(t.value("When", Json(true)), 0);
-		const float fade = t.value("BlendTime", .15f);
-		require(std::isfinite(fade) && fade >= 0, "invalid BlendTime");
-		if (t.contains("Consume")) {
-			for (const auto& name : t.at("Consume")) {
-				require(doc.at("Parameters").contains(name.get<std::string>()) && doc["Parameters"][name.get<std::string>()]["Type"] == "trigger",
-					"Consume requires declared triggers");
-			}
-		}
-	};
-	for (const auto& t : doc.value("AnyState", Json::array())) {
-		transition(t);
-	}
-	for (const auto& [name, s] : states.items()) {
-		require(clipIndex.contains(s.at("Clock").get<std::string>()), "missing clock clip in " + name);
-		expression(s.value("Rate", Json(1)), 0);
-		expression(s.value("EntryTime", Json(0)), 0);
-		if (s.contains("ExternalTime")) {
-			expression(s.at("ExternalTime"), 0);
-		}
-		for (const auto& t : s.value("Transitions", Json::array())) {
-			transition(t);
-		}
-		require(!s.contains("Action"), "state Action metadata is unsupported; configure traversal actions separately");
-	}
-	std::set<std::string> phased, phaseStack;
-	std::function<void(const std::string&)> matchPhase;
-	matchPhase = [&](const std::string& name) {
-		if (phased.contains(name)) {
-			return;
-		}
-		require(phaseStack.insert(name).second, "phase-reference cycle at " + name);
-		const auto& clip = clips.at(name);
-		if (clip.contains("PhaseReference")) {
-			const auto reference = clip.at("PhaseReference").get<std::string>();
-			require(clips.contains(reference), "unknown phase reference " + reference);
-			matchPhase(reference);
-			const auto joints = rig.value("PhaseJoints", std::vector<std::string> { "LeftFoot", "RightFoot" });
-			require(joints.size() == 2, "PhaseJoints needs two support joints");
-			const int left = skeleton->findJointIndex(joints[0]), right = skeleton->findJointIndex(joints[1]);
-			require(left >= 0 && right >= 0, "missing phase support joints");
-			auto stride = [&](const std::string& id) {
-				AnimSample sample(result->skeleton, result->clips.at(id));
-				std::array<float, 32> values {};
-				for (int i = 0; i < 32; ++i) {
-					sample.seek(sample.duration() * float(i) / 32);
-					const auto p = CHARACTER::positions(*result->skeleton, *sample.getPose());
-					values[i] = p[left].y - p[right].y;
-				}
-				return values;
-			};
-			result->document["Clips"][name]["PhaseOffset"] = CHARACTER::strideOffset(stride(reference), stride(name))
-				+ result->document["Clips"][reference].value("PhaseOffset", 0.f) + clip.value("PhaseOffset", 0.f);
-			result->ir.clips[clipIndex.at(name)].phaseOffset = result->document["Clips"][name]["PhaseOffset"];
-		}
-		phaseStack.erase(name);
-		phased.insert(name);
-	};
-	for (const auto& [name, c] : clips.items()) {
-		matchPhase(name);
-	}
-	for (const auto& [name, p] : doc.at("Parameters").items()) {
-		auto value = parameterValue(p);
-		const auto type = std::visit([](auto v) { return DATA::typeOf(DATA::Value(v)); }, value);
-		result->symbols.emplace(name, DATA::Symbol { result->symbols.size(), type });
-		result->parameters.push_back(name);
-	}
-	result->parameterCount = result->symbols.size();
-	result->builtinStart = result->symbols.size();
-	for (const auto* name : { "StateTime", "NormalizedTime", "Duration", "Finished" }) {
-		result->symbols.emplace(
-			name, DATA::Symbol { result->symbols.size(), std::string_view(name) == "Finished" ? DATA::ValueType::Bool : DATA::ValueType::Float });
-	}
-	std::set<std::string> building;
-	std::function<void(const std::string&)> compileBinding;
-	compileBinding = [&](const std::string& name) {
-		if (result->symbols.contains(name)) {
-			return;
-		}
-		require(building.insert(name).second, "binding cycle: " + name);
-		const auto& b = bindings.at(name);
-		const auto& e = b.is_object() ? b.at("Expression") : b;
-		std::function<void(const Json&)> deps = [&](const Json& x) {
-			if (x.is_string() && bindings.contains(x.get<std::string>())) {
-				compileBinding(x.get<std::string>());
-			}
-			else if (x.is_array()) {
-				for (size_t i = 1; i < x.size(); ++i) {
-					deps(x[i]);
-				}
-			}
-		};
-		deps(e);
-		auto program = DATA::Expression::compile(e, result->symbols);
-		const auto slot = result->symbols.size();
-		const float response = b.is_object() ? b.value("Smoothing", 0.f) : 0.f;
-		require(response == 0 || program.type() == DATA::ValueType::Float, "Smoothing needs Float");
-		result->symbols.emplace(name, DATA::Symbol { slot, program.type() });
-		result->bindings.push_back({ slot, std::move(program), response });
-		building.erase(name);
-	};
-	for (const auto& [name, b] : bindings.items()) {
-		compileBinding(name);
-	}
-	auto compileProgram = [&](const Json& e, bool expectBool) -> uint16_t {
-		auto program = DATA::Expression::compile(e, result->symbols);
-		require(
-			expectBool ? program.type() == DATA::ValueType::Bool : program.type() == DATA::ValueType::Float || program.type() == DATA::ValueType::Int,
-			"wrong expression result type");
-		const auto id = uint16_t(result->expressions.size());
-		result->expressions.push_back(std::move(program));
-		return id;
-	};
-	std::function<uint16_t(const Json&, int)> compileNode;
-	compileNode = [&](const Json& n, int depth) -> uint16_t {
-		require(depth < 32, "node nesting exceeds 32");
-		if (n.is_string()) {
-			const auto name = n.get<std::string>();
-			require(clipIndex.contains(name), "unknown clip " + name);
-			ClipNode node { clipIndex.at(name) };
-			result->ir.nodes.push_back(node);
-			return uint16_t(result->ir.nodes.size() - 1);
-		}
-		if (n.contains("Blend")) {
-			require(n.at("Blend").is_array() && n.at("Blend").size() == 2, "Blend needs two nodes");
-			BlendNode node { compileNode(n["Blend"][0], depth + 1), compileNode(n["Blend"][1], depth + 1), compileProgram(n.at("Weight"), false) };
-			result->ir.nodes.push_back(node);
-			return uint16_t(result->ir.nodes.size() - 1);
-		}
-		if (n.contains("Select")) {
-			SelectNode node { compileProgram(n.at("Select"), true), compileNode(n.at("True"), depth + 1), compileNode(n.at("False"), depth + 1) };
-			result->ir.nodes.push_back(node);
-			return uint16_t(result->ir.nodes.size() - 1);
-		}
-		if (n.contains("Blendspace1D")) {
-			const auto& points = n.at("Blendspace1D");
-			require(points.is_array() && !points.empty(), "empty blendspace");
-			float last = -INFINITY;
-			Blendspace1DNode node;
-			node.parameterProgram = compileProgram(n.at("Parameter"), false);
-			for (const auto& p : points) {
-				const float v = p.at("Value");
-				require(std::isfinite(v) && v > last, "blendspace points must increase strictly");
-				last = v;
-				node.points.push_back({ v, compileNode(p.at("Node"), depth + 1) });
-			}
-			result->ir.nodes.push_back(std::move(node));
-			return uint16_t(result->ir.nodes.size() - 1);
-		}
-		require(false, "unknown blend node " + n.dump());
-		return 0;
-	};
-	for (const auto& [name, s] : states.items()) {
-		CompiledState state;
-		state.name = name;
-		state.nodeIndex = compileNode(s.at("Node"), 0);
-		state.clockClipIndex = clipIndex.at(s.at("Clock").get<std::string>());
-		if (s.contains("Rate")) {
-			state.rateProgram = compileProgram(s.at("Rate"), false);
-		}
-		if (s.contains("EntryTime")) {
-			state.entryTimeProgram = compileProgram(s.value("EntryTime", Json(0)), false);
-		}
-		if (s.contains("ExternalTime")) {
-			state.externalTimeProgram = compileProgram(s.at("ExternalTime"), false);
-		}
-		state.applyPoseOffset = s.value("ApplyPoseOffset", true);
-		state.preserveTime = s.value("PreserveTime", false);
-		state.lockTransitions = s.value("LockTransitions", false);
-		state.syncGroup = s.value("SyncGroup", std::string {});
-		result->ir.stateByName[name] = result->ir.states.size();
-		result->ir.states.push_back(std::move(state));
-	}
-	result->ir.initialStateIndex = result->ir.stateByName.at(doc.at("InitialState").get<std::string>());
-	if (doc.contains("Layers")) {
-		for (const auto& layerJson : doc.at("Layers")) {
-			auto layerDocument = layerJson;
-			const auto layerDesc = serde::deserialize<LayerDescriptor>(layerDocument);
-			CompiledLayer layer;
-			layer.mode = parseLayerMode(layerDesc.Mode);
-			layer.defaultWeight = layerDesc.Weight;
-			layer.boneMask = compileBoneMask(*skeleton, layerDesc.Mask, layerDesc.MaskJoints);
-			layer.nodeIndex = compileNode(layerDesc.Node, 0);
-			if (layerJson.contains("WeightExpression")) {
-				layer.weightProgram = compileProgram(layerJson.at("WeightExpression"), false);
-			}
-			result->ir.layers.push_back(layer);
-		}
-	}
-	auto edge = [&](const Json& t) {
-		return DATA::StateTransition { t.at("Target").get<std::string>(), DATA::Expression::compile(t.value("When", Json(true)), result->symbols),
-			t.value("Priority", 0), t.value("Interrupt", false), t.value("Force", false), t.value("BlendTime", .15f), t };
-	};
-	for (const auto& [name, state] : doc.at("States").items()) {
-		for (const auto& t : state.value("Transitions", Json::array())) {
-			result->ir.machine.transitions[name].push_back(edge(t));
-		}
-	}
-	for (const auto& t : doc.value("AnyState", Json::array())) {
-		result->ir.machine.anyState.push_back(edge(t));
-	}
-	return result;
 }
 
 StateGraphRuntime::StateGraphRuntime(std::shared_ptr<const StateGraphDefinition> def, std::shared_ptr<UTILS::Environment> env)
 	: mDefinition(std::move(def))
 	, mEnvironment(std::move(env))
 	, mBlend(mDefinition->skeleton) {
-	declareParameters(definition(), *mEnvironment);
-	for (const auto& name : mDefinition->parameters) {
-		mParameterSlots.push_back(mEnvironment->slot(name));
+	mParameterSlots.reserve(mDefinition->parameters.size());
+	for (const auto& parameter : mDefinition->parameters) {
+		mEnvironment->declare(parameter.name, parameter.defaultValue, parameter.trigger);
+		mParameterSlots.push_back(mEnvironment->slot(parameter.name));
 	}
 	mExpressionValues.resize(mDefinition->symbols.size(), 0.f);
 	for (const auto& clip : mDefinition->ir.clips) {
@@ -459,12 +65,9 @@ StateGraphRuntime::StateGraphRuntime(const StateGraphRuntime& other)
 const CompiledState& StateGraphRuntime::stateResource() const {
 	return mDefinition->ir.states.at(mStateIndex);
 }
-const StateGraphRuntime::Json& StateGraphRuntime::metadata() const {
-	return definition().at("States").at(mState);
-}
 void StateGraphRuntime::reset() {
-	for (const auto& [name, p] : definition().at("Parameters").items()) {
-		mEnvironment->setValue(name, parameterValue(p));
+	for (size_t i = 0; i < mDefinition->parameters.size(); ++i) {
+		mEnvironment->set(mParameterSlots[i], mDefinition->parameters[i].defaultValue);
 	}
 	mPhases.clear();
 	mSmoothedBindings.clear();
@@ -473,7 +76,7 @@ void StateGraphRuntime::reset() {
 	mPreviousState.clear();
 	mOutput = {};
 	mPoseOffset = {};
-	mLastTransition = {};
+	mLastTransition.clear();
 	mHasBindRoot = false;
 	mRootMotion = {};
 	mPendingEvents.clear();
@@ -658,12 +261,12 @@ void StateGraphRuntime::update(float dt) {
 	const auto& active = activeState();
 	const auto* selected = select(mDefinition->ir.machine, active.lockTransitions, [&](size_t slot) { return readExpressionSlot(slot); });
 	if (selected) {
-		mLastTransition = selected->metadata;
+		mLastTransition = selected->displayText;
 		const auto it = mDefinition->ir.stateByName.find(selected->target);
 		require(it != mDefinition->ir.stateByName.end(), "transition target missing from IR");
 		enter(it->second, selected->blend);
-		for (const auto& name : selected->metadata.value("Consume", Json::array())) {
-			mEnvironment->setValue(name.get<std::string>(), false);
+		for (const auto slot : selected->consumeSlots) {
+			mEnvironment->set(mParameterSlots.at(slot), false);
 		}
 	}
 	mPreviousPlaybackTime = mPlaybackTime;

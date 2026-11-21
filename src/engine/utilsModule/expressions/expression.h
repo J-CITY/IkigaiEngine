@@ -3,7 +3,7 @@
 #include "utilsModule/variables/entityRef.h"
 #include <functional>
 #include <map>
-#include <nlohmann/json.hpp>
+#include <nlohmann/json_fwd.hpp>
 #include <variant>
 #include <vector>
 

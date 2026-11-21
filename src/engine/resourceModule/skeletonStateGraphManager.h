@@ -12,6 +12,7 @@ public:
 		const std::string& path, UTILS::IAllocator* allocator = nullptr, ResourceDeleter deleter = nullptr);
 
 private:
+	static std::shared_ptr<const SKELETON::StateGraphDefinition> CompileDefinition(nlohmann::json& document);
 	void addFileWatchSubscribe(const std::string&, const std::unordered_set<std::string>&, std::weak_ptr<SKELETON::SkeletalStateGraph>) override;
 	ResourcePtr<SKELETON::SkeletalStateGraph> createResource(const std::string& path) override;
 	ResourcePtr<SKELETON::SkeletalStateGraph> createResource(const std::string& path, ELoadingType type) override;

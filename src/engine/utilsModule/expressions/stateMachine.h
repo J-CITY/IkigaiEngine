@@ -9,7 +9,8 @@ struct StateTransition {
 	int priority = 0;
 	bool interrupt = false, force = false;
 	float blend = 0;
-	nlohmann::json metadata;
+	std::vector<size_t> consumeSlots;
+	std::string displayText;
 };
 struct StateMachineDefinition {
 	std::map<std::string, std::vector<StateTransition>> transitions;

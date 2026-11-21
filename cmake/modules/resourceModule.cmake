@@ -67,6 +67,7 @@ set(IKIGAI_MANIFEST_resourceModule
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/skeletonBlendspaceManager.h"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/skeletonManager.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/skeletonManager.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/skeletonStateGraphCompiler.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/skeletonStateGraphManager.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/skeletonStateGraphManager.h"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/textureManager.cpp"

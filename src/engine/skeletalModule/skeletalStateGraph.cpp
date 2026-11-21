@@ -32,7 +32,7 @@ SkeletalStateGraphInstance::SkeletalStateGraphInstance(
 SkeletalStateGraphInstance::~SkeletalStateGraphInstance() = default;
 
 void SkeletalStateGraphInstance::update(float dt) {
-	if (mReloadPolicy == ReloadPolicy::Automatic && mRevision != mGraph->revision && !mRuntime->metadata().value("LockTransitions", false)) {
+	if (mReloadPolicy == ReloadPolicy::Automatic && mRevision != mGraph->revision && !mRuntime->activeState().lockTransitions) {
 		std::string error;
 		if (!mRuntime->replace(mGraph->definition, error)) {
 			std::cerr << "State graph reload rejected: " << error << std::endl;

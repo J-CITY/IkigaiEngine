@@ -427,7 +427,8 @@ void ComponentInspectorWindow::drawComponent(std::shared_ptr<ECS::Object> select
 				if (auto graph = dynamic_cast<ECS::SkeletalStateGraphComponent*>(component.get()); graph && graph->instance) {
 					auto* state = graph->instance->runtime();
 					ImGui::Text("State: %s | time %.3f | blend %.2f", state->state().c_str(), state->stateTime(), state->blendWeight());
-					ImGui::TextWrapped("Last transition: %s", state->lastTransition().dump().c_str());
+					const auto& transition = state->lastTransitionText();
+					ImGui::TextWrapped("Last transition: %s", transition.empty() ? "null" : transition.c_str());
 				}
 			} catch (const std::exception& e) {
 				ImGui::TextWrapped("%s", e.what());

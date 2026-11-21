@@ -1,8 +1,6 @@
 #include "skeletonStateGraphManager.h"
 #include "fileWatcher.h"
 #include "serviceManager.h"
-#include "skeletonAnimationManager.h"
-#include "skeletonManager.h"
 #include "utilsModule/memory/resourceAllocator.h"
 #include <iostream>
 
@@ -99,11 +97,7 @@ ResourcePtr<SKELETON::SkeletalStateGraph> SkeletonStateGraphLoader::CreateFromRe
 	}
 	expandBlendspaces(doc);
 	auto graph = MEMORY::MakeSharedWithDeleter<SKELETON::SkeletalStateGraph, MEMORY::Category::Skeleton>(allocator, deleter);
-	auto skeleton = ServiceManager::Get<SkeletonLoader>().loadResource(doc.at("SkeletonPath").get<std::string>());
-	graph->definition = SKELETON::StateGraphDefinition::compile(doc, skeleton, [skeleton](const std::string& clip) {
-		return clip.ends_with(".animation") ? SkeletonAnimationLoader::CreateFromResource(clip, skeleton)
-											: SkeletonAnimationLoader::CreateFromFile(clip, skeleton);
-	});
+	graph->definition = CompileDefinition(doc);
 	return graph;
 }
 
@@ -130,7 +124,6 @@ void SkeletonStateGraphLoader::addFileWatchSubscribe(
 	const std::string& path, const std::unordered_set<std::string>&, std::weak_ptr<SKELETON::SkeletalStateGraph> weak) {
 	std::unordered_set<std::string> dependencies { path };
 	if (auto graph = weak.lock(); graph && graph->definition) {
-		dependencies.insert(graph->definition->document.at("SkeletonPath").get<std::string>());
 		for (const auto& clip : graph->definition->dependencies) {
 			dependencies.insert(clip);
 			if (clip.ends_with(".animation")) {
