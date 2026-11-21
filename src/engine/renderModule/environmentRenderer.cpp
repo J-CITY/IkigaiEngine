@@ -1,11 +1,11 @@
 #include "backends/interface/uniformBufferInterface.h"
-#include "coreModule/core/core.h"
 #include "coreModule/ecs/components/environmentComponent.h"
 #include "coreModule/ecs/components/vegetationInteractorComponent.h"
 #include "coreModule/ecs/systems/environmentSystem.h"
 #include "gameRenderer.h"
 #include "render.h"
 #include "sceneModule/scene.h"
+#include "windowModule/window/window.h"
 #include <algorithm>
 #include <cmath>
 #include <string_view>

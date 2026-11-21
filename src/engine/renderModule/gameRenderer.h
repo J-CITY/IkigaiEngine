@@ -22,10 +22,11 @@
 #include "renderGraph/pipelineExecution.h"
 #include "renderGraph/renderGraphDescriptor.h"
 #include "renderGraph/screenProbeSettings.h"
-#include "sceneRenderData.h"
 #include "renderModule/virtualGeometry/virtualGeometryShadows.h"
+#include "sceneRenderData.h"
 #include "utilsModule/memory/frameArena.h"
 #include <filesystem>
+#include <functional>
 #include <set>
 
 // TODO move include to .cpp
@@ -59,11 +60,8 @@ class DeformableRenderer;
 }
 #endif
 
-namespace IKIGAI {
-namespace CORE {
-	class Core;
-}
-
+namespace IKIGAI::WINDOW {
+class Window;
 }
 namespace IKIGAI::RENDER {
 class MaterialInterface;
@@ -482,10 +480,22 @@ struct RenderGraphPipeline {
 	StagesArr loadStages(const std::vector<PipelineStage::Descriptor>& stages);
 };
 
+struct RenderSceneInput {
+	SCENE_SYSTEM::Scene* scene = nullptr;
+	bool loading = false;
+	std::string sourcePath;
+};
+
 class GameRenderer : public RENDER::GameRendererInterface {
 	friend struct RenderGraphPipeline;
 
-	IKIGAI::CORE::Core& mContext;
+	struct RenderContext {
+		Renderer* render;
+		WINDOW::Window* window;
+		std::function<RenderSceneInput()> sceneInput;
+		bool profileLoading;
+	};
+	RenderContext mContext;
 	std::unique_ptr<RenderGraphPipeline> mRenderPipeline;
 	HistoryCounters mRetiredHistoryCounters;
 	HistoryCounters mLoggedHistoryCounters;
@@ -648,14 +658,14 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	unsigned long long mFrameCount = 0ull;
 	PROFILER::GpuStageProfiler mGpuProfiler = {};
 
-	void renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::CameraComponent&);
+	void renderScene(SCENE_SYSTEM::Scene& scene, ECS::CameraComponent&, const std::string& sceneSourcePath);
 	void updateLights(SCENE_SYSTEM::Scene& scene);
 	void updateLightsInFrustum(SCENE_SYSTEM::Scene& scene, const Frustum& frustum);
 
 	const RenderGraphPipeline& getCurrentPipeline() const override;
 
 public:
-	GameRenderer(CORE::Core& context);
+	GameRenderer(Renderer& renderer, WINDOW::Window& window, std::function<RenderSceneInput()> sceneInput, bool profileLoading);
 	~GameRenderer() override;
 	PrimitiveRender& primitives() {
 		return mPrimitives;

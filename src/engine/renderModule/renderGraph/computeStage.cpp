@@ -1,7 +1,5 @@
 #include "computeStage.h"
 
-#include "coreModule/core/core.h"
-
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/backends/interface/shaderInterface.h"
 #include "renderModule/backends/interface/storageBufferInterface.h"

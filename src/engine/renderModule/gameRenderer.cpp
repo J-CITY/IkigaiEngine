@@ -1,5 +1,4 @@
 #include "gameRenderer.h"
-#include "coreModule/config.h"
 #include "coreModule/ecs/components/facialAnimationComponent.h"
 #include "coreModule/ecs/systems/environmentSystem.h"
 #include "diagnostics/renderStatistics.h"
@@ -26,14 +25,13 @@
 #include "captureModule/screenshot.h"
 
 #include "backends/interface/frameBufferInterface.h"
-#include "coreModule/core/core.h"
 #include "resourceModule/serviceManager.h"
 #include <renderModule/backends/graphicsWrapper.hpp>
 
 #include "resourceModule/materialManager.h"
 #include "resourceModule/shaderManager.h"
 #include "resourceModule/textureManager.h"
-#include "sceneModule/sceneManager.h"
+#include "sceneModule/scene.h"
 
 #include "backends/interface/indexBufferInterface.h"
 #include "backends/interface/uniformTypes.h"
@@ -119,8 +117,8 @@ namespace {
 	}
 }
 
-GameRenderer::GameRenderer(CORE::Core& context)
-	: mContext(context) {
+GameRenderer::GameRenderer(Renderer& renderer, WINDOW::Window& window, std::function<RenderSceneInput()> sceneInput, bool profileLoading)
+	: mContext { &renderer, &window, std::move(sceneInput), profileLoading } {
 	Init();
 }
 
@@ -204,20 +202,21 @@ void GameRenderer::Init() {
 
 void GameRenderer::renderScene() {
 	IKIGAI_PROFILE_SCOPE("Record Scene Frame");
-	if (mContext.sceneManager->isTransitioning() || !mContext.sceneManager->hasCurrentScene()) {
+	const auto input = mContext.sceneInput();
+	if (input.loading || !input.scene) {
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 		if (mGpuSceneMaterials) {
 			mGpuSceneMaterials->clear(*mContext.render);
 		}
 		mGpuScene.reset();
 #endif
-		renderLoadingScene(mContext.sceneManager->getPresentedScene());
+		renderLoadingScene(input.scene);
 		mPrimitives.clear();
 		return;
 	}
-	auto& scene = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::SCENE_SYSTEM::SceneManager>().getCurrentScene();
+	auto& scene = *input.scene;
 	std::unique_ptr<UTILS::LoadTimer> firstFrameTiming;
-	if (const bool profileLoading = Config::PROFILE_LOADING; profileLoading && mRenderedScene.lock() != scene.lifetime) {
+	if (const bool profileLoading = mContext.profileLoading; profileLoading && mRenderedScene.lock() != scene.lifetime) {
 		firstFrameTiming = std::make_unique<UTILS::LoadTimer>("scene-first-frame", profileLoading);
 	}
 	auto& render = mContext.render;
@@ -259,7 +258,7 @@ void GameRenderer::renderScene() {
 		mRenderedTopologyRevision = scene.renderTopologyRevision;
 	}
 
-	if (auto mainCameraComponent = mContext.sceneManager->getCurrentScene().findMainCamera()) {
+	if (auto mainCameraComponent = scene.findMainCamera()) {
 
 		auto sz = mContext.window->getPixelSize();
 		auto winWidth = sz.x;
@@ -274,7 +273,7 @@ void GameRenderer::renderScene() {
 		mainCameraComponent->getCamera().cacheMatrices(winWidth, winHeight, cameraPosition, cameraRotation);
 
 		// const auto glState = mDriver->fetchGLState();
-		renderScene(scene, *mainCameraComponent);
+		renderScene(scene, *mainCameraComponent, input.sourcePath);
 		// mDriver->applyStateMask(glState);
 	}
 	else {
@@ -621,7 +620,7 @@ void GameRenderer::drawDrawable(const Drawable& drawable, const GpuSceneDraw* in
 	}
 }
 // TODO: split it
-void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::CameraComponent& cameraComponent) {
+void GameRenderer::renderScene(SCENE_SYSTEM::Scene& scene, ECS::CameraComponent& cameraComponent, const std::string& sceneSourcePath) {
 	IKIGAI_PROFILE_SCOPE("Record Scene View");
 	// Draw lists are local to view recording. Recorded commands own their payloads and resource handles.
 	mDrawableArena.reset();
@@ -802,7 +801,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		mGpuScene->prepare(*mContext.render, ordinary, culling ? &camera.getFrustum() : nullptr, cameraPosition,
 			{ ordinaryHzb, mEmptyTexture, viewProjection, mPreviousViewProjection, temporalValid }, &materialIds,
 			mGpuSceneMaterials && bool(mGpuSceneMaterials->pass(true)));
-		if (Config::PROFILE_LOADING && mGpuSceneMaterials) {
+		if (mContext.profileLoading && mGpuSceneMaterials) {
 			const auto draws = std::ranges::count_if(mGpuScene->draws(), [](const auto& draw) { return bool(draw.Buffers.MaterialIds); });
 			std::cout << "GPU_SCENE_MATERIAL_TABLE draws=" << draws << " materials=" << materialIds.size() << '\n';
 		}
@@ -912,8 +911,8 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 			mContext.render->updateUniformBuffer(mFrameUbo, mFrameData);
 		}
 	}
-	const bool sdfMoved = !mRenderPipeline->mDescriptor.ScreenProbes.SdfAtlas.empty()
-		&& UpdateSdfTrace(*mRenderPipeline, *mContext.render, scene, mContext.sceneManager->getCurrentSceneSourcePath());
+	const bool sdfMoved
+		= !mRenderPipeline->mDescriptor.ScreenProbes.SdfAtlas.empty() && UpdateSdfTrace(*mRenderPipeline, *mContext.render, scene, sceneSourcePath);
 	if (sdfMoved) {
 		mRenderPipeline->mHistory.invalidate(
 			HistoryReason::SceneDynamicPose, historyEffectBit(HistoryEffect::GlobalIllumination) | historyEffectBit(HistoryEffect::Reflections));
@@ -990,7 +989,7 @@ void GameRenderer::renderScene(IKIGAI::SCENE_SYSTEM::Scene& scene, IKIGAI::ECS::
 		const bool changed = mRenderPipeline->mDescriptor.ScreenProbes.SdfAtlas.empty()
 			? mRaySceneChanged
 			: UpdateSdfCacheLights(*mRenderPipeline, *mContext.render, SceneRenderData::findLightData(scene));
-		UpdateSurfaceCache(*mRenderPipeline, *mContext.render, mContext.sceneManager->getCurrentSceneSourcePath(), changed || sdfMoved);
+		UpdateSurfaceCache(*mRenderPipeline, *mContext.render, sceneSourcePath, changed || sdfMoved);
 	}
 	mContext.render->updateUniformBuffer(mShadowUbo, mShadowData);
 
@@ -1855,14 +1854,15 @@ void GameRenderer::setPipeline(std::unique_ptr<RenderGraphPipeline>&& renderPipe
 void GameRenderer::renderSceneOculus(XrCompositionLayerProjectionView& layerView, render_target_t& rtarget, XrPosef& stagePose, uint32_t viewID) {
 	(void)stagePose;
 
-	if (mContext.sceneManager->isTransitioning() || !mContext.sceneManager->hasCurrentScene()) {
+	const auto input = mContext.sceneInput();
+	if (input.loading || !input.scene) {
 		const auto& rect = layerView.subImage.imageRect;
 		glBindFramebuffer(GL_FRAMEBUFFER, rtarget.fbo_id);
 		glViewport(rect.offset.x, rect.offset.y, rect.extent.width, rect.extent.height);
 		glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 		glClearColor(0.f, 0.f, 0.f, 1.f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		if (auto* loading = mContext.sceneManager->getPresentedScene()) {
+		if (auto* loading = input.scene) {
 			uboData.ViewportSize = { float(rect.extent.width), float(rect.extent.height) };
 			uboData.Time = static_cast<float>(TIME::Timer::GetInstance().getTimeSinceStart().count());
 			mContext.render->updateUniformBuffer(mEngineUbo, uboData);
@@ -1872,10 +1872,7 @@ void GameRenderer::renderSceneOculus(XrCompositionLayerProjectionView& layerView
 		return;
 	}
 
-	if (!mContext.sceneManager->hasCurrentScene()) {
-		return;
-	}
-	auto& scene = mContext.sceneManager->getCurrentScene();
+	auto& scene = *input.scene;
 	auto mainCamera = scene.findMainCamera();
 	if (!mainCamera) {
 		return;
@@ -1921,7 +1918,7 @@ void GameRenderer::renderSceneOculus(XrCompositionLayerProjectionView& layerView
 	cameraComp->getCamera().cacheViewMatrix(toMat4(matV));
 	cameraComp->getCamera().cacheProjectionMatrix(toMat4(matP));
 
-	renderScene(scene, *cameraComp);
+	renderScene(scene, *cameraComp, input.sourcePath);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }

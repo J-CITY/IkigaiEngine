@@ -418,7 +418,13 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 #endif
 	{
 		UTILS::LoadTimer timing("renderer", Config::PROFILE_LOADING);
-		auto gameRenderer = std::make_unique<RENDER::GameRenderer>(*this);
+		auto sceneInput = [manager = sceneManager.get()]() -> RENDER::RenderSceneInput {
+			if (manager->isTransitioning() || !manager->hasCurrentScene()) {
+				return { manager->getPresentedScene(), true, {} };
+			}
+			return { &manager->getCurrentScene(), false, manager->getCurrentSceneSourcePath() };
+		};
+		auto gameRenderer = std::make_unique<RENDER::GameRenderer>(*render, *window, std::move(sceneInput), Config::PROFILE_LOADING);
 		RESOURCES::ServiceManager::Set<RENDER::PrimitiveRender>(&gameRenderer->primitives());
 		renderer = std::move(gameRenderer);
 	}
