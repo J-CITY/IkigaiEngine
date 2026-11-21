@@ -13,7 +13,6 @@
 #include <sstream>
 #include <vector>
 
-#include "coreModule/config.h"
 #include "resourceModule/contentPacks.h"
 #include "resourceModule/modelManager.h"
 #include "resourceModule/parser/assimpParser.h"
@@ -90,7 +89,7 @@ void CookImportedModel(
 	CookVMesh(input, settings, output, report);
 }
 
-std::string ResolveCookModelPath(const std::string& modelPath) {
+std::string ResolveCookModelPath(const std::string& modelPath, const VMeshCookPaths& paths) {
 	namespace fs = std::filesystem;
 	std::vector<fs::path> candidates;
 	candidates.push_back(fs::u8path(modelPath));
@@ -98,11 +97,11 @@ std::string ResolveCookModelPath(const std::string& modelPath) {
 	while (!relative.empty() && (relative.front() == '/' || relative.front() == '\\')) {
 		relative.erase(relative.begin());
 	}
-	candidates.push_back(fs::u8path(Config::ROOT + Config::USER_ASSETS_PATH + relative));
-	for (const auto& pack : RESOURCES::ContentPackRoots(Config::ROOT)) {
+	candidates.push_back(fs::u8path(paths.gameAssets + relative));
+	for (const auto& pack : RESOURCES::ContentPackRoots(paths.root)) {
 		candidates.push_back(pack / fs::u8path(relative));
 	}
-	candidates.push_back(fs::u8path(Config::ROOT + Config::ENGINE_ASSETS_PATH + relative));
+	candidates.push_back(fs::u8path(paths.engineAssets + relative));
 	for (const fs::path& candidate : candidates) {
 		std::error_code error;
 		if (fs::is_regular_file(candidate, error)) {
@@ -112,14 +111,14 @@ std::string ResolveCookModelPath(const std::string& modelPath) {
 	return {};
 }
 
-int RunVMeshCookCommand(const VMeshCookCommand& command) {
+int RunVMeshCookCommand(const VMeshCookCommand& command, const VMeshCookPaths& paths) {
 	try {
 		using Clock = std::chrono::steady_clock;
 		const auto start = Clock::now();
 		if (command.OutputPath.empty()) {
 			throw std::invalid_argument("--cook-output=<file.vmesh> is required");
 		}
-		const std::string modelPath = ResolveCookModelPath(command.ModelPath);
+		const std::string modelPath = ResolveCookModelPath(command.ModelPath, paths);
 		if (modelPath.empty()) {
 			throw std::invalid_argument("Model not found: " + command.ModelPath);
 		}

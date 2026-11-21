@@ -24,10 +24,16 @@ struct VMeshCookCommand {
 	std::string SettingsPath {}; // optional JSON with VMeshCookSettings fields
 };
 
+struct VMeshCookPaths {
+	std::string root;
+	std::string gameAssets;
+	std::string engineAssets;
+};
+
 // Resolves the model path to a native file, or returns an empty string.
-std::string ResolveCookModelPath(const std::string& modelPath);
+std::string ResolveCookModelPath(const std::string& modelPath, const VMeshCookPaths& paths);
 
 // Imports the model with the default model loader flags, cooks, writes, reads the file back with validation and
 // prints statistics. Prints VMESH_COOK_OK on success. Returns a process exit code (0 on success).
-int RunVMeshCookCommand(const VMeshCookCommand& command);
+int RunVMeshCookCommand(const VMeshCookCommand& command, const VMeshCookPaths& paths);
 }

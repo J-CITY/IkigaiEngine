@@ -6,7 +6,7 @@
 #include "sceneModule/sceneManager.h"
 #include "utilsModule/contentRoot.h"
 #if defined(IKIGAI_VG_COOKER)
-#include "vmeshCookModel.h"
+#include "resourceModule/tools/vmeshCookModel.h"
 #endif
 #include <argParse.h>
 #include <filesystem>
@@ -118,7 +118,8 @@ int RunApplication(int argc, char* argv[], PlatformContext platform) {
 		applyOptions(options);
 #if defined(IKIGAI_VG_COOKER)
 		if (!options.cookVmesh.empty()) {
-			return VG::RunVMeshCookCommand(VG::VMeshCookCommand { options.cookVmesh, options.cookOutput, options.cookSettings });
+			return VG::RunVMeshCookCommand(VG::VMeshCookCommand { options.cookVmesh, options.cookOutput, options.cookSettings },
+				VG::VMeshCookPaths { Config::ROOT, Config::ROOT + Config::USER_ASSETS_PATH, Config::ROOT + Config::ENGINE_ASSETS_PATH });
 		}
 #endif
 		PlatformStartup startup;
