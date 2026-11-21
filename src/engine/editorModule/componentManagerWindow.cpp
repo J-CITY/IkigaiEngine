@@ -34,7 +34,7 @@
 #include "imgui_internal.h"
 #include "misc/cpp/imgui_stdlib.h"
 #include "utilsModule/imguiHelper/imguiWidgets.h"
-#include "utilsModule/reflection/reflection.h"
+#include "reflectionModule/reflection.h"
 
 using namespace IKIGAI::EDITOR;
 

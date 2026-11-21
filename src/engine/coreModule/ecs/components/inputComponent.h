@@ -3,7 +3,7 @@
 #include <string>
 
 #include "component.h"
-#include "utilsModule/reflection/reflection_macros.h"
+#include "reflectionModule/reflection_macros.h"
 #include "windowModule/inputManager/inputActions.h"
 
 namespace IKIGAI::ECS {

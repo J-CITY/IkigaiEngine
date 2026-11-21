@@ -1,8 +1,7 @@
 #pragma once
 #include "lightComponent.h"
 #include "mathModule/math.h"
-#include "utilsModule/reflection/reflection_macros.h"
-
+#include "reflectionModule/reflection_macros.h"
 
 namespace IKIGAI::ECS {
 class Object;

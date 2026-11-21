@@ -1,9 +1,9 @@
 #pragma once
 
 #include "component.h"
+#include "reflectionModule/reflection_macros.h"
 #include "skeletalModule/iAnimationPlayable.h"
 #include "utilsModule/environment.h"
-#include "utilsModule/reflection/reflection_macros.h"
 #include <memory>
 
 namespace IKIGAI::ECS {

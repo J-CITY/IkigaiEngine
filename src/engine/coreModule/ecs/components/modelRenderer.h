@@ -4,8 +4,8 @@
 #include <renderModule/backends/interface/modelInterface.h>
 #include <utilsModule/event.h>
 
+#include "reflectionModule/reflection_macros.h"
 #include "renderModule/meshGenerator.h"
-#include "utilsModule/reflection/reflection_macros.h"
 
 namespace IKIGAI::ECS {
 class Object;

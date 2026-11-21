@@ -21,6 +21,7 @@ set(IKIGAI_MODULE_MANIFEST_NAMES
     physicsModule
     profilerModule
     ragdollModule
+    reflectionModule
     renderModule
     renderGl
     renderVk

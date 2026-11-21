@@ -1,8 +1,8 @@
 #pragma once
 
 #include "ecsModule/world.h"
+#include "reflectionModule/reflection.h"
 #include "utilsModule/animation.h"
-#include "utilsModule/reflection/reflection.h"
 
 #include <optional>
 #include <string_view>

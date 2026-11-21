@@ -136,7 +136,7 @@ def generate_headers(all_files_data, output_dir_base, root_dir):
         cpp_h_content += f"#include <vector>\n"
         cpp_h_content += f"#include <map>\n"
         cpp_h_content += f"#include <string>\n"
-        cpp_h_content += f"#include \"utilsModule/reflection/reflection.h\"\n"
+        cpp_h_content += f"#include \"reflectionModule/reflection.h\"\n"
         cpp_h_content += f"#include \"{rel_path}\"\n\n"
 
         cpp_c_content = f"// AUTO GENERATED FILE. DO NOT MODIFY.\n"

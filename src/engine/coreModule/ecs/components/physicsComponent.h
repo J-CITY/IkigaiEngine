@@ -4,7 +4,7 @@
 #include "component.h"
 #include "physics3dLease.h"
 #include "physicsModule/narrowPhase.h"
-#include "utilsModule/reflection/reflection_macros.h"
+#include "reflectionModule/reflection_macros.h"
 #include <functional>
 #include <physicsModule/body.h>
 #include <renderModule/objects/boundingSphere.h>

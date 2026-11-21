@@ -2,7 +2,7 @@
 #include "component.h"
 #include "materialRenderer.h"
 #include "modelRenderer.h"
-#include "utilsModule/reflection/reflection_macros.h"
+#include "reflectionModule/reflection_macros.h"
 
 namespace IKIGAI::ECS {
 class Object;

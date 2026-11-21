@@ -1,11 +1,11 @@
 #pragma once
 
 #include "component.h"
+#include "reflectionModule/reflection_macros.h"
 #include "skeletalModule/animationOffset.h"
 #include "skeletalModule/animationTransform.h"
 #include "skeletalModule/iAnimationPlayable.h"
 #include "skeletalModule/skeleton.h"
-#include "utilsModule/reflection/reflection_macros.h"
 
 namespace IKIGAI::ECS {
 IKI_CLASS(Groups = [Component])

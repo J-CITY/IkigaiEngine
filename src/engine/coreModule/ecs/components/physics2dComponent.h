@@ -3,7 +3,7 @@
 #include "component.h"
 #include "mathModule/math.h"
 #include "physics2dModule/physics2d.h"
-#include "utilsModule/reflection/reflection_macros.h"
+#include "reflectionModule/reflection_macros.h"
 
 namespace IKIGAI::ECS {
 // The component owns a shared lease, not a pointer into an ECS array. Sparse

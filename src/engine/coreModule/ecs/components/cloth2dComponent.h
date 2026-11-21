@@ -3,7 +3,7 @@
 #include "component.h"
 #include "mathModule/math.h"
 #include "physics2dComponent.h"
-#include "utilsModule/reflection/reflection_macros.h"
+#include "reflectionModule/reflection_macros.h"
 
 namespace IKIGAI::ECS {
 IKI_CLASS(Groups = [Component])

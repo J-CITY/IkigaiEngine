@@ -1,7 +1,7 @@
 #pragma once
 #if USE_IKIGAI_SCRIPT
 #include "component.h"
-#include "utilsModule/reflection/reflection_macros.h"
+#include "reflectionModule/reflection_macros.h"
 #include <cstdint>
 #include <memory>
 #include <optional>

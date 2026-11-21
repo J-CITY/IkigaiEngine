@@ -1,6 +1,6 @@
 #include "core.h"
 #include "editorFrontend.h"
-#include "utilsModule/reflection/reflection_macros.h"
+#include "reflectionModule/reflection_macros.h"
 #include "utilsModule/time/loadTimer.h"
 #if USE_PHYSICS_3D
 #include "coreModule/ecs/components/physics3dComponent.h"

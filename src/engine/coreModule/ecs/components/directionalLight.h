@@ -2,7 +2,7 @@
 #include <string>
 
 #include "lightComponent.h"
-#include "utilsModule/reflection/reflection_macros.h"
+#include "reflectionModule/reflection_macros.h"
 // #include "../../../DiffuseLightRT.h"
 
 namespace IKIGAI::ECS {

@@ -1,6 +1,6 @@
-#include "componentCatalog.h"
 #include "componentReference.inl"
-#include "utilsModule/reflection/reflection.h"
+#include "componentCatalog.h"
+#include "reflectionModule/reflection.h"
 #include <map>
 
 namespace IKIGAI::ECS {

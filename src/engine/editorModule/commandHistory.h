@@ -5,7 +5,7 @@
 #include <string>
 
 #include "coreModule/ecs/object.h"
-#include "utilsModule/reflection/reflection.h"
+#include "reflectionModule/reflection.h"
 
 namespace IKIGAI::EDITOR {
 

@@ -11,7 +11,7 @@
 #include "utilsModule/serialization/jsonError.h"
 
 // because need in all component
-#include "utilsModule/reflection/reflection.h"
+#include "reflectionModule/reflection.h"
 #include <serdepp/attribute/default.hpp>
 #include <serdepp/serializer.hpp>
 

@@ -11,11 +11,11 @@
 #include "bindlessInterface.h"
 #include "mathModule/math.h"
 #include "rayTracingInterface.h"
+#include "reflectionModule/reflection.h"
 #include "reflectionStructs.h"
 #include "renderEnums.h"
 #include "resourceModule/parser/parseFlags.h"
 #include "textureInterface.h"
-#include "utilsModule/reflection/reflection.h"
 // #include "coreModule/resourceManager/parser/assimpParser.h"
 
 namespace IKIGAI::RENDER {

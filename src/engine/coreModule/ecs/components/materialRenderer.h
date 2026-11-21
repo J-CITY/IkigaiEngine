@@ -3,8 +3,8 @@
 #include "component.h"
 #include <renderModule/backends/interface/materialInterface.h>
 
+#include "reflectionModule/reflection_macros.h"
 #include "utilsModule/event.h"
-#include "utilsModule/reflection/reflection_macros.h"
 
 #define MAX_MATERIAL_COUNT 255
 

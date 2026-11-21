@@ -3,8 +3,8 @@
 #include "animationTimelineBind.h"
 #include "coreModule/ecs/object.h"
 #include "coroutineModule/task.h"
+#include "reflectionModule/reflection.h"
 #include "resourceModule/jsonLoader.h"
-#include "utilsModule/reflection/reflection.h"
 #include "utilsModule/serialization/typedDescriptor.h"
 
 #include <functional>

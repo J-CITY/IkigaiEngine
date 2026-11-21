@@ -1,8 +1,8 @@
 #pragma once
 
 #include "component.h"
+#include "reflectionModule/reflection_macros.h"
 #include "utilsModule/animation.h"
-#include "utilsModule/reflection/reflection_macros.h"
 
 #include <memory>
 #include <string>

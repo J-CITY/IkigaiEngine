@@ -1,7 +1,7 @@
 #pragma once
 
 #include "component.h"
-#include "utilsModule/reflection/reflection_macros.h"
+#include "reflectionModule/reflection_macros.h"
 
 #include <functional>
 

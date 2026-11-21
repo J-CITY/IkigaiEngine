@@ -4,7 +4,7 @@
 #include <sol/sol.hpp>
 
 #include "component.h"
-#include "utilsModule/reflection/reflection_macros.h"
+#include "reflectionModule/reflection_macros.h"
 #include <utilsModule/event.h>
 
 namespace IKIGAI::ECS {
