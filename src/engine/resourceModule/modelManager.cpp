@@ -7,10 +7,10 @@
 #include "fileWatcher.h"
 #include "renderModule/render.h"
 #include "taskModule/taskSystem.h"
-#include "utilsModule/pathGetter.h"
 
 #include "renderModule/backends/interface/resourceStruct.h"
 #include "utilsModule/assertion.h"
+#include "utilsModule/log/loggerDefine.h"
 #include <renderModule/backends/interface/driverInterface.h>
 
 namespace IKIGAI::RESOURCES {
