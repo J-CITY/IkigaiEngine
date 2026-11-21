@@ -28,7 +28,7 @@
 #include "backends/interface/frameBufferInterface.h"
 #include "coreModule/core/core.h"
 #include "resourceModule/serviceManager.h"
-#include <coreModule/graphicsWrapper.hpp>
+#include <renderModule/backends/graphicsWrapper.hpp>
 
 #include "resourceModule/materialManager.h"
 #include "resourceModule/shaderManager.h"

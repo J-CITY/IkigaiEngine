@@ -1,6 +1,6 @@
 #include "indexBufferGl.h"
 #ifdef OPENGL_BACKEND
-#include <coreModule/graphicsWrapper.hpp>
+#include <renderModule/backends/graphicsWrapper.hpp>
 
 namespace IKIGAI::INTERNAL {
 	const GLenum UsageTypeMap[] = {

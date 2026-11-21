@@ -1,7 +1,7 @@
 #include "uniformBufferGl.h"
 #ifdef OPENGL_BACKEND
-#include <coreModule/graphicsWrapper.hpp>
 #include <cstring>
+#include <renderModule/backends/graphicsWrapper.hpp>
 #include <stdexcept>
 
 IKIGAI::RENDER::UniformBufferGl::UniformBufferGl(const void* data, size_t sz)

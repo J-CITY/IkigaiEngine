@@ -5,10 +5,10 @@
 #include <stdexcept>
 
 #ifdef OPENGL_BACKEND
-#include "coreModule/graphicsWrapper.hpp"
 #include "gl/indexBufferGl.h"
 #include "gl/meshGl.h"
 #include "gl/modelGl.h"
+#include "renderModule/backends/graphicsWrapper.hpp"
 
 #endif
 #ifdef VULKAN_BACKEND

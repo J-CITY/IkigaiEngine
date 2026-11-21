@@ -13,8 +13,7 @@
 
 #include "renderModule/backends/gl/textureGl.h"
 #include "resourceModule/textureManager.h"
-#include <coreModule/graphicsWrapper.hpp>
-
+#include <renderModule/backends/graphicsWrapper.hpp>
 
 #include "components/vectorComponents.h"
 #include "resourceModule/fileSystem/fileSystem.h"

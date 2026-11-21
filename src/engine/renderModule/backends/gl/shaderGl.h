@@ -5,7 +5,7 @@
 #include "mathModule/math.h"
 #include "profilerModule/gpuMemoryProfiler.h"
 #include "renderModule/backends/interface/resourceStruct.h"
-#include <coreModule/graphicsWrapper.hpp>
+#include <renderModule/backends/graphicsWrapper.hpp>
 #include <unordered_map>
 
 namespace IKIGAI::RENDER {

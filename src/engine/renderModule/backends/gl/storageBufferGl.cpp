@@ -1,6 +1,6 @@
 #include "storageBufferGl.h"
 #ifdef OPENGL_BACKEND
-#include <coreModule/graphicsWrapper.hpp>
+#include <renderModule/backends/graphicsWrapper.hpp>
 
 namespace {
 GLenum StorageBufferTarget() {

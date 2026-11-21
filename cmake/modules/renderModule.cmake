@@ -1,6 +1,7 @@
 # Explicit source manifest for renderModule.
 # Add new production files here; generated reflection files are owned by Codegen.cmake.
 set(IKIGAI_MANIFEST_renderModule
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/graphicsWrapper.hpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/dlssUpscalerCommon.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/driverFactory.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/backends/driverFactory.h"

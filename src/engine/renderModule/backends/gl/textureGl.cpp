@@ -18,7 +18,7 @@
 
 #ifdef OPENGL_BACKEND
 #include <iostream>
-#include <coreModule/graphicsWrapper.hpp>
+#include <renderModule/backends/graphicsWrapper.hpp>
 //#include <coreModule/resourceManager/textureManager.h>
 #include <renderModule/backends/interface/resourceStruct.h>
 #include <resourceModule/serviceManager.h>

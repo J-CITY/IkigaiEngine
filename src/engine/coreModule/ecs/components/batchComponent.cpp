@@ -1,5 +1,5 @@
 #include "batchComponent.h"
-#include <coreModule/graphicsWrapper.hpp>
+#include <renderModule/backends/graphicsWrapper.hpp>
 #include <string>
 
 

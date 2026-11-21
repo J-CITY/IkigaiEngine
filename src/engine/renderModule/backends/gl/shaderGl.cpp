@@ -2,13 +2,13 @@
 #include "shaderGl.h"
 #ifdef OPENGL_BACKEND
 #include <array>
-#include <coreModule/graphicsWrapper.hpp>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <sstream>
 #include <regex>
+#include <renderModule/backends/graphicsWrapper.hpp>
+#include <sstream>
 #include <stdexcept>
 // #include <coreModule/resourceManager/textureManager.h>
 #include "../interface/reflectionStructs.h"

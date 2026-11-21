@@ -5,7 +5,7 @@
 
 #include "renderModule/backends/interface/storageBufferInterface.h"
 #include "renderModule/backends/interface/textureInterface.h"
-#include <coreModule/graphicsWrapper.hpp>
+#include <renderModule/backends/graphicsWrapper.hpp>
 #ifdef OPENGL_BACKEND
 #include <memory>
 #include <string>

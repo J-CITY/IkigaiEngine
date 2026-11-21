@@ -1,5 +1,5 @@
 #include "gpuStageProfiler.h"
-#include "coreModule/graphicsWrapper.hpp"
+#include "renderModule/backends/graphicsWrapper.hpp"
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/render.h"
 #include "resourceModule/serviceManager.h"

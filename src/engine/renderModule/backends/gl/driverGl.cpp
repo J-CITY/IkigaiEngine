@@ -11,8 +11,8 @@
 #include "storageBufferGl.h"
 #include "textureGl.h"
 #include "uniformBufferGl.h"
-#include <coreModule/graphicsWrapper.hpp>
 #include <iostream>
+#include <renderModule/backends/graphicsWrapper.hpp>
 #include <string>
 
 #include "modelGl.h"

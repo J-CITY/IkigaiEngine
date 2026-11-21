@@ -1,6 +1,6 @@
 #include "gpuMemoryGl.h"
 #if defined(OPENGL_BACKEND) && IKIGAI_ENABLE_MEMORY_TRACKING
-#include "coreModule/graphicsWrapper.hpp"
+#include "renderModule/backends/graphicsWrapper.hpp"
 #include "renderModule/backends/interface/driverInterface.h"
 #include <algorithm>
 #include <limits>

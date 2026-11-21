@@ -2,8 +2,8 @@
 #ifdef OPENGL_BACKEND
 #include "textureGl.h"
 
-#include <coreModule/graphicsWrapper.hpp>
 #include <iostream>
+#include <renderModule/backends/graphicsWrapper.hpp>
 #include <stdexcept>
 #if defined(USE_SDL) && defined(__APPLE__) && TARGET_OS_IPHONE
 #include <SDL3/SDL.h>
