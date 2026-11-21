@@ -1,9 +1,9 @@
 #include "concaveDestruction.h"
-#include "../../../3rd/assimp/contrib/earcut-hpp/earcut.hpp"
 #include <algorithm>
 #include <cmath>
 #include <limits>
 #include <map>
+#include <mapbox/earcut.hpp>
 #include <stdexcept>
 #include <utility>
 

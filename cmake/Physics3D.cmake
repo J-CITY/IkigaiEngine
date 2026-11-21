@@ -12,6 +12,8 @@ function(ikigai_add_physics3d_library)
     endif()
     set(root "${IKIGAI_PHYSICS_3D_ROOT}")
     ikigai_add_collision_library(3)
+    add_library(ikigai_earcut INTERFACE)
+    target_include_directories(ikigai_earcut SYSTEM INTERFACE "${root}/3rd/earcut-hpp/include")
     add_library(ikigai_physics3d STATIC
         "${root}/src/engine/physicsModule/body.cpp"
         "${root}/src/engine/physicsModule/contacts.cpp"
@@ -30,7 +32,7 @@ function(ikigai_add_physics3d_library)
     target_sources(ikigai_physics3d PRIVATE "${root}/src/engine/destructionModule/destructibleDefinition.cpp"
         "${root}/src/engine/destructionModule/destructibleInstance.cpp")
     target_compile_features(ikigai_physics3d PUBLIC cxx_std_20)
-    target_link_libraries(ikigai_physics3d PUBLIC ikigai_collision3d)
+    target_link_libraries(ikigai_physics3d PUBLIC ikigai_collision3d PRIVATE ikigai_earcut)
     ikigai_enable_stop_token(ikigai_physics3d)
     target_include_directories(ikigai_physics3d PUBLIC "${root}/src/engine"
         "${root}/3rd/serdepp/include" "${root}/3rd/json/include" "${root}/3rd/nameof/include"
