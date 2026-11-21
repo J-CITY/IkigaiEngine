@@ -13,6 +13,7 @@ set(IKIGAI_MODULE_MANIFEST_NAMES
     ecsModule
     editorModule
     environmentModule
+    guiModule
     mathModule
     networkModule
     particleModule

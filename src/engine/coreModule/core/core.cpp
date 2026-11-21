@@ -36,7 +36,7 @@
 
 #include "../config.h"
 #include "../ecs/systems/audioSystem.h"
-#include "../ecs/systems/guiLayoutSystem.h"
+#include "guiModule/guiLayoutSystem.h"
 #include "../ecs/systems/inputSystem.h"
 #include "../ecs/systems/propertyAnimationSystem.h"
 #include "../ecs/systems/scriptSystem.h"

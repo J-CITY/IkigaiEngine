@@ -1,0 +1,10 @@
+set(IKIGAI_MANIFEST_guiModule
+    "${IKIGAI_SOURCE_ROOT}/engine/guiModule/font.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/guiModule/font.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/guiModule/guiLayoutSystem.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/guiModule/guiLayoutSystem.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/guiModule/guiObject.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/guiModule/guiObject.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/guiModule/spriteBatcher.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/guiModule/spriteBatcher.h"
+)

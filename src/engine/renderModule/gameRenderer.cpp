@@ -43,7 +43,7 @@
 #include "backends/meshFactory.h"
 #include "coreModule/gui/components/spriteComponent.h"
 #include "coreModule/gui/components/vectorComponents.h"
-#include "coreModule/gui/guiObject.h"
+#include "guiModule/font.h"
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/light.h"
 #include "renderModule/render.h"
