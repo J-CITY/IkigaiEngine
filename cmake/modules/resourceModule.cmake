@@ -42,6 +42,8 @@ set(IKIGAI_MANIFEST_resourceModule
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/parser/assimpParser.h"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/parser/importedModel.h"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/parser/parseFlags.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/particleDefinition.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/particleDefinition.h"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/particleManager.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/particleManager.h"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/playerProfile.cpp"

@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <map>
 #include <memory>
-#include <nlohmann/json_fwd.hpp>
 #include <string>
 #include <vector>
 
@@ -115,8 +114,6 @@ struct Definition {
 	Parameters parameters;
 	std::vector<EmitterDefinition> emitters;
 };
-// Strict, independent of ECS, VFS and GPU. All failures include a JSON path.
-std::shared_ptr<const Definition> parse(const nlohmann::json& json, const std::string& path = { });
 uint64_t hash(const std::string& text);
 float random01(uint64_t key);
 

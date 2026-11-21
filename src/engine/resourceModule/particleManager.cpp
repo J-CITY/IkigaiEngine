@@ -1,6 +1,7 @@
 #include "particleManager.h"
 #include "materialManager.h"
 #include "modelManager.h"
+#include "particleDefinition.h"
 #include "renderModule/backends/interface/materialInterface.h"
 #include "renderModule/backends/interface/meshInterface.h"
 #include "renderModule/backends/interface/modelInterface.h"
@@ -70,7 +71,7 @@ ResourcePtr<ParticleAsset> ParticleLoader::createResource(const std::string& pat
 	if (!file || !file->isValid()) {
 		throw std::runtime_error("Missing particle asset: " + path);
 	}
-	auto definition = PARTICLES::parse(nlohmann::json::parse(file->readStr()), path);
+	auto definition = ReadParticleDefinition(file->readStr(), path);
 	return registerResource(path, createInline(std::move(definition)));
 }
 COROUTINE::Task<ResourcePtr<ParticleAsset>> ParticleLoader::createResourceTask(
@@ -86,7 +87,7 @@ COROUTINE::Task<ResourcePtr<ParticleAsset>> ParticleLoader::createResourceTask(
 	auto bytes = co_await file->readAllTask(control);
 	control->check();
 	auto asset = std::make_shared<ParticleAsset>();
-	asset->definition = PARTICLES::parse(nlohmann::json::parse(bytes.begin(), bytes.end()), path);
+	asset->definition = ReadParticleDefinition({ reinterpret_cast<const char*>(bytes.data()), bytes.size() }, path);
 	for (const auto& e : asset->definition->emitters) {
 		control->check();
 		ParticleAsset::DrawResources r;

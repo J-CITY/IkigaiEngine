@@ -7,6 +7,8 @@
 #include "resourceModule/particleManager.h"
 #include "resourceModule/shaderManager.h"
 #include "windowModule/window/window.h"
+#include <algorithm>
+#include <cmath>
 #include <renderModule/gameRenderer.h>
 #include <stdexcept>
 #include <utilsModule/pathGetter.h>
@@ -215,9 +217,29 @@ SpriteParticleComponent& SpriteParticleComponent::operator=(const SpriteParticle
 }
 
 void SpriteParticleComponent::setEmmiters(std::vector<Emmiter> e) {
-	using J = nlohmann::json;
-	J effect { { "Version", 1 }, { "Dimension", "2D" }, { "Emitters", J::array() } };
-	auto uniform = [](float a, float b) { return J { { "Mode", "uniform" }, { "Min", a }, { "Max", b } }; };
+	using namespace PARTICLES;
+	auto definition = std::make_shared<Definition>();
+	auto uniform = [](Value minimum, Value maximum, int channels, const char* property) {
+		for (int channel = 0; channel < channels; ++channel) {
+			if (!std::isfinite(minimum[channel]) || !std::isfinite(maximum[channel]) || minimum[channel] > maximum[channel]) {
+				throw std::invalid_argument(std::string("Invalid legacy particle range: ") + property);
+			}
+		}
+		Source result;
+		result.mode = SourceMode::Uniform;
+		result.channels = channels;
+		result.min = minimum;
+		result.max = maximum;
+		result.channel = hash(property);
+		return result;
+	};
+	auto module = [](ModuleType type, const char* id) {
+		Module result;
+		result.type = type;
+		result.id = hash(id);
+		return result;
+	};
+	uint64_t capacity = 0;
 	for (size_t i = 0; i < e.size(); ++i) {
 		auto& emitter = e[i];
 		emitter.curSpawnTime = emitter.pause;
@@ -228,51 +250,76 @@ void SpriteParticleComponent::setEmmiters(std::vector<Emmiter> e) {
 		if (emitter.spawnTime <= 0) {
 			throw std::invalid_argument("Legacy particle SpawnTime must be positive; choose an explicit interval");
 		}
-		J render { { "Type", "sprite2D" }, { "RenderSpace", mIs3D ? "world" : "screen" },
-			{ "Piece", emitter.piece.empty() ? mTexturePiece : emitter.piece } };
+		capacity += emitter.count;
+		if (capacity > 1000000 || definition->emitters.size() >= 128) {
+			throw std::invalid_argument("Legacy particle effect exceeds emitter or particle capacity");
+		}
+		if (!std::isfinite(emitter.spawnTime) || !std::isfinite(emitter.pause) || emitter.spawnTime < .001 || emitter.pause < 0) {
+			throw std::invalid_argument("Legacy particle SpawnTime must be >= .001 and Pause >= 0");
+		}
+		if (emitter.spawnCount < 0 || emitter.spawnCount > 65536 || emitter.lifeTime.x <= 0) {
+			throw std::invalid_argument("Legacy particles require SpawnCount in [0,65536] and a positive lifetime");
+		}
+
+		EmitterDefinition converted;
+		converted.id = "legacy-" + std::to_string(i);
+		converted.local = true;
+		converted.capacity = static_cast<uint32_t>(emitter.count);
+		converted.duration = emitter.spawnTime;
+		converted.loops = 0;
+		converted.delay = emitter.pause;
+		Burst burst;
+		burst.count = static_cast<uint32_t>(emitter.spawnCount);
+		converted.bursts.push_back(burst);
+
+		auto& renderer = converted.renderer;
+		renderer.screen = !mIs3D;
+		renderer.depthTest = mIs3D;
+		renderer.piece = emitter.piece.empty() ? mTexturePiece : emitter.piece;
 		if (mExplicitAtlas) {
-			render["Atlas"] = mPath;
+			renderer.atlas = mPath;
 		}
-		else if (!mPath.empty()) {
-			render["Texture"] = mPath;
+		else {
+			renderer.texture = mPath;
 		}
-		J acceleration { { "Mode", "uniform" }, { "Min", { emitter.gravity.x * emitter.weight.x, emitter.gravity.y * emitter.weight.x } },
-			{ "Max", { emitter.gravity.x * emitter.weight.y, emitter.gravity.y * emitter.weight.y } } };
-		// Negative gravity reverses a numeric interval; linked channels preserve one weight.
-		for (int c = 0; c < 2; ++c) {
-			if (acceleration["Min"][c].get<float>() > acceleration["Max"][c].get<float>()) {
-				std::swap(acceleration["Min"][c], acceleration["Max"][c]);
-			}
+
+		auto shape = module(ModuleType::Shape, "shape");
+		shape.shape.offset = { emitter.localPos.x, emitter.localPos.y };
+		auto initialize = module(ModuleType::Initialize, "init");
+		initialize.lifetime = uniform({ emitter.lifeTime.x }, { emitter.lifeTime.y }, 1, "Lifetime");
+		initialize.size = uniform({ emitter.size.x, emitter.size.x }, { emitter.size.y, emitter.size.y }, 2, "Size");
+		initialize.velocity.channels = 2;
+		initialize.color.channels = 4;
+		initialize.color.min = initialize.color.max = { emitter.color.x, emitter.color.y, emitter.color.z, emitter.color.w };
+		initialize.orientation.channels = 3;
+		auto launch = module(ModuleType::DirectionalVelocity, "launch");
+		launch.value = uniform({ emitter.angleForce.x }, { emitter.angleForce.y }, 1, "Value");
+		launch.rotation = uniform({ emitter.angle.x }, { emitter.angle.y }, 1, "Rotation");
+
+		auto acceleration = module(ModuleType::Acceleration, "gravity");
+		acceleration.value.mode = SourceMode::Uniform;
+		acceleration.value.channels = 2;
+		acceleration.value.channel = hash("Value");
+		// Both axes use the same weight even when their gravity signs differ.
+		acceleration.value.min = { emitter.gravity.x * emitter.weight.x, emitter.gravity.y * emitter.weight.x };
+		acceleration.value.max = { emitter.gravity.x * emitter.weight.y, emitter.gravity.y * emitter.weight.y };
+		const auto finite = [](float value) { return std::isfinite(value); };
+		if (!std::all_of(shape.shape.offset.begin(), shape.shape.offset.end(), finite)
+			|| !std::all_of(initialize.color.min.begin(), initialize.color.min.end(), finite)
+			|| !std::all_of(acceleration.value.min.begin(), acceleration.value.min.end(), finite)
+			|| !std::all_of(acceleration.value.max.begin(), acceleration.value.max.end(), finite)) {
+			throw std::invalid_argument("Legacy particle position, color and acceleration must be finite");
 		}
-		effect["Emitters"].push_back({ { "Id", "legacy-" + std::to_string(i) }, { "SimulationSpace", "local" }, { "Capacity", emitter.count },
-			{ "Timing", { { "Duration", emitter.spawnTime }, { "Loops", 0 }, { "Delay", emitter.pause } } },
-			{ "Emission", { { "Bursts", J::array({ { { "Time", 0 }, { "Count", emitter.spawnCount } } }) } } },
-			{ "Spawn",
-			J::array({ { { "Id", "shape" }, { "Type", "Shape" }, { "Shape", "point" }, { "Offset", { emitter.localPos.x, emitter.localPos.y } } },
-			{ { "Id", "init" }, { "Type", "Initialize" }, { "Lifetime", uniform(emitter.lifeTime.x, emitter.lifeTime.y) },
-			{ "Size", { { "Mode", "uniform" }, { "Min", { emitter.size.x, emitter.size.x } }, { "Max", { emitter.size.y, emitter.size.y } } } },
-			{ "Color", { { "Mode", "constant" }, { "Value", { emitter.color.x, emitter.color.y, emitter.color.z, emitter.color.w } } } } },
-			{ { "Id", "launch" }, { "Type", "DirectionalVelocity" }, { "Speed", uniform(emitter.angleForce.x, emitter.angleForce.y) },
-			{ "Angle", uniform(emitter.angle.x, emitter.angle.y) } } }) },
-			{ "Update",
-			J::array({ { { "Id", "gravity" }, { "Type", "Acceleration" }, { "Value", acceleration } },
-			{ { "Id", "motion" }, { "Type", "IntegrateMotion" } } }) },
-			{ "Renderer", render } });
+		converted.spawn.push_back(std::move(shape));
+		converted.spawn.push_back(std::move(initialize));
+		converted.spawn.push_back(std::move(launch));
+		converted.update.push_back(std::move(acceleration));
+		converted.update.push_back(module(ModuleType::IntegrateMotion, "motion"));
+		definition->emitters.push_back(std::move(converted));
 	}
 	std::shared_ptr<RESOURCES::ParticleAsset> asset;
 	std::unique_ptr<PARTICLES::Runtime<2>> runtime;
-	if (!effect["Emitters"].empty()) {
-		auto definition = std::make_shared<PARTICLES::Definition>(*PARTICLES::parse(effect, "legacy particles"));
-		for (auto& converted : definition->emitters) {
-			const auto& original = e[std::stoi(converted.id.substr(7))];
-			for (auto& m : converted.update) {
-				if (m.type == PARTICLES::ModuleType::Acceleration) {
-					// Preserve one shared random weight, including opposite signs of gravity axes.
-					m.value.min = { original.gravity.x * original.weight.x, original.gravity.y * original.weight.x, 0, 0 };
-					m.value.max = { original.gravity.x * original.weight.y, original.gravity.y * original.weight.y, 0, 0 };
-				}
-			}
-		}
+	if (!definition->emitters.empty()) {
 		asset = RESOURCES::ServiceManager::Get<RESOURCES::ParticleLoader>().createInline(std::move(definition));
 		runtime = std::make_unique<PARTICLES::Runtime<2>>(asset->definition, 1);
 	}
