@@ -5,8 +5,8 @@
 #include <renderModule/camera.h>
 #include <windowModule/window/window.h>
 
-#include "renderModule/backends/gl/textureGl.h"
 #include "sceneModule/sceneManager.h"
+#include <iostream>
 using namespace IKIGAI::ECS;
 
 CameraComponent::CameraComponent(UTILS::Ref<ECS::Object> _obj)

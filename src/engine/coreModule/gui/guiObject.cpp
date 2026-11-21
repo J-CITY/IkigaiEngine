@@ -11,9 +11,7 @@
 #include <windowModule/inputManager/inputManager.h>
 
 
-#include "renderModule/backends/gl/textureGl.h"
 #include "resourceModule/textureManager.h"
-#include <renderModule/backends/graphicsWrapper.hpp>
 
 #include "components/vectorComponents.h"
 #include "resourceModule/fileSystem/fileSystem.h"

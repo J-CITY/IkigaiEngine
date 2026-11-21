@@ -2,8 +2,10 @@
 #include "atlasInterface.h"
 #include "renderEnums.h"
 #include "renderResourceOwner.h"
+#include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace IKIGAI::RENDER {
 	struct TextureResource; // forward declaration (defined in resourceStruct.h)

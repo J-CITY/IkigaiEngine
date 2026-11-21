@@ -8,13 +8,10 @@
 #include "resourceModule/particleManager.h"
 #include "resourceModule/shaderManager.h"
 #include "windowModule/window/window.h"
-#include <renderModule/backends/gl/textureGl.h>
 #include <renderModule/gameRenderer.h>
 #include <stdexcept>
 #include <utilsModule/pathGetter.h>
 
-#include "renderModule/backends/gl/shaderGl.h"
-#include "renderModule/backends/gl/vertexBufferGl.h"
 #include "renderModule/vertex.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/textureManager.h"
