@@ -1,4 +1,5 @@
 #pragma once
+#include "renderModule/backends/interface/atlasInterface.h"
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/backends/interface/resourceStruct.h"
 #include "resourceManager.h"
@@ -10,6 +11,7 @@
 #include <functional>
 #include <future>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -22,6 +24,8 @@ namespace IKIGAI::RESOURCES {
 
 class TextureLoader : public ResourceManager<RENDER::TextureInterface, RENDER::TextureResource> {
 public:
+	static std::vector<std::uint8_t> ReadImage(const std::string& path);
+	static std::optional<RENDER::AtlasData> ReadAtlas(const std::string& imagePath);
 	TextureLoader();
 	ResolvedTexture resolveSprite(const std::string& path);
 	ResourceRequest<RENDER::TextureInterface> requestSprite(const std::string& path);

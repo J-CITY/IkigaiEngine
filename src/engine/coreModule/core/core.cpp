@@ -42,6 +42,7 @@
 #include "../ecs/systems/scriptSystem.h"
 #include "coreModule/gui/components/vectorComponents.h"
 #include "networkModule/networkRuntime.h"
+#include "renderModule/backends/interface/textureAssetSource.h"
 #include "resourceModule/audioSourceManager.h"
 #include "resourceModule/contentPacks.h"
 #include "resourceModule/contentService.h"
@@ -141,6 +142,8 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 		},
 	};
 	UTILS::ServiceManager::Set(&audioClips);
+	static const RENDER::TextureAssetSource textureAssets { RESOURCES::TextureLoader::ReadImage, RESOURCES::TextureLoader::ReadAtlas };
+	UTILS::ServiceManager::Set(&textureAssets);
 #ifdef USE_FILE_WATCHER
 	RESOURCES::FileWatcher::getInstance()->start();
 #endif

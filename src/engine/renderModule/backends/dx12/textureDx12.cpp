@@ -1,5 +1,6 @@
 #include "textureDx12.h"
 #include "renderModule/backends/interface/integerColorAttachment.h"
+#include "renderModule/backends/interface/textureAssetSource.h"
 
 #include "utilsModule/pathGetter.h"
 
@@ -9,16 +10,12 @@
 #include "d3dx12/d3d12generatemips.h"
 #include "renderModule/backends/interface/atlasInterface.h"
 #include "renderModule/backends/interface/resourceStruct.h"
-#include "resourceModule/jsonLoader.h"
 #include "utilsModule/stdLoader.h"
 #include <algorithm>
 #include <bit>
-#include <filesystem>
 #include <stdexcept>
 
 #include "driverDx12.h"
-#include <resourceModule/serviceManager.h>
-#include <resourceModule/fileSystem/fileSystem.h>
 #include "utilsModule/log/loggerDefine.h"
 
 #define STB_IMAGE_IMPLEMENTATION
@@ -39,15 +36,15 @@ static uint32_t GetMipCount(uint32_t width, uint32_t height) {
 }
 
 static bool LoadTextureImageFromVfs(const std::string& path, bool isFloat, int& width, int& height, int& channels, void*& outData) {
-	auto file = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>().getFile(path, RESOURCES::FileMode::READ);
-	if (!file) {
+	const auto fileData = IKIGAI::RENDER::ReadTextureImage(path);
+	if (fileData.empty()) {
 		LOG_ERROR << "Failed to open texture: " << path;
 		return false;
 	}
-	const auto fileData = file->read();
 	if (isFloat) {
 		outData = UTILS::STBiLoadfFromMemory(fileData.data(), fileData.size(), &width, &height, &channels, 4); channels=4;
-	} else {
+	}
+	else {
 		auto* data = UTILS::STBiLoadFromMemory(fileData.data(), fileData.size(), &width, &height, &channels, 0);
 		if (data && channels == 3) {
 			UTILS::STBiImageFree((unsigned char*)data);
@@ -701,11 +698,9 @@ std::shared_ptr<TextureAtlasDx12> TextureAtlasDx12::CreateAtlasFromResource(cons
 	}
 
 	if (!_d.pathTexture.empty()) {
-		std::filesystem::path configPath{ _d.pathTexture[0] };
-		configPath.replace_extension(".atlas");
-		auto atlasRes = IKIGAI::UTILS::FromJson<IKIGAI::RENDER::AtlasData>(configPath.string());
-		if (atlasRes.isOk()) {
-			tex->mAtlas = atlasRes.unwrap();
+		auto atlasRes = IKIGAI::RENDER::ReadTextureAtlas(_d.pathTexture[0]);
+		if (atlasRes.has_value()) {
+			tex->mAtlas = std::move(*atlasRes);
 		}
 	}
 	return tex;
@@ -745,11 +740,9 @@ std::shared_ptr<TextureAtlasDx12> TextureAtlasDx12::CreateAtlasFromResource(cons
 	}
 
 	if (!_d.pathTexture.empty()) {
-		std::filesystem::path configPath{ _d.pathTexture[0] };
-		configPath.replace_extension(".atlas");
-		auto atlasRes = IKIGAI::UTILS::FromJson<IKIGAI::RENDER::AtlasData>(configPath.string());
-		if (atlasRes.isOk()) {
-			tex->mAtlas = atlasRes.unwrap();
+		auto atlasRes = IKIGAI::RENDER::ReadTextureAtlas(_d.pathTexture[0]);
+		if (atlasRes.has_value()) {
+			tex->mAtlas = std::move(*atlasRes);
 		}
 	}
 	return tex;

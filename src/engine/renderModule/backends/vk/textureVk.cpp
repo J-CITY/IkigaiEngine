@@ -1,21 +1,15 @@
 #include "textureVk.h"
-
+#include "renderModule/backends/interface/textureAssetSource.h"
 
 #ifdef VULKAN_BACKEND
 #include <iostream>
-#include <filesystem>
 
 #include "driverVk.h"
-#include "resourceModule/jsonLoader.h"
 #include "utilsModule/log/loggerDefine.h"
 #include "utilsModule/stdLoader.h"
 
-#include <resourceModule/textureManager.h>
-
 #include "renderModule/backends/imgui/imguiBackend.h"
 #include <renderModule/backends/interface/atlasInterface.h>
-#include <resourceModule/fileSystem/fileSystem.h>
-#include <resourceModule/serviceManager.h>
 
 #include "renderModule/backends/interface/integerColorAttachment.h"
 
@@ -446,11 +440,12 @@ std::shared_ptr<IKIGAI::RENDER::TextureVk> IKIGAI::RENDER::TextureVk::Create(con
 		IKIGAI::UTILS::STBiSetFlipVerticallyOnLoad(true);
 		for (const auto& path : _descriptor.pathTexture) {
 			int width = 0, height = 0, channels = 0;
-			
-			auto file = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RESOURCES::FileSystem>().getFile(path, IKIGAI::RESOURCES::FileMode::READ);
-			if (!file) continue;
-			auto fileData = file->read();
-			
+
+			const auto fileData = IKIGAI::RENDER::ReadTextureImage(path);
+			if (fileData.empty()) {
+				continue;
+			}
+
 			if (_descriptor.isFloat) {
 				auto* data = IKIGAI::UTILS::STBiLoadfFromMemory(fileData.data(), fileData.size(), &width, &height, &channels, 4); channels=4;
 				if (data) textureData.push_back(data);
@@ -579,11 +574,16 @@ std::shared_ptr<IKIGAI::RENDER::TextureAtlasVk> IKIGAI::RENDER::TextureAtlasVk::
 	if (!_d.pathTexture.empty()) {
 		IKIGAI::UTILS::STBiSetFlipVerticallyOnLoad(true);
 		const auto& path = _d.pathTexture[0];
+		const auto image = IKIGAI::RENDER::ReadTextureImage(path);
+		if (image.empty()) {
+			return nullptr;
+		}
 		int w = 0, h = 0, c = 0;
-		auto* data = IKIGAI::UTILS::STBiLoad(path.c_str(), &w, &h, &c, 0);
+		auto* data = IKIGAI::UTILS::STBiLoadFromMemory(image.data(), image.size(), &w, &h, &c, 0);
 		if (data && c != 4) {
 			IKIGAI::UTILS::STBiImageFree((unsigned char*)data);
-			data = IKIGAI::UTILS::STBiLoad(path.c_str(), &w, &h, &c, 4); c = 4;
+			data = IKIGAI::UTILS::STBiLoadFromMemory(image.data(), image.size(), &w, &h, &c, 4);
+			c = 4;
 		}
 		textureData.push_back(data);
 		_d.width = w; _d.height = h; _d.channels = c;
@@ -602,10 +602,10 @@ std::shared_ptr<IKIGAI::RENDER::TextureAtlasVk> IKIGAI::RENDER::TextureAtlasVk::
 
 	// Загружаем .atlas JSON
 	if (!_d.pathTexture.empty()) {
-		std::filesystem::path configPath{ _d.pathTexture[0] };
-		configPath.replace_extension(".atlas");
-		auto atlasRes = IKIGAI::UTILS::FromJson<IKIGAI::RENDER::AtlasData>(configPath.string());
-		if (atlasRes.isOk()) tex->mAtlas = atlasRes.unwrap();
+		auto atlasRes = IKIGAI::RENDER::ReadTextureAtlas(_d.pathTexture[0]);
+		if (atlasRes.has_value()) {
+			tex->mAtlas = std::move(*atlasRes);
+		}
 	}
 	return tex;
 }
@@ -641,10 +641,10 @@ std::shared_ptr<IKIGAI::RENDER::TextureAtlasVk> IKIGAI::RENDER::TextureAtlasVk::
 	}
 
 	if (!_d.pathTexture.empty()) {
-		std::filesystem::path configPath{ _d.pathTexture[0] };
-		configPath.replace_extension(".atlas");
-		auto atlasRes = IKIGAI::UTILS::FromJson<IKIGAI::RENDER::AtlasData>(configPath.string());
-		if (atlasRes.isOk()) tex->mAtlas = atlasRes.unwrap();
+		auto atlasRes = IKIGAI::RENDER::ReadTextureAtlas(_d.pathTexture[0]);
+		if (atlasRes.has_value()) {
+			tex->mAtlas = std::move(*atlasRes);
+		}
 	}
 	return tex;
 }

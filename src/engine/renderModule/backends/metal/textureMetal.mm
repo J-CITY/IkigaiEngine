@@ -1,17 +1,14 @@
 #ifdef METAL_BACKEND
 #include "textureMetal.h"
 #include "gpuMemoryMetal.h"
+#include "renderModule/backends/interface/textureAssetSource.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <filesystem>
 #include <vector>
 
 #include "deviceMetal.h"
-#include "resourceModule/fileSystem/fileSystem.h"
-#include "resourceModule/jsonLoader.h"
-#include "resourceModule/serviceManager.h"
 #include "utilsModule/log/loggerDefine.h"
 #include "utilsModule/stdLoader.h"
 
@@ -184,14 +181,12 @@ namespace IKIGAI::RENDER {
 				}
 				payload.freePixels = true;
 			} else if (!descriptor.pathTexture.empty()) {
-				auto& fs = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>();
 				for (const auto& path : descriptor.pathTexture) {
-					auto file = fs.getFile(path);
-					if (!file || !file->isOpened()) {
+					const auto bytes = ReadTextureImage(path);
+					if (bytes.empty()) {
 						LOG_ERROR << "Metal texture: failed to open " << path;
 						continue;
 					}
-					const auto bytes = file->read();
 					int width = 0;
 					int height = 0;
 					int channels = 0;
@@ -491,11 +486,9 @@ namespace IKIGAI::RENDER {
 		if (descriptor.pathTexture.empty()) {
 			return;
 		}
-		std::filesystem::path configPath{descriptor.pathTexture.front()};
-		configPath.replace_extension(".atlas");
-		auto atlas = UTILS::FromJson<AtlasData>(configPath.string());
-		if (atlas.isOk()) {
-			mAtlas = atlas.unwrap();
+		auto atlas = IKIGAI::RENDER::ReadTextureAtlas(descriptor.pathTexture.front());
+		if (atlas.has_value()) {
+			mAtlas = std::move(*atlas);
 		}
 	}
 

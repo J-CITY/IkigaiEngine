@@ -1,13 +1,12 @@
+#include "textureGl.h"
+#include "renderModule/backends/interface/textureAssetSource.h"
 #include "utilsModule/memory/resourceAllocator.h"
 #include <algorithm>
-#include "textureGl.h"
 
 #include <array>
-#include <filesystem>
 #include <stdexcept>
 #include <vector>
 
-#include "resourceModule/jsonLoader.h"
 #include "utilsModule/assertion.h"
 #include "utilsModule/log/loggerDefine.h"
 #include "utilsModule/pathGetter.h"
@@ -21,8 +20,6 @@
 #include <renderModule/backends/graphicsWrapper.hpp>
 //#include <coreModule/resourceManager/textureManager.h>
 #include <renderModule/backends/interface/resourceStruct.h>
-#include <resourceModule/serviceManager.h>
-#include <resourceModule/fileSystem/fileSystem.h>
 using namespace IKIGAI;
 using namespace IKIGAI::RENDER;
 
@@ -368,12 +365,11 @@ std::shared_ptr<TextureGl> TextureGl::Create(const TextureResource &descriptor, 
 		IKIGAI::UTILS::STBiSetFlipVerticallyOnLoad(true);
 		for (const auto &path : _descriptor.pathTexture) {
 			int width = 0, height = 0, channels = 0;
-			auto file = IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::RESOURCES::FileSystem>().getFile(path, IKIGAI::RESOURCES::FileMode::READ);
-			if (!file) {
+			const auto fileData = IKIGAI::RENDER::ReadTextureImage(path);
+			if (fileData.empty()) {
 				LOG_ERROR << "Failed to open texture: " << path;
 				continue;
 			}
-			auto fileData = file->read();
 			bool loaded = false;
 
 			if (_descriptor.isFloat) {
@@ -710,8 +706,12 @@ std::shared_ptr<TextureAtlasGl> TextureAtlasGl::CreateAtlasFromResource(const Te
 	if (!_d.pathTexture.empty()) {
 		IKIGAI::UTILS::STBiSetFlipVerticallyOnLoad(true);
 		const auto& path = _d.pathTexture[0];
+		const auto image = IKIGAI::RENDER::ReadTextureImage(path);
+		if (image.empty()) {
+			return nullptr;
+		}
 		int w = 0, h = 0, c = 0;
-		auto* data = IKIGAI::UTILS::STBiLoad(path.c_str(), &w, &h, &c, 0);
+		auto* data = IKIGAI::UTILS::STBiLoadFromMemory(image.data(), image.size(), &w, &h, &c, 0);
 		ASSERT_IF(data, "TextureAtlasGl: failed to load image");
 		if (!data) return nullptr;
 		textureData.push_back(data);
@@ -729,12 +729,10 @@ std::shared_ptr<TextureAtlasGl> TextureAtlasGl::CreateAtlasFromResource(const Te
 
 	// Загружаем .atlas JSON
 	if (!_d.pathTexture.empty()) {
-		std::filesystem::path configPath{ _d.pathTexture[0] };
-		configPath.replace_extension(".atlas");
-		auto atlasRes = UTILS::FromJson<AtlasData>(configPath.string());
-		ASSERT_IF(atlasRes.isOk(), "TextureAtlasGl: failed to load atlas data");
-		if (atlasRes.isOk()) {
-			tex->mAtlas = atlasRes.unwrap();
+		auto atlasRes = IKIGAI::RENDER::ReadTextureAtlas(_d.pathTexture[0]);
+		ASSERT_IF(atlasRes.has_value(), "TextureAtlasGl: failed to load atlas data");
+		if (atlasRes.has_value()) {
+			tex->mAtlas = std::move(*atlasRes);
 		}
 	}
 	return tex;
@@ -771,12 +769,10 @@ std::shared_ptr<TextureAtlasGl> TextureAtlasGl::CreateAtlasFromResource(const Te
 	}
 
 	if (!_d.pathTexture.empty()) {
-		std::filesystem::path configPath{ _d.pathTexture[0] };
-		configPath.replace_extension(".atlas");
-		auto atlasRes = UTILS::FromJson<AtlasData>(configPath.string());
-		ASSERT_IF(atlasRes.isOk(), "TextureAtlasGl: failed to load atlas data");
-		if (atlasRes.isOk()) {
-			tex->mAtlas = atlasRes.unwrap();
+		auto atlasRes = IKIGAI::RENDER::ReadTextureAtlas(_d.pathTexture[0]);
+		ASSERT_IF(atlasRes.has_value(), "TextureAtlasGl: failed to load atlas data");
+		if (atlasRes.has_value()) {
+			tex->mAtlas = std::move(*atlasRes);
 		}
 	}
 	return tex;

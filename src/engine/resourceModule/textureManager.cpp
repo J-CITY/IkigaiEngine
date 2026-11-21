@@ -1,4 +1,6 @@
 #include "textureManager.h"
+#include "renderModule/backends/interface/atlasSerde.h"
+#include "resourceModule/jsonLoader.h"
 #include "serviceManager.h"
 #include <filesystem>
 #include <resourceModule/fileSystem/fileSystem.h>
@@ -16,16 +18,30 @@ constexpr auto TEXTURE_HDR_EXT = ".hdr";
 }
 
 namespace IKIGAI::RESOURCES {
+std::vector<std::uint8_t> TextureLoader::ReadImage(const std::string& path) {
+	auto file = ServiceManager::Get<FileSystem>().getFile(path, FileMode::READ);
+	return file && file->isValid() ? file->read() : std::vector<std::uint8_t> {};
+}
+
+std::optional<RENDER::AtlasData> TextureLoader::ReadAtlas(const std::string& imagePath) {
+	auto path = std::filesystem::u8path(imagePath);
+	path.replace_extension(".atlas");
+	const auto utf8 = path.generic_u8string();
+	auto decoded = UTILS::FromJson<RENDER::AtlasData>(std::string(utf8.begin(), utf8.end()));
+	if (decoded.isOk()) {
+		return decoded.unwrap();
+	}
+	return {};
+}
+
 namespace {
 	std::vector<std::vector<uint8_t>> readTextureSources(const RENDER::TextureResource& descriptor) {
 		if (descriptor.pathTexture.empty() && descriptor.colorData.empty() && (descriptor.width <= 0 || descriptor.height <= 0)) {
 			throw std::runtime_error("Missing texture data: " + descriptor.path);
 		}
 		std::vector<std::vector<uint8_t>> data;
-		auto& files = ServiceManager::Get<FileSystem>();
 		for (const auto& source : descriptor.pathTexture) {
-			auto file = files.getFile(source, FileMode::READ);
-			auto bytes = file && file->isValid() ? file->read() : std::vector<uint8_t> {};
+			auto bytes = TextureLoader::ReadImage(source);
 			if (bytes.empty()) {
 				throw std::runtime_error("Missing or empty texture source: " + source);
 			}
