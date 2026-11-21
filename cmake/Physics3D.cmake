@@ -88,9 +88,6 @@ function(ikigai_configure_physics3d target)
         ikigai_exclude_sources(sources
             "engine/physicsModule/body.cpp"
             "engine/physicsModule/characterQueries.cpp"
-            "engine/physicsModule/cloth/cloth.cpp"
-            "engine/physicsModule/cloth/clothParticle.cpp"
-            "engine/physicsModule/cloth/spring.cpp"
             "engine/physicsModule/contacts.cpp"
             "engine/physicsModule/forceGenerator.cpp"
             "engine/physicsModule/joint.cpp"
