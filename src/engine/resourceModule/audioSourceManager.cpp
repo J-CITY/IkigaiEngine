@@ -2,7 +2,6 @@
 #include "fileWatcher.h"
 #include "serviceManager.h"
 #include "utilsModule/assertion.h"
-#include "utilsModule/pathGetter.h"
 #include <audioModule/audioManager.h>
 #include <audioModule/audioSource.h>
 #include <resourceModule/fileSystem/fileSystem.h>

@@ -11,7 +11,6 @@
 #include <cmath>
 #include <renderModule/gameRenderer.h>
 #include <stdexcept>
-#include <utilsModule/pathGetter.h>
 
 #include "renderModule/vertex.h"
 #include "resourceModule/textureManager.h"

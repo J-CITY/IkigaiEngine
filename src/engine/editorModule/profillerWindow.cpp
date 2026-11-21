@@ -1,7 +1,7 @@
 #include "profillerWindow.h"
 #ifdef USE_EDITOR
 #include "imgui.h"
-#include "utilsModule/imguiHelper/imgui_widget_flamegraph.h"
+#include "editorModule/imguiHelper/imgui_widget_flamegraph.h"
 #include "profilerModule/profiler.h"
 #include "renderModule/diagnostics/renderStatistics.h"
 #include "renderModule/gameRenderer.h"

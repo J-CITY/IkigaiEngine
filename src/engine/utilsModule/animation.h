@@ -8,7 +8,6 @@
 #include <variant>
 #include <vector>
 
-#include "ecsModule/entityManager.h"
 #include "mathModule/curves.h"
 #include <serdepp/serializer.hpp>
 
@@ -297,7 +296,6 @@ public:
 
 class NodableAnimationNodePos : public NodableAnimationNode {
 public:
-	ECS::Entity id;
 	MATH::Vector3f toPos {};
 
 	MATH::Vector3f fromPos {};
@@ -307,13 +305,12 @@ public:
 	Curve curve;
 	AnimationProperty prop;
 
-	NodableAnimationNodePos(ECS::Entity id, MATH::Vector3f toPos, float time, std::optional<AnimationProperty> binding);
+	NodableAnimationNodePos(MATH::Vector3f toPos, float time, std::optional<AnimationProperty> binding);
 	void update(float dt) override;
 };
 
 class NodableAnimationNodeScale : public NodableAnimationNode {
 public:
-	ECS::Entity id;
 	MATH::Vector3f to {};
 
 	MATH::Vector3f from {};
@@ -323,13 +320,12 @@ public:
 	Curve curve;
 	AnimationProperty prop;
 
-	NodableAnimationNodeScale(ECS::Entity id, MATH::Vector3f to, float time, std::optional<AnimationProperty> binding);
+	NodableAnimationNodeScale(MATH::Vector3f to, float time, std::optional<AnimationProperty> binding);
 	void update(float dt) override;
 };
 
 class NodableAnimationNodeRotate : public NodableAnimationNode {
 public:
-	ECS::Entity id;
 	MATH::Vector3f to {};
 
 	MATH::Vector3f from {};
@@ -339,7 +335,7 @@ public:
 	Curve curve;
 	AnimationProperty prop;
 
-	NodableAnimationNodeRotate(ECS::Entity id, MATH::Vector3f to, float time, std::optional<AnimationProperty> binding);
+	NodableAnimationNodeRotate(MATH::Vector3f to, float time, std::optional<AnimationProperty> binding);
 	void update(float dt) override;
 };
 

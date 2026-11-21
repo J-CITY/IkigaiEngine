@@ -7,21 +7,22 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "IconsFontAwesome5.h"
 #include "coreModule/ecs/animationTimelineBind.h"
+#include "ecsModule/entityManager.h"
 #include "editorRender.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "renderModule/backends/gl/materialGl.h"
 #include "resourceModule/jsonLoader.h"
 #include "resourceModule/materialManager.h"
-#include "utilsModule/imguiHelper/imgui_neo_sequencer.h"
+#include "editorModule/imguiHelper/imgui_neo_sequencer.h"
 
 #include "sceneModule/sceneManager.h"
 #include "misc/cpp/imgui_stdlib.h"
 #include "resourceModule/textureManager.h"
-#include "utilsModule/imguiHelper/imguiWidgets.h"
+#include "editorModule/imguiHelper/imguiWidgets.h"
 #include "utilsModule/time/time.h"
 
-#include <utilsModule/imguiHelper/nodeEditor/imgui_node_editor.h>
+#include <editorModule/imguiHelper/nodeEditor/imgui_node_editor.h>
 
 enum class PinType {
     Flow,
@@ -1033,21 +1034,21 @@ struct AnimationNodeEditor: public NodeEditor<NodeType, Node> {
 			const auto target = std::get<IKIGAI::MATH::Vector3f>(desc.value);
 			const IKIGAI::ECS::Entity id { IKIGAI::ECS::Entity::ID(desc.objId) };
 			res = std::make_unique<IKIGAI::ANIMATION::NodableAnimationNodePos>(
-				id, target, desc.time, IKIGAI::ECS::bindNodableTransformTrack(id, IKIGAI::ECS::NodableTransformTrack::Position, desc.curveType));
+				target, desc.time, IKIGAI::ECS::bindNodableTransformTrack(id, IKIGAI::ECS::NodableTransformTrack::Position, desc.curveType));
 			static_cast<IKIGAI::ANIMATION::NodableAnimationNodePos*>(res.get())->curve = desc.curve;
         }break;
         case NodeType::Scale: {
 			const auto target = std::get<IKIGAI::MATH::Vector3f>(desc.value);
 			const IKIGAI::ECS::Entity id { IKIGAI::ECS::Entity::ID(desc.objId) };
 			res = std::make_unique<IKIGAI::ANIMATION::NodableAnimationNodeScale>(
-				id, target, desc.time, IKIGAI::ECS::bindNodableTransformTrack(id, IKIGAI::ECS::NodableTransformTrack::Scale, desc.curveType));
+				target, desc.time, IKIGAI::ECS::bindNodableTransformTrack(id, IKIGAI::ECS::NodableTransformTrack::Scale, desc.curveType));
 			static_cast<IKIGAI::ANIMATION::NodableAnimationNodeScale*>(res.get())->curve = desc.curve;
         }break;
         case NodeType::Rotation: {
 			const auto target = std::get<IKIGAI::MATH::Vector3f>(desc.value);
 			const IKIGAI::ECS::Entity id { IKIGAI::ECS::Entity::ID(desc.objId) };
 			res = std::make_unique<IKIGAI::ANIMATION::NodableAnimationNodeRotate>(
-				id, target, desc.time, IKIGAI::ECS::bindNodableTransformTrack(id, IKIGAI::ECS::NodableTransformTrack::Rotation, desc.curveType));
+				target, desc.time, IKIGAI::ECS::bindNodableTransformTrack(id, IKIGAI::ECS::NodableTransformTrack::Rotation, desc.curveType));
 			static_cast<IKIGAI::ANIMATION::NodableAnimationNodeRotate*>(res.get())->curve = desc.curve;
         }break;
         case NodeType::Sequence:  {
@@ -1206,13 +1207,7 @@ void IKIGAI::EDITOR::StatWindow::draw() {
                 }
 
                 auto jsonStr = res.unwrap();
-                //write
-                //auto path = UTILS::GetRealPath("animations/") + name + ".trackanim";
-                //std::ofstream f(path);
-                //if (f.is_open()) {
-                //    f << jsonStr << std::endl;
-                //}
-                //f.close();
+				// TODO: Save the animation through FileSystem::writeTextAtomic.
 
                 ImGui::CloseCurrentPopup();
             }

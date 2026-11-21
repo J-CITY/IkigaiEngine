@@ -8,6 +8,8 @@ set(IKIGAI_MANIFEST_coreModule
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/cameraUiBindings.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/application.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/application.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/contentRoot.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/contentRoot.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/core.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/core.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/core/editorFrontend.h"

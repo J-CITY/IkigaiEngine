@@ -3,7 +3,7 @@
 #include <list>
 
 #include "editorWindow.h"
-#include "utilsModule/imguiHelper/TextEditor.h"
+#include "editorModule/imguiHelper/TextEditor.h"
 #include "utilsModule/log/logger.h"
 
 namespace IKIGAI::EDITOR {

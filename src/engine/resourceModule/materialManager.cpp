@@ -9,7 +9,6 @@
 #include <renderModule/backends/interface/driverInterface.h>
 #include <renderModule/backends/interface/materialInterface.h>
 #include <resourceModule/fileSystem/fileSystem.h>
-#include <utilsModule/pathGetter.h>
 
 namespace IKIGAI::RESOURCES {
 

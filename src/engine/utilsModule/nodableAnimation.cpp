@@ -91,9 +91,8 @@ void NodableAnimationNodeSimultaneous::add(std::unique_ptr<NodableAnimationNode>
 	childs.push_back(std::move(node));
 }
 
-NodableAnimationNodePos::NodableAnimationNodePos(ECS::Entity id, Vector3f toPos, float time, std::optional<AnimationProperty> binding)
-	: id(id)
-	, toPos(toPos)
+NodableAnimationNodePos::NodableAnimationNodePos(Vector3f toPos, float time, std::optional<AnimationProperty> binding)
+	: toPos(toPos)
 	, time(time) {
 	if (!binding) {
 		status = Status::FINISH;
@@ -121,9 +120,8 @@ void NodableAnimationNodePos::update(float dt) {
 	}
 }
 
-NodableAnimationNodeScale::NodableAnimationNodeScale(ECS::Entity id, Vector3f to, float time, std::optional<AnimationProperty> binding)
-	: id(id)
-	, to(to)
+NodableAnimationNodeScale::NodableAnimationNodeScale(Vector3f to, float time, std::optional<AnimationProperty> binding)
+	: to(to)
 	, time(time) {
 	if (!binding) {
 		status = Status::FINISH;
@@ -150,9 +148,8 @@ void NodableAnimationNodeScale::update(float dt) {
 	}
 }
 
-NodableAnimationNodeRotate::NodableAnimationNodeRotate(ECS::Entity id, Vector3f to, float time, std::optional<AnimationProperty> binding)
-	: id(id)
-	, to(to)
+NodableAnimationNodeRotate::NodableAnimationNodeRotate(Vector3f to, float time, std::optional<AnimationProperty> binding)
+	: to(to)
 	, time(time) {
 	if (!binding) {
 		status = Status::FINISH;

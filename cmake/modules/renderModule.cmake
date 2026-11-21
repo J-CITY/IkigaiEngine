@@ -150,6 +150,7 @@ set(IKIGAI_MANIFEST_renderModule
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/spatial/frustumVisibility.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/spine/spineDrawable.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/spine/spineDrawable.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/renderModule/spine/spineFileExtension.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/vertex.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/vertex.h"
     "${IKIGAI_SOURCE_ROOT}/engine/renderModule/vectorGraphics/vectorRenderer.cpp"

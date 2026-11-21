@@ -9,7 +9,7 @@
 #include "sceneModule/sceneManager.h"
 #include "misc/cpp/imgui_stdlib.h"
 #include "resourceModule/textureManager.h"
-#include "utilsModule/imguiHelper/imguiWidgets.h"
+#include "editorModule/imguiHelper/imguiWidgets.h"
 
 #include <serdepp/serde.hpp>
 #include <serdepp/adaptor/reflection.hpp>

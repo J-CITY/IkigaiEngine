@@ -18,7 +18,6 @@
 #include "resourceModule/contentPacks.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
-#include "utilsModule/pathGetter.h"
 #include "utilsModule/stringUtils.h"
 
 using namespace IKIGAI::EDITOR;

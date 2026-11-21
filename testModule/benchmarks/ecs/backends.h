@@ -13,7 +13,10 @@
 
 namespace ECS_BENCHMARK {
 
-template <int Alignment = alignof(float), bool SparseVelocity = false, IKIGAI::ECS::ArchetypeLayout Layout = IKIGAI::ECS::ArchetypeLayout::SharedRows>
+enum class MovementStorage { Archetype, Mixed, Sparse };
+
+template <int Alignment = alignof(float), MovementStorage Storage = MovementStorage::Archetype,
+	IKIGAI::ECS::ArchetypeLayout Layout = IKIGAI::ECS::ArchetypeLayout::SharedRows>
 class Ikigai {
 public:
 	using Entity = IKIGAI::ECS::Entity;
@@ -24,8 +27,8 @@ public:
 
 	void registerMovement() {
 		using IKIGAI::ECS::StorageType;
-		components.registerComponent<PositionType>();
-		components.registerComponent<VelocityType>(SparseVelocity ? StorageType::Sparse : StorageType::Archetype);
+		components.registerComponent<PositionType>(Storage == MovementStorage::Sparse ? StorageType::Sparse : StorageType::Archetype);
+		components.registerComponent<VelocityType>(Storage == MovementStorage::Archetype ? StorageType::Archetype : StorageType::Sparse);
 	}
 
 	Entity create() {
@@ -87,6 +90,10 @@ public:
 	}
 	template <class T> const T* get(Entity entity) const {
 		return registry.try_get<T>(entity);
+	}
+
+	template <class T> auto& storage() {
+		return registry.storage<T>();
 	}
 
 	template <class Function> auto makePass(Function&& function) {

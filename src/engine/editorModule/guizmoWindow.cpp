@@ -9,8 +9,7 @@
 #include "mathModule/math.h"
 #include "resourceModule/serviceManager.h"
 #include "sceneModule/sceneManager.h"
-#include "utilsModule/imguiHelper/imguiWidgets.h"
-#include "utilsModule/pathGetter.h"
+#include "editorModule/imguiHelper/imguiWidgets.h"
 #include "windowModule/window/window.h"
 
 using namespace IKIGAI::EDITOR;

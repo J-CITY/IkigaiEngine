@@ -2,18 +2,10 @@
 
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/render.h"
-#include "utilsModule/log/loggerDefine.h"
-#include <coreModule/graphicsWrapper.hpp>
-#include <fstream>
+#include "utilsModule/serviceManager.h"
 #include <map>
+#include <utility>
 
-
-#include "renderModule/backends/gl/textureGl.h"
-#include <spine/TextureLoader.h>
-#include <utilsModule/pathGetter.h>
-
-
-#include "utilsModule/format.h"
 using namespace IKIGAI;
 using namespace spine;
 using namespace IKIGAI::RENDER::SPINE;
@@ -45,7 +37,11 @@ spine::SkeletonData* SpineController::spineReadSkeletonJsonData(const spine::Str
 
 SpineController::SpineController(const std::string& pathSkel, const std::string& pathAtlas, float scale)
 	: path(pathSkel) {
-	create(UTILS::GetRealPath(pathSkel), UTILS::GetRealPath(pathAtlas), scale);
+	create(pathSkel, pathAtlas, scale);
+}
+
+SpineController::~SpineController() {
+	spineDestroy();
 }
 
 void SpineController::setSkin(const std::string& name) {
@@ -57,6 +53,9 @@ void SpineController::setSkin(const std::string& name) {
 bool SpineController::setAnimation(const std::string& name, bool loop, int trackIndex,
 	std::function<void(AnimationState* state, EventType type, TrackEntry* entry, Event* event)> cb) {
 
+	if (!_drawable) {
+		return false;
+	}
 	spine::Animation* animation = _skeletonData->findAnimation(name.c_str());
 	if (animation == nullptr) {
 		// LOG_ERROR("Failed to find animation: %s", animationName);
@@ -122,27 +121,35 @@ void SpineController::setTimeScale(float scale) {
 }
 
 bool SpineController::create(const std::string& pathSkel, const std::string& pathAtlas, float scale) {
-	_textureLoader = new SpineTextureLoader();
-	_atlas = new spine::Atlas(pathAtlas.c_str(), _textureLoader);
-	if (_atlas->getPages().size() == 0) {
+	if (pathSkel.empty() || pathAtlas.empty()) {
+		return false;
+	}
+	auto textureLoader = std::make_unique<SpineTextureLoader>();
+	auto atlas = std::make_unique<spine::Atlas>(pathAtlas.c_str(), textureLoader.get());
+	if (atlas->getPages().size() == 0) {
 		// LOG_ERROR("Failed to load atlas");
 		return false;
 	}
 
-	_skeletonData = spineReadSkeletonJsonData(pathSkel.c_str(), _atlas, scale);
-	if (_skeletonData == nullptr) {
+	std::unique_ptr<spine::SkeletonData> skeletonData(spineReadSkeletonJsonData(pathSkel.c_str(), atlas.get(), scale));
+	if (!skeletonData) {
 		return false;
 	}
 
-	_drawable = new SkeletonDrawable(_skeletonData);
-	_drawable->setTimeScale(timeScale);
-	_drawable->setUsePremultipliedAlpha(true);
+	auto drawable = std::make_unique<SkeletonDrawable>(skeletonData.get());
+	drawable->setTimeScale(timeScale);
+	drawable->setUsePremultipliedAlpha(true);
 
-	spine::Skeleton* skeleton = _drawable->getSkeleton();
+	spine::Skeleton* skeleton = drawable->getSkeleton();
 	skeleton->setPosition(0.0f, 0.0f);
 	skeleton->setSkin("default");
 	skeleton->updateWorldTransform(spine::Physics_Update);
 
+	spineDestroy();
+	_textureLoader = textureLoader.release();
+	_atlas = atlas.release();
+	_skeletonData = skeletonData.release();
+	_drawable = drawable.release();
 	return true;
 }
 
@@ -154,10 +161,11 @@ void SpineController::spineDraw(float dt) {
 }
 
 void SpineController::spineDestroy() {
-	delete _skeletonData;
-	delete _atlas;
-	delete _drawable;
-	delete _textureLoader;
+	delete std::exchange(_drawable, nullptr);
+	delete std::exchange(_skeletonData, nullptr);
+	delete std::exchange(_atlas, nullptr);
+	delete std::exchange(_textureLoader, nullptr);
+	isPlaying = false;
 }
 
 void SpineController::stop() {
@@ -378,7 +386,7 @@ std::map<RENDER::TextureInterface*, std::shared_ptr<RENDER::TextureInterface>> t
 
 void SpineTextureLoader::load(AtlasPage& page, const String& path) {
 	auto pathStr = std::string(path.buffer(), path.length());
-	auto texture = RESOURCES::ServiceManager::Get<RENDER::Renderer>().createTexture(UTILS::GetRealPath(pathStr), true);
+	auto texture = RESOURCES::ServiceManager::Get<RENDER::Renderer>().createTexture(pathStr, true);
 	if (texture) {
 		// texture->textureId = texture->textureId;
 		//
@@ -411,40 +419,4 @@ void SpineTextureLoader::unload(void* texture) {
 std::shared_ptr<RENDER::TextureInterface> SpineTextureLoader::getTexture(RENDER::TextureInterface* texture) {
 	const auto found = textures.find(texture);
 	return found == textures.end() ? nullptr : found->second;
-}
-
-namespace spine {
-// TODO: load by my resource system
-
-class SpineLoaderExtension : public DefaultSpineExtension {
-protected:
-	char* _readFile(const String& path, int* length) override {
-		LOG_INFO << UTILS::format("AndroidSpineExtension _readFile: {}", path.buffer());
-
-		auto realPath = UTILS::GetRealPath(path.buffer());
-		char* readBuffer = nullptr;
-
-		std::ifstream file(realPath, std::ios::binary);
-		if (!file.is_open()) {
-			LOG_ERROR << "Error opening file!";
-			*length = 0;
-			return nullptr;
-		}
-		file.seekg(0, std::ios::end);
-		size_t fileSize = file.tellg();
-		file.seekg(0, std::ios::beg);
-
-		char* buffer = new char[fileSize + 1];
-		file.read(buffer, fileSize);
-		file.close();
-		buffer[fileSize] = 0;
-		*length = static_cast<int>(fileSize);
-
-		return readBuffer;
-	}
-};
-
-SpineExtension* getDefaultExtension() {
-	return new SpineLoaderExtension();
-}
 }

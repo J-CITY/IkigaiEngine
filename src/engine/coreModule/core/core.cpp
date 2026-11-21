@@ -1,4 +1,5 @@
 #include "core.h"
+#include "contentRoot.h"
 #include "editorFrontend.h"
 #include "reflectionModule/reflection_macros.h"
 #include "utilsModule/time/loadTimer.h"
@@ -26,21 +27,24 @@
 #include "resourceModule/serviceManager.h"
 #include "windowModule/window/window.h"
 #include "windowModule/windowManager.h"
+#include <filesystem>
 #include <iostream>
 #include <resourceModule/jsonLoader.h>
 #include <stdexcept>
-#include <utilsModule/contentRoot.h>
 #include <utilsModule/log/logger.h>
 #include <utility>
 #include <vector>
 
 #include "../config.h"
 #include "../ecs/systems/audioSystem.h"
-#include "guiModule/guiLayoutSystem.h"
 #include "../ecs/systems/inputSystem.h"
 #include "../ecs/systems/propertyAnimationSystem.h"
 #include "../ecs/systems/scriptSystem.h"
+#include "coreModule/ecs/sceneSimulationHost.h"
+#include "coreModule/ecs/systemBatchExecutor.h"
 #include "coreModule/gui/components/vectorComponents.h"
+#include "guiModule/guiLayoutSystem.h"
+#include "inputActionStorage.h"
 #include "networkModule/networkRuntime.h"
 #include "renderModule/backends/interface/textureAssetSource.h"
 #include "resourceModule/audioSourceManager.h"
@@ -54,10 +58,7 @@
 #include "resourceModule/serviceManager.h"
 #include "resourceModule/shaderManager.h"
 #include "resourceModule/textureManager.h"
-#include "inputActionStorage.h"
 #include "sceneResourcePreparation.h"
-#include "coreModule/ecs/sceneSimulationHost.h"
-#include "coreModule/ecs/systemBatchExecutor.h"
 #include "windowModule/inputManager/inputActions.h"
 #include "windowModule/inputManager/inputManager.h"
 #include <audioModule/audioManager.h>
@@ -68,7 +69,6 @@
 #include <sceneModule/sceneDocument.h>
 #include <sceneModule/sceneManager.h>
 #include <taskModule/taskSystem.h>
-#include <utilsModule/pathGetter.h>
 
 #include "aiModule/navigation/pathQuery.h"
 #include "coreModule/ecs/components/batchComponent.h"
@@ -100,6 +100,9 @@
 #ifdef OCULUS
 #include <android_native_app_glue.h>
 #endif
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
 
 using namespace IKIGAI;
 using namespace IKIGAI::CORE;
@@ -122,7 +125,7 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 	, androidApp(platform.android) {
 	UTILS::RegisterGeneratedReflection();
 	UTILS::LoadTimer coreTiming("core", Config::PROFILE_LOADING);
-	UTILS::InitContentRoot();
+	InitContentRoot();
 	if (!Config::ROOT.empty()) {
 		std::cout << "Content root: " << Config::ROOT << "\n";
 	}

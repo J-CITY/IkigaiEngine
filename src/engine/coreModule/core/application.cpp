@@ -1,10 +1,10 @@
 #include "application.h"
 #include "app.h"
 #include "captureModule/screenshot.h"
+#include "contentRoot.h"
 #include "coreModule/config.h"
 #include "renderModule/backends/driverFactory.h"
 #include "sceneModule/sceneManager.h"
-#include "utilsModule/contentRoot.h"
 #if defined(IKIGAI_VG_COOKER)
 #include "resourceModule/tools/vmeshCookModel.h"
 #endif
@@ -63,8 +63,8 @@ namespace {
 			if (!std::filesystem::is_directory(directory / "engine") || !std::filesystem::is_directory(directory / "game")) {
 				throw std::invalid_argument("Assets directory must contain engine/ and game/");
 			}
-			Config::ROOT = UTILS::NormalizeRootPath(directory.parent_path().generic_string());
-			Config::ASSETS_PATH = UTILS::NormalizeRootPath(directory.filename().generic_string());
+			Config::ROOT = NormalizeRootPath(directory.parent_path().generic_string());
+			Config::ASSETS_PATH = NormalizeRootPath(directory.filename().generic_string());
 			Config::ENGINE_ASSETS_PATH = Config::ASSETS_PATH + "engine/";
 			Config::USER_ASSETS_PATH = Config::ASSETS_PATH + "game/";
 		}

@@ -8,7 +8,7 @@
 #include <filesystem>
 
 #include "imgui.h"
-#include "utilsModule/imguiHelper/ImGuizmo.h"
+#include "editorModule/imguiHelper/ImGuizmo.h"
 
 namespace IKIGAI::EDITOR {
 	class GuizmoWindow: public EditorWindow{

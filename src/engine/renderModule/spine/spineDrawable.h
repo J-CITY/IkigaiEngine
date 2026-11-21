@@ -58,7 +58,9 @@ public:
 	SpineController() = default;
 	SpineController(const std::string& pathSkel, const std::string& pathAtlas, float scale = 1.0f);
 
-	~SpineController() { }
+	~SpineController();
+	SpineController(const SpineController&) = delete;
+	SpineController& operator=(const SpineController&) = delete;
 
 	void setSkin(const std::string& name = "default");
 	bool setAnimation(

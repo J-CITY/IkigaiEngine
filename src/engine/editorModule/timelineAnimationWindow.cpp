@@ -17,17 +17,17 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 
 #include "IconsFontAwesome5.h"
+#include "editorModule/imguiHelper/imgui_neo_sequencer.h"
 #include "editorRender.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "renderModule/backends/gl/materialGl.h"
 #include "resourceModule/materialManager.h"
-#include "utilsModule/imguiHelper/imgui_neo_sequencer.h"
 
+#include "editorModule/imguiHelper/imguiWidgets.h"
 #include "misc/cpp/imgui_stdlib.h"
 #include "resourceModule/textureManager.h"
 #include "sceneModule/sceneManager.h"
-#include "utilsModule/imguiHelper/imguiWidgets.h"
 #include "utilsModule/time/time.h"
 
 #include "utilsModule/time/time.h"

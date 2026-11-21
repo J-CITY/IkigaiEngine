@@ -46,6 +46,18 @@ struct EcsBenchmarkAccess {
 		manager.addArchetypeComponentBatchImpl<false>(entities, value);
 	}
 
+	template <class T, class Func> static void visitPoolChunks(ComponentArray<T>& pool, Func&& func) {
+		ComponentManager::visitPoolChunks(pool, std::forward<Func>(func));
+	}
+
+	template <class T> static const SparseRowIndex& sparseIndex(const ComponentArray<T>& pool) {
+		return *pool.mSparseRows;
+	}
+
+	template <class T> static const auto& sparseValues(const ComponentArray<T>& pool) {
+		return pool.componentArray;
+	}
+
 	static std::size_t sumRows(const ComponentManager& manager, std::span<const Entity> entities) {
 		std::size_t sum = 0;
 		ComponentManager::EntityRecords::PageCursor cursor;
@@ -87,13 +99,15 @@ namespace {
 	constexpr std::array entityCounts { 1000, 10000, 100000 };
 	constexpr float delta = 0.5f;
 
-	void movementSizes(benchmark::internal::Benchmark* benchmark) {
+	template <bool WithMultipleSignatures = true> void movementSizes(benchmark::internal::Benchmark* benchmark) {
 		benchmark->UseRealTime();
 		for (const auto count : entityCounts) {
 			benchmark->Args({ count, 100, 1 });
 			benchmark->Args({ count, 10, 1 });
 			benchmark->Args({ count, 50, 1 });
-			benchmark->Args({ count, 100, 16 });
+			if constexpr (WithMultipleSignatures) {
+				benchmark->Args({ count, 100, 16 });
+			}
 		}
 		benchmark->ArgNames({ "entities", "match_pct", "signatures" });
 	}
@@ -116,13 +130,9 @@ namespace {
 			...);
 	}
 
-	template <class Backend, bool LookupOnly = false> void movement(benchmark::State& state) {
+	template <class Backend> auto populateMovement(Backend& backend, std::size_t count, std::size_t stride, std::size_t signatures) {
 		using PositionType = typename Backend::PositionType;
 		using VelocityType = typename Backend::VelocityType;
-		const auto count = static_cast<std::size_t>(state.range(0));
-		const auto stride = 100 / static_cast<std::size_t>(state.range(1));
-		const auto signatures = static_cast<std::size_t>(state.range(2));
-		Backend backend;
 		backend.registerMovement();
 		std::vector<typename Backend::Entity> entities;
 		entities.reserve(count);
@@ -136,6 +146,17 @@ namespace {
 			}
 			addTags(backend, entity, index % signatures, std::make_index_sequence<4> {});
 		}
+		return entities;
+	}
+
+	template <class Backend, bool LookupOnly = false> void movement(benchmark::State& state) {
+		using PositionType = typename Backend::PositionType;
+		using VelocityType = typename Backend::VelocityType;
+		const auto count = static_cast<std::size_t>(state.range(0));
+		const auto stride = 100 / static_cast<std::size_t>(state.range(1));
+		const auto signatures = static_cast<std::size_t>(state.range(2));
+		Backend backend;
+		const auto entities = populateMovement(backend, count, stride, signatures);
 
 		const auto expectedMatches = (count + stride - 1) / stride;
 		std::size_t matched = 0;
@@ -282,7 +303,7 @@ namespace {
 	void storageGrowth(benchmark::State& state) {
 		using IKIGAI::ECS::EcsBenchmarkAccess;
 		const auto count = static_cast<std::size_t>(state.range(0));
-		using Backend = Ikigai<alignof(float), false, Layout>;
+		using Backend = Ikigai<alignof(float), MovementStorage::Archetype, Layout>;
 		std::vector<typename Backend::Entity> entities(count);
 		const std::size_t warmRows = ReuseCapacity ? count : 1;
 		std::vector<typename Backend::Entity> warmEntities(warmRows);
@@ -472,10 +493,148 @@ namespace {
 	}
 
 	using IkigaiCompact = Ikigai<>;
-	using IkigaiMixed = Ikigai<alignof(float), true>;
+	using IkigaiMixed = Ikigai<alignof(float), MovementStorage::Mixed>;
+	using IkigaiSparse = Ikigai<alignof(float), MovementStorage::Sparse>;
 	using IkigaiAligned = Ikigai<16>;
 	using FlecsUncached = Flecs<>;
 	using FlecsCached = Flecs<flecs::QueryCacheAuto>;
+
+	enum class SparseProbe { LeadingRows, LeadingChunks, RowLookup, RowLookupAndRead };
+
+	template <class Checksum, class Probe>
+	void measureSparseProbe(benchmark::State& state, std::size_t candidates, const Checksum& expected, Probe&& probe) {
+		if (probe() != expected) {
+			state.SkipWithError("sparse diagnostic did not visit the expected rows");
+			return;
+		}
+		for (auto _ : state) {
+			const auto checksum = probe();
+			benchmark::DoNotOptimize(checksum);
+			benchmark::ClobberMemory();
+		}
+		state.SetItemsProcessed(state.iterations() * candidates);
+	}
+
+	template <SparseProbe Probe, bool PositionLeads, class Backend>
+	void measureSparseMovement(benchmark::State& state, Backend& backend, std::span<const typename Backend::Entity> entities, std::size_t stride) {
+		using Access = IKIGAI::ECS::EcsBenchmarkAccess;
+		using Position = typename Backend::PositionType;
+		using Velocity = typename Backend::VelocityType;
+		using Leading = std::conditional_t<PositionLeads, Position, Velocity>;
+		using Other = std::conditional_t<PositionLeads, Velocity, Position>;
+		using Entity = typename Backend::Entity;
+		const auto candidates = (entities.size() + stride - 1) / stride;
+		const auto entityId = [](Entity entity) -> std::uint32_t {
+			if constexpr (std::is_same_v<Backend, EnTT>) {
+				return entt::to_integral(entity);
+			}
+			else {
+				return entity.getUniqueId().value();
+			}
+		};
+		if constexpr (Probe == SparseProbe::RowLookup || Probe == SparseProbe::RowLookupAndRead) {
+			struct Checksum {
+				std::uint64_t rows = 0;
+				std::size_t hits = 0;
+				float values = 0.0f;
+
+				bool operator==(const Checksum&) const = default;
+			};
+			constexpr auto missing = IKIGAI::ECS::SparseRowIndex::missing;
+			Checksum expected { static_cast<std::uint64_t>(candidates) * (candidates - 1) / 2 * stride, candidates };
+			if constexpr (Probe == SparseProbe::RowLookupAndRead) {
+				for (std::size_t row = 0; row < entities.size(); row += stride) {
+					expected.values += PositionLeads ? 0.5f : static_cast<float>(row % 29);
+				}
+			}
+			const auto measureLookup = [&](auto ids, auto findRow, auto readValue) {
+				measureSparseProbe(state, candidates, expected, [&] {
+					Checksum result {};
+					for (const auto entity : ids) {
+						const auto row = findRow(entity);
+						if (row != missing) {
+							result.rows += row;
+							++result.hits;
+							if constexpr (Probe == SparseProbe::RowLookupAndRead) {
+								result.values += readValue(row);
+							}
+						}
+					}
+					return result;
+				});
+			};
+			if constexpr (std::is_same_v<Backend, EnTT>) {
+				const auto& leading = backend.template storage<Leading>();
+				const auto& other = backend.template storage<Other>();
+				const auto ids = std::span(leading.data(), leading.size());
+				const auto values = other.raw();
+				constexpr auto pageSize = entt::component_traits<Other, Entity>::page_size;
+				measureLookup(
+					ids | std::views::reverse, [&](Entity entity) { return other.contains(entity) ? other.index(entity) : missing; },
+					[&](std::size_t row) { return values[row / pageSize][row % pageSize].x; });
+			}
+			else {
+				const auto ids = backend.components.template getComponentsArray<Leading>().getEntities();
+				const auto& other = backend.components.template getComponentsArray<Other>();
+				const auto& index = Access::sparseIndex(other);
+				const auto& values = Access::sparseValues(other);
+				measureLookup(ids, [&](Entity entity) { return index.find(entityId(entity)); }, [&](std::size_t row) { return values[row].x; });
+			}
+		}
+		else {
+			using Checksum = std::pair<std::uint64_t, float>;
+			Checksum expected {};
+			for (std::size_t row = 0; row < entities.size(); row += stride) {
+				expected.first += entityId(entities[row]);
+				expected.second += PositionLeads ? static_cast<float>(row % 29) : 0.5f;
+			}
+			auto& leading = [&]() -> auto& {
+				if constexpr (std::is_same_v<Backend, EnTT>) {
+					return backend.template storage<Leading>();
+				}
+				else {
+					return backend.components.template getComponentsArray<Leading>();
+				}
+			}();
+			measureSparseProbe(state, candidates, expected, [&] {
+				Checksum result {};
+				const auto accumulate = [&](Entity entity, const Leading& value) {
+					result.first += entityId(entity);
+					result.second += value.x;
+				};
+				if constexpr (std::is_same_v<Backend, EnTT>) {
+					for (const auto [entity, value] : leading.each()) {
+						accumulate(entity, value);
+					}
+				}
+				else {
+					if constexpr (Probe == SparseProbe::LeadingChunks) {
+						Access::visitPoolChunks(leading, accumulate);
+					}
+					else {
+						const auto ids = leading.getEntities();
+						for (std::size_t row = 0; row < ids.size(); ++row) {
+							accumulate(ids[row], leading.at(row));
+						}
+					}
+				}
+				return result;
+			});
+		}
+	}
+
+	template <class Backend, SparseProbe Probe> void sparseMovementProbe(benchmark::State& state) {
+		const auto count = static_cast<std::size_t>(state.range(0));
+		const auto stride = 100 / static_cast<std::size_t>(state.range(1));
+		Backend backend;
+		const auto entities = populateMovement(backend, count, stride, 1);
+		if (stride == 1) {
+			measureSparseMovement<Probe, true>(state, backend, std::span(entities), stride);
+		}
+		else {
+			measureSparseMovement<Probe, false>(state, backend, std::span(entities), stride);
+		}
+	}
 
 	class IkigaiNoHandle : public IkigaiCompact {
 	public:
@@ -662,10 +821,24 @@ namespace {
 		return true;
 	}();
 
-	BENCHMARK_TEMPLATE(movement, IkigaiCompact)->Apply(movementSizes);
-	BENCHMARK_TEMPLATE(movement, EnTT)->Apply(movementSizes);
-	BENCHMARK_TEMPLATE(movement, FlecsUncached)->Apply(movementSizes);
-	BENCHMARK_TEMPLATE(movement, FlecsCached)->Apply(movementSizes);
+	BENCHMARK_TEMPLATE(movement, IkigaiCompact)->Apply(movementSizes<>);
+	BENCHMARK_TEMPLATE(movement, IkigaiSparse)->Apply(movementSizes<false>);
+	BENCHMARK_TEMPLATE(movement, EnTT)->Apply(movementSizes<>);
+	BENCHMARK_TEMPLATE(movement, FlecsUncached)->Apply(movementSizes<>);
+	BENCHMARK_TEMPLATE(movement, FlecsCached)->Apply(movementSizes<>);
+	const auto sparseProbes = [] {
+		const auto add = [](const char* name, void (*run)(benchmark::State&)) {
+			benchmark::RegisterBenchmark(name, run)->UseRealTime()->Args({ 100000, 10 })->Args({ 100000, 50 })->Args({ 100000, 100 });
+		};
+		add("SparseProbe/Ikigai/LeadingRows", sparseMovementProbe<IkigaiSparse, SparseProbe::LeadingRows>);
+		add("SparseProbe/Ikigai/LeadingChunks", sparseMovementProbe<IkigaiSparse, SparseProbe::LeadingChunks>);
+		add("SparseProbe/Ikigai/RowLookup", sparseMovementProbe<IkigaiSparse, SparseProbe::RowLookup>);
+		add("SparseProbe/Ikigai/RowLookupAndRead", sparseMovementProbe<IkigaiSparse, SparseProbe::RowLookupAndRead>);
+		add("SparseProbe/EnTT/LeadingStorage", sparseMovementProbe<EnTT, SparseProbe::LeadingChunks>);
+		add("SparseProbe/EnTT/RowLookup", sparseMovementProbe<EnTT, SparseProbe::RowLookup>);
+		add("SparseProbe/EnTT/RowLookupAndRead", sparseMovementProbe<EnTT, SparseProbe::RowLookupAndRead>);
+		return true;
+	}();
 	BENCHMARK_TEMPLATE(movement, IkigaiAligned)->UseRealTime()->Args({ 1000, 100, 1 })->Args({ 10000, 100, 1 })->Args({ 100000, 100, 1 });
 	BENCHMARK_TEMPLATE(movement, IkigaiMixed)
 		->UseRealTime()

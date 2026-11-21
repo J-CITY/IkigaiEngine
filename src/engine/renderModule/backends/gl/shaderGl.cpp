@@ -16,7 +16,6 @@
 #include "spirv_reflect.h"
 #include "utilsModule/assertion.h"
 #include "utilsModule/log/loggerDefine.h"
-#include "utilsModule/pathGetter.h"
 #include "utilsModule/stringUtils.h"
 #include <renderModule/backends/interface/resourceStruct.h>
 #include <resourceModule/fileSystem/fileSystem.h>

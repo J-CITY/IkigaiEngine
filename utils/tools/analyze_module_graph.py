@@ -1,130 +1,248 @@
+import json
 import os
 import re
 from collections import defaultdict
+from functools import cache
+from pathlib import Path
+
+from networkx import DiGraph, strongly_connected_components
 from pyvis.network import Network
 
-# ==================== НАСТРОЙКИ СТРУКТУРЫ ====================
-ENGINE_DIR = "../../src/engine"
-THIRD_PARTY_DIR = "../../3rd"
-# =============================================================
+PROJECT_DIR = Path(__file__).resolve().parents[2]
+ENGINE_DIR = PROJECT_DIR / "src" / "engine"
+THIRD_PARTY_DIR = PROJECT_DIR / "3rd"
+SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hh", ".hpp", ".hxx", ".inl", ".m", ".mm"}
+EDGE_COLORS = {
+    "incoming": "#5ab0ff",
+    "outgoing": "#47dc9a",
+    "cycle": "#ff6b6b",
+    "neutral": "#888888",
+}
 
-def get_project_structure(engine_dir, third_party_dir):
-    """Автоматически находит все внутренние модули и 3rd-party библиотеки."""
-    internal_modules = set()
-    third_party_libs = set()
+# Дополнительные каталоги из конфигураций платформ и библиотек.
+EXTRA_INCLUDE_DIRS = {
+    "IkigaiScript": ("SimpleScript",),
+    "magic_enum": ("include/magic_enum",),
+    "vfspp": ("vendor/miniz-cpp",),
+}
 
-    # 1. Сканируем внутренние модули (все папки первого уровня в src/engine)
-    if os.path.exists(engine_dir):
-        for entry in os.scandir(engine_dir):
-            if entry.is_dir():
-                internal_modules.add(entry.name)
+# Комментарии и литералы пропускаем целиком, чтобы не считать директивы внутри них.
+INCLUDE_DIRECTIVES = re.compile(
+    r"""
+    //[^\r\n]* | /\*[\s\S]*?\*/
+    | R"(?P<delimiter>[^\s()\\]{0,16})\([\s\S]*?\)(?P=delimiter)"
+    | ^[ \t]*\#[ \t]*include[ \t]*(?:"(?P<quoted>[^"\r\n]+)"|<(?P<angled>[^>\r\n]+)>)
+    | "(?:\\.|[^"\\\r\n])*" | '(?:\\.|[^'\\\r\n])*'
+    """,
+    re.MULTILINE | re.VERBOSE,
+)
 
-    # 2. Сканируем 3rd-party (первый уровень + поддержка вложенности для imgui и boost)
-    if os.path.exists(third_party_dir):
-        for entry in os.scandir(third_party_dir):
-            if entry.is_dir():
-                # Если это imgui или boost, заходим на один уровень глубже для поиска сабмодулей
-                if entry.name.lower() in ['imgui', 'boost']:
-                    third_party_libs.add(entry.name) # Добавляем и саму корневую либу на всякий случай
-                    for sub_entry in os.scandir(entry.path):
-                        if sub_entry.is_dir():
-                            # Записываем как "imgui/submodule" или "boost/submodule"
-                            third_party_libs.add(f"{entry.name}/{sub_entry.name}")
-                else:
-                    third_party_libs.add(entry.name)
 
-    return internal_modules, third_party_libs
+def get_library_directories(third_party_dir):
+    """Сопоставляет названия библиотек с их каталогами в 3rd."""
+    libraries = {}
+    if not third_party_dir.is_dir():
+        return libraries
 
-def find_module_owner(include_path, internal_modules, third_party_libs):
-    """Определяет, к какому модулю или 3rd party относится include-путь."""
-    # Приводим к единому виду разделители путей
-    normalized_path = include_path.replace('\\', '/')
-    parts = normalized_path.split('/')
-    
-    if not parts:
-        return None, None
+    for directory in sorted(third_party_dir.iterdir()):
+        if not directory.is_dir() or directory.name.startswith("."):
+            continue
+        libraries[directory.name] = directory
+        if directory.name in {"boost", "imgui"}:
+            for submodule in sorted(directory.iterdir()):
+                if submodule.is_dir() and not submodule.name.startswith("."):
+                    libraries[f"{directory.name}/{submodule.name}"] = submodule
+    return libraries
 
-    # Проверка на составные 3rd party (например, imgui/submodule/... или boost/submodule/...)
-    if len(parts) >= 2:
-        two_parts = f"{parts[0]}/{parts[1]}"
-        if two_parts in third_party_libs:
-            return two_parts, "3rdParty"
 
-    # Проверка по первому элементу пути или по полному совпадению имени
-    first_part = parts[0]
-    if first_part in internal_modules:
-        return first_part, "Internal"
-    if first_part in third_party_libs:
-        return first_part, "3rdParty"
+def get_file_owner(path, engine_dir, third_party_dir, libraries):
+    if path.is_relative_to(engine_dir):
+        parts = path.relative_to(engine_dir).parts
+        return parts[0] if len(parts) > 1 else None
+    if path.is_relative_to(third_party_dir):
+        parts = path.relative_to(third_party_dir).parts
+        if len(parts) > 1:
+            submodule = "/".join(parts[:2])
+            return submodule if submodule in libraries else parts[0]
+    return None
 
-    # Эвристика для плоских инклудов (если имя файла или путь содержит название либы)
-    for lib in third_party_libs:
-        if '/' in lib: # Для вложенных проверяем точное совпадение сабмодуля
-            sub = lib.split('/')[-1]
-            if sub.lower() in normalized_path.lower():
-                return lib, "3rdParty"
-        elif lib.lower() in normalized_path.lower():
-            return lib, "3rdParty"
-            
-    return None, None
 
-def analyze_dependencies():
-    internal_modules, third_party_libs = get_project_structure(ENGINE_DIR, THIRD_PARTY_DIR)
-    
+def make_include_resolver(engine_dir, third_party_dir, libraries):
+    include_dirs = []
+    for directory in libraries.values():
+        for prefix in ("", "include", "single_include", "src", *EXTRA_INCLUDE_DIRS.get(directory.name, ())):
+            include_dir = directory / prefix
+            if include_dir.is_dir():
+                include_dirs.append(include_dir)
+    emscripten_include_dir = third_party_dir / "emsdk/upstream/emscripten/cache/sysroot/include"
+
+    @cache
+    def find_library(include_path):
+        # В sysroot также лежат заголовки стандартной библиотеки C.
+        search_dirs = include_dirs
+        if include_path.parts[:1] == ("emscripten",):
+            search_dirs = [*include_dirs, emscripten_include_dir]
+        owners = set()
+        for directory in search_dirs:
+            candidate = directory / include_path
+            if candidate.is_file():
+                owners.add(get_file_owner(candidate.resolve(), engine_dir, third_party_dir, libraries))
+        owners.discard(None)
+        # Разные библиотеки могут предоставлять одно и то же имя заголовка.
+        return next(iter(owners)) if len(owners) == 1 else None
+
+    def resolve(include_path, local_dir):
+        path = Path(include_path.replace("\\", "/"))
+        if local_dir is not None:
+            candidate = local_dir / path
+            if candidate.is_file():
+                return get_file_owner(candidate.resolve(), engine_dir, third_party_dir, libraries)
+        for directory in (engine_dir, third_party_dir.parent):
+            candidate = directory / path
+            if candidate.is_file():
+                return get_file_owner(candidate.resolve(), engine_dir, third_party_dir, libraries)
+        if path.is_absolute() or ".." in path.parts:
+            return None
+        return find_library(path)
+
+    return resolve
+
+
+def analyze_dependencies(engine_dir=ENGINE_DIR, third_party_dir=THIRD_PARTY_DIR):
+    engine_dir = Path(engine_dir).resolve()
+    third_party_dir = Path(third_party_dir).resolve()
+    dependencies = defaultdict(lambda: defaultdict(int))
+    libraries = get_library_directories(third_party_dir)
+    third_party_libs = set(libraries)
+    if not engine_dir.is_dir():
+        print(f"❌ Ошибка: Директория {engine_dir} не найдена!")
+        return dependencies, set(), third_party_libs
+
+    internal_modules = {path.name for path in engine_dir.iterdir() if path.is_dir()}
     print(f"📦 Найдено внутренних модулей: {len(internal_modules)} ({', '.join(sorted(internal_modules))})")
     print(f"📚 Найдено 3rd-party библиотек/сабмодулей: {len(third_party_libs)}")
-    
-    dependencies = defaultdict(lambda: defaultdict(int))
-    include_regex = re.compile(r'#include\s+["<](.*?)[">]')
-    
-    if not os.path.exists(ENGINE_DIR):
-        print(f"❌ Ошибка: Директория {ENGINE_DIR} не найдена!")
-        return dependencies, internal_modules, third_party_libs
+    resolve_include = make_include_resolver(engine_dir, third_party_dir, libraries)
 
-    # Обходим всю папку src/engine
-    for root, dirs, files in os.walk(ENGINE_DIR):
-        # Вычисляем, к какому корневому модулю относится текущий файл
-        relative_path = os.path.relpath(root, ENGINE_DIR)
-        if relative_path == '.':
+    for root, _, files in os.walk(engine_dir):
+        source_dir = Path(root)
+        module_parts = source_dir.relative_to(engine_dir).parts
+        if not module_parts:
             continue
-            
-        current_module = relative_path.split(os.sep)[0]
-        
-        for file in files:
-            if file.endswith(('.h', '.hpp', '.cpp', '.inl', '.cc', '.cxx')):
-                file_path = os.path.join(root, file)
-                try:
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        for line in f:
-                            match = include_regex.search(line)
-                            if match:
-                                include_path = match.group(1)
-                                target, target_type = find_module_owner(include_path, internal_modules, third_party_libs)
-                                
-                                # Исключаем self-зависимости модуля на самого себя
-                                if target and target != current_module:
-                                    dependencies[current_module][target] += 1
-                except Exception as e:
-                    print(f"Ошибка чтения файла {file_path}: {e}")
-                    
+        current_module = module_parts[0]
+
+        for filename in files:
+            source = source_dir / filename
+            if source.suffix not in SOURCE_SUFFIXES:
+                continue
+            try:
+                contents = source.read_text(encoding="utf-8-sig", errors="ignore")
+            except OSError as error:
+                print(f"Ошибка чтения файла {source}: {error}")
+                continue
+            for match in INCLUDE_DIRECTIVES.finditer(contents):
+                quoted = match["quoted"]
+                include_path = quoted or match["angled"]
+                if include_path:
+                    owner = resolve_include(include_path, source_dir if quoted else None)
+                    if owner and owner != current_module:
+                        dependencies[current_module][owner] += 1
+
     return dependencies, internal_modules, third_party_libs
 
-def print_report_table(dependencies):
+
+def find_cycle_groups(dependencies, internal_modules):
+    """Находит группы модулей, между которыми есть пути в обе стороны."""
+    graph = DiGraph()
+    graph.add_edges_from(
+        (source, target)
+        for source, targets in dependencies.items()
+        if source in internal_modules
+        for target in targets
+        if target in internal_modules
+    )
+    return sorted(tuple(sorted(group)) for group in strongly_connected_components(graph) if len(group) > 1)
+
+
+def print_cycle_report(cycle_groups):
+    print(f"Циклические группы модулей ({len(cycle_groups)})")
+    for number, modules in enumerate(cycle_groups, start=1):
+        print(f"  {number}. {', '.join(modules)}")
+
+
+def index_cycle_groups(cycle_groups):
+    return {module: number for number, modules in enumerate(cycle_groups, start=1) for module in modules}
+
+
+def edge_cycle_group(source, target, group_by_module):
+    group = group_by_module.get(source)
+    return group if group == group_by_module.get(target) else None
+
+
+def print_report_table(dependencies, cycle_groups=()):
     """Выводит отчет в виде Markdown-совместимой ASCII-таблицы."""
-    print("\n" + "="*85)
-    print(f"{'Исходный модуль движка':<25} | {'От чего зависит':<35} | {'Кол-во #include'}")
-    print("="*85)
-    
+    group_by_module = index_cycle_groups(cycle_groups)
+    header = f"{'Исходный модуль движка':<25} | {'От чего зависит':<35} | {'Кол-во #include':>15} | Циклическая группа"
+    border = "=" * len(header)
+    print("\n" + border)
+    print(header)
+    print(border)
+
     for source in sorted(dependencies.keys()):
         targets = dependencies[source]
         # Сортируем по частоте использования (по убыванию)
-        for target, count in sorted(targets.items(), key=lambda x: x[1], reverse=True):
-            print(f"{source:<25} | {target:<35} | {count}")
-    print("="*85 + "\n")
+        for target, count in sorted(targets.items(), key=lambda item: (-item[1], item[0])):
+            group = edge_cycle_group(source, target, group_by_module)
+            cycle = f"№{group}" if group is not None else "—"
+            print(f"{source:<25} | {target:<35} | {count:>15} | {cycle}")
+    print(border + "\n")
 
-def generate_graph(dependencies, internal_modules, third_party_libs):
+def write_dependency_graph(net):
+    legend = f"""
+    <div style="background:#1a1a1a;color:#ddd;padding:8px 16px">
+        Нажмите на узел
+        <span style="color:{EDGE_COLORS['incoming']};margin-left:1em">Входящие</span>
+        <span style="color:{EDGE_COLORS['outgoing']};margin-left:1em">Исходящие</span>
+        <span style="color:{EDGE_COLORS['cycle']};margin-left:1em">Циклы (пунктир)</span>
+    </div>
+    """
+    interaction = """
+    <script id="edge-directions">
+    (() => {
+        const colors = __EDGE_COLORS__;
+
+        function highlightDirections(selectedNodes) {
+            const selected = selectedNodes.length === 1 ? selectedNodes[0] : null;
+            const updates = edges.map((edge) => {
+                let color = colors.neutral;
+                if (edge.dashes) {
+                    color = colors.cycle;
+                } else if (edge.to === selected) {
+                    color = colors.incoming;
+                } else if (edge.from === selected) {
+                    color = colors.outgoing;
+                }
+                return {id: edge.id, color: {color, highlight: color, hover: color, inherit: false}};
+            });
+            edges.update(updates);
+        }
+
+        network.on("select", ({nodes}) => highlightDirections(nodes));
+        highlightDirections([]);
+    })();
+    </script>
+    """.replace("__EDGE_COLORS__", json.dumps(EDGE_COLORS))
+    graph_container = '<div id="mynetwork"'
+    html = net.generate_html().replace(graph_container, legend + graph_container, 1)
+    body, footer = html.rsplit("</body>", 1)
+    output = Path("engine_dependencies.html")
+    output.write_text(body + interaction + "</body>" + footer, encoding="utf-8")
+    print(f"🎉 Интерактивный граф сохранен в: {output}")
+
+
+def generate_graph(dependencies, internal_modules, cycle_groups):
     """Генерирует интерактивный HTML-граф зависимостей движка."""
-    net = Network(height="850px", width="100%", directed=True, bgcolor="#1a1a1a", font_color="white")
+    net = Network(height="850px", width="100%", directed=True, bgcolor="#1a1a1a", font_color="white", cdn_resources="in_line")
+    group_by_module = index_cycle_groups(cycle_groups)
     
     # Настройка физики (кулоновское отталкивание и пружины для чистоты графа)
     net.force_atlas_2based(gravity=-50, central_gravity=0.01, spring_length=120)
@@ -134,7 +252,7 @@ def generate_graph(dependencies, internal_modules, third_party_libs):
     for targets in dependencies.values():
         active_nodes.update(targets.keys())
         
-    for node in active_nodes:
+    for node in sorted(active_nodes):
         if node in internal_modules:
             color = "#2ecc71"  # Ярко-зеленый для модулей движка
             group = "Internal"
@@ -147,10 +265,21 @@ def generate_graph(dependencies, internal_modules, third_party_libs):
             size = 20
             
         net.add_node(node, label=node, color=color, title=title, size=size, group=group)
+        if node in group_by_module:
+            net.get_node(node).update(
+                color={"background": color, "border": EDGE_COLORS["cycle"]},
+                borderWidth=3,
+                title=f"{title}<br>Циклическая группа {group_by_module[node]}",
+            )
         
     # Добавляем ребра-стрелки
-    for source, targets in dependencies.items():
-        for target, count in targets.items():
+    for source, targets in sorted(dependencies.items()):
+        for target, count in sorted(targets.items()):
+            cycle_group = edge_cycle_group(source, target, group_by_module)
+            cyclic = cycle_group is not None
+            title = f"Зависимостей (#include): {count}"
+            if cyclic:
+                title += f"<br>Циклическая группа {cycle_group}"
             # Толщина стрелки масштабируется в зависимости от количества включений
             width = min(1 + (count // 5), 8) 
             net.add_edge(
@@ -158,21 +287,22 @@ def generate_graph(dependencies, internal_modules, third_party_libs):
                 target, 
                 value=count, 
                 width=width,
-                title=f"Зависимостей (#include): {count}", 
-                color="#888888",
+                title=title,
+                color=EDGE_COLORS["cycle" if cyclic else "neutral"],
+                dashes=cyclic,
                 arrowStrikethrough=False
             )
             
-    output_filename = "engine_dependencies.html"
-    net.write_html(output_filename)
-    print(f"🎉 Интерактивный граф сохранен в: {output_filename}")
+    write_dependency_graph(net)
 
 if __name__ == "__main__":
     print("🔍 Автоматическое сканирование архитектуры проекта...")
-    deps, internals, third_party = analyze_dependencies()
+    deps, internals, _ = analyze_dependencies()
     
     if deps:
-        print_report_table(deps)
-        generate_graph(deps, internals, third_party)
+        cycle_groups = find_cycle_groups(deps, internals)
+        print_report_table(deps, cycle_groups)
+        print_cycle_report(cycle_groups)
+        generate_graph(deps, internals, cycle_groups)
     else:
-        print("⚠ Связей между модулями не обнаружено. Проверьте правильность путей SRC_DIR / ENGINE_DIR.")
+        print("⚠ Связей между модулями не обнаружено. Проверьте, доступны ли каталоги src/engine и 3rd.")

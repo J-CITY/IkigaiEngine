@@ -5,7 +5,6 @@
 
 #include <cassert>
 
-#include "utilsModule/pathGetter.h"
 
 #ifdef VULKAN_BACKEND
 #include <exception>

@@ -2,7 +2,7 @@
 #include "renderModule/backends/interface/resourceStruct.h"
 #include "renderModule/backends/interface/uniformTypes.h"
 #include "resourceModule/jsonLoader.h"
-#include "utilsModule/imguiHelper/imguiWidgets.h"
+#include "editorModule/imguiHelper/imguiWidgets.h"
 #include "utilsModule/log/loggerDefine.h"
 #ifdef USE_EDITOR
 #include "editorWindow.h"
@@ -336,10 +336,7 @@ namespace IKIGAI::EDITOR {
 					return;
 				}
 				auto jsonStr = jsonStrRes.unwrap();
-				//write
-				//std::ofstream f(UTILS::GetRealPath(mPath));
-				//f << jsonStr << std::endl;
-				//f.close();
+				// TODO: Save the resource through FileSystem::writeTextAtomic.
 			}
 			ImGui::End();
 		}

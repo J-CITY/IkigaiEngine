@@ -14,7 +14,7 @@
 #include "misc/cpp/imgui_stdlib.h"
 #include "resourceModule/textureManager.h"
 #include "sceneModule/sceneManager.h"
-#include "utilsModule/imguiHelper/imguiWidgets.h"
+#include "editorModule/imguiHelper/imguiWidgets.h"
 
 bool isEngineUniform(const std::string& uniformName) {
 	return uniformName.rfind("EngineUBO", 0) == 0 || uniformName.rfind("engine_", 0) == 0 || uniformName.rfind("Engine", 0) == 0;
@@ -39,9 +39,7 @@ void IKIGAI::EDITOR::MaterialWindow::draw() {
 			LOG_ERROR << "Can not save: " << material->getPath();
 		}
 		else {
-			// std::ofstream f(UTILS::GetRealPath(material->getPath()));
-			// f << dataRes.unwrap().dump(4) << std::endl;
-			// f.close();
+			// TODO: Save the material through FileSystem::writeTextAtomic.
 		}
 	}
 	ImGui::SameLine();

@@ -29,11 +29,11 @@
 #include "coreModule/ecs/componentCatalog.h"
 #include "coreModule/ecs/object.h"
 #include "ecsModule/weakPtr.h"
+#include "editorModule/imguiHelper/imguiWidgets.h"
 #include "editorRender.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "misc/cpp/imgui_stdlib.h"
-#include "utilsModule/imguiHelper/imguiWidgets.h"
 #include "reflectionModule/reflection.h"
 
 using namespace IKIGAI::EDITOR;

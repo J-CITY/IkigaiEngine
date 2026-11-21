@@ -489,7 +489,7 @@ GLuint TextureAtlas::CreateTextureForAtlas(std::vector<SlotBundle> slotBundles, 
 	// TODO: fix it
 	// for (uint32_t i = 0; i < slotBundles.size(); i++)
 	//{
-	//	std::vector<unsigned char> texData = RENDER::TextureGl::GetPixels(UTILS::GetRealPath(slotBundles[i].GetTexture()->getPath()));
+	//	Read and decode the texture bytes through the VFS before copying the pixels.
 	//	uint32_t channels = slotBundles[i].GetTexture()->getChannels();
 	//	Rect rect = slotBundles[i].GetRect();
 	//

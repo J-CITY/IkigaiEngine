@@ -9,7 +9,6 @@
 
 #include "utilsModule/assertion.h"
 #include "utilsModule/log/loggerDefine.h"
-#include "utilsModule/pathGetter.h"
 #include "utilsModule/stdLoader.h"
 
 //#include "coreModule/ecs/components/transform.h"
@@ -314,7 +313,7 @@ TextureGl::~TextureGl() {
 //
 //	IKIGAI::UTILS::STBiSetFlipVerticallyOnLoad(true);
 //	//stbi_set_flip_vertically_on_load(true);
-//	unsigned char* data = IKIGAI::UTILS::STBiLoad(UTILS::GetRealPath(path).c_str(), &width, &height, &nrComponents, 0);
+//	Read the image bytes through the VFS before decoding them.
 //	if (data)
 //	{
 //		GLenum format = GL_RGBA;
@@ -460,9 +459,6 @@ std::shared_ptr<TextureGl> TextureGl::Create(const TextureResource &descriptor, 
 }
 
 std::shared_ptr<TextureGl> TextureGl::Create(const std::string& path, bool genMipmap, UTILS::IAllocator* allocator, TextureDeleter deleter) {
-	//int width = 0, height = 0, nrComponents = 0;
-	//IKIGAI::UTILS::STBiSetFlipVerticallyOnLoad(true);
-	//unsigned char* data = IKIGAI::UTILS::STBiLoad(UTILS::GetRealPath(path).c_str(), &width, &height, &nrComponents, 4);
 	TextureResource res;
 	res.useMipmap = genMipmap;
 	res.pathTexture.push_back(path);

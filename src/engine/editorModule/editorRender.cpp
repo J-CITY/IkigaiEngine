@@ -13,6 +13,7 @@
 #include "cameraControlWindow.h"
 #include "componentManagerWindow.h"
 #include "coreModule/config.h"
+#include "editorModule/imguiHelper/ImGuiFileBrowser.h"
 #include "fileBrowser.h"
 #include "imgui.h"
 #include "menuBar.h"
@@ -25,7 +26,6 @@
 #include "statWindow.h"
 #include "textureWatcher.h"
 #include "treeWindow.h"
-#include "utilsModule/imguiHelper/ImGuiFileBrowser.h"
 #include "windowModule/inputManager/inputActions.h"
 #include "windowModule/inputManager/inputManager.h"
 #include <cstring>

@@ -5,7 +5,7 @@
 #include "coreModule/ecs/sceneSimulationHost.h"
 #include "imgui.h"
 #include "sceneModule/sceneManager.h"
-#include "utilsModule/imguiHelper/ImGuizmo.h"
+#include "editorModule/imguiHelper/ImGuizmo.h"
 #include <algorithm>
 #include <misc/cpp/imgui_stdlib.h>
 

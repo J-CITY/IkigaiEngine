@@ -18,7 +18,7 @@ add_subdirectory("${IKIGAI_ECS_BENCHMARK_DEPS}/entt" entt EXCLUDE_FROM_ALL)
 add_subdirectory("${IKIGAI_ECS_BENCHMARK_DEPS}/flecs" flecs EXCLUDE_FROM_ALL)
 add_subdirectory("${IKIGAI_ECS_BENCHMARK_DEPS}/benchmark" google-benchmark EXCLUDE_FROM_ALL)
 
-add_executable(ecs_benchmarks comparison.cpp demo.cpp "${ENGINE_ROOT}/src/ecsDemo/systems.cpp")
+add_executable(ecs_benchmarks comparison.cpp demo.cpp relations.cpp "${ENGINE_ROOT}/src/ecsDemo/systems.cpp")
 target_include_directories(ecs_benchmarks PRIVATE "${ENGINE_ROOT}/src")
 target_link_libraries(ecs_benchmarks PRIVATE ikigai_ecs_under_test EnTT::EnTT flecs::flecs_static benchmark::benchmark_main)
 

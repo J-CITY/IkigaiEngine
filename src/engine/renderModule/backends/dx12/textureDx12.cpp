@@ -2,8 +2,6 @@
 #include "renderModule/backends/interface/integerColorAttachment.h"
 #include "renderModule/backends/interface/textureAssetSource.h"
 
-#include "utilsModule/pathGetter.h"
-
 #ifdef DX12_BACKEND
 #include "d3dUtil.h"
 #include "d3dx12/DirectXHelpers.h"

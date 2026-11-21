@@ -12,67 +12,6 @@
 
 
 
-/*! @name Emscripten Extensions
- *
- * Please see the following references for more details on how to use
- * Emscripten with C++:
- *
- * https://emscripten.org/docs/porting/connecting_cpp_and_javascript/embind.html
- * https://emscripten.org/docs/api_reference/bind.h.html
- *
- * @{
- */
-#ifdef TINYSPLINE_EMSCRIPTEN
-
-// Additional includes and namespaces.
-#include <stdexcept>
-#include <emscripten/bind.h>
-using namespace emscripten;
-
-/* Used by value_objects to guard read-only properties. */
-void inline
-cannotWrite()
-{ throw std::runtime_error("cannot write read-only property"); }
-
-/* Allow clients to read exception messages in the Javascript binding. */
-std::string
-exceptionMessage(int ptr)
-{ return std::string(reinterpret_cast<std::exception *>(ptr)->what()); }
-
-// Map: std::vector <--> JS array
-// https://github.com/emscripten-core/emscripten/issues/11070#issuecomment-717675128
-namespace emscripten {
-namespace internal {
-template <typename T, typename Allocator>
-struct BindingType<std::vector<T, Allocator>> {
-	using ValBinding = BindingType<val>;
-	using WireType = ValBinding::WireType;
-
-	static WireType
-	toWireType(const std::vector<T, Allocator> &vec)
-	{ return ValBinding::toWireType(val::array(vec)); }
-
-	static std::vector<T, Allocator>
-	fromWireType(WireType value)
-	{ return vecFromJSArray<T>(ValBinding::fromWireType(value)); }
-};
-
-template <typename T>
-struct TypeID<T, // this is ridiculous...
-              typename std::enable_if_t<std::is_same<
-                  typename Canonicalized<T>::type,
-                  std::vector<typename Canonicalized<T>::type::value_type,
-                  typename Canonicalized<T>::type::allocator_type>>::value>> {
-	static constexpr TYPEID
-	get() { return TypeID<val>::get(); }
-};
-}  // namespace internal
-}  // namespace emscripten
-#endif
-/*! @} */
-
-
-
 namespace tinyspline {
 
 /*! @name API Configuration
@@ -138,11 +77,6 @@ public:
 
 private:
 	real m_vals[2];
-
-#ifdef TINYSPLINE_EMSCRIPTEN
-public:
-	void setValues(std::vector<real>) { cannotWrite(); }
-#endif
 };
 
 class TINYSPLINECXX_API Vec3 {
@@ -176,11 +110,6 @@ public:
 
 private:
 	real m_vals[3];
-
-#ifdef TINYSPLINE_EMSCRIPTEN
-public:
-	void setValues(std::vector<real>) { cannotWrite(); }
-#endif
 };
 
 class TINYSPLINECXX_API Vec4 {
@@ -215,162 +144,7 @@ public:
 
 private:
 	real m_vals[4];
-
-#ifdef TINYSPLINE_EMSCRIPTEN
-public:
-	void setValues(std::vector<real>) { cannotWrite(); }
-#endif
 };
-
-#ifdef TINYSPLINE_EMSCRIPTEN
-class VecMath {
-public:
-	/*! @name Add
-	*
-	* @{
-	*/
-	static Vec2
-	add2(const Vec2 &a, const Vec2 &b)
-	{ return a.add(b); }
-
-	static Vec3
-	add3(const Vec3 &a, const Vec3 &b)
-	{ return a.add(b); }
-
-	static Vec4
-	add4(const Vec4 &a, const Vec4 &b)
-	{ return a.add(b); }
-	/*! @} */
-
-	/*! @name Subtract
-	*
-	* @{
-	*/
-	static Vec2
-	subtract2(const Vec2 &a, const Vec2 &b)
-	{ return a.subtract(b); }
-
-	static Vec3
-	subtract3(const Vec3 &a, const Vec3 &b)
-	{ return a.subtract(b); }
-
-	static Vec4
-	subtract4(const Vec4 &a, const Vec4 &b)
-	{ return a.subtract(b); }
-	/*! @} */
-
-	/*! @name Multiply
-	*
-	* @{
-	*/
-	static Vec2
-	multiply2(const Vec2 &vec, real scalar)
-	{ return vec.multiply(scalar); }
-
-	static Vec3
-	multiply3(const Vec3 &vec, real scalar)
-	{ return vec.multiply(scalar); }
-
-	static Vec4
-	multiply4(const Vec4 &vec, real scalar)
-	{ return vec.multiply(scalar); }
-	/*! @} */
-
-	/*! @name Cross
-	*
-	* @{
-	*/
-	static Vec3
-	cross3(const Vec3 &a, Vec3 &b)
-	{ return a.cross(b); }
-	/*! @} */
-
-	/*! @name Normalize
-	*
-	* @{
-	*/
-	static Vec2
-	normalize2(const Vec2 &vec)
-	{ return vec.normalize(); }
-
-	static Vec3
-	normalize3(const Vec3 &vec)
-	{ return vec.normalize(); }
-
-	static Vec4
-	normalize4(const Vec4 &vec)
-	{ return vec.normalize(); }
-	/*! @} */
-
-	/*! @name Magnitude
-	*
-	* @{
-	*/
-	static real
-	magnitude2(const Vec2 &vec)
-	{ return vec.magnitude(); }
-
-	static real
-	magnitude3(const Vec3 &vec)
-	{ return vec.magnitude(); }
-
-	static real
-	magnitude4(const Vec4 &vec)
-	{ return vec.magnitude(); }
-	/*! @} */
-
-	/*! @name Dot
-	*
-	* @{
-	*/
-	static real
-	dot2(const Vec2 &a, Vec2 &b)
-	{ return a.dot(b); }
-
-	static real
-	dot3(const Vec3 &a, Vec3 &b)
-	{ return a.dot(b); }
-
-	static real
-	dot4(const Vec4 &a, Vec4 &b)
-	{ return a.dot(b); }
-	/*! @} */
-
-	/*! @name Angle
-	*
-	* @{
-	*/
-	static real
-	angle2(const Vec2 &a, Vec2 &b)
-	{ return a.angle(b); }
-
-	static real
-	angle3(const Vec3 &a, Vec3 &b)
-	{ return a.angle(b); }
-
-	static real
-	angle4(const Vec4 &a, Vec4 &b)
-	{ return a.angle(b); }
-	/*! @} */
-
-	/*! @name Distance
-	*
-	* @{
-	*/
-	static real
-	distance2(const Vec2 &a, Vec2 &b)
-	{ return a.distance(b); }
-
-	static real
-	distance3(const Vec3 &a, Vec3 &b)
-	{ return a.distance(b); }
-
-	static real
-	distance4(const Vec4 &a, Vec4 &b)
-	{ return a.distance(b); }
-	/*! @} */
-};
-#endif
 /*! @} */
 
 
@@ -401,15 +175,6 @@ private:
 	     m_tangent,
 	     m_normal,
 	     m_binormal;
-
-#ifdef TINYSPLINE_EMSCRIPTEN
-public:
-	Frame() {}
-	void setPosition(Vec3) { cannotWrite(); }
-	void setTangent(Vec3) { cannotWrite(); }
-	void setNormal(Vec3) { cannotWrite(); }
-	void setBinormal(Vec3) { cannotWrite(); }
-#endif
 };
 
 class TINYSPLINECXX_API FrameSeq {
@@ -458,15 +223,6 @@ public:
 private:
 	real m_min,
 	     m_max;
-
-#ifdef TINYSPLINE_EMSCRIPTEN
-public:
-	Domain()
-	: Domain(TS_DOMAIN_DEFAULT_MIN, TS_DOMAIN_DEFAULT_MAX)
-	{}
-	void setMin(real) { cannotWrite(); }
-	void setMax(real) { cannotWrite(); }
-#endif
 };
 /*! @} */
 
@@ -549,18 +305,6 @@ private:
 	explicit DeBoorNet(tsDeBoorNet &data);
 
 	friend class BSpline;
-
-#ifdef TINYSPLINE_EMSCRIPTEN
-public:
-	DeBoorNet() : m_net(ts_deboornet_init()) {}
-	void setKnot(real) { cannotWrite(); }
-	void setIndex(size_t) { cannotWrite(); }
-	void setMultiplicity(size_t) { cannotWrite(); }
-	void setNumInsertions(size_t) { cannotWrite(); }
-	void setDimension(size_t) { cannotWrite(); }
-	void setPoints(std::vector<real>) { cannotWrite(); }
-	void setResult(std::vector<real>) { cannotWrite(); }
-#endif
 };
 /*! @} */
 
@@ -678,15 +422,6 @@ private:
 
 	/* Needs to access ::spline. */
 	friend class Morphism;
-
-#ifdef TINYSPLINE_EMSCRIPTEN
-public:
-	std_real_vector_out sample0() const { return sample(); }
-	std_real_vector_out sample1(size_t num) const { return sample(num); }
-	BSpline derive0() const { return derive(); }
-	BSpline derive1(size_t n) const { return derive(n); }
-	BSpline derive2(size_t n, real eps) const { return derive(n, eps); }
-#endif
 };
 /*! @} */
 
@@ -758,209 +493,3 @@ private:
 /*! @} */
 
 }
-
-
-
-#ifdef TINYSPLINE_EMSCRIPTEN
-using namespace tinyspline;
-EMSCRIPTEN_BINDINGS(tinyspline) {
-	function("exceptionMessage", &exceptionMessage);
-
-	// Vector Math
-	value_object<Vec2>("Vec2")
-		.field("x",
-		       &Vec2::x,
-		       &Vec2::setX)
-		.field("y",
-		       &Vec2::y,
-		       &Vec2::setY)
-		.field("values",
-		       &Vec2::values,
-		       &Vec2::setValues)
-	;
-	value_object<Vec3>("Vec3")
-		.field("x",
-		       &Vec3::x,
-		       &Vec3::setX)
-		.field("y",
-		       &Vec3::y,
-		       &Vec3::setY)
-		.field("z",
-		       &Vec3::z,
-		       &Vec3::setZ)
-		.field("values",
-		       &Vec3::values,
-		       &Vec3::setValues)
-	;
-	value_object<Vec4>("Vec4")
-		.field("x",
-		       &Vec4::x,
-		       &Vec4::setX)
-		.field("y",
-		       &Vec4::y,
-		       &Vec4::setY)
-		.field("z",
-		       &Vec4::z,
-		       &Vec4::setZ)
-		.field("w",
-		       &Vec4::w,
-		       &Vec4::setW)
-		.field("values",
-		       &Vec4::values,
-		       &Vec4::setValues)
-	;
-	class_<VecMath>("VecMath")
-		.class_function("add", &VecMath::add2)
-		.class_function("add", &VecMath::add3)
-		.class_function("add", &VecMath::add4)
-		.class_function("subtract", &VecMath::subtract2)
-		.class_function("subtract", &VecMath::subtract3)
-		.class_function("subtract", &VecMath::subtract4)
-		.class_function("multiply", &VecMath::multiply2)
-		.class_function("multiply", &VecMath::multiply3)
-		.class_function("multiply", &VecMath::multiply4)
-		.class_function("cross", &VecMath::cross3)
-		.class_function("normalize", &VecMath::normalize2)
-		.class_function("normalize", &VecMath::normalize3)
-		.class_function("normalize", &VecMath::normalize4)
-		.class_function("magnitude", &VecMath::magnitude2)
-		.class_function("magnitude", &VecMath::magnitude3)
-		.class_function("magnitude", &VecMath::magnitude4)
-		.class_function("dot", &VecMath::dot2)
-		.class_function("dot", &VecMath::dot3)
-		.class_function("dot", &VecMath::dot4)
-		.class_function("angle", &VecMath::angle2)
-		.class_function("angle", &VecMath::angle3)
-		.class_function("angle", &VecMath::angle4)
-		.class_function("distance", &VecMath::distance2)
-		.class_function("distance", &VecMath::distance3)
-		.class_function("distance", &VecMath::distance4)
-	;
-
-	// Spline Framing
-	value_object<Frame>("Frame")
-		.field("position",
-		       &Frame::position,
-		       &Frame::setPosition)
-		.field("tangent",
-		       &Frame::tangent,
-		       &Frame::setTangent)
-		.field("normal",
-		       &Frame::normal,
-		       &Frame::setNormal)
-		.field("binormal",
-		       &Frame::normal,
-		       &Frame::setNormal)
-	;
-	class_<FrameSeq>("FrameSeq")
-		.constructor<>()
-		.constructor<FrameSeq>()
-		.function("size", &FrameSeq::size)
-		.function("at", &FrameSeq::at)
-		.function("toString", &FrameSeq::toString)
-	;
-
-	// Utility Classes
-	value_object<Domain>("Domain")
-		.field("min",
-		       &Domain::min,
-		       &Domain::setMin)
-		.field("max",
-		       &Domain::max,
-		       &Domain::setMax)
-	;
-
-	value_object<DeBoorNet>("DeBoorNet")
-		.field("knot",
-		       &DeBoorNet::knot,
-		       &DeBoorNet::setKnot)
-		.field("index",
-		       &DeBoorNet::index,
-		       &DeBoorNet::setIndex)
-		.field("multiplicity",
-		       &DeBoorNet::multiplicity,
-		       &DeBoorNet::setMultiplicity)
-		.field("numInsertions",
-		       &DeBoorNet::numInsertions,
-		       &DeBoorNet::setNumInsertions)
-		.field("dimension",
-		       &DeBoorNet::dimension,
-		       &DeBoorNet::setDimension)
-		.field("points",
-		       &DeBoorNet::points,
-		       &DeBoorNet::setPoints)
-		.field("result",
-		       &DeBoorNet::result,
-		       &DeBoorNet::setResult)
-	;
-
-	class_<BSpline>("BSpline")
-	        .constructor<>()
-	        //.constructor<BSpline>()
-	        .constructor<size_t>()
-	        .constructor<size_t, size_t>()
-	        .constructor<size_t, size_t, size_t>()
-	        .constructor<size_t, size_t, size_t, BSpline::Type>()
-
-	        .class_function("interpolateCubicNatural",
-			&BSpline::interpolateCubicNatural)
-	        .class_function("interpolateCatmullRom",
-			&BSpline::interpolateCatmullRom,
-			allow_raw_pointers())
-	        .class_function("parseJson", &BSpline::parseJson)
-
-	        .property("degree", &BSpline::degree)
-	        .property("order", &BSpline::order)
-	        .property("dimension", &BSpline::dimension)
-	        .property("controlPoints", &BSpline::controlPoints,
-			&BSpline::setControlPoints)
-	        .property("knots", &BSpline::knots, &BSpline::setKnots)
-	        .property("domain", &BSpline::domain)
-
-	        /* Property by index */
-	        .function("knotAt", &BSpline::knotAt)
-	        .function("setKnotAt", &BSpline::setKnotAt)
-
-	        /* Query */
-	        .function("numControlPoints", &BSpline::numControlPoints)
-	        .function("eval", &BSpline::eval)
-	        .function("evalAll", &BSpline::evalAll)
-	        .function("sample",
-			select_overload<std_real_vector_out() const>
-			(&BSpline::sample0))
-	        .function("sample",
-			select_overload<std_real_vector_out(size_t) const>
-			(&BSpline::sample1))
-	        .function("sample", &BSpline::sample)
-	        .function("bisect", &BSpline::bisect)
-	        .function("isClosed", &BSpline::isClosed)
-
-		/* Serialization */
-	        .function("toJson", &BSpline::toJson)
-
-	        /* Transformations */
-	        .function("insertKnot", &BSpline::insertKnot)
-	        .function("split", &BSpline::split)
-	        .function("tension", &BSpline::tension)
-	        .function("toBeziers", &BSpline::toBeziers)
-	        .function("derive",
-			select_overload<BSpline() const>
-			(&BSpline::derive0))
-	        .function("derive",
-			select_overload<BSpline(size_t) const>
-			(&BSpline::derive1))
-	        .function("derive",
-			select_overload<BSpline(size_t, real) const>
-			(&BSpline::derive2))
-
-	        /* Debug */
-	        .function("toString", &BSpline::toString)
-	;
-
-	enum_<BSpline::Type>("BSplineType")
-	        .value("Opened", BSpline::Type::Opened)
-	        .value("Clamped", BSpline::Type::Clamped)
-	        .value("Beziers", BSpline::Type::Beziers)
-	;
-}
-#endif

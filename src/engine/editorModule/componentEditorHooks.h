@@ -5,11 +5,11 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "componentEditorCatalog.h"
 #include "coreModule/ecs/animationTimelineBind.h"
+#include "editorModule/imguiHelper/imguiWidgets.h"
 #include "imgui.h"
 #include "misc/cpp/imgui_stdlib.h"
 #include "sceneModule/sceneManager.h"
 #include "utilsModule/animation.h"
-#include "utilsModule/imguiHelper/imguiWidgets.h"
 #include <magic_enum.hpp>
 #include <string>
 #include <typeindex>

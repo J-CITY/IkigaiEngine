@@ -194,6 +194,76 @@ namespace {
 		});
 	}
 
+	void checkSparseIndex(ArchetypeLayout layout) {
+		World world { layout };
+		auto& components = *world.getComponentManager();
+		components.registerComponent<Health>(StorageType::Sparse);
+		components.registerComponent<Shield>(StorageType::Sparse);
+		const Entity first { Entity::ID { 1023 } };
+		const Entity second { Entity::ID { 1024 } };
+		const Entity high { Entity::ID { 0x70000000u } };
+		const Entity absent { Entity::ID { 0x70000001u } };
+		for (const auto entity : { first, second, high, absent }) {
+			world.registerEntity(entity);
+			components.addComponent(entity, Shield { 1 });
+		}
+		const auto firstHandle = components.addComponent(first, Health { 10 });
+		components.addComponent(second, Health { 20 });
+		const auto highHandle = components.addComponent(high, Health { 30 });
+		expect(!components.tryGetComponent<Health>(absent), "an empty sparse slot cannot alias dense row zero");
+
+		components.removeComponents<Health>(first);
+		const auto* relocated = components.resolveComponent(highHandle);
+		expect(relocated && relocated->value == 30, "sparse swap-removal preserves the moved row and its generation");
+		expect(!components.resolveComponent(firstHandle), "removing a sparse component invalidates its handle");
+		components.addComponent(first, Health { 40 });
+		expect(!components.resolveComponent(firstHandle), "reclaiming a sparse page does not revive a stale handle");
+
+		std::unordered_map<Entity, int> joined;
+		components.forEach<Read<Health>, Read<Shield>>([&](Entity entity, const Health& health, const Shield&) {
+			expect(joined.emplace(entity, health.value).second, "paged sparse join visits each match once");
+		});
+		expect(joined == std::unordered_map<Entity, int> { { first, 40 }, { second, 20 }, { high, 30 } },
+			"paged sparse join handles boundary IDs, isolated IDs and missing slots");
+		world.destroyEntity(high);
+		world.registerEntity(high);
+		components.addComponent(high, Health { 50 });
+		expect(!components.resolveComponent(highHandle), "reregistering a sparse ID does not revive a stale component handle");
+	}
+
+	void checkSparseChunkJoin(ArchetypeLayout layout) {
+		World world { layout };
+		auto& components = *world.getComponentManager();
+		components.registerComponent<Health>(StorageType::Sparse);
+		components.registerComponent<Shield>(StorageType::Sparse);
+		std::vector<Entity> entities;
+		std::vector<Entity> expected;
+		for (int index = 0; index < 2 * static_cast<int>(ComponentArray<Shield>::chunk_size) + 37; ++index) {
+			const auto entity = world.createEntity();
+			entities.push_back(entity);
+			if (index % 3 != 0) {
+				components.addComponent(entity, Health { index });
+			}
+			if (index % 2 == 0) {
+				components.addComponent(entity, Shield { 1 });
+				if (index % 3 != 0) {
+					expected.push_back(entity);
+				}
+			}
+		}
+		std::vector<Entity> visited;
+		components.forEach<Write<Health>, Read<Shield>>([&](Entity entity, Health& health, const Shield& shield) {
+			visited.push_back(entity);
+			health.value += shield.value;
+		});
+		expect(visited == expected, "sparse chunk join keeps leading order and filters missing rows across a partial chunk");
+		for (std::size_t index = 0; index < entities.size(); ++index) {
+			if (const auto* health = components.tryGetComponent<Health>(entities[index])) {
+				expect(health->value == static_cast<int>(index) + (index % 2 == 0), "sparse chunk join writes the owning component");
+			}
+		}
+	}
+
 	void checkMixedJoin(ArchetypeLayout layout) {
 		World world { layout };
 		auto& components = *world.getComponentManager();
@@ -266,13 +336,13 @@ namespace {
 		auto& components = *world.getComponentManager();
 		std::unordered_map<Entity, int> expected;
 		std::vector<Entity> entities;
-		for (int index = 0; index < 257; ++index) {
+		for (int index = 0; index < 2 * static_cast<int>(ComponentArray<Position>::chunk_size) + 57; ++index) {
 			const auto entity = world.createEntity();
 			entities.push_back(entity);
 			components.addComponents(entity, Position { index }, Velocity { 2 * index });
 			expected.emplace(entity, index);
 		}
-		for (std::size_t index = 0; index < 117; ++index) {
+		for (std::size_t index = 0; index < ComponentArray<Position>::chunk_size + 17; ++index) {
 			components.addComponent(entities[index], Shield { 1 });
 		}
 		world.destroyEntity(entities[10]);
@@ -700,6 +770,8 @@ void runStorageTests() {
 		checkHybridRegistry(layout);
 		checkComponentEvents(layout);
 		checkQueries(layout);
+		checkSparseIndex(layout);
+		checkSparseChunkJoin(layout);
 		checkMixedJoin(layout);
 		checkDenseChunks(layout);
 		checkAlignment(layout);
