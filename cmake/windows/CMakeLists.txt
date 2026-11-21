@@ -243,9 +243,6 @@ endif()
 # Additional definitions
 ikigai_apply_feature_definitions(${APP_NAME})
 if(IKIGAI_ENABLE_VG_COOKER)
-    target_sources(${APP_NAME} PRIVATE
-        "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/tools/vmeshCookModel.cpp"
-        "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/tools/vmeshCookModel.h")
     target_compile_definitions(${APP_NAME} PRIVATE IKIGAI_VG_COOKER)
     target_link_libraries(${APP_NAME} PRIVATE ikigai_vmesh_cooker)
 endif()

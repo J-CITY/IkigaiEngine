@@ -72,3 +72,10 @@ set(IKIGAI_MANIFEST_resourceModule
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/textureManager.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/textureManager.h"
 )
+
+if(TARGET ikigai_vmesh_cooker)
+    list(APPEND IKIGAI_MANIFEST_resourceModule
+        "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/tools/vmeshCookModel.cpp"
+        "${IKIGAI_SOURCE_ROOT}/engine/resourceModule/tools/vmeshCookModel.h"
+    )
+endif()
