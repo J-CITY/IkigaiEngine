@@ -74,21 +74,28 @@ struct BoundResources {
 	}
 
 	void emit(VkCommandBuffer cmd, VkPipelineStageFlags2 otherStages, VkPipelineStageFlags2 commandStage, bool after) {
-		if (buffers.empty() && images.empty()) return;
+		if (buffers.empty() && images.empty()) {
+			return;
+		}
 		const auto setScopes = [&](auto& barrier) {
 			if (after) {
 				barrier.srcStageMask = commandStage;
 				barrier.srcAccessMask = barrier.dstAccessMask;
 				barrier.dstStageMask = otherStages;
 				barrier.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
-			} else {
+			}
+			else {
 				barrier.srcStageMask = otherStages;
 				barrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
 				barrier.dstStageMask = commandStage;
 			}
 		};
-		for (auto& barrier : buffers) setScopes(barrier);
-		for (auto& barrier : images) setScopes(barrier);
+		for (auto& barrier : buffers) {
+			setScopes(barrier);
+		}
+		for (auto& barrier : images) {
+			setScopes(barrier);
+		}
 		VkDependencyInfo info { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
 		info.bufferMemoryBarrierCount = static_cast<uint32_t>(buffers.size());
 		info.pBufferMemoryBarriers = buffers.data();
@@ -291,28 +298,38 @@ std::shared_ptr<ASVk> buildAS(DriverVk& driver, std::vector<VkAccelerationStruct
 	constexpr auto asRead = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
 	constexpr auto asWrite = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
 	VkPipelineStageFlags2 traceStages = 0;
-	if (driver.mRayTracingCapabilities.RayQuery) traceStages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-	if (driver.mRayTracingCapabilities.Pipeline) traceStages |= VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
+	if (driver.mRayTracingCapabilities.RayQuery) {
+		traceStages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+	}
+	if (driver.mRayTracingCapabilities.Pipeline) {
+		traceStages |= VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
+	}
 	if (update || top) {
 		// TLAS reads the BLASes; in-place refits also reuse the AS and its scratch.
 		dependency(cmd, buildStage | (update ? traceStages : 0), asWrite, buildStage, update ? asRead | asWrite : asRead);
 	}
 	BoundResources inputs;
 	for (const auto& input : data.Source) {
-		if (!input.Aabbs.empty()) continue; // Private host uploads are visible at queue submission.
+		if (!input.Aabbs.empty()) {
+			continue; // Private host uploads are visible at queue submission.
+		}
 		const auto vertices = std::static_pointer_cast<VertexBufferVk>(input.Vertices);
-		inputs.buffer(vertices->getBuffer().handle(), input.VertexOffset, uint64_t(input.VertexCount - 1) * input.VertexStride + 12,
-			VK_ACCESS_2_SHADER_READ_BIT);
+		// Traversal reads strided vertices; include the tail of the last interleaved record.
+		inputs.buffer(vertices->getBuffer().handle(), input.VertexOffset, VK_WHOLE_SIZE, VK_ACCESS_2_SHADER_READ_BIT);
 		if (input.Indices) {
 			const auto indices = std::static_pointer_cast<IndexBufferVk>(input.Indices);
-			inputs.buffer(indices->getBuffer().handle(), input.IndexOffset, uint64_t(input.IndexCount) * input.IndexStride, VK_ACCESS_2_SHADER_READ_BIT);
+			inputs.buffer(
+				indices->getBuffer().handle(), input.IndexOffset, uint64_t(input.IndexCount) * input.IndexStride, VK_ACCESS_2_SHADER_READ_BIT);
 		}
 	}
-	const auto inputStages = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT | traceStages;
+	const auto inputStages
+		= VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT | traceStages;
 	inputs.emit(cmd, inputStages, buildStage, false);
 	vkCmdBuildAccelerationStructuresKHR(cmd, 1, &build, &rangePtr);
 	inputs.emit(cmd, inputStages, buildStage, true);
-	if (traceStages) dependency(cmd, buildStage, asWrite, traceStages, asRead);
+	if (traceStages) {
+		dependency(cmd, buildStage, asWrite, traceStages, asRead);
+	}
 	VkAccelerationStructureDeviceAddressInfoKHR addressInfo { VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR };
 	addressInfo.accelerationStructure = data.Handle;
 	data.Address = vkGetAccelerationStructureDeviceAddressKHR(data.Device, &addressInfo);
@@ -855,7 +872,7 @@ void DriverVk::dispatchGraphCompute(const RayTracingDispatch& dispatch) try {
 		check(*this, vkCreateQueryPool(*mDevice, &queryInfo, nullptr, &timing->Queries), "Create graph queue timestamps");
 		mRayTracingFrameResources.push_back(timing);
 		vkCmdResetQueryPool(*list, timing->Queries, 0, 2);
-		vkCmdWriteTimestamp2(*list, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, timing->Queries, 0);
+		vkCmdWriteTimestamp2(*list, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, timing->Queries, 0);
 	}
 	executeRayProgram(dispatch, true, *list);
 	if (timing) {
@@ -876,7 +893,8 @@ void DriverVk::dispatchGraphCompute(const RayTracingDispatch& dispatch) try {
 	const auto wait = *mGraphGraphicsTimeline;
 	const auto signal = *mGraphComputeTimeline;
 	// Without maintenance8 a queue-family ownership acquire is synchronized at ALL_COMMANDS.
-	const vk::PipelineStageFlags stage = mQueueFamilyIndex == mGraphComputeFamily ? vk::PipelineStageFlagBits::eComputeShader : vk::PipelineStageFlagBits::eAllCommands;
+	const vk::PipelineStageFlags stage
+		= mQueueFamilyIndex == mGraphComputeFamily ? vk::PipelineStageFlagBits::eComputeShader : vk::PipelineStageFlagBits::eAllCommands;
 	const vk::TimelineSemaphoreSubmitInfo timeline(1, &value, 1, &value);
 	vk::SubmitInfo submit(1, &wait, &stage, 1, &command, 1, &signal);
 	submit.setPNext(&timeline);
@@ -1066,8 +1084,9 @@ void DriverVk::executeRayProgram(const RayTracingDispatch& dispatch, bool rayQue
 					texture->setState(getCurrentFrame().mCommandBuffer, vk::ImageLayout::eGeneral);
 				}
 				if (needsDescriptorBarriers) {
-					descriptors.image(*texture, storageImage ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT
-						: VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+					descriptors.image(*texture,
+						storageImage ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT
+									 : VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 					hasAliasedImage |= texture->mImage.isAliased();
 				}
 				images.push_back({ storageImage ? VK_NULL_HANDLE : VkSampler(*texture->mSampler), *texture->mImageView, VK_IMAGE_LAYOUT_GENERAL });
@@ -1075,8 +1094,9 @@ void DriverVk::executeRayProgram(const RayTracingDispatch& dispatch, bool rayQue
 		}
 		if (needsDescriptorBarriers) {
 			for (const auto& buffer : buffers) {
-				descriptors.buffer(buffer.buffer, buffer.offset, buffer.range, binding.Type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ?
-					VK_ACCESS_2_UNIFORM_READ_BIT : VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+				descriptors.buffer(buffer.buffer, buffer.offset, buffer.range,
+					binding.Type == VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER ? VK_ACCESS_2_UNIFORM_READ_BIT
+																	  : VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
 			}
 		}
 		VkWriteDescriptorSet write { VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
@@ -1107,7 +1127,8 @@ void DriverVk::executeRayProgram(const RayTracingDispatch& dispatch, bool rayQue
 		// Other views of the same allocation can have different image handles.
 		dependency(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, VK_ACCESS_2_MEMORY_WRITE_BIT, shaderStage,
 			VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_UNIFORM_READ_BIT);
-	} else {
+	}
+	else {
 		descriptors.emit(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, shaderStage, false);
 	}
 	vkCmdBindPipeline(cmd, bindPoint, data.Pipeline);
@@ -1131,7 +1152,8 @@ void DriverVk::executeRayProgram(const RayTracingDispatch& dispatch, bool rayQue
 	if (hasAliasedImage) {
 		dependency(cmd, shaderStage, VK_ACCESS_2_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 			VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT);
-	} else {
+	}
+	else {
 		descriptors.emit(cmd, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT, shaderStage, true);
 	}
 	if (frame->Timestamps)

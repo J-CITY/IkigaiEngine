@@ -439,7 +439,9 @@ public:
 	void draw(uint32_t vertex_count, uint32_t vertex_offset, uint32_t instance_count) override;
 	std::vector<float> readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
 	std::vector<int32_t> readIntTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
+	void finishComputeDispatch(vk::Buffer indirectArguments = {});
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) override;
+	void dispatchGraphGroups(uint32_t x, uint32_t y, uint32_t z) override;
 	void dispatchMipCompute(
 		uint32_t x, uint32_t y, uint32_t z, const std::shared_ptr<TextureInterface>& texture, uint32_t mip, uint32_t layer) override;
 	void renderGraphBarrier(bool uav) override;

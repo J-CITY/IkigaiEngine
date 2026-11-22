@@ -154,7 +154,7 @@ void StreamlineRuntime::camera(const FrameGenerationInputs& f) {
 	if (!Token) {
 		beginFrame(static_cast<uint32_t>(f.RealFrameId));
 	}
-	if (Api == sl::RenderAPI::eD3D12 && DriverInterface::settings.pipelined() && Frame != static_cast<uint32_t>(f.RealFrameId)) {
+	if (DriverInterface::settings.pipelined() && Frame != static_cast<uint32_t>(f.RealFrameId)) {
 		throw UnsupportedFrameGeneration("Streamline camera frame does not match the current frame token");
 	}
 	Camera = f;

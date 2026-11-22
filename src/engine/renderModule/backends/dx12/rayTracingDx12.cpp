@@ -873,7 +873,13 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 	auto snapshot = std::make_shared<RayTracingDispatch>(dispatch);
 	const auto views = allocateRayDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, data.Descriptors);
 	const auto samplers = allocateRayDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, data.Samplers);
-	uav(list);
+	std::vector<D3D12_RESOURCE_BARRIER> uavBarriers;
+	const auto orderUav = [&](ID3D12Resource* resource) {
+		if (!computeList && !dispatch.GraphManagedBarriers
+			&& std::ranges::none_of(uavBarriers, [resource](const auto& barrier) { return barrier.UAV.pResource == resource; })) {
+			uavBarriers.push_back(CD3DX12_RESOURCE_BARRIER::UAV(resource));
+		}
+	};
 	std::set<StorageBufferDx12*> computeBuffers;
 	std::map<TextureDx12*, D3D12_RESOURCE_STATES> imageStates;
 	for (const auto& b : data.Bindings) {
@@ -905,6 +911,7 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 				D3D12_SHADER_RESOURCE_VIEW_DESC desc { };
 				desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
 				desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+				orderUav(as->Data->Storage.Get());
 				desc.RaytracingAccelerationStructure.Location = as->Data->Storage->GetGPUVirtualAddress();
 				mDevice->CreateShaderResourceView(nullptr, &desc, handle);
 			}
@@ -949,6 +956,7 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 				if (!element || bytes % element || bytes / element > UINT_MAX)
 					throw std::runtime_error("Invalid DXR buffer element layout");
 				if (b.Uav) {
+					orderUav(raw);
 					D3D12_UNORDERED_ACCESS_VIEW_DESC desc { };
 					desc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
 					desc.Format = b.Raw ? DXGI_FORMAT_R32_TYPELESS : DXGI_FORMAT_UNKNOWN;
@@ -999,6 +1007,7 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 					texture->setState(list, state);
 				}
 				if (b.Uav) {
+					orderUav(raw);
 					D3D12_UNORDERED_ACCESS_VIEW_DESC desc {};
 					desc.Format = format;
 					desc.ViewDimension = b.Dimension == D3D_SRV_DIMENSION_TEXTURE3D ? D3D12_UAV_DIMENSION_TEXTURE3D : D3D12_UAV_DIMENSION_TEXTURE2D;
@@ -1037,6 +1046,9 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 			list->ResourceBarrier(1, &barrier);
 		}
 	}
+	if (!uavBarriers.empty()) {
+		list->ResourceBarrier(static_cast<UINT>(uavBarriers.size()), uavBarriers.data());
+	}
 	std::array<ID3D12DescriptorHeap*, 2> heaps {};
 	UINT heapCount = 0;
 	if (views.Heap) {
@@ -1073,7 +1085,9 @@ void DriverDx12::executeRayProgram(const RayTracingDispatch& dispatch, bool comp
 		desc.Depth = dispatch.Extent[2];
 		list->DispatchRays(&desc);
 	}
-	uav(list);
+	if (!uavBarriers.empty()) {
+		list->ResourceBarrier(static_cast<UINT>(uavBarriers.size()), uavBarriers.data());
+	}
 	for (auto* buffer : computeBuffers) {
 		buffer->transition(list, D3D12_RESOURCE_STATE_COMMON);
 	}

@@ -2893,11 +2893,101 @@ std::vector<float> DriverVk::readTexture(std::shared_ptr<TextureInterface> textu
 	return values;
 }
 
-void DriverVk::dispatch(uint32_t x, uint32_t y, uint32_t z) {
+void DriverVk::dispatchGraphGroups(uint32_t x, uint32_t y, uint32_t z) {
 	auto& cmd = getCurrentFrame().mCommandBuffer;
 	EnsureComputeState(cmd);
 	cmd.dispatch(x, y, z);
-	UtilityVk::SetMemoryBarrier(cmd, vk::PipelineStageFlagBits2::eComputeShader, vk::PipelineStageFlagBits2::eAllCommands);
+}
+
+void DriverVk::dispatch(uint32_t x, uint32_t y, uint32_t z) {
+	dispatchGraphGroups(x, y, z);
+	finishComputeDispatch();
+}
+
+void DriverVk::finishComputeDispatch(vk::Buffer indirectArguments) {
+	using Stage = vk::PipelineStageFlagBits2;
+	using Access = vk::AccessFlagBits2;
+	using Type = vk::DescriptorType;
+	auto& cmd = getCurrentFrame().mCommandBuffer;
+	const auto& shader = *mCurrentState.mShader;
+	const auto fallback = [&] {
+		const auto stages = indirectArguments ? Stage::eComputeShader | Stage::eDrawIndirect : vk::PipelineStageFlags2(Stage::eComputeShader);
+		UtilityVk::SetMemoryBarrier(cmd, stages, Stage::eAllCommands);
+	};
+	if (shader.bindingMode() != ShaderBindingMode::Bound) {
+		fallback();
+		return;
+	}
+
+	// Legacy callers do not declare the next consumer. Confine visibility to the views actually bound to this dispatch.
+	std::vector<vk::BufferMemoryBarrier2> buffers;
+	std::vector<vk::ImageMemoryBarrier2> images;
+	const auto addBuffer = [&](vk::Buffer buffer, vk::PipelineStageFlags2 sourceStage, vk::AccessFlags2 sourceAccess) {
+		buffers.push_back(vk::BufferMemoryBarrier2()
+				.setSrcStageMask(sourceStage)
+				.setSrcAccessMask(sourceAccess)
+				.setDstStageMask(Stage::eAllCommands)
+				.setDstAccessMask(Access::eMemoryRead | Access::eMemoryWrite)
+				.setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+				.setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+				.setBuffer(buffer)
+				.setSize(VK_WHOLE_SIZE));
+	};
+	if (indirectArguments) {
+		addBuffer(indirectArguments, Stage::eDrawIndirect, Access::eIndirectCommandRead);
+	}
+	for (const auto& binding : shader.mRequiredDescriptorBindings) {
+		if (binding.descriptorCount != 1) {
+			fallback();
+			return;
+		}
+		switch (binding.descriptorType) {
+		case Type::eStorageBuffer:
+			addBuffer(
+				*mStorageBuffers.at(binding.binding)->getBuffer(), Stage::eComputeShader, Access::eShaderStorageRead | Access::eShaderStorageWrite);
+			break;
+		case Type::eUniformBuffer:
+			addBuffer(*mUniformBuffers.at(binding.binding)->getBuffer(), Stage::eComputeShader, Access::eUniformRead);
+			break;
+		case Type::eStorageImage:
+		case Type::eCombinedImageSampler: {
+			const auto& texture = *mTextures.at(binding.binding);
+			if (texture.mImage.isAliased()) {
+				fallback();
+				return;
+			}
+			auto range = texture.subresourceRange(0, 0);
+			const bool storage = binding.descriptorType == Type::eStorageImage;
+			const auto view = mStorageImageBindings.find(binding.binding);
+			if (storage && view != mStorageImageBindings.end()) {
+				range = texture.subresourceRange(view->second.Mip, view->second.Layer);
+			}
+			else {
+				range.setLevelCount(storage ? 1u : VK_REMAINING_MIP_LEVELS).setLayerCount(VK_REMAINING_ARRAY_LAYERS);
+			}
+			const vk::AccessFlags2 sourceAccess
+				= storage ? Access::eShaderStorageRead | Access::eShaderStorageWrite : vk::AccessFlags2(Access::eShaderSampledRead);
+			images.push_back(vk::ImageMemoryBarrier2()
+					.setSrcStageMask(Stage::eComputeShader)
+					.setSrcAccessMask(sourceAccess)
+					.setDstStageMask(Stage::eAllCommands)
+					.setDstAccessMask(Access::eMemoryRead | Access::eMemoryWrite)
+					.setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+					.setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+					.setOldLayout(vk::ImageLayout::eGeneral)
+					.setNewLayout(vk::ImageLayout::eGeneral)
+					.setImage(texture.mImagePtr)
+					.setSubresourceRange(range));
+			break;
+		}
+		default:
+			fallback();
+			return;
+		}
+	}
+	if (!buffers.empty() || !images.empty()) {
+		cmd.pipelineBarrier2(vk::DependencyInfo().setBufferMemoryBarriers(buffers).setImageMemoryBarriers(images));
+	}
 }
 
 void DriverVk::dispatchMipCompute(
@@ -3138,14 +3228,20 @@ void DriverVk::finishPresent() {
 	IKIGAI_PROFILE_SCOPE("Vulkan Finish Present");
 	requireUsableDevice();
 	if (settings.pipelined()) {
-		collectCompletedFrames();
-		nextFrame();
-		begin();
-		return;
+		if (mFrameGeneration) {
+			// Vulkan FG consumes the graph's shared inputs on SDK queues. Its
+			// present drain follows graphics completion before the next recording.
+			waitForCompletion(completion().lastSubmitted());
+		}
+		else {
+			collectCompletedFrames();
+		}
 	}
-	// The frame fence also covers the readback copies.
-	releaseCompletedFrame();
-	mCompletedEpoch = mSubmissionEpoch - 1;
+	else {
+		// The frame fence also covers the readback copies.
+		releaseCompletedFrame();
+		mCompletedEpoch = mSubmissionEpoch - 1;
+	}
 	if (mFrameGeneration) {
 		IKIGAI_PROFILE_SCOPE("Vulkan Wait for Generated Presents");
 		mFrameGeneration->waitForPresents();

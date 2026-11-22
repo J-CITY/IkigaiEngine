@@ -11,7 +11,7 @@ struct Config {
 	inline static std::optional<std::string> WINDOW_TITLE;
 	inline static std::string ROOT;
 	inline static bool PROFILE_LOADING = false;
-	inline static bool RENDER_CPU_OVERLAP = false;
+	inline static std::optional<bool> RENDER_CPU_OVERLAP;
 	inline static std::string CONTENT_RELEASE;
 	inline static std::string STORAGE_ROOT;
 	inline static std::string PROFILE_ID = "default";

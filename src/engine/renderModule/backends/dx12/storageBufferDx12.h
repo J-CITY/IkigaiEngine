@@ -35,6 +35,9 @@ namespace IKIGAI::RENDER {
 		CD3DX12_GPU_DESCRIPTOR_HANDLE getSRVHandler();
 		CD3DX12_GPU_DESCRIPTOR_HANDLE getUAVHandler();
 		const Dx12Resource& getBuffer() const;
+		bool isUnorderedAccess() const {
+			return mState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		}
 		BufferUsage getUsage() const {
 			return mUsage;
 		}

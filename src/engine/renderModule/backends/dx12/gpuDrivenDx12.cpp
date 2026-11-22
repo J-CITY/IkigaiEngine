@@ -345,11 +345,21 @@ void DriverDx12::flushRecordedCommands() {
 	}
 }
 
-void DriverDx12::renderGraphIndirectBarrier(const std::shared_ptr<StorageBufferInterface>& arguments) {
-	constexpr auto operation = "renderGraphIndirectBarrier";
-	auto& native = NativeBuffer(arguments, operation);
-	CheckUsage(native, BufferUsage::INDIRECT, operation);
-	native.transition(mCommandList.Get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+void DriverDx12::renderGraphBufferBarrier(const std::shared_ptr<StorageBufferInterface>& buffer, GraphBufferBarrier transition) {
+	auto& native = NativeBuffer(buffer, "renderGraphBufferBarrier");
+	if (transition.After == GraphBufferAccess::Indirect) {
+		CheckUsage(native, BufferUsage::INDIRECT, "renderGraphBufferBarrier");
+		native.transition(mCommandList.Get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
+	}
+	else if (transition.After == GraphBufferAccess::TransferRead || transition.After == GraphBufferAccess::TransferWrite) {
+		native.transition(mCommandList.Get(),
+			transition.After == GraphBufferAccess::TransferRead ? D3D12_RESOURCE_STATE_COPY_SOURCE : D3D12_RESOURCE_STATE_COPY_DEST);
+	}
+	else if (native.isUnorderedAccess()) {
+		// The following descriptor binding selects UAV or SRV; same-state UAV uses still need ordering.
+		const auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(native.getBuffer().Get());
+		mCommandList->ResourceBarrier(1, &barrier);
+	}
 }
 
 void DriverDx12::drawIndexedIndirect(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset, uint32_t drawCount, uint32_t stride) {
@@ -395,8 +405,7 @@ void DriverDx12::dispatchIndirect(const std::shared_ptr<StorageBufferInterface>&
 	applyState();
 	native.transition(mCommandList.Get(), D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT);
 	mCommandList->ExecuteIndirect(mDispatchSignature.Get(), 1, native.getBuffer().Get(), offset, nullptr, 0);
-	const auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(nullptr);
-	mCommandList->ResourceBarrier(1, &barrier);
+	finishComputeDispatch();
 }
 }
 #endif

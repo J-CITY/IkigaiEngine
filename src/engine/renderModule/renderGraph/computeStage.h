@@ -34,7 +34,7 @@ struct ResolvedAsyncImageProgramBinding {
 	std::shared_ptr<StorageBufferInterface> Buffer;
 };
 
-struct ScopedTextureDispatch {
+struct ScopedDispatchShader {
 	std::weak_ptr<ShaderInterface> Shader;
 	uint64_t Generation = 0;
 };
@@ -63,7 +63,9 @@ struct ComputeStageState {
 	uint32_t MipCount = 0;
 	std::vector<std::shared_ptr<UniformBufferInterface>> MipUniforms;
 	std::array<size_t, 3> MipUniformExtent = { 0, 0, 0 };
-	std::optional<ScopedTextureDispatch> TextureWrite;
+	std::optional<ScopedDispatchShader> TextureWrite;
+	bool ProgramBufferBindingsVerified = false;
+	std::optional<ScopedDispatchShader> BufferShader;
 };
 
 BufferUsage ResolveBufferUsage(const std::vector<PipelineBufferUsage>& usage);

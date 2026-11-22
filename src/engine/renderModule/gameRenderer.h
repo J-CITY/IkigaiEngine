@@ -424,11 +424,11 @@ struct RenderGraphPipeline {
 	struct ResolvedGraphBarriers {
 		std::vector<ResolvedGraphImageBarrier> Images;
 		struct BufferBarrier {
-            std::shared_ptr<StorageBufferInterface> Buffer;
-            GraphBufferBarrier Transition {};
-        };
-        std::vector<BufferBarrier> Buffers;
-        bool ComputeBarriersCovered = false;
+			std::shared_ptr<StorageBufferInterface> Buffer;
+			GraphBufferBarrier Transition {};
+		};
+		std::vector<BufferBarrier> Buffers;
+		bool ComputeBarriersCovered = false;
 		bool Conservative = false;
 		bool Uav = false;
 	};
@@ -542,7 +542,7 @@ class GameRenderer : public RENDER::GameRendererInterface {
 	void prepareRayTracingScene(const std::vector<RenderChunk>& chunks);
 	void runRayTracingStage(PipelineStage& stage);
 	RayTracingDispatch buildProgramDispatch(PipelineStage& stage);
-	void runComputeStage(PipelineStage& stage, bool async = false);
+	void runComputeStage(PipelineStage& stage, bool async = false, bool graphManaged = false);
 	std::vector<LightOGL> mLights;
 	std::vector<int> mLightObjectIds;
 	std::vector<float> mEnvironmentSun;

@@ -169,8 +169,8 @@ Plan Compile(std::span<const Resource> resources, std::span<const Pass> passes) 
 		result.ResourceNames.push_back(resource.Name);
 	}
 	std::vector<std::optional<Barrier::SourceAccess>> last(resources.size());
-    std::vector<std::optional<Barrier::SourceAccess>> bufferWriters(resources.size());
-    std::vector<std::vector<Barrier::SourceAccess>> bufferReaders(resources.size());
+	std::vector<std::optional<Barrier::SourceAccess>> bufferWriters(resources.size());
+	std::vector<std::vector<Barrier::SourceAccess>> bufferReaders(resources.size());
 	for (auto id : order) {
 		if (!live[id]) {
 			result.Culled.push_back(id);
@@ -181,27 +181,28 @@ Plan Compile(std::span<const Resource> resources, std::span<const Pass> passes) 
 			const auto* current = pair.Write ? pair.Write : pair.Read;
 			const auto previous = last[resource];
 			if (resources[resource].StorageBuffer) {
-                // A writer must be visible at every reader's stage. An overwrite also waits for every outstanding reader.
-                auto& writer = bufferWriters[resource];
-                auto& readers = bufferReaders[resource];
-                const auto add = [&](std::optional<Barrier::SourceAccess> source) {
-                    scheduled.Barriers.push_back({ resource, IsStorage(current->Mode) || (source && IsStorage(source->Mode)), source, current->Mode });
-                };
-                if (writer || (!previous && resources[resource].Imported)) {
-                    add(writer);
-                }
-                if (pair.Write) {
-                    for (const auto& reader : readers) {
-                        add(reader);
-                    }
-                    readers.clear();
-                    writer = Barrier::SourceAccess { id, current->Mode };
-                }
-                else {
-                    readers.push_back({id, current->Mode});
-                }
-            }
-            else if ((previous && (IsWrite(previous->Mode) || pair.Write)) || (!previous && resources[resource].Imported)) {
+				// A writer must be visible at every reader's stage. An overwrite also waits for every outstanding reader.
+				auto& writer = bufferWriters[resource];
+				auto& readers = bufferReaders[resource];
+				const auto add = [&](std::optional<Barrier::SourceAccess> source) {
+					scheduled.Barriers.push_back(
+						{ resource, IsStorage(current->Mode) || (source && IsStorage(source->Mode)), source, current->Mode });
+				};
+				if (writer || (!previous && resources[resource].Imported)) {
+					add(writer);
+				}
+				if (pair.Write) {
+					for (const auto& reader : readers) {
+						add(reader);
+					}
+					readers.clear();
+					writer = Barrier::SourceAccess { id, current->Mode };
+				}
+				else {
+					readers.push_back({ id, current->Mode });
+				}
+			}
+			else if ((previous && (IsWrite(previous->Mode) || pair.Write)) || (!previous && resources[resource].Imported)) {
 				scheduled.Barriers.push_back(
 					{ resource, IsStorage(current->Mode) || (previous && IsStorage(previous->Mode)), previous, current->Mode });
 			}

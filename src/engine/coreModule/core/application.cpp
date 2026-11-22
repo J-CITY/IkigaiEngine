@@ -51,7 +51,9 @@ namespace {
 		parser.addArg<bool>({ "--profile-loading" }, [&](bool value) { options.profileLoading = value; }, {}, "Report loading timings");
 		parser.addArg<bool>(
 			{ "--render-cpu-overlap" }, [&](bool value) { options.renderCpuOverlap = value; }, {},
-			"Prepare transform history during pipelined Vulkan or DirectX 12 replay with upscaling and frame generation off");
+			"Prepare transform history during Vulkan or DirectX 12 pipelined replay (default for pipelined execution)");
+		parser.addArg<bool>(
+			{ "--no-render-cpu-overlap" }, [&](bool) { options.renderCpuOverlap = false; }, {}, "Prepare transform history after render replay");
 		return parser;
 	}
 	void applyOptions(const ApplicationOptions& options) {

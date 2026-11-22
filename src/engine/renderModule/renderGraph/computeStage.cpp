@@ -110,6 +110,30 @@ namespace {
 		return writesTarget;
 	}
 
+	bool MatchesGraphBuffers(
+		const PipelineStage::Descriptor& stage, const RenderGraphPipeline& pipeline, const ShaderReflection& reflection, bool program) {
+		const auto& bindings = program ? stage.Bindings : stage.BufferLinks;
+		if (bindings.empty() || bindings.size() != reflection.mUniforms.size()) {
+			return false;
+		}
+		return std::ranges::all_of(reflection.mUniforms, [&](const auto& uniform) {
+			if (uniform.mType != ShaderReflection::UniformType::STORAGE_BUFFER || uniform.mRuntimeArray || uniform.mDescriptorCount != 1
+				|| (!program && (uniform.mSet || uniform.mName.starts_with("engine_") || uniform.mName.starts_with("Engine")))) {
+				return false;
+			}
+			auto binding = bindings.end();
+			if (program) {
+				binding = bindings.find(std::to_string(uniform.mSet) + ":" + std::to_string(uniform.mBind));
+			}
+			if (binding == bindings.end()) {
+				binding = bindings.find(uniform.mName);
+			}
+			const auto mode = uniform.mReadOnly ? GRAPH::Access::STORAGE_READ : GRAPH::Access::STORAGE_WRITE;
+			return binding != bindings.end() && pipeline.mStorageBuffers.contains(binding->second)
+				&& std::ranges::any_of(stage.ResourceUses, [&](const auto& use) { return use.Resource == binding->second && use.Mode == mode; });
+		});
+	}
+
 	ShaderReflection ReflectComputeProgram(const RayTracingProgramResource& resource, const std::string& path) {
 		if (resource.Shaders.size() != 1 || resource.Shaders[0].Stage != ShaderType::COMPUTE) {
 			throw std::runtime_error("Compute program needs exactly one compute shader: " + path);
@@ -564,9 +588,14 @@ void LoadComputeStage(RenderGraphPipeline& pipeline, PipelineStage& stage) {
 			const auto resource = RESOURCES::ShaderLoader::LoadProgramResource(desc.Program);
 			const bool asyncImages = pipeline.mDescriptor.Graph.Enabled && desc.Queue == GRAPH::Queue::ASYNC_COMPUTE
 				&& std::ranges::any_of(desc.Bindings, [&](const auto& binding) { return pipeline.mTextures.contains(binding.second); });
-			if (groups || asyncImages) {
+			const bool graphBuffers = pipeline.mDescriptor.Graph.Enabled && !desc.Bindings.empty()
+				&& std::ranges::all_of(desc.Bindings, [&](const auto& binding) { return pipeline.mStorageBuffers.contains(binding.second); })
+				&& resource.Shaders.size() == 1 && resource.Shaders.front().Language == "GLSL" && resource.Shaders.front().BackendPaths.empty()
+				&& resource.Shaders.front().EntryPoint == "main" && !resource.RequiresDescriptorIndexing;
+			if (groups || asyncImages || graphBuffers) {
 				const auto reflection = ReflectComputeProgram(resource, desc.Program);
 				state->LocalSize = { reflection.mLocalSize[0], reflection.mLocalSize[1], reflection.mLocalSize[2] };
+				state->ProgramBufferBindingsVerified = graphBuffers && MatchesGraphBuffers(desc, pipeline, reflection, true);
 				if (asyncImages) {
 					if (!resource.Shaders.front().BackendPaths.empty() || resource.Shaders.front().EntryPoint != "main"
 						|| resource.RequiresDescriptorIndexing) {
@@ -582,13 +611,17 @@ void LoadComputeStage(RenderGraphPipeline& pipeline, PipelineStage& stage) {
 		}
 		else {
 			const auto shader = stage.mMaterial->getShader();
+			if (pipeline.mDescriptor.Graph.Enabled && state->Mode == ComputeDispatchMode::GROUPS && shader->bindingMode() == ShaderBindingMode::Bound
+				&& MatchesGraphBuffers(desc, pipeline, shader->getReflection(), false)) {
+				state->BufferShader = ScopedDispatchShader { shader, shader->generation() };
+			}
 			const auto& local = shader->getReflection().mLocalSize;
 			state->LocalSize = { local[0], local[1], local[2] };
 			if (state->Mode == ComputeDispatchMode::TEXTURE && state->Clears.empty() && desc.Queue == GRAPH::Queue::GRAPHICS
 				&& features.StorageImageMipViews) {
 				const auto* target = FindPipelineTexture(pipeline, state->DispatchTexture);
 				if (target && WritesOnlyDispatchMipZero(desc, *shader, *target)) {
-					state->TextureWrite = ScopedTextureDispatch { shader, shader->generation() };
+					state->TextureWrite = ScopedDispatchShader { shader, shader->generation() };
 				}
 			}
 		}
@@ -608,7 +641,7 @@ void LoadComputeStage(RenderGraphPipeline& pipeline, PipelineStage& stage) {
 	}
 }
 
-void GameRenderer::runComputeStage(PipelineStage& stage, bool async) {
+void GameRenderer::runComputeStage(PipelineStage& stage, bool async, bool graphManaged) {
 	auto& state = *stage.mCompute;
 	const auto& desc = stage.mDescriptor;
 	if (state.Bypassed || !state.Resolved) {
@@ -637,6 +670,7 @@ void GameRenderer::runComputeStage(PipelineStage& stage, bool async) {
 	bool scopedTextureWrite = false;
 	if (state.UsesProgram) {
 		auto dispatch = buildProgramDispatch(stage);
+		dispatch.GraphManagedBarriers = graphManaged && state.ProgramBufferBindingsVerified;
 		if (state.Mode == ComputeDispatchMode::GROUPS) {
 			for (size_t i = 0; i < 3; ++i) {
 				dispatch.Extent[i] = state.Groups[i] * state.LocalSize[i];
@@ -683,7 +717,21 @@ void GameRenderer::runComputeStage(PipelineStage& stage, bool async) {
 			}
 		}
 		else if (state.Mode == ComputeDispatchMode::GROUPS) {
-			renderer.dispatch(state.Groups[0], state.Groups[1], state.Groups[2]);
+			const auto shader = stage.mMaterial->getShader();
+			if (graphManaged && state.BufferShader && state.BufferShader->Shader.lock() == shader) {
+				renderer.execute([driver, shader, generation = state.BufferShader->Generation, groups = state.Groups] {
+					RenderStatistics::Get().recordDispatch();
+					if (shader->generation() == generation) {
+						driver->dispatchGraphGroups(groups[0], groups[1], groups[2]);
+					}
+					else {
+						driver->dispatch(groups[0], groups[1], groups[2]);
+					}
+				});
+			}
+			else {
+				renderer.dispatch(state.Groups[0], state.Groups[1], state.Groups[2]);
+			}
 		}
 		else if (state.Mode == ComputeDispatchMode::INDIRECT) {
 			auto buffer = mRenderPipeline->mStorageBuffers.at(state.DispatchBuffer);

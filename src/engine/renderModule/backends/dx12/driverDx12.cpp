@@ -1070,11 +1070,56 @@ std::vector<float> DriverDx12::readTexture(std::shared_ptr<TextureInterface> tex
 	return values;
 }
 
-void DriverDx12::dispatch(uint32_t x, uint32_t y, uint32_t z) {
+void DriverDx12::dispatchGraphGroups(uint32_t x, uint32_t y, uint32_t z) {
 	applyState();
 	mCommandList->Dispatch(x, y, z);
-	auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(nullptr);
-	mCommandList->ResourceBarrier(1, &barrier);
+}
+
+void DriverDx12::dispatch(uint32_t x, uint32_t y, uint32_t z) {
+	dispatchGraphGroups(x, y, z);
+	finishComputeDispatch();
+}
+
+void DriverDx12::finishComputeDispatch() {
+	const auto& shader = mCurrentState.mShader;
+	if (shader->bindingMode() != ShaderBindingMode::Bound) {
+		renderGraphBarrier(true);
+		return;
+	}
+	std::vector<D3D12_RESOURCE_BARRIER> barriers;
+	for (const auto& uniform : shader->getReflection().mUniforms) {
+		using Type = ShaderReflection::UniformType;
+		ID3D12Resource* resource = nullptr;
+		switch (uniform.mType) {
+		case Type::STORAGE_BUFFER:
+			resource = mStorageBuffers.at(uniform.mBind)->getBuffer().Get();
+			break;
+		case Type::IMAGE_2D:
+		case Type::IMAGE_2D_ARRAY:
+		case Type::IMAGE_3D:
+			resource = mTextures.at(uniform.mBind)->getResource().Get();
+			break;
+		case Type::SAMPLER_2D:
+		case Type::SAMPLER_2D_ARRAY:
+		case Type::SAMPLER_CUBE:
+		case Type::SAMPLER_3D:
+		case Type::UNIFORM_BUFFER:
+			continue;
+		default:
+			renderGraphBarrier(true);
+			return;
+		}
+		if (!resource || uniform.mRuntimeArray || uniform.mDescriptorCount != 1) {
+			renderGraphBarrier(true);
+			return;
+		}
+		if (std::ranges::none_of(barriers, [resource](const auto& barrier) { return barrier.UAV.pResource == resource; })) {
+			barriers.push_back(CD3DX12_RESOURCE_BARRIER::UAV(resource));
+		}
+	}
+	if (!barriers.empty()) {
+		mCommandList->ResourceBarrier(static_cast<UINT>(barriers.size()), barriers.data());
+	}
 }
 
 void DriverDx12::dispatchMipCompute(uint32_t x, uint32_t y, uint32_t z, const std::shared_ptr<TextureInterface>& texture, uint32_t, uint32_t) {

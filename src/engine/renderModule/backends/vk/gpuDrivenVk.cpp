@@ -128,8 +128,7 @@ std::shared_ptr<StorageBufferInterface> DriverVk::createStorageBuffer(const void
 
 void DriverVk::beginTransferCommands(vk::raii::CommandBuffer& cmd) {
 	deactivateRenderPass();
-	// Earlier graphics reads/writes are ordered by the tracked stage; compute dispatches
-	// already end with a compute -> all-commands barrier.
+	// Order earlier graphics and compute accesses before transfer commands.
 	EnsureMemoryState(cmd, vk::PipelineStageFlagBits2::eTransfer);
 }
 
@@ -332,20 +331,45 @@ void DriverVk::flushRecordedCommands() try {
 	checkFrameResult(VK_ERROR_DEVICE_LOST, "record readback submission");
 }
 
-void DriverVk::renderGraphIndirectBarrier(const std::shared_ptr<StorageBufferInterface>& arguments) {
-	const auto& native = NativeBuffer(arguments, "renderGraphIndirectBarrier");
-	CheckUsage(native, BufferUsage::INDIRECT, "renderGraphIndirectBarrier");
+void DriverVk::renderGraphBufferBarrier(const std::shared_ptr<StorageBufferInterface>& buffer, GraphBufferBarrier transition) {
+	const auto& native = NativeBuffer(buffer, "renderGraphBufferBarrier");
+	using Stage = vk::PipelineStageFlagBits2;
+	using Access = vk::AccessFlagBits2;
+	const auto scope = [](GraphBufferAccess mode) -> std::pair<vk::PipelineStageFlags2, vk::AccessFlags2> {
+		switch (mode) {
+		case GraphBufferAccess::ComputeRead:
+			return { Stage::eComputeShader, Access::eShaderStorageRead };
+		case GraphBufferAccess::ComputeWrite:
+			return { Stage::eComputeShader, Access::eShaderStorageRead | Access::eShaderStorageWrite };
+		case GraphBufferAccess::GraphicsRead:
+			return { Stage::eAllGraphics, Access::eShaderStorageRead };
+		case GraphBufferAccess::GraphicsWrite:
+			return { Stage::eAllGraphics, Access::eShaderStorageRead | Access::eShaderStorageWrite };
+		case GraphBufferAccess::TransferRead:
+			return { Stage::eTransfer, Access::eTransferRead };
+		case GraphBufferAccess::TransferWrite:
+			return { Stage::eTransfer, Access::eTransferWrite };
+		case GraphBufferAccess::ComputeWriteWithTransfer:
+			return { Stage::eComputeShader | Stage::eTransfer, Access::eShaderStorageRead | Access::eShaderStorageWrite | Access::eTransferWrite };
+		case GraphBufferAccess::Indirect:
+			return { Stage::eDrawIndirect, Access::eIndirectCommandRead };
+		}
+		throw std::invalid_argument("Unsupported graph buffer access");
+	};
+	const auto [srcStage, srcAccess] = scope(transition.Before);
+	const auto [dstStage, dstAccess] = scope(transition.After);
+	if (transition.Before == GraphBufferAccess::Indirect || transition.After == GraphBufferAccess::Indirect) {
+		CheckUsage(native, BufferUsage::INDIRECT, "renderGraphBufferBarrier");
+	}
 	deactivateRenderPass();
-
 	const auto barrier = vk::BufferMemoryBarrier2()
-							 .setSrcStageMask(vk::PipelineStageFlagBits2::eComputeShader | vk::PipelineStageFlagBits2::eTransfer)
-							 .setSrcAccessMask(vk::AccessFlagBits2::eShaderStorageWrite | vk::AccessFlagBits2::eTransferWrite)
-							 .setDstStageMask(vk::PipelineStageFlagBits2::eDrawIndirect)
-							 .setDstAccessMask(vk::AccessFlagBits2::eIndirectCommandRead)
+							 .setSrcStageMask(srcStage)
+							 .setSrcAccessMask(srcAccess)
+							 .setDstStageMask(dstStage)
+							 .setDstAccessMask(dstAccess)
 							 .setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
 							 .setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
 							 .setBuffer(*native.getBuffer())
-							 .setOffset(0)
 							 .setSize(VK_WHOLE_SIZE);
 	getCurrentFrame().mCommandBuffer.pipelineBarrier2(vk::DependencyInfo().setBufferMemoryBarriers(barrier));
 }
@@ -396,10 +420,7 @@ void DriverVk::dispatchIndirect(const std::shared_ptr<StorageBufferInterface>& a
 	auto& cmd = getCurrentFrame().mCommandBuffer;
 	EnsureComputeState(cmd);
 	cmd.dispatchIndirect(*native.getBuffer(), offset);
-	// The argument read happens in the draw-indirect stage: include it so later writes to the
-	// argument buffer (compute or transfer) are ordered after the read.
-	UtilityVk::SetMemoryBarrier(
-		cmd, vk::PipelineStageFlagBits2::eComputeShader | vk::PipelineStageFlagBits2::eDrawIndirect, vk::PipelineStageFlagBits2::eAllCommands);
+	finishComputeDispatch(*native.getBuffer());
 }
 }
 #endif

@@ -1003,12 +1003,12 @@ void GameRenderer::renderScene(SCENE_SYSTEM::Scene& scene, ECS::CameraComponent&
 			mContext.render->updateUniformBuffer(mFrameUbo, mFrameData);
 		}
 	};
-	std::function<void(PipelineStage*)> runStage;
-	runStage = [&](PipelineStage* stage) {
+	std::function<void(PipelineStage*, bool)> runStage;
+	runStage = [&](PipelineStage* stage, bool graphManaged) {
 		if (!stage->mDescriptor.Enabled || (upscaleEnabled && (stage->mName == "TAA" || stage->mName == "fxaa"))) {
 			if (stage->mDrawContent == DrawContent::LIGHT_ACCUMULATION) {
 				for (auto& init : mRenderPipeline->mLightPasses.at(stage->mDescriptor.LightPass).InitStages) {
-					runStage(init.get());
+					runStage(init.get(), false);
 				}
 				return;
 			}
@@ -1125,7 +1125,7 @@ void GameRenderer::renderScene(SCENE_SYSTEM::Scene& scene, ECS::CameraComponent&
 				rayShadows = (*provider)->mDescriptor.Enabled && bool((*provider)->mRayTracingProgram);
 			}
 			for (auto& init : pass.InitStages) {
-				runStage(init.get());
+				runStage(init.get(), false);
 			}
 			int used = 0, shadowed = 0, rasterCaptures = 0;
 			struct RestoreCapture {
@@ -1168,7 +1168,7 @@ void GameRenderer::renderScene(SCENE_SYSTEM::Scene& scene, ECS::CameraComponent&
 						farPlane = capture->mDescriptor.ShadowRange;
 					}
 					if (hasShadow && !rayShadows) {
-						runStage(capture.get());
+						runStage(capture.get(), false);
 						++rasterCaptures;
 						captured = true;
 					}
@@ -1198,10 +1198,10 @@ void GameRenderer::renderScene(SCENE_SYSTEM::Scene& scene, ECS::CameraComponent&
 				// Each queued resolve owns a distinct immutable buffer snapshot.
 				mCurrentShadowUbo = mContext.render->createUniformBuffer<CurrentShadowUBO>(mCurrentShadow);
 				for (auto& prepare : pass.PrepareStages) {
-					runStage(prepare.get());
+					runStage(prepare.get(), false);
 				}
 				for (auto& resolve : pass.ResolveStages) {
-					runStage(resolve.get());
+					runStage(resolve.get(), false);
 				}
 				++used;
 			}
@@ -1217,7 +1217,7 @@ void GameRenderer::renderScene(SCENE_SYSTEM::Scene& scene, ECS::CameraComponent&
 		}
 		if (stage->mDrawContent == DrawContent::COMPUTE) {
 			if (stage->mCompute) {
-				runComputeStage(*stage);
+				runComputeStage(*stage, false, graphManaged);
 				return;
 			}
 			if (!stage->mDescriptor.Program.empty()) {
@@ -1473,7 +1473,7 @@ void GameRenderer::renderScene(SCENE_SYSTEM::Scene& scene, ECS::CameraComponent&
 	auto submitCpuProfile = PROFILER::Profiler::IsEnabled() ? std::make_unique<PROFILER::ProfilerSpy>("GameRenderer::submitStages") : nullptr;
 	if (!mRenderPipeline->mIsInitialized) {
 		for (auto& stage : mRenderPipeline->mStartStages) {
-			runStage(stage.get());
+			runStage(stage.get(), false);
 		}
 		mRenderPipeline->mIsInitialized = true;
 	}
@@ -1493,15 +1493,14 @@ void GameRenderer::renderScene(SCENE_SYSTEM::Scene& scene, ECS::CameraComponent&
 		}
 		const auto& barriers = mRenderPipeline->mGraphBarriers[pass.Id];
 		if (barriers.Conservative || !barriers.Buffers.empty()) {
-			mContext.render->execute(
-				[presentationDriver, conservative = barriers.Conservative, uav = barriers.Uav, buffers = barriers.Buffers] {
-					if (conservative) {
-						presentationDriver->renderGraphBarrier(uav);
-					}
-					for (const auto& buffer : buffers) {
-						presentationDriver->renderGraphBufferBarrier(buffer.Buffer, buffer.Transition);
-					}
-				});
+			mContext.render->execute([presentationDriver, conservative = barriers.Conservative, uav = barriers.Uav, buffers = barriers.Buffers] {
+				if (conservative) {
+					presentationDriver->renderGraphBarrier(uav);
+				}
+				for (const auto& buffer : buffers) {
+					presentationDriver->renderGraphBufferBarrier(buffer.Buffer, buffer.Transition);
+				}
+			});
 		}
 		for (const auto& image : barriers.Images) {
 			// Resolve the current allocation when recording, so resize and delayed replay use the right texture.
@@ -1519,7 +1518,7 @@ void GameRenderer::renderScene(SCENE_SYSTEM::Scene& scene, ECS::CameraComponent&
 			computePending = true;
 		}
 		else {
-			runStage(stage);
+			runStage(stage, barriers.ComputeBarriersCovered);
 		}
 	}
 	if (computePending) {
@@ -2764,10 +2763,6 @@ void RenderGraphPipeline::prepareUpscaler(Renderer& renderer, int width, int hei
 		return;
 	}
 	const auto settings = DriverInterface::settings.upscaler;
-	if (DriverInterface::settings.pipelined() && DriverInterface::settings.backend != RenderSettings::Backend::DIRECTX12
-		&& settings.technology != UpscalerType::OFF) {
-		throw std::invalid_argument("Pipelined upscaling requires DirectX 12");
-	}
 	if (!std::isfinite(settings.sharpness) || settings.sharpness < 0 || settings.sharpness > 1) {
 		throw std::runtime_error("Upscaler sharpness must be in [0,1]");
 	}

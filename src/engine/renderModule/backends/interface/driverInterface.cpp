@@ -224,6 +224,10 @@ void DriverInterface::dispatchMipCompute(uint32_t x, uint32_t y, uint32_t z, con
 	dispatch(x, y, z);
 }
 
+void DriverInterface::renderGraphIndirectBarrier(const std::shared_ptr<StorageBufferInterface>& arguments) {
+	renderGraphBufferBarrier(arguments, { GraphBufferAccess::ComputeWriteWithTransfer, GraphBufferAccess::Indirect });
+}
+
 void DriverInterface::renderGraphBufferBarrier(const std::shared_ptr<StorageBufferInterface>&, GraphBufferBarrier) {
 	throw std::logic_error("Backend does not support render graph buffer barriers");
 }

@@ -92,9 +92,10 @@ struct App::RenderTransformStaging {
 
 App::App(const PlatformStartup& platform, const std::string& initialScene)
 	: core(platform, initialScene) {
-	if (Config::RENDER_CPU_OVERLAP) {
-		if (!core.render->supportsCpuReplayOverlap()) {
-			throw std::invalid_argument("--render-cpu-overlap requires pipelined Vulkan or DirectX 12 with upscaling and frame generation off");
+	const bool supportsOverlap = core.render->supportsCpuReplayOverlap();
+	if (Config::RENDER_CPU_OVERLAP.value_or(supportsOverlap)) {
+		if (!supportsOverlap) {
+			throw std::invalid_argument("--render-cpu-overlap requires pipelined Vulkan or DirectX 12");
 		}
 		mRenderTransformStaging = std::make_unique<RenderTransformStaging>();
 	}
@@ -294,8 +295,7 @@ void App::update(std::chrono::duration<double> dt) {
 				SDL_GetPointerProperty(SDL_GetWindowProperties(core.window->getSDLWindow()), SDL_PROP_WINDOW_WIN32_HWND_POINTER, nullptr));
 		}
 #endif
-		if (mRenderTransformStaging && core.render->supportsCpuReplayOverlap() && core.sceneManager->hasCurrentScene()
-			&& !core.sceneManager->isTransitioning()) {
+		if (mRenderTransformStaging && core.sceneManager->hasCurrentScene() && !core.sceneManager->isTransitioning()) {
 			auto& scene = core.sceneManager->getCurrentScene();
 			core.render->submitAsync([&] { mRenderTransformStaging->prepare(scene); });
 			mRenderTransformStaging->commit();

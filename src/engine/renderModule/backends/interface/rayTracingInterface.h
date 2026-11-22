@@ -113,6 +113,6 @@ struct RayTracingDispatch {
     std::array<uint32_t,3> Extent={1,1,1};
     std::vector<uint8_t> PushConstants;
     uint32_t RaygenRecord=0;
-    bool GraphManagedBarriers = false;
+	bool GraphManagedBarriers = false;
 };
 }

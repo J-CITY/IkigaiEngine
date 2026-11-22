@@ -92,6 +92,37 @@ namespace {
 		return found == reader;
 	}
 
+	std::optional<GraphBufferAccess> ResolveBufferAccess(const PipelineStage::Descriptor& stage, const std::string& resource, Access mode) {
+		const bool clears = std::ranges::any_of(stage.Compute.ClearBuffers, [&](const auto& clear) { return clear.Buffer == resource; });
+		if (mode == Access::TRANSFER_READ) {
+			return GraphBufferAccess::TransferRead;
+		}
+		if (mode == Access::TRANSFER_WRITE) {
+			return GraphBufferAccess::TransferWrite;
+		}
+		if (mode == Access::INDIRECT) {
+			return GraphBufferAccess::Indirect;
+		}
+		if (mode != Access::STORAGE_READ && mode != Access::STORAGE_WRITE) {
+			return {};
+		}
+		const bool bound = std::ranges::any_of(stage.BufferLinks, [&](const auto& binding) { return binding.second == resource; })
+			|| std::ranges::any_of(stage.Bindings, [&](const auto& binding) { return binding.second == resource; });
+		if (stage.Draw == DrawContent::COMPUTE && clears && mode == Access::STORAGE_WRITE) {
+			return GraphBufferAccess::ComputeWriteWithTransfer;
+		}
+		if (!bound) {
+			return {};
+		}
+		if (stage.Draw == DrawContent::COMPUTE) {
+			return mode == Access::STORAGE_WRITE ? GraphBufferAccess::ComputeWrite : GraphBufferAccess::ComputeRead;
+		}
+		if (stage.Draw == DrawContent::QUAD) {
+			return mode == Access::STORAGE_WRITE ? GraphBufferAccess::GraphicsWrite : GraphBufferAccess::GraphicsRead;
+		}
+		return {};
+	}
+
 	std::optional<GraphImageBarrier> ResolveImageTransition(const RenderGraphPipeline::Descriptor& descriptor, const GRAPH::Barrier& barrier,
 		GRAPH::PassId consumerId, const PipelineStage& loadedConsumer, const std::string& resource) {
 		if (!barrier.Before) {
@@ -200,7 +231,7 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 	}
 	for (const auto& buffer : descriptor.Buffers) {
 		add(buffer.Name, buffer.Type == BufferType::UNIFORM ? ResourceKind::UniformBuffer : ResourceKind::StorageBuffer, false, false);
-        resources.back().StorageBuffer = buffer.Type != BufferType::UNIFORM;
+		resources.back().StorageBuffer = buffer.Type != BufferType::UNIFORM;
 	}
 	for (const auto& name : descriptor.Graph.Imports) {
 		resources[resolve(name)].Imported = true;
@@ -422,9 +453,35 @@ std::vector<RenderGraphPipeline::ResolvedGraphBarriers> RenderGraphPipeline::res
 	const Descriptor& descriptor, const GRAPH::Plan& plan) const {
 	std::vector<ResolvedGraphBarriers> result(descriptor.Stages.size());
 	std::vector<GRAPH::Queue> queues(descriptor.Stages.size(), GRAPH::Queue::GRAPHICS);
-	for (const auto& pass : plan.Schedule) {
+	// Bound a graph-managed dispatch on both sides by writes to each of its buffers. The first and last
+	// users keep their ordinary resource barriers for uploads, readbacks, and work outside this frame.
+	struct WriteInterval {
+		size_t First = 0;
+		size_t Last = 0;
+	};
+	std::map<std::string, WriteInterval> writeIntervals;
+	for (size_t index = 0; index < plan.Schedule.size(); ++index) {
+		const auto& pass = plan.Schedule[index];
+		for (const auto& use : descriptor.Stages[pass.Id].ResourceUses) {
+			if (use.Mode == Access::STORAGE_WRITE && mStorageBuffers.contains(use.Resource)) {
+				const auto interval = writeIntervals.try_emplace(use.Resource, WriteInterval { index, index }).first;
+				interval->second.Last = index;
+			}
+		}
+	}
+	for (size_t index = 0; index < plan.Schedule.size(); ++index) {
+		const auto& pass = plan.Schedule[index];
 		queues[pass.Id] = pass.ExecutionQueue;
 		auto& resolved = result[pass.Id];
+		const auto& stage = descriptor.Stages[pass.Id];
+		const auto& compute = mStageIndex[pass.Id]->mCompute;
+		resolved.ComputeBarriersCovered = compute && (compute->ProgramBufferBindingsVerified || compute->BufferShader.has_value())
+			&& compute->Clears.empty() && !stage.SideEffect && !stage.ResourceUses.empty() && pass.ExecutionQueue == GRAPH::Queue::GRAPHICS
+			&& std::ranges::all_of(stage.ResourceUses, [&](const auto& use) {
+				   const auto interval = writeIntervals.find(use.Resource);
+				   return interval != writeIntervals.end() && interval->second.First < index && index < interval->second.Last
+					   && (use.Mode == Access::STORAGE_READ || use.Mode == Access::STORAGE_WRITE);
+			   });
 		for (const auto& barrier : pass.Barriers) {
 			const auto& name = plan.ResourceNames[barrier.Resource];
 			const auto image = mTextures.find(name);
@@ -435,17 +492,13 @@ std::vector<RenderGraphPipeline::ResolvedGraphBarriers> RenderGraphPipeline::res
 					continue;
 				}
 			}
-			// Cross-queue and undeclared native uses still follow the conservative path.
-			if (barrier.Before && barrier.Before->Mode == Access::STORAGE_WRITE && barrier.After == Access::INDIRECT
-				&& descriptor.Stages[barrier.Before->Pass].Draw == DrawContent::COMPUTE && queues[barrier.Before->Pass] == GRAPH::Queue::GRAPHICS
+			const auto buffer = mStorageBuffers.find(name);
+			if (buffer != mStorageBuffers.end() && barrier.Before && queues[barrier.Before->Pass] == GRAPH::Queue::GRAPHICS
 				&& pass.ExecutionQueue == GRAPH::Queue::GRAPHICS) {
-				const auto usage = mBufferUsages.find(name);
-				const bool onlyIndirectReaders = std::ranges::none_of(descriptor.Stages, [&](const auto& stage) {
-					return std::ranges::any_of(stage.ResourceUses,
-						[&](const auto& use) { return use.Resource == name && use.Mode != Access::STORAGE_WRITE && use.Mode != Access::INDIRECT; });
-				});
-				if (onlyIndirectReaders && usage != mBufferUsages.end() && HasBufferUsage(usage->second, BufferUsage::INDIRECT)) {
-					resolved.IndirectBuffers.push_back(mStorageBuffers.at(name));
+				const auto before = ResolveBufferAccess(descriptor.Stages[barrier.Before->Pass], name, barrier.Before->Mode);
+				const auto after = ResolveBufferAccess(descriptor.Stages[pass.Id], name, barrier.After);
+				if (before && after) {
+					resolved.Buffers.push_back({ buffer->second, { *before, *after } });
 					continue;
 				}
 			}

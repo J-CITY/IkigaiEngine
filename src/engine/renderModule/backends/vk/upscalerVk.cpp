@@ -45,6 +45,9 @@ void endUpscaler(DriverVk& driver) {
 }
 void* upscalerCommand(DriverVk& driver) {return reinterpret_cast<void*>(VkCommandBuffer(*driver.getCurrentFrame().mCommandBuffer));}
 void deferUpscaler(DriverVk& driver,std::shared_ptr<void> context) {driver.destroyDeferred(std::move(context));}
+void pinUpscalerContext(DriverVk& driver, const std::shared_ptr<void>& context) {
+	driver.mRayTracingFrameResources.push_back(context);
+}
 std::shared_ptr<TextureVk> upscaleTexture(DriverVk& driver,const std::shared_ptr<TextureInterface>& texture,bool write) {
     auto native=std::dynamic_pointer_cast<TextureVk>(texture);
     if(!native)throw std::runtime_error("UPSCALE requires Vulkan textures");

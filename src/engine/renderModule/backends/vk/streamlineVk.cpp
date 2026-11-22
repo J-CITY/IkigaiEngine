@@ -105,6 +105,10 @@ StreamlineCallbacks DriverVk::streamlineCallbacks(){
 				requireUsableDevice();
 			}
 			checkFrameResult(vkWaitSemaphores(*mDevice, &info, GpuWaitTimeoutNs), "vkWaitSemaphores (Streamline)", true);
+		}, {}, [this] {
+			if (settings.pipelined() && !mShuttingDown && !hasGpuFailure()) {
+				waitForCompletion(completion().lastSubmitted());
+			}
 		} };
 }
 void DriverVk::streamlinePresenter(bool enable,bool commandOpen){

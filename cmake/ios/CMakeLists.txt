@@ -115,9 +115,11 @@ if(USE_OPENGL)
 endif()
 
 if(USE_VULKAN)
+    include("${CMAKE_CURRENT_LIST_DIR}/../ImGuiVulkan.cmake")
+    ikigai_prepare_imgui_vulkan("${IMGUI_DIR}/imgui/backends" imgui_vulkan_source)
     list(APPEND IMGUI_SOURCES 
         "${IMGUI_DIR}/imgui/backends/imgui_impl_vulkan.h"
-        "${IMGUI_DIR}/imgui/backends/imgui_impl_vulkan.cpp"
+        "${imgui_vulkan_source}"
     )
 endif()
 

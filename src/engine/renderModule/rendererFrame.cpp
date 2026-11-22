@@ -213,9 +213,9 @@ RenderTicket Renderer::submitAsync() {
 bool Renderer::supportsCpuReplayOverlap() const {
 	mOwner.requireCurrentThread();
 	const auto& settings = DriverInterface::settings;
-	return mGpuWaitThread && (settings.backend == RenderSettings::Backend::DIRECTX12 || settings.backend == RenderSettings::Backend::VULKAN)
-		&& settings.upscaler.technology == UpscalerType::OFF && settings.frameGeneration.technology == FrameGenerationType::OFF
-		&& !mDriver->mFrameGenerationStatus.Active;
+	// Presentation and SDK dispatch finish on their owning threads. The producer
+	// only reads scene transforms while the detached command buffer is replayed.
+	return mGpuWaitThread && (settings.backend == RenderSettings::Backend::DIRECTX12 || settings.backend == RenderSettings::Backend::VULKAN);
 }
 
 void Renderer::waitForReplay() {
@@ -274,7 +274,7 @@ RenderTicket Renderer::submitAsync(const std::function<void()>& prepare) {
 	}
 	waitForReplay();
 	if (prepare && (!mActiveFrame || !supportsCpuReplayOverlap())) {
-		throw std::logic_error("CPU replay overlap requires an active pipelined Vulkan or DirectX 12 frame with upscaling and frame generation off");
+		throw std::logic_error("CPU replay overlap requires an active pipelined Vulkan or DirectX 12 frame");
 	}
 	if (mRenderThread) {
 		if (mActiveFrame) {

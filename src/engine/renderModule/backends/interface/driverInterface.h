@@ -241,10 +241,15 @@ public:
 	virtual void setClearColor(const MATH::Vector4f& color) = 0;
 	virtual void setClearColor(float r, float g, float b, float a) = 0;
 	virtual void dispatch(uint32_t x, uint32_t y, uint32_t z) = 0;
+	// The graph orders all accesses of this dispatch through its declared buffer dependencies.
+	virtual void dispatchGraphGroups(uint32_t x, uint32_t y, uint32_t z) {
+		dispatch(x, y, z);
+	}
 	virtual void dispatchMipCompute(
 		uint32_t x, uint32_t y, uint32_t z, const std::shared_ptr<TextureInterface>& texture, uint32_t mip, uint32_t layer);
 	virtual void renderGraphBarrier(bool uav);
 	virtual void renderGraphImageBarrier(TextureInterface& texture, const GraphImageBarrier& barrier);
+	virtual void renderGraphIndirectBarrier(const std::shared_ptr<StorageBufferInterface>& arguments);
 	virtual void renderGraphBufferBarrier(const std::shared_ptr<StorageBufferInterface>& buffer, GraphBufferBarrier barrier);
 	virtual AliasedRenderTargets createAliasedRenderTargets(std::span<const TextureResource>) {
 		return {};
