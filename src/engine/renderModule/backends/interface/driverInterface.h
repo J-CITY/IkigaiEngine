@@ -245,7 +245,7 @@ public:
 		uint32_t x, uint32_t y, uint32_t z, const std::shared_ptr<TextureInterface>& texture, uint32_t mip, uint32_t layer);
 	virtual void renderGraphBarrier(bool uav);
 	virtual void renderGraphImageBarrier(TextureInterface& texture, const GraphImageBarrier& barrier);
-	virtual void renderGraphIndirectBarrier(const std::shared_ptr<StorageBufferInterface>& arguments);
+	virtual void renderGraphBufferBarrier(const std::shared_ptr<StorageBufferInterface>& buffer, GraphBufferBarrier barrier);
 	virtual AliasedRenderTargets createAliasedRenderTargets(std::span<const TextureResource>) {
 		return {};
 	}

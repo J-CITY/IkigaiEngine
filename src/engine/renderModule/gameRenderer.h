@@ -423,7 +423,12 @@ struct RenderGraphPipeline {
 	};
 	struct ResolvedGraphBarriers {
 		std::vector<ResolvedGraphImageBarrier> Images;
-		std::vector<std::shared_ptr<StorageBufferInterface>> IndirectBuffers;
+		struct BufferBarrier {
+            std::shared_ptr<StorageBufferInterface> Buffer;
+            GraphBufferBarrier Transition {};
+        };
+        std::vector<BufferBarrier> Buffers;
+        bool ComputeBarriersCovered = false;
 		bool Conservative = false;
 		bool Uav = false;
 	};

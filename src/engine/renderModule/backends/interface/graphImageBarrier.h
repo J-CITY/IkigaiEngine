@@ -3,6 +3,12 @@
 
 namespace IKIGAI::RENDER {
 enum class GraphImageAccess { DepthAttachmentWrite, StorageWrite, StorageRead, ComputeSampledRead, GraphicsSampledRead };
+enum class GraphBufferAccess { ComputeRead, ComputeWrite, GraphicsRead, GraphicsWrite, Indirect, TransferRead, TransferWrite };
+struct GraphBufferBarrier {
+    GraphBufferAccess Before = GraphBufferAccess::ComputeWrite;
+    GraphBufferAccess After = GraphBufferAccess::ComputeRead;
+};
+
 enum class GraphImageAspect { Color, Depth };
 
 struct GraphImageBarrier {

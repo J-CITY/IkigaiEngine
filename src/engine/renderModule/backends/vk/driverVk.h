@@ -444,7 +444,7 @@ public:
 		uint32_t x, uint32_t y, uint32_t z, const std::shared_ptr<TextureInterface>& texture, uint32_t mip, uint32_t layer) override;
 	void renderGraphBarrier(bool uav) override;
 	void renderGraphImageBarrier(TextureInterface& texture, const GraphImageBarrier& barrier) override;
-	void renderGraphIndirectBarrier(const std::shared_ptr<StorageBufferInterface>& arguments) override;
+	void renderGraphBufferBarrier(const std::shared_ptr<StorageBufferInterface>& buffer, GraphBufferBarrier barrier) override;
 	AliasedRenderTargets createAliasedRenderTargets(std::span<const TextureResource> descriptors) override;
 	void activateAliasedRenderTarget(TextureInterface& texture) override;
 	// Texture infrastructure for GI/HZB (M1-4, M1-8); implemented in textureFeaturesVk.cpp.

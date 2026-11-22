@@ -1492,14 +1492,14 @@ void GameRenderer::renderScene(SCENE_SYSTEM::Scene& scene, ECS::CameraComponent&
 			});
 		}
 		const auto& barriers = mRenderPipeline->mGraphBarriers[pass.Id];
-		if (barriers.Conservative || !barriers.IndirectBuffers.empty()) {
+		if (barriers.Conservative || !barriers.Buffers.empty()) {
 			mContext.render->execute(
-				[presentationDriver, conservative = barriers.Conservative, uav = barriers.Uav, buffers = barriers.IndirectBuffers] {
+				[presentationDriver, conservative = barriers.Conservative, uav = barriers.Uav, buffers = barriers.Buffers] {
 					if (conservative) {
 						presentationDriver->renderGraphBarrier(uav);
 					}
 					for (const auto& buffer : buffers) {
-						presentationDriver->renderGraphIndirectBarrier(buffer);
+						presentationDriver->renderGraphBufferBarrier(buffer.Buffer, buffer.Transition);
 					}
 				});
 		}

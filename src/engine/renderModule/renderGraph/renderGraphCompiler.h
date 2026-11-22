@@ -18,6 +18,7 @@ struct Resource {
 	bool Imported = false;
 	bool Exported = false;
 	bool Transient = false;
+    bool StorageBuffer = false;
 };
 
 struct Use {

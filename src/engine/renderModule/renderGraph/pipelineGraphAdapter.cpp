@@ -200,6 +200,7 @@ GRAPH::Plan RenderGraphPipeline::compileGraph(const Descriptor& descriptor) {
 	}
 	for (const auto& buffer : descriptor.Buffers) {
 		add(buffer.Name, buffer.Type == BufferType::UNIFORM ? ResourceKind::UniformBuffer : ResourceKind::StorageBuffer, false, false);
+        resources.back().StorageBuffer = buffer.Type != BufferType::UNIFORM;
 	}
 	for (const auto& name : descriptor.Graph.Imports) {
 		resources[resolve(name)].Imported = true;
