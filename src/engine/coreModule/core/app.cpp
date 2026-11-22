@@ -19,7 +19,6 @@
 #include "resourceModule/parser/assimpParser.h"
 #include "resourceModule/serviceManager.h"
 #include "sceneModule/sceneManager.h"
-#include "taskModule/taskSystem.h"
 #include "traceModule/trace.h"
 #include "utilsModule/time/time.h"
 #include "windowModule/inputManager/inputActions.h"
@@ -285,12 +284,6 @@ void App::update(std::chrono::duration<double> dt) {
 		core.renderer->renderScene();
 	}
 
-#endif
-#ifndef __EMSCRIPTEN__
-	{
-		IKIGAI_PROFILE_SCOPE("Wait for Frame Tasks");
-		RESOURCES::ServiceManager::Get<TASK::TaskSystem>().waitSync();
-	}
 #endif
 
 #ifndef OCULUS

@@ -145,6 +145,7 @@ namespace {
 
 GuiLayoutSystem::GuiLayoutSystem() {
 	mName = "GuiLayoutSystem";
+	setPhases({ SystemPhase::Update });
 	mPriority = 5;
 	mExclusiveBatch = true;
 	auto cm = RESOURCES::ServiceManager::Get<ECS::World>().getComponentManager();

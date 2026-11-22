@@ -13,6 +13,109 @@ namespace IKIGAI::NETWORK {
 using namespace DETAIL;
 using Tcp = asio::ip::tcp;
 using Udp = asio::ip::udp;
+
+void AsioState::stop() {
+	{
+		std::lock_guard lock(submissionMutex);
+		if (!stopping.exchange(true)) {
+			// Enqueue shutdown before releasing the guard so the I/O thread can
+			// abort pending operations and drain their completion handlers.
+			asio::post(io, [this] {
+				auto operations = std::move(activeOperations);
+				for (const auto& [_, weak] : operations) {
+					if (auto watch = weak.lock()) {
+						watch->interrupt();
+					}
+				}
+			});
+			work.reset();
+		}
+	}
+	{
+		std::lock_guard lock(controlsMutex);
+		for (const auto& weak : controls) {
+			if (auto control = weak.lock()) {
+				control->cancel();
+			}
+		}
+		controls.clear();
+	}
+	if (ioThread == std::this_thread::get_id()) {
+		return;
+	}
+	std::lock_guard lock(joinMutex);
+	if (worker.joinable()) {
+		worker.join();
+	}
+}
+
+void AsioState::post(std::function<void()> fn) {
+	std::lock_guard lock(submissionMutex);
+	if (!stopping) {
+		asio::post(io, std::move(fn));
+	}
+}
+
+AsioState::~AsioState() {
+	stop();
+}
+
+Watch::Watch(std::shared_ptr<AsioState> state, std::shared_ptr<TransferControl> control, Timeout timeout, std::function<void()> cancel)
+	: runtime(std::move(state))
+	, control(std::move(control))
+	, deadline(std::chrono::steady_clock::now() + timeout)
+	, timer(runtime->io, deadline)
+	, cancel(std::move(cancel)) { }
+
+void Watch::arm() {
+	const auto weak = weak_from_this();
+	runtime->activeOperations.emplace(this, weak);
+	cancellationCallback = std::make_shared<const std::function<void()>>([weak, weakRuntime = std::weak_ptr(runtime)] {
+		if (auto state = weakRuntime.lock()) {
+			state->post([weak] {
+				if (auto pending = weak.lock()) {
+					pending->interrupt();
+				}
+			});
+		}
+	});
+	control->subscribeToCancellation(cancellationCallback);
+	timer.async_wait([weak](boost::system::error_code error) {
+		if (!error) {
+			if (auto watch = weak.lock()) {
+				watch->interrupt();
+			}
+		}
+	});
+}
+
+void Watch::interrupt() {
+	if (finished || interrupted) {
+		return;
+	}
+	interrupted = true;
+	// Propagate cancellation into the coroutine even if an I/O completion
+	// is already queued and the coroutine is about to start its next phase.
+	signal.emit(asio::cancellation_type::terminal);
+	cancel();
+}
+
+void Watch::finish() {
+	finished = true;
+	runtime->activeOperations.erase(this);
+	cancellationCallback.reset();
+	timer.cancel();
+}
+
+void Watch::check() const {
+	if (control->isCancelled() || runtime->stopping) {
+		throw NetworkError(NetworkErrorCode::cancelled, "Network operation cancelled");
+	}
+	if (std::chrono::steady_clock::now() >= deadline) {
+		throw NetworkError(NetworkErrorCode::timeout, "Network operation timed out");
+	}
+}
+
 namespace {
 	template<class E> Endpoint Address(const E& endpoint) { return {endpoint.address().to_string(), endpoint.port()}; }
 	struct Busy {
@@ -190,7 +293,9 @@ void NetworkRuntime::stop() { mState->stop(); }
 void NetworkRuntime::trackOperation(const std::shared_ptr<TransferControl>& control) {
 	std::lock_guard lock(mState->controlsMutex);
 	std::erase_if(mState->controls, [](const auto& weak) { return weak.expired(); });
-	if (mState->stopping) control->cancelled = true;
+	if (mState->stopping) {
+		control->cancel();
+	}
 	else mState->controls.push_back(control);
 }
 }
@@ -236,9 +341,13 @@ Operation<void> NetworkRuntime::delay(Timeout duration) {
 		std::chrono::steady_clock::time_point end;
 		static void tick(void* pointer) {
 			auto* state = static_cast<Delay*>(pointer);
-			if (state->control->cancelled) {
+			if (state->control->isCancelled()) {
 				state->promise.set_exception(std::make_exception_ptr(NetworkError(NetworkErrorCode::cancelled, "Timer cancelled"))); delete state;
-			} else if (std::chrono::steady_clock::now() >= state->end) { state->promise.set_value(); delete state; }
+			}
+			else if (std::chrono::steady_clock::now() >= state->end) {
+				state->promise.set_value();
+				delete state;
+			}
 			else emscripten_async_call(tick, state, 10);
 		}
 	};
@@ -265,12 +374,18 @@ size_t NetworkRuntime::poll(size_t limit) {
 void NetworkRuntime::trackOperation(const std::shared_ptr<TransferControl>& control) {
 	std::lock_guard lock(mState->mutex);
 	std::erase_if(mState->controls, [](const auto& weak) { return weak.expired(); });
-	if (mState->stopped) control->cancelled = true;
+	if (mState->stopped) {
+		control->cancel();
+	}
 	else mState->controls.push_back(control);
 }
 void NetworkRuntime::stop() {
 	std::lock_guard lock(mState->mutex); mState->stopped = true;
-	for (const auto& weak : mState->controls) if (const auto control = weak.lock()) control->cancelled = true;
+	for (const auto& weak : mState->controls) {
+		if (const auto control = weak.lock()) {
+			control->cancel();
+		}
+	}
 	mState->controls.clear();
 }
 TcpStream::~TcpStream() = default;

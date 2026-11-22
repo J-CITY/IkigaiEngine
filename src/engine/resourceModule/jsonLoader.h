@@ -12,6 +12,7 @@ inline const std::string PATCH_KEY = "##patch";
 
 // Supply the VFS path when the caller already knows the document's origin.
 Result<nlohmann::json, JsonError> ApplyPatches(const nlohmann::json& data, const std::string& sourcePath = {});
+// Positional edits carry RFC 6902 tests for their inherited arrays. A changed array requires regenerating the edit.
 Result<nlohmann::json, JsonError> GetPatches(const nlohmann::json& data, const std::string& sourcePath = {});
 
 namespace JsonDetail {

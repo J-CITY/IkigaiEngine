@@ -16,7 +16,9 @@ public:
 template<class T> struct Operation {
 	std::shared_future<T> result;
 	std::shared_ptr<TransferControl> control;
-	void cancel() const { control->cancelled = true; }
+	void cancel() const {
+		control->cancel();
+	}
 };
 struct Endpoint { std::string address; uint16_t port = 0; };
 struct Datagram { Endpoint sender; std::vector<uint8_t> bytes; };

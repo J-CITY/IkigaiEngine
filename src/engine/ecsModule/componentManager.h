@@ -7,11 +7,14 @@
 #include "systemAccessScope.h"
 #include <array>
 #include <atomic>
+#include <condition_variable>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <span>
 #include <string>
+#include <thread>
 #include <unordered_set>
 #include <utility>
 
@@ -93,6 +96,8 @@ struct Record {
 
 class ComponentManager {
 	friend class World;
+	friend class SystemManager;
+	friend class SystemAccessScope;
 	friend struct EcsBenchmarkAccess;
 
 	class EntityRecords {
@@ -250,31 +255,31 @@ private:
 
 	const EntityHandle::OwnerId mOwner = IdGenerator<EntityHandle>::generateId();
 	std::uint64_t mNextEntityGeneration = 1;
-	std::atomic_size_t mActiveQueries { 0 };
+	// Direct component pointers are borrowed by the world's owner or a synchronously joined system.
+	const std::thread::id mOwnerThread = std::this_thread::get_id();
+	// -1 reserves exclusive mutation. Positive counts are simultaneous query scopes.
+	std::atomic<std::ptrdiff_t> mStorageUsers { 0 };
+#if !defined(__cpp_lib_atomic_wait)
+	std::mutex mStorageWaitMutex;
+	std::condition_variable mStorageAvailable;
+#endif
+	enum class StorageAccess { Query, Mutation };
+	class StorageScope {
+		friend class ComponentManager;
 
-	class QueryScope {
 	public:
-		explicit QueryScope(std::atomic_size_t& activeQueries)
-			: mActiveQueries(activeQueries) {
-			mActiveQueries.fetch_add(1, std::memory_order_relaxed);
-		}
-
-		~QueryScope() {
-			mActiveQueries.fetch_sub(1, std::memory_order_relaxed);
-		}
-
-		QueryScope(const QueryScope&) = delete;
-		QueryScope& operator=(const QueryScope&) = delete;
+		StorageScope(ComponentManager& manager, StorageAccess access);
+		~StorageScope();
+		StorageScope(const StorageScope&) = delete;
+		StorageScope& operator=(const StorageScope&) = delete;
 
 	private:
-		std::atomic_size_t& mActiveQueries;
+		static thread_local const StorageScope* sCurrent;
+		const StorageScope* mPrevious;
+		ComponentManager& mManager;
+		StorageAccess mAccess;
+		bool mAcquired = false;
 	};
-
-	void requireStructuralChangesAllowed() const {
-		if (!immediateStructuralChangesAllowed() || mActiveQueries.load(std::memory_order_relaxed) != 0) {
-			throw std::logic_error("ECS structural changes must be deferred during queries and shared system batches");
-		}
-	}
 
 	// Archetype structs
 	// Table ownership covers all records and transition entries in this world.
@@ -295,7 +300,6 @@ private:
 	RelationManager mRelationManager;
 	EventManager mEventManager;
 
-private:
 private:
 	// Helper to lazily register component with default storage if not already registered
 	template <typename T> StorageType ensureComponentRegistered(ComponentType id) {
@@ -659,9 +663,17 @@ private:
 	}
 
 public:
+	// Hold the reservation across lifecycle callbacks that precede an ECS mutation.
+	[[nodiscard]] auto beginStructuralChange() {
+		return StorageScope(*this, StorageAccess::Mutation);
+	}
+
+	// Dispatching and joining worker queries while holding this reservation would wait on the caller.
+	[[nodiscard]] bool hasStructuralChangeOnThisThread() const noexcept;
+
 	template <class First, class Func> void forEachSparse(Func&& func) {
 		static_assert(!IsExclude<RawType<First>>, "Exclude is not supported by forEachSparse");
-		const QueryScope query(mActiveQueries);
+		const StorageScope query(*this, StorageAccess::Query);
 		const auto type = getComponentType<First>();
 		SystemAccessScope::requireComponent(*this, type, AccessTraits<First>::ReadOnly ? AccessMode::Read : AccessMode::Write);
 		const auto pool = mSparseArrays.find(type);
@@ -687,7 +699,7 @@ public:
 	}
 
 	template <typename T> void registerComponent(StorageType type = StorageType::Archetype) {
-		requireStructuralChangesAllowed();
+		const StorageScope mutation(*this, StorageAccess::Mutation);
 		static_assert(std::is_same_v<T, RawType<T>> && !IsExclude<T>, "Register an unqualified component type");
 		ComponentType id = getComponentType<T>();
 
@@ -720,21 +732,26 @@ public:
 	}
 
 	RelationManager& getRelationManager() {
+		SystemAccessScope::requireStorageAccess(*this);
 		return mRelationManager;
 	}
 	const RelationManager& getRelationManager() const {
+		SystemAccessScope::requireStorageAccess(*this);
 		return mRelationManager;
 	}
 	EventManager& getEventManager() {
+		SystemAccessScope::requireStorageAccess(*this);
 		return mEventManager;
 	}
 	const EventManager& getEventManager() const {
+		SystemAccessScope::requireStorageAccess(*this);
 		return mEventManager;
 	}
 
 	template <typename T> UTILS::WeakPtr<T> getSingletonComponent() {
 		static_assert(std::is_base_of_v<Component, T>, "Must inherit from class Component");
 		const auto type = getComponentType<T>();
+		SystemAccessScope::requireComponent(*this, type, AccessMode::Write);
 		if (!mSingletonComponent.contains(type)) {
 			return nullptr;
 		}
@@ -742,7 +759,7 @@ public:
 	}
 
 	template <typename T> UTILS::WeakPtr<T> addSingletonComponent() {
-		requireStructuralChangesAllowed();
+		const StorageScope mutation(*this, StorageAccess::Mutation);
 		static_assert(std::is_base_of_v<Component, T>, "Must inherit from class Component");
 		const auto type = getComponentType<T>();
 		mSingletonComponent[type] = std::make_unique<T>();
@@ -786,7 +803,7 @@ public:
 
 private:
 	template <bool Chunked, class T> void addArchetypeComponentBatchImpl(std::span<const Entity> entities, const T& value) {
-		requireStructuralChangesAllowed();
+		const StorageScope mutation(*this, StorageAccess::Mutation);
 		if (entities.empty()) {
 			return;
 		}
@@ -863,7 +880,7 @@ private:
 	};
 
 	template <bool CaptureIdentity = false, class... Components> auto addRvalueComponents(Entity entity, Components&&... newComponent) {
-		requireStructuralChangesAllowed();
+		const StorageScope mutation(*this, StorageAccess::Mutation);
 		const std::array<ComponentType, sizeof...(Components)> types { getComponentType<Components>()... };
 		for (std::size_t i = 0; i < types.size(); ++i) {
 			const auto preceding = std::span(types).first(i);
@@ -922,7 +939,7 @@ private:
 
 public:
 	template <class... Components> void removeComponents(Entity entity) {
-		requireStructuralChangesAllowed();
+		const StorageScope mutation(*this, StorageAccess::Mutation);
 		// static_assert(sizeof...(Components) == 0, "Must contain non 0 components");
 		(emitComponentEvent<OnRemove, Components>(entity), ...);
 		Record& record = mEntityRecords.at(entity);
@@ -975,6 +992,7 @@ public:
 	}
 
 	template <class T = Component> std::vector<UTILS::WeakPtr<T>> getComponents(Entity entity) {
+		SystemAccessScope::requireWorld(*this);
 		std::vector<UTILS::WeakPtr<T>> res;
 
 		if (const auto* record = mEntityRecords.find(entity)) {
@@ -1036,10 +1054,17 @@ private:
 
 public:
 	std::shared_ptr<Archetype> getArchetype(Signature mask) {
+		SystemAccessScope::requireStorageAccess(*this);
+		{
+			const StorageScope query(*this, StorageAccess::Query);
+			if (const auto existing = mMaskToArchetype.find(mask); existing != mMaskToArchetype.end()) {
+				return existing->second;
+			}
+		}
+		const StorageScope mutation(*this, StorageAccess::Mutation);
 		if (const auto existing = mMaskToArchetype.find(mask); existing != mMaskToArchetype.end()) {
 			return existing->second;
 		}
-		requireStructuralChangesAllowed();
 		auto newArchetype = std::make_shared<Archetype>();
 		newArchetype->mMask = mask;
 		if (mIndexedRecords) {
@@ -1080,7 +1105,7 @@ private:
 				throw std::invalid_argument("Cannot register an invalid entity");
 			}
 		}
-		requireStructuralChangesAllowed();
+		const StorageScope mutation(*this, StorageAccess::Mutation);
 		if (mNextEntityGeneration == 0) {
 			if constexpr (!Generated) {
 				if (mEntityRecords.find(entity)) {
@@ -1107,6 +1132,7 @@ public:
 	}
 
 	[[nodiscard]] EntityHandle getEntityHandle(Entity entity) const {
+		SystemAccessScope::requireWorld(*this);
 		const auto* record = mEntityRecords.find(entity);
 		if (!record) {
 			return {};
@@ -1115,6 +1141,7 @@ public:
 	}
 
 	[[nodiscard]] std::optional<Entity> resolveEntity(EntityHandle handle) const {
+		SystemAccessScope::requireWorld(*this);
 		if (handle.owner != mOwner || !handle.id.valid() || handle.generation == 0) {
 			return std::nullopt;
 		}
@@ -1179,7 +1206,7 @@ public:
 	}
 
 	void destroyEntity(Entity entity) {
-		requireStructuralChangesAllowed();
+		const StorageScope mutation(*this, StorageAccess::Mutation);
 		const auto location = mEntityRecords.locateForErase(entity);
 		const auto* record = location.record;
 		if (!record) {
@@ -1220,7 +1247,7 @@ public:
 
 	// Visit order follows the selected storage and can change after structural edits.
 	template <class... Components, class Func> void forEach(Func&& func) {
-		const QueryScope query(mActiveQueries);
+		const StorageScope query(*this, StorageAccess::Query);
 		static_assert(sizeof...(Components) > 0, "forEach requires components");
 		static_assert((!IsExclude<RawType<Components>> && ...), "Exclude is not supported by forEach");
 		constexpr auto count = sizeof...(Components);
@@ -1367,6 +1394,7 @@ public:
 	}
 
 	template <class T> ComponentArray<T>& getComponentsArray() {
+		SystemAccessScope::requireStorageAccess(*this);
 		static_assert(std::is_same_v<T, RawType<T>>, "Get the pool by its unqualified component type");
 		auto type = getComponentType<T>();
 		SystemAccessScope::requireComponent(*this, type, AccessMode::Write);
@@ -1377,12 +1405,14 @@ public:
 	}
 
 	Signature getSignature(Entity entity) {
+		SystemAccessScope::requireWorld(*this);
 #ifdef __DEBUG__
 		if (!mSignatures.contains(entity)) {
 			throw;
 		}
 #endif
-		return mSignatures[entity];
+		const auto it = mSignatures.find(entity);
+		return it == mSignatures.end() ? Signature {} : it->second;
 	}
 };
 }

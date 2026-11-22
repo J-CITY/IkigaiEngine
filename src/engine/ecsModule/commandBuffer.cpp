@@ -8,6 +8,7 @@
 
 namespace IKIGAI::ECS {
 CommandBuffer::PendingEntity CommandBuffer::createEntity() {
+	SystemAccessScope::requireCommandBuffer(*this);
 	std::lock_guard guard(mMutex);
 	if (!mRecording) {
 		mRecording = std::make_shared<Recording>();
@@ -17,6 +18,7 @@ CommandBuffer::PendingEntity CommandBuffer::createEntity() {
 }
 
 void CommandBuffer::queueEntityEdit(const EntityTarget& target, std::unique_ptr<EntityEdit> edit) {
+	SystemAccessScope::requireCommandBuffer(*this);
 	std::lock_guard guard(mMutex);
 	if (const auto* pending = std::get_if<PendingEntity>(&target)) {
 		if (!mRecording || pending->mRecording.lock() != mRecording) {
@@ -34,8 +36,40 @@ void CommandBuffer::destroyEntity(EntityTarget target) {
 }
 
 void CommandBuffer::addCommand(std::function<void()>&& command) {
+	SystemAccessScope::requireCommandBuffer(*this);
 	std::lock_guard guard(mMutex);
 	mCommands.emplace_back(std::move(command));
+}
+
+void CommandBuffer::appendRanges(std::vector<CommandBuffer>& ranges) {
+	SystemAccessScope::requireCommandBuffer(*this);
+	std::lock_guard guard(mMutex);
+	auto total = mCommands.size();
+	for (const auto& range : ranges) {
+		if (&range == this) {
+			throw std::logic_error("Cannot append an ECS command buffer to itself");
+		}
+		if (range.mCommands.size() > mCommands.max_size() - total) {
+			throw std::length_error("ECS command buffer exceeds its maximum size");
+		}
+		total += range.mCommands.size();
+	}
+	mCommands.reserve(total);
+	static_assert(std::is_nothrow_move_constructible_v<Command>);
+	for (auto& range : ranges) {
+		for (auto& command : range.mCommands) {
+			if (auto* edit = std::get_if<EditEntity>(&command)) {
+				if (auto* index = std::get_if<std::size_t>(&edit->target)) {
+					*index += mPendingCount;
+				}
+			}
+			mCommands.push_back(std::move(command));
+		}
+		mPendingCount += range.mPendingCount;
+		range.mPendingCount = 0;
+		range.mRecording.reset();
+		range.mCommands.clear();
+	}
 }
 
 void CommandBuffer::execute(World& world) {
@@ -47,6 +81,10 @@ void CommandBuffer::execute() {
 }
 
 void CommandBuffer::executeImpl(World* world) {
+	SystemAccessScope::requireCommandBuffer(*this);
+	if (!immediateStructuralChangesAllowed()) {
+		throw std::logic_error("ECS command playback requires the owning thread after shared system execution");
+	}
 	std::vector<Command> commands;
 	std::vector<EntityHandle> createdEntities;
 	{

@@ -8,6 +8,7 @@ using namespace IKIGAI::ECS;
 
 PropertyAnimationSystem::PropertyAnimationSystem() {
 	mName = "PropertyAnimationSystem";
+	setPhases({ SystemPhase::Update });
 	mPriority = 15;
 	// Animation bindings can invoke setters on arbitrary components.
 	mExclusiveBatch = true;

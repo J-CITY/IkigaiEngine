@@ -505,7 +505,95 @@ ComponentArrayInterface* ComponentManager::findArray(Entity entity, ComponentTyp
 	return sparse == mSparseArrays.end() ? nullptr : sparse->second.get();
 }
 
+thread_local const ComponentManager::StorageScope* ComponentManager::StorageScope::sCurrent = nullptr;
+
+bool ComponentManager::hasStructuralChangeOnThisThread() const noexcept {
+	for (auto* scope = StorageScope::sCurrent; scope; scope = scope->mPrevious) {
+		if (&scope->mManager == this && scope->mAccess == StorageAccess::Mutation) {
+			return true;
+		}
+	}
+	return false;
+}
+
+ComponentManager::StorageScope::StorageScope(ComponentManager& manager, StorageAccess access)
+	: mPrevious(sCurrent)
+	, mManager(manager)
+	, mAccess(access) {
+	const bool writing = access == StorageAccess::Mutation;
+	if (writing) {
+		SystemAccessScope::hasSystemScopeOrRequireOwner(manager);
+	}
+	else {
+		SystemAccessScope::requireWorld(manager);
+	}
+	if (writing && !immediateStructuralChangesAllowed()) {
+		throw std::logic_error("ECS structural changes must be deferred during shared system execution");
+	}
+	for (auto* outer = mPrevious; outer; outer = outer->mPrevious) {
+		if (&outer->mManager == &manager) {
+			if (writing && outer->mAccess == StorageAccess::Query) {
+				throw std::logic_error("ECS structural changes must be deferred during a query");
+			}
+			// A nested query or internal mutation borrows the enclosing reservation.
+			sCurrent = this;
+			return;
+		}
+	}
+	for (auto users = manager.mStorageUsers.load(std::memory_order_relaxed);;) {
+		if (users < 0 || (writing && users != 0)) {
+#if defined(__cpp_lib_atomic_wait)
+			manager.mStorageUsers.wait(users, std::memory_order_relaxed);
+#else
+			std::unique_lock lock { manager.mStorageWaitMutex };
+			manager.mStorageAvailable.wait(lock, [&] {
+				const auto current = manager.mStorageUsers.load(std::memory_order_relaxed);
+				return writing ? current == 0 : current >= 0;
+			});
+#endif
+			users = manager.mStorageUsers.load(std::memory_order_relaxed);
+		}
+		else if (manager.mStorageUsers.compare_exchange_weak(users, writing ? -1 : users + 1, std::memory_order_acquire, std::memory_order_relaxed)) {
+			break;
+		}
+	}
+	mAcquired = true;
+	sCurrent = this;
+}
+
+ComponentManager::StorageScope::~StorageScope() {
+	sCurrent = mPrevious;
+	if (mAcquired) {
+		if (mAccess == StorageAccess::Mutation) {
+			mManager.mStorageUsers.store(0, std::memory_order_release);
+		}
+		else if (mManager.mStorageUsers.fetch_sub(1, std::memory_order_release) != 1) {
+			return;
+		}
+#if defined(__cpp_lib_atomic_wait)
+		mManager.mStorageUsers.notify_all();
+#else
+		const std::lock_guard lock { mManager.mStorageWaitMutex };
+		mManager.mStorageAvailable.notify_all();
+#endif
+	}
+}
+
 thread_local const SystemAccessScope* SystemAccessScope::sCurrent = nullptr;
+thread_local const SystemAccessScope::BatchDispatch* SystemAccessScope::sDispatch = nullptr;
+
+SystemAccessScope::BatchDispatch::BatchDispatch(const ComponentManager& manager) noexcept
+	: mManager(manager)
+	, mPrevious(sDispatch)
+	, mPreviousScope(sCurrent) {
+	sDispatch = this;
+	sCurrent = nullptr;
+}
+
+SystemAccessScope::BatchDispatch::~BatchDispatch() {
+	sCurrent = mPreviousScope;
+	sDispatch = mPrevious;
+}
 
 SystemAccessScope::SystemAccessScope(bool enabled, std::string_view system, const ComponentManager& manager,
 	const std::unordered_set<ComponentType>& reads, const std::unordered_set<ComponentType>& writes,
@@ -516,21 +604,75 @@ SystemAccessScope::SystemAccessScope(bool enabled, std::string_view system, cons
 	, mReads(reads)
 	, mWrites(writes)
 	, mResourceReads(resourceReads)
-	, mResourceWrites(resourceWrites) {
-	if (enabled) {
-		sCurrent = this;
-	}
+	, mResourceWrites(resourceWrites)
+	, mChecked(enabled) {
+	sCurrent = this;
+}
+
+SystemAccessScope::SystemAccessScope(const SystemAccessScope& parent, CommandBuffer& childCommands) noexcept
+	: mPrevious(sCurrent)
+	, mSystem(parent.mSystem)
+	, mManager(parent.mManager)
+	, mReads(parent.mReads)
+	, mWrites(parent.mWrites)
+	, mResourceReads(parent.mResourceReads)
+	, mResourceWrites(parent.mResourceWrites)
+	, mChecked(true)
+	, mChildCommands(std::in_place, childCommands, false) {
+	sCurrent = this;
 }
 
 SystemAccessScope::~SystemAccessScope() {
 	sCurrent = mPrevious;
 }
 
-void SystemAccessScope::requireComponent(const ComponentManager& manager, ComponentType type, AccessMode mode) {
-	if (const auto* scope = sCurrent) {
-		if (&scope->mManager != &manager) {
-			throw std::logic_error("ECS system " + std::string(scope->mSystem) + " accessed components in another world");
+const SystemAccessScope& SystemAccessScope::current() {
+	if (UTILS::TaskBorrowScope::current() != UTILS::TaskBorrowState::Borrowing || !sCurrent) {
+		throw std::logic_error("ECS child ranges require an executing system");
+	}
+	return *sCurrent;
+}
+
+bool SystemAccessScope::hasSystemScopeOrRequireOwner(const ComponentManager& manager) {
+	if (UTILS::TaskBorrowScope::current() == UTILS::TaskBorrowState::Detached) {
+		throw std::logic_error("Unscoped tasks submitted by an ECS system cannot access the world");
+	}
+	if (sCurrent && &sCurrent->mManager == &manager) {
+		return true;
+	}
+	if ((sCurrent && sCurrent->mChecked) || std::this_thread::get_id() != manager.mOwnerThread) {
+		throw std::logic_error("Live ECS world access requires its owner thread or its joined system scope");
+	}
+	return false;
+}
+
+void SystemAccessScope::requireWorld(const ComponentManager& manager) {
+	if (!hasSystemScopeOrRequireOwner(manager)) {
+		for (auto* dispatch = sDispatch; dispatch; dispatch = dispatch->mPrevious) {
+			if (&dispatch->mManager == &manager && !manager.hasStructuralChangeOnThisThread()) {
+				throw std::logic_error("Live component access during batch dispatch requires an exclusive storage reservation");
+			}
 		}
+	}
+}
+
+void SystemAccessScope::requireStorageAccess(const ComponentManager& manager) {
+	requireWorld(manager);
+	if (sCurrent && sCurrent->mChildCommands) {
+		throw std::logic_error("ECS child ranges must use typed component access");
+	}
+}
+
+void SystemAccessScope::requireCommandBuffer(const CommandBuffer& commands) {
+	if (UTILS::TaskBorrowScope::current() == UTILS::TaskBorrowState::Detached
+		|| (sCurrent && sCurrent->mChildCommands && &sCurrent->mChildCommands->mBuffer != &commands)) {
+		throw std::logic_error("ECS child tasks must record into their own range command buffer");
+	}
+}
+
+void SystemAccessScope::requireComponent(const ComponentManager& manager, ComponentType type, AccessMode mode) {
+	requireWorld(manager);
+	if (const auto* scope = sCurrent; scope && scope->mChecked) {
 		if (!scope->mWrites.contains(type) && (mode == AccessMode::Write || !scope->mReads.contains(type))) {
 			throw std::logic_error(
 				"ECS system " + std::string(scope->mSystem) + " has undeclared component access for type " + std::to_string(type.value()));
@@ -539,7 +681,10 @@ void SystemAccessScope::requireComponent(const ComponentManager& manager, Compon
 }
 
 void SystemAccessScope::requireResource(std::type_index type, AccessMode mode) {
-	if (const auto* scope = sCurrent) {
+	if (UTILS::TaskBorrowScope::current() == UTILS::TaskBorrowState::Detached) {
+		throw std::logic_error("Unscoped tasks submitted by an ECS system cannot access its resources");
+	}
+	if (const auto* scope = sCurrent; scope && scope->mChecked) {
 		if (!scope->mResourceWrites.contains(type) && (mode == AccessMode::Write || !scope->mResourceReads.contains(type))) {
 			throw std::logic_error("ECS system " + std::string(scope->mSystem) + " has undeclared resource access for type " + type.name());
 		}

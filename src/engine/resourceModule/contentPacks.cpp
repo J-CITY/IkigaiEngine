@@ -1,6 +1,7 @@
 #include "contentPacks.h"
 
 #include "fileSystem/fileSystem.h"
+#include "utilsModule/serialization/jsonAdapters.h"
 
 #include <algorithm>
 #include <nlohmann/json.hpp>
@@ -31,16 +32,13 @@ namespace {
 		if (!file || !file->isValid()) {
 			throw std::runtime_error("Cannot read /content_packs.json");
 		}
-		const auto json = nlohmann::json::parse(file->readStr());
+		auto json = nlohmann::json::parse(file->readStr());
 		if (!json.is_array()) {
 			throw std::runtime_error("/content_packs.json must be an array of pack ids");
 		}
-		std::vector<std::string> ids;
-		for (const auto& entry : json) {
-			if (!entry.is_string() || entry.get<std::string>().empty()) {
-				throw std::runtime_error("/content_packs.json contains an empty pack id");
-			}
-			ids.push_back(entry.get<std::string>());
+		auto ids = serde::deserialize<std::vector<std::string>>(json);
+		if (std::ranges::find(ids, std::string {}) != ids.end()) {
+			throw std::runtime_error("/content_packs.json contains an empty pack id");
 		}
 		return ids;
 	}

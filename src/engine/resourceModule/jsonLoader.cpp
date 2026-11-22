@@ -4,6 +4,7 @@
 #include "utilsModule/serviceManager.h"
 #include <algorithm>
 #include <optional>
+#include <set>
 #include <utility>
 
 namespace IKIGAI::UTILS {
@@ -13,6 +14,32 @@ namespace {
 	constexpr std::size_t MaxActiveJsonFiles = 64;
 
 	enum class PatchOperation { Apply, Generate };
+
+	nlohmann::json DiffInheritedJson(const nlohmann::json& parent, const nlohmann::json& value) {
+		using Json = nlohmann::json;
+		auto patch = Json::diff(parent, value);
+		auto tests = Json::array();
+		std::set<std::string> guardedArrays;
+		for (const auto& operation : patch) {
+			const auto& path = operation.at("path").get_ref<const std::string&>();
+			// A positional edit depends on the identity and order of the outermost array it traverses.
+			// Use encoded pointer prefixes so object keys containing '/' or '~' retain their meaning.
+			for (auto slash = path.find('/'); slash != std::string::npos; slash = path.find('/', slash + 1)) {
+				const auto prefix = path.substr(0, slash);
+				if (guardedArrays.contains(prefix)) {
+					break;
+				}
+				const auto& container = parent.at(Json::json_pointer(prefix));
+				if (container.is_array()) {
+					tests.push_back({ { "op", "test" }, { "path", prefix }, { "value", container } });
+					guardedArrays.insert(prefix);
+					break;
+				}
+			}
+		}
+		patch.insert(patch.begin(), tests.begin(), tests.end());
+		return patch;
+	}
 
 	class JsonParentResolver {
 		std::vector<std::string> mActivePaths;
@@ -132,7 +159,7 @@ namespace {
 					dataForDiff.erase(PARENT_KEY);
 					return Ok(nlohmann::json {
 						{ PARENT_KEY, parentPath },
-						{ PATCH_KEY, nlohmann::json::diff(resolvedParent.unwrap(), dataForDiff) },
+						{ PATCH_KEY, DiffInheritedJson(resolvedParent.unwrap(), dataForDiff) },
 					});
 				}
 				auto result = resolvedParent.unwrap().patch(*patch);

@@ -1,5 +1,6 @@
 #pragma once
 #include "entityManager.h"
+#include "utilsModule/taskBorrowScope.h"
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -51,6 +52,8 @@ public:
 
 	void destroyEntity(EntityTarget target);
 	void addCommand(std::function<void()>&& command);
+	// The caller owns and has joined every range. Publish their commands in order.
+	void appendRanges(std::vector<CommandBuffer>& ranges);
 
 	// Play back on the owning thread after the batch has finished. Stale or foreign
 	// entity handles are skipped. If a command throws, later commands are discarded.
@@ -91,28 +94,19 @@ private:
 	std::mutex mMutex;
 };
 
-inline CommandBuffer*& activeCommandBuffer() {
-	thread_local CommandBuffer* current = nullptr;
-	return current;
-}
-
-inline bool& immediateStructuralChangesAllowed() {
-	thread_local bool allowed = true;
-	return allowed;
-}
-
 class ActiveCommandBufferScope {
 public:
 	explicit ActiveCommandBufferScope(CommandBuffer& buffer, bool allowImmediate = true)
-		: mPrevious(activeCommandBuffer())
-		, mPreviousAllowImmediate(immediateStructuralChangesAllowed()) {
-		immediateStructuralChangesAllowed() = mPreviousAllowImmediate && allowImmediate;
-		activeCommandBuffer() = &buffer;
+		: mBuffer(buffer)
+		, mPrevious(sBuffer)
+		, mPreviousAllowImmediate(sAllowImmediate) {
+		sAllowImmediate = mPreviousAllowImmediate && allowImmediate;
+		sBuffer = &buffer;
 	}
 
 	~ActiveCommandBufferScope() {
-		activeCommandBuffer() = mPrevious;
-		immediateStructuralChangesAllowed() = mPreviousAllowImmediate;
+		sBuffer = mPrevious;
+		sAllowImmediate = mPreviousAllowImmediate;
 	}
 
 	ActiveCommandBufferScope(const ActiveCommandBufferScope&) = delete;
@@ -121,7 +115,21 @@ public:
 	ActiveCommandBufferScope& operator=(ActiveCommandBufferScope&&) = delete;
 
 private:
+	friend class SystemAccessScope;
+	friend CommandBuffer* activeCommandBuffer() noexcept;
+	friend bool immediateStructuralChangesAllowed() noexcept;
+	inline static thread_local CommandBuffer* sBuffer = nullptr;
+	inline static thread_local bool sAllowImmediate = true;
+	CommandBuffer& mBuffer;
 	CommandBuffer* mPrevious = nullptr;
 	bool mPreviousAllowImmediate = true;
 };
+
+inline CommandBuffer* activeCommandBuffer() noexcept {
+	return UTILS::TaskBorrowScope::current() == UTILS::TaskBorrowState::Detached ? nullptr : ActiveCommandBufferScope::sBuffer;
+}
+
+inline bool immediateStructuralChangesAllowed() noexcept {
+	return UTILS::TaskBorrowScope::current() != UTILS::TaskBorrowState::Detached && ActiveCommandBufferScope::sAllowImmediate;
+}
 }

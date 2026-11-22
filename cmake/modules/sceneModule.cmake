@@ -13,4 +13,5 @@ set(IKIGAI_MANIFEST_sceneModule
     "${IKIGAI_SOURCE_ROOT}/engine/sceneModule/sceneObjectDescriptor.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/sceneModule/sceneObjectDescriptor.h"
     "${IKIGAI_SOURCE_ROOT}/engine/sceneModule/sceneSimulation.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/sceneModule/sceneSystem.h"
 )

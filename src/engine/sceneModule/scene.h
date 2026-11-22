@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -78,7 +79,9 @@ public:
 	std::vector<std::shared_ptr<ECS::Object>> findObjectsByName(const std::string& p_name);
 	std::vector<std::shared_ptr<ECS::Object>> findObjectsByTag(const std::string& p_tag);
 
-	[[nodiscard]] std::span<std::shared_ptr<ECS::Object>> getObjects();
+	[[nodiscard]] std::span<const std::shared_ptr<ECS::Object>> getObjects() const;
+	// Current position in this scene, including when multiple scenes share a world.
+	[[nodiscard]] std::optional<std::size_t> getObjectIndex(const ECS::Object& object) const noexcept;
 
 	virtual void onDeserialize(nlohmann::json& j) override {
 		// for (auto& oj : j["objects"]) {
@@ -136,13 +139,18 @@ public:
 
 private:
 	friend class SceneManager;
+	std::shared_ptr<ECS::Object> insertObject(std::shared_ptr<ECS::Object> object, std::size_t index);
+	void refreshObjectIndices(std::size_t first) noexcept;
 	std::shared_ptr<ECS::Object> appendDocument(const DOCUMENT::Expanded& document, std::span<const SceneObjectDescriptor> descriptors);
 	std::unique_ptr<SceneSimulation> mSimulation;
 	SceneSimulation& requireSimulation();
+	void runScheduledPhase(ECS::SystemPhase phase, std::chrono::duration<double> dt = {}, float interpolationAlpha = 0.f);
 	void observeComponents(ECS::Object& object);
 	std::shared_ptr<ComponentChanges> mComponentChanges = std::make_shared<ComponentChanges>();
 	ECS::World* mWorld = nullptr;
 	std::unique_ptr<COROUTINE::CoroutineScope> mCoroutineScope;
+	bool mSystemsRegistered = false;
+	bool mStarting = false;
 	bool isExecute = false;
 	std::vector<std::shared_ptr<ECS::Object>> objects;
 

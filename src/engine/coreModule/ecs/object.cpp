@@ -79,6 +79,7 @@ void Object::disposeImmediate(Entity entity) {
 	if (mDisposed) {
 		return;
 	}
+	const auto mutation = getWorld().getComponentManager()->beginStructuralChange();
 	mDisposing = true;
 	// Callbacks still need to read this object's components during disposal.
 	if (mIsActive) {

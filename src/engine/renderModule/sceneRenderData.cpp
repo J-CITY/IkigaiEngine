@@ -26,6 +26,7 @@
 #include <cmath>
 #include <cstdint>
 #include <optional>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -154,6 +155,9 @@ SceneRenderData::~SceneRenderData() = default;
 
 SceneRenderData::SpatialIndex& SceneRenderData::spatial(Scene& scene) {
 	auto changes = scene.componentChanges().lock();
+	if (!changes) {
+		throw std::logic_error("A scene must provide its component change event");
+	}
 	if (!mSpatial || mSpatial->changes.lock() != changes) {
 		auto spatial = std::make_unique<SpatialIndex>();
 		spatial->changes = changes;

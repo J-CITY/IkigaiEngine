@@ -20,7 +20,7 @@ struct DownloadHandle {
 	std::shared_future<std::filesystem::path> result;
 	void cancel() const {
 		if (control)
-			control->cancelled = true;
+			control->cancel();
 	}
 };
 // Native: one file/verification worker, with network I/O on Asio's executor.

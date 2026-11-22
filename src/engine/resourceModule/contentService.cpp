@@ -2,12 +2,20 @@
 #include "fileSystem/storage.h"
 #include "fileSystem/userStorage.h"
 #include "resourceResolver.h"
-#include "utilsModule/serialization/jsonValueAdaptor.h"
+#include "utilsModule/serialization/jsonAdapters.h"
+#include "utilsModule/serialization/strictJsonFields.h"
 #include <regex>
 #include <serdepp/serde.hpp>
 #include <set>
 
 namespace IKIGAI::RESOURCES {
+namespace {
+	constexpr int ContentSchemaV1 = 1;
+	constexpr int EngineVersion = 1;
+	constexpr std::size_t MaxArchives = 128;
+	constexpr uint64_t MaxArchiveSize = uint64_t { 1 } << 34;
+}
+
 struct ContentArchive {
 	std::string path = {};
 	std::string sha256 = {};
@@ -17,67 +25,38 @@ struct ContentArchive {
 		serde::serde_struct(context, value)
 			.field(&ContentArchive::path, "path")
 			.field(&ContentArchive::sha256, "sha256")
-			.field(&ContentArchive::size, "size")
-			.field(&ContentArchive::deletedPaths, "deletedPaths", serde::attribute::default_ { std::vector<std::string> {} });
+			.field(&ContentArchive::size, "size", DATA::JsonIntegerRange { 0, MaxArchiveSize, "Invalid archive size" })
+			.field(&ContentArchive::deletedPaths, "deletedPaths", serde::attribute::default_ { std::vector<std::string> {} },
+				DATA::JsonContainer { nlohmann::json::value_t::array });
 	}
 };
-struct ContentManifest {
-	int schemaVersion = 1;
-	int minEngineVersion = 1;
+struct ContentManifestV1 {
+	int schemaVersion = ContentSchemaV1;
+	int minEngineVersion = EngineVersion;
 	std::string platform = {};
 	std::string releaseId = {};
 	std::vector<ContentArchive> archives = {};
 	std::map<std::string, std::string> files = {};
-	template <class Context> constexpr static void serde(Context& context, ContentManifest& value) {
+	template <class Context> constexpr static void serde(Context& context, ContentManifestV1& value) {
 		serde::serde_struct(context, value)
-			.field(&ContentManifest::schemaVersion, "schemaVersion")
-			.field(&ContentManifest::minEngineVersion, "minEngineVersion")
-			.field(&ContentManifest::platform, "platform")
-			.field(&ContentManifest::releaseId, "releaseId")
-			.field(&ContentManifest::archives, "archives")
-			.field(&ContentManifest::files, "files");
+			.field(&ContentManifestV1::schemaVersion, "schemaVersion",
+				DATA::JsonIntegerRange { ContentSchemaV1, ContentSchemaV1, "Unsupported content schema version" })
+			.field(&ContentManifestV1::minEngineVersion, "minEngineVersion",
+				DATA::JsonIntegerRange { 0, EngineVersion, "Unsupported content engine version" })
+			.field(&ContentManifestV1::platform, "platform")
+			.field(&ContentManifestV1::releaseId, "releaseId")
+			.field(&ContentManifestV1::archives, "archives", DATA::JsonContainer { nlohmann::json::value_t::array, 1, MaxArchives })
+			.field(&ContentManifestV1::files, "files", DATA::JsonContainer { nlohmann::json::value_t::object });
 	}
 };
-
-namespace {
-	nlohmann::json WriteManifest(const ContentManifest& manifest) {
-		auto result = serde::serialize<nlohmann::json>(manifest);
-		// serdepp's collection adaptor leaves empty collections as null.
-		if (manifest.files.empty()) {
-			result["files"] = nlohmann::json::object();
-		}
-		for (auto& archive : result.at("archives")) {
-			if (archive.at("deletedPaths").is_null()) {
-				archive["deletedPaths"] = nlohmann::json::array();
-			}
-		}
-		return result;
-	}
-}
 
 ContentService::ContentService(FileSystem& files, std::filesystem::path root, std::string platform)
 	: mFiles(files)
 	, mRoot(std::move(root))
 	, mPlatform(std::move(platform)) { }
 
-ContentManifest ContentService::validate(nlohmann::json source) const {
-	if (!source.at("schemaVersion").is_number_integer() || source.at("schemaVersion") != 1 || !source.at("minEngineVersion").is_number_integer()
-		|| source.at("minEngineVersion") < 0 || source.at("minEngineVersion") > 1) {
-		throw std::runtime_error("Unsupported content schema/engine version");
-	}
-	if (!source.at("archives").is_array() || source.at("archives").empty() || source.at("archives").size() > 128 || !source.at("files").is_object()) {
-		throw std::runtime_error("Invalid release catalog");
-	}
-	for (const auto& archive : source.at("archives")) {
-		const auto& size = archive.at("size");
-		if (!size.is_number_integer() || size < 0 || size > (uint64_t { 1 } << 34)) {
-			throw std::runtime_error("Invalid archive size");
-		}
-		if (archive.contains("deletedPaths") && !archive.at("deletedPaths").is_array()) {
-			throw std::runtime_error("Invalid deleted paths");
-		}
-	}
-	auto manifest = serde::deserialize<ContentManifest>(source);
+ContentManifestV1 ContentService::validate(nlohmann::json source) const {
+	auto manifest = serde::deserialize<ContentManifestV1>(source);
 	if (manifest.platform != "any" && manifest.platform != mPlatform) {
 		throw std::runtime_error("Content platform mismatch");
 	}
@@ -104,7 +83,7 @@ ContentManifest ContentService::validate(nlohmann::json source) const {
 	return manifest;
 }
 
-void ContentService::verify(const ContentManifest& manifest) const {
+void ContentService::verify(const ContentManifestV1& manifest) const {
 	FileSystem candidate;
 	for (const auto& archive : manifest.archives) {
 		const auto path = STORAGE::Child(mRoot, archive.path);
@@ -177,7 +156,7 @@ void ContentService::stageLocal(const std::filesystem::path& path) {
 		}
 	}
 	verify(manifest);
-	STORAGE::WriteTextAtomic(mRoot / "releases" / (manifest.releaseId + ".json"), WriteManifest(manifest).dump(2));
+	STORAGE::WriteTextAtomic(mRoot / "releases" / (manifest.releaseId + ".json"), serde::serialize<nlohmann::json>(manifest).dump(2));
 }
 
 std::vector<NETWORK::DownloadHandle> ContentService::download(
@@ -203,6 +182,7 @@ std::vector<NETWORK::DownloadHandle> ContentService::download(
 std::shared_future<void> ContentService::activate(const nlohmann::json& source) {
 	const auto manifest = validate(source);
 	verify(manifest);
+	const auto nextSnapshot = serde::serialize<nlohmann::json>(manifest);
 	std::vector<FileSystem::MountId> next;
 	try {
 		for (const auto& archive : manifest.archives) {
@@ -214,13 +194,13 @@ std::shared_future<void> ContentService::activate(const nlohmann::json& source) 
 				const auto bytes = STORAGE::Read(active);
 				const auto old = nlohmann::json::parse(bytes);
 				verify(validate(old));
-				if (old != WriteManifest(manifest)) {
+				if (old != nextSnapshot) {
 					STORAGE::WriteAtomic(mRoot / "previous.json", bytes);
 				}
 			} catch (const std::exception&) { /* Preserve the known-good previous snapshot during recovery. */
 			}
 		}
-		STORAGE::WriteTextAtomic(active, WriteManifest(manifest).dump(2));
+		STORAGE::WriteTextAtomic(active, nextSnapshot.dump(2));
 	} catch (...) {
 		for (auto id : next) {
 			mFiles.unmount(id);

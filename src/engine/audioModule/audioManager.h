@@ -82,6 +82,7 @@ namespace AUDIO {
 		std::mutex mClipMutex;
 		std::mutex mVoiceMutex;
 		ClipCache& clipCache(SoundType type);
+		static ClipCache::iterator reserveClipCacheEntry(ClipCache& cache, const std::string& key);
 		std::shared_ptr<SoLoud::AudioSource> getClip(const SoundConfig& config);
 		void startVoice(SoundResource& source, bool paused, bool reserveForReload);
 		AudioManagerAL();

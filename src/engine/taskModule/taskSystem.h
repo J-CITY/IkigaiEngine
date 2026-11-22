@@ -61,31 +61,12 @@ namespace TASK {
 
 		template <typename Func, typename... Args>
 		auto submit(const char* name, int32_t threadID, const std::shared_ptr<ITask>& upstreamTask, Func&& func, Args&&... args) {
-			auto boundTask = std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
-			using ResultType = std::invoke_result_t<decltype(boundTask)>;
-			using PackagedTask = std::packaged_task<ResultType()>;
-
-			PackagedTask packagedTask { std::move(boundTask) };
-			auto future = packagedTask.get_future();
-			TaskHandle<ResultType> handle;
-			auto task = std::make_unique<Task<PackagedTask>>(std::move(packagedTask), name, upstreamTask);
-			handle.mFuture = std::make_shared<Future<ResultType>>(std::move(future));
-			handle.mTask = addTask(std::move(task), threadID);
-			return handle;
+			return submitToPool(name, threadID, upstreamTask, false, std::forward<Func>(func), std::forward<Args>(args)...);
 		}
 
 		template <typename Func, typename... Args>
 		auto submitImmediately(const char* name, int32_t threadID, const std::shared_ptr<ITask>& upstreamTask, Func&& func, Args&&... args) {
-			auto boundTask = std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
-			using ResultType = std::invoke_result_t<decltype(boundTask)>;
-			using PackagedTask = std::packaged_task<ResultType()>;
-
-			PackagedTask _task { std::move(boundTask) };
-			Future<ResultType> _future { _task.get_future() };
-			TaskHandle<ResultType> _handle;
-			_handle.mTask = addTaskFront(std::make_unique<Task<PackagedTask>>(std::move(_task), name, upstreamTask), threadID);
-			_handle.mFuture = std::make_shared<Future<ResultType>>(std::move(_future));
-			return _handle;
+			return submitToPool(name, threadID, upstreamTask, true, std::forward<Func>(func), std::forward<Args>(args)...);
 		}
 
 		template <typename Func, typename... Args>
@@ -117,8 +98,21 @@ namespace TASK {
 		BackgroundTicket dispatchImpl(ThreadPoolExecutor& executor, const char* name, std::function<void(std::stop_token)> work,
 			BackgroundCompletion completion, bool cooperative, std::size_t capacity = 0);
 
-		std::shared_ptr<ITask> addTask(std::unique_ptr<ITask>&& task, int threadID);
-		std::shared_ptr<ITask> addTaskFront(std::unique_ptr<ITask>&& task, int threadID);
+		template <typename Func, typename... Args>
+		auto submitToPool(const char* name, int threadID, const std::shared_ptr<ITask>& upstreamTask, bool front, Func&& func, Args&&... args) {
+			auto boundTask = std::bind(std::forward<Func>(func), std::forward<Args>(args)...);
+			using Result = std::invoke_result_t<decltype(boundTask)>;
+			using PackagedTask = std::packaged_task<Result()>;
+			PackagedTask packagedTask { std::move(boundTask) };
+			auto future = packagedTask.get_future();
+			auto task = std::make_shared<Task<PackagedTask>>(std::move(packagedTask), name, upstreamTask);
+			TaskHandle<Result> handle;
+			handle.mFuture = std::make_shared<Future<Result>>(std::move(future));
+			handle.mTask = schedule(std::move(task), threadID, front);
+			return handle;
+		}
+
+		std::shared_ptr<ITask> schedule(std::shared_ptr<ITask> task, int threadID, bool front);
 		std::shared_ptr<ITask> addTaskInNewThread(std::unique_ptr<ITask>&& task);
 	};
 
@@ -169,7 +163,7 @@ namespace TASK {
 				const size_t chunkEnd = chunkBegin + std::min(chunkSize, end - chunkBegin);
 				auto& chunk = chunks.emplace_back(chunkBegin, chunkEnd, nullptr, nullptr);
 				auto work = [runChunk, &chunk]() { runChunk(chunk); };
-				chunk.Task = addTask(std::make_unique<Task<decltype(work)>>(std::move(work), "parallelFor", nullptr), -1);
+				chunk.Task = schedule(std::make_shared<Task<decltype(work)>>(std::move(work), "parallelFor", nullptr), -1, false);
 				chunkBegin = chunkEnd;
 			}
 		} catch (...) {

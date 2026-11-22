@@ -52,8 +52,19 @@ namespace {
 		expect(count == 1 && sum == 8, "an edit targeting a destroyed entity is skipped");
 	}
 
-	void checkScheduling(ArchetypeLayout layout, SystemBatchExecutor executor, bool withWorkers) {
-		World world { layout, std::move(executor) };
+	void checkScheduling(ArchetypeLayout layout, const SystemBatchExecutor& executor) {
+		std::size_t dispatchedBatches = 0;
+		SystemBatchExecutor observedExecutor;
+		if (executor) {
+			observedExecutor = [&](std::span<const char* const> names, const std::function<void(std::size_t)>& runJob) {
+				const bool dispatched = executor(names, runJob);
+				if (dispatched) {
+					++dispatchedBatches;
+				}
+				return dispatched;
+			};
+		}
+		World world { layout, std::move(observedExecutor) };
 		auto& components = *world.getComponentManager();
 		const auto entity = world.createEntity();
 		components.addComponents(entity, Position { 1 }, Velocity { 2 });
@@ -79,8 +90,12 @@ namespace {
 		expect(observedPosition == 7, "reader scheduled after the writer sees its value");
 		const auto* velocity = components.tryGetComponent<Velocity>(entity);
 		expect(velocity && velocity->value == 9, "independent writer updates its component");
-		expect(positionThread != std::thread::id {} && (positionThread != caller) == withWorkers, "position writer uses the expected executor");
-		expect(velocityThread != std::thread::id {} && (velocityThread != caller) == withWorkers, "velocity writer uses the expected executor");
+		if (executor) {
+			expect(dispatchedBatches == 1, "task pool accepts the batch of independent writers");
+		}
+		else {
+			expect(positionThread == caller && velocityThread == caller, "writers run on the caller without a batch executor");
+		}
 	}
 
 	void checkAccessValidation(ArchetypeLayout layout) {
@@ -102,7 +117,7 @@ void runSystemTests() {
 	constexpr std::array layouts { ECS::ArchetypeLayout::PerColumn, ECS::ArchetypeLayout::SharedRows };
 	for (const auto layout : layouts) {
 		checkCommands(layout);
-		checkScheduling(layout, {}, false);
+		checkScheduling(layout, {});
 		checkAccessValidation(layout);
 	}
 
@@ -112,7 +127,7 @@ void runSystemTests() {
 	if (started) {
 		const auto executor = makeTaskSystemBatchExecutor(tasks);
 		for (const auto layout : layouts) {
-			checkScheduling(layout, executor, true);
+			checkScheduling(layout, executor);
 		}
 	}
 }

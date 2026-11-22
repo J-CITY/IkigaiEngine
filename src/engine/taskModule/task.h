@@ -14,6 +14,7 @@
 
 #include "jobBatch.h"
 #include "safeQueue.h"
+#include "utilsModule/taskBorrowScope.h"
 
 namespace IKIGAI {
 namespace TASK {
@@ -40,9 +41,11 @@ namespace TASK {
 		size_t getCount();
 
 	private:
-		std::mutex mMutex;
-		std::condition_variable mCondition;
-		size_t mCount = 0;
+		std::atomic_size_t mCount = 0;
+#if !defined(__cpp_lib_atomic_wait)
+		std::mutex mWaitMutex;
+		std::condition_variable mIdle;
+#endif
 	};
 
 	enum class ThreadState { FREE, BUSY };
@@ -70,7 +73,7 @@ namespace TASK {
 		void requestStop();
 		void cancelPendingTasks();
 		void join();
-		void signalWork();
+		void signalWork(bool wakeAll = true);
 		bool hasPendingWork();
 		std::optional<std::shared_ptr<ITask>> tryPopLocal();
 		std::optional<std::shared_ptr<ITask>> trySteal();
@@ -122,6 +125,8 @@ namespace TASK {
 		friend class Thread;
 		friend struct PoolState;
 		virtual void cancel();
+		void captureSubmissionScope() noexcept;
+		UTILS::TaskBorrowState mBorrowState = UTILS::TaskBorrowScope::forChild();
 
 		std::mutex mMutex;
 		std::condition_variable mCondition;
@@ -205,8 +210,11 @@ namespace TASK {
 	class ThreadPoolExecutor {
 		std::shared_ptr<InflightCounter> mInflightCounter = std::make_shared<InflightCounter>();
 		std::vector<std::unique_ptr<Thread>> mThreads;
+#if defined(__cpp_lib_atomic_shared_ptr)
+		std::atomic<std::shared_ptr<PoolState>> mPoolState {};
+#else
 		std::shared_ptr<PoolState> mPoolState;
-		mutable std::mutex mPoolStateMutex;
+#endif
 		std::mutex mLifecycleMutex;
 		std::condition_variable mLifecycleCondition;
 		std::thread::id mStoppingThread = {};
@@ -245,6 +253,7 @@ namespace TASK {
 
 	private:
 		friend class TaskSystem;
+		std::shared_ptr<ITask> schedule(std::shared_ptr<ITask> task, int threadID, bool front);
 		[[nodiscard]] std::shared_ptr<PoolState> loadPoolState() const;
 		void storePoolState(std::shared_ptr<PoolState> pool);
 		void closeAdmission();

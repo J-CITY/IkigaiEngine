@@ -1,38 +1,38 @@
 #include "playerProfile.h"
 #include "fileSystem/storage.h"
 #include "utilsModule/serialization/jsonValueAdaptor.h"
+#include "utilsModule/serialization/strictJsonFields.h"
 #include <algorithm>
 #include <serdepp/serde.hpp>
 
 namespace IKIGAI::RESOURCES {
 namespace {
+	constexpr int ProfileSchemaV1 = 1;
+
 	class UnsupportedProfileSchema : public std::runtime_error {
 	public:
-		UnsupportedProfileSchema()
-			: std::runtime_error("Unsupported profile schema") { }
+		using std::runtime_error::runtime_error;
 	};
 	std::span<const uint8_t> Bytes(const std::string& text) {
 		return { reinterpret_cast<const uint8_t*>(text.data()), text.size() };
 	}
-	struct ProfileDescriptor {
-		int schemaVersion = 1;
+	struct ProfileDescriptorV1 {
+		int schemaVersion = ProfileSchemaV1;
 		nlohmann::json data = nlohmann::json::object();
-		template <class Context> constexpr static void serde(Context& context, ProfileDescriptor& value) {
-			serde::serde_struct(context, value).field(&ProfileDescriptor::schemaVersion, "schemaVersion").field(&ProfileDescriptor::data, "data");
+		template <class Context> constexpr static void serde(Context& context, ProfileDescriptorV1& value) {
+			serde::serde_struct(context, value)
+				.field(&ProfileDescriptorV1::schemaVersion, "schemaVersion",
+					DATA::JsonIntegerRange<UnsupportedProfileSchema> { ProfileSchemaV1, ProfileSchemaV1, "Unsupported profile schema" })
+				.field(&ProfileDescriptorV1::data, "data");
 		}
 	};
-	ProfileDescriptor ParseProfile(const std::vector<uint8_t>& bytes) {
+	ProfileDescriptorV1 ParseProfile(const std::vector<uint8_t>& bytes) {
 		auto value = nlohmann::json::parse(bytes);
-		const auto& version = value.at("schemaVersion");
-		if (!version.is_number_integer() || version != 1) {
-			throw UnsupportedProfileSchema();
-		}
-		// Version 1 is the first persisted schema. Never reinterpret a future
-		// version as corrupt data and silently recover an older backup.
-		return serde::deserialize<ProfileDescriptor>(value);
+		// Check the version before reading data so a future schema cannot trigger backup recovery.
+		return serde::deserialize<ProfileDescriptorV1>(value);
 	}
 	std::string WriteProfile(const nlohmann::json& data) {
-		return serde::serialize<nlohmann::json>(ProfileDescriptor { 1, data }).dump(2);
+		return serde::serialize<nlohmann::json>(ProfileDescriptorV1 { .data = data }).dump(2);
 	}
 
 }

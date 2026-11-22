@@ -85,24 +85,7 @@ inline bool IsPrefabRef(const Json& object) {
 
 std::string ComponentTypeKey(const Json& component);
 
-inline IdMap ReadMap(const Json& entry) {
-	IdMap ids;
-	if (!entry.contains("IdMap")) {
-		return ids;
-	}
-	if (!entry["IdMap"].is_object()) {
-		throw std::runtime_error("IdMap must be an object");
-	}
-	for (auto it = entry["IdMap"].begin(); it != entry["IdMap"].end(); ++it) {
-		std::size_t used = 0;
-		const int local = std::stoi(it.key(), &used);
-		if (used != it.key().size() || local <= 0 || std::to_string(local) != it.key()) {
-			throw std::runtime_error("Invalid local ID in IdMap");
-		}
-		ids.emplace(local, Id(it.value()));
-	}
-	return ids;
-}
+IdMap ReadMap(const Json& entry);
 
 // Only declared entity-reference fields are visited. Other integer properties
 // (particle counts, enum values, resource indices, etc.) are never remapped.
@@ -240,89 +223,9 @@ inline Json WriteMap(const IdMap& ids) {
 	return result;
 }
 
-inline void MergeLegacyRootOverrides(Json& patch, const Json& legacy) {
-	if (!legacy.is_object() || legacy.empty()) {
-		return;
-	}
-	for (auto it = legacy.begin(); it != legacy.end(); ++it) {
-		if (it.key() == "Transform") {
-			if (!patch.contains("Transform")) {
-				patch["Transform"] = Json::object();
-			}
-			for (auto p = it.value().begin(); p != it.value().end(); ++p) {
-				patch["Transform"][p.key()] = p.value();
-			}
-		}
-		else if (it.key() == "Name" || it.key() == "Tag" || it.key() == "IsActive" || it.key() == "IsVisible") {
-			patch[it.key()] = it.value();
-		}
-		else {
-			throw std::runtime_error("Unsupported root override: " + it.key());
-		}
-	}
-}
-
-inline Json OverridesForLocal(const Json& entry, int localId, int localRoot) {
-	Json patch = Json::object();
-	if (entry.contains("Overrides") && entry["Overrides"].is_object()) {
-		const auto key = std::to_string(localId);
-		if (entry["Overrides"].contains(key)) {
-			patch = entry["Overrides"][key];
-		}
-	}
-	if (localId == localRoot && entry.contains("RootOverrides")) {
-		MergeLegacyRootOverrides(patch, entry["RootOverrides"]);
-	}
-	return patch;
-}
-
-inline void ApplyObjectOverrides(Json& object, const Json& overrides) {
-	if (!overrides.is_object() || overrides.empty()) {
-		return;
-	}
-	for (auto it = overrides.begin(); it != overrides.end(); ++it) {
-		if (it.key() == "Transform") {
-			if (!it.value().is_object()) {
-				throw std::runtime_error("Transform override must be an object");
-			}
-			for (auto p = it.value().begin(); p != it.value().end(); ++p) {
-				if (p.key() != "LocalPosition" && p.key() != "LocalRotation" && p.key() != "LocalScale") {
-					throw std::runtime_error("Unsupported Transform override: " + p.key());
-				}
-				Transform(object)[p.key()] = p.value();
-			}
-		}
-		else if (it.key() == "Components") {
-			if (!it.value().is_object()) {
-				throw std::runtime_error("Components override must be an object");
-			}
-			for (auto c = it.value().begin(); c != it.value().end(); ++c) {
-				Json* target = nullptr;
-				for (auto& component : object.at("Components")) {
-					if (Component(component, c.key().c_str())) {
-						target = &component;
-						break;
-					}
-				}
-				if (!target) {
-					throw std::runtime_error("Override targets missing component: " + c.key());
-				}
-				if (!c.value().is_object()) {
-					throw std::runtime_error("Component override must be an object");
-				}
-				for (auto p = c.value().begin(); p != c.value().end(); ++p) {
-					(*target)[p.key()] = p.value();
-				}
-			}
-		}
-		else if (it.key() == "Name" || it.key() == "Tag" || it.key() == "IsActive" || it.key() == "IsVisible") {
-			object[it.key()] = it.value();
-		}
-		else {
-			throw std::runtime_error("Unsupported object override: " + it.key());
-		}
-	}
-}
+void MergeLegacyRootOverrides(Json& patch, const Json& legacy);
+Json OverridesForLocal(const Json& entry, int localId, int localRoot);
+void ApplyObjectOverrides(Json& object, const Json& overrides);
 
 inline Json ComponentTypes(const Json& object) {
 	Json types = Json::array();
@@ -399,6 +302,8 @@ struct Expanded {
 };
 
 // Reserve persisted IDs for the whole document before allocating new members.
+// Overrides use canonical, positive prefab-local IDs. A saved IdMap entry identifies
+// a removed member whose edits can be discarded when the instance is compacted.
 class Resolver {
 public:
 	explicit Resolver(const Json& entries);

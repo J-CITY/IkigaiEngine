@@ -1,9 +1,39 @@
 #include "httpClient.h"
 #include "networkRuntime.h"
 namespace IKIGAI::NETWORK {
+void TransferControl::cancel() {
+	decltype(mCancellationCallbacks) callbacks;
+	{
+		std::lock_guard lock(mCancellationMutex);
+		if (mCancelled.exchange(true)) {
+			return;
+		}
+		callbacks.swap(mCancellationCallbacks);
+	}
+	for (const auto& weak : callbacks) {
+		if (const auto callback = weak.lock()) {
+			(*callback)();
+		}
+	}
+}
+
+bool TransferControl::isCancelled() const {
+	return mCancelled.load();
+}
+
+void TransferControl::subscribeToCancellation(const std::shared_ptr<const std::function<void()>>& callback) {
+	std::lock_guard lock(mCancellationMutex);
+	if (mCancelled) {
+		return;
+	}
+	std::erase_if(mCancellationCallbacks, [](const auto& weak) { return weak.expired(); });
+	mCancellationCallbacks.push_back(callback);
+}
+
 void TransferControl::check() const {
-	if (cancelled)
+	if (isCancelled()) {
 		throw NetworkError(NetworkErrorCode::cancelled, "Transfer cancelled");
+	}
 }
 void IHttpClient::get(const HttpRequest& request, TransferControl& control, const std::function<void(const HttpResponse&)>& headers,
 	const std::function<void(std::span<const uint8_t>)>& body) {

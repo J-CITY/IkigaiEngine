@@ -15,7 +15,7 @@ int ikigai_web_ws_create();
 void ikigai_web_ws_destroy(int);
 void ikigai_web_ws_operation(int, int, void*, const uint8_t*, size_t, int, int);
 EMSCRIPTEN_KEEPALIVE int ikigai_ws_cancelled(void* pointer) {
-	return static_cast<WebWsWork*>(pointer)->control->cancelled;
+	return static_cast<WebWsWork*>(pointer)->control->isCancelled();
 }
 EMSCRIPTEN_KEEPALIVE void ikigai_ws_done(void* pointer, int code, const char* error, const uint8_t* bytes, size_t size, int text) {
 	std::unique_ptr<WebWsWork> work(static_cast<WebWsWork*>(pointer));
@@ -31,7 +31,7 @@ namespace {
 			auto control = std::make_shared<TransferControl>();
 			mRuntime->trackOperation(control);
 			Operation<T> result { promise->get_future().share(), control };
-			if (control->cancelled) {
+			if (control->isCancelled()) {
 				promise->set_exception(std::make_exception_ptr(NetworkError(NetworkErrorCode::cancelled, "Network runtime stopped")));
 				return result;
 			}
@@ -39,11 +39,12 @@ namespace {
 			work->control = control;
 			work->finish = [promise, control, convert](int code, const char* error, const uint8_t* data, size_t count, bool text) {
 				try {
-					if (code || control->cancelled)
-						throw NetworkError(control->cancelled ? NetworkErrorCode::cancelled
-								: code == 2					  ? NetworkErrorCode::timeout
-															  : NetworkErrorCode::io,
+					if (code || control->isCancelled()) {
+						throw NetworkError(control->isCancelled() ? NetworkErrorCode::cancelled
+								: code == 2						  ? NetworkErrorCode::timeout
+																  : NetworkErrorCode::io,
 							error ? error : "WebSocket operation failed");
+					}
 					if constexpr (std::is_void_v<T>)
 						promise->set_value();
 					else

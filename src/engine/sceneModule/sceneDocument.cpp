@@ -1,5 +1,6 @@
 #include "sceneDocument.h"
 #include "utilsModule/serialization/jsonValueAdaptor.h"
+#include <charconv>
 #include <serdepp/serde.hpp>
 #include <string_view>
 
@@ -68,6 +69,28 @@ namespace {
 		}
 	};
 
+	struct OverrideMetadata {
+		std::map<std::string, Json> Overrides = {};
+		Json RootOverrides = Json::object();
+
+		template <class Context> constexpr static void serde(Context& context, OverrideMetadata& value) {
+			using serde::attribute::default_;
+			serde::serde_struct(context, value)
+				.field(&OverrideMetadata::Overrides, "Overrides", default_ { std::map<std::string, Json> {} })
+				.field(&OverrideMetadata::RootOverrides, "RootOverrides", default_ { Json::object() });
+		}
+	};
+
+	int LocalId(const std::string& key, const char* field) {
+		int local = 0;
+		const auto end = key.data() + key.size();
+		const auto parsed = std::from_chars(key.data(), end, local);
+		if (parsed.ec != std::errc {} || parsed.ptr != end || key.front() == '0' || local <= 0 || local >= std::numeric_limits<int>::max()) {
+			throw std::runtime_error("Invalid local ID in " + std::string(field) + ": " + key);
+		}
+		return local;
+	}
+
 	ReferenceDescriptor ReadReference(const Json& entry) {
 		if (entry.contains("Components")) {
 			throw std::runtime_error("Prefab reference cannot contain Components");
@@ -93,11 +116,67 @@ namespace {
 		return *nested;
 	}
 
-	void ValidatePatchFields(const Json& entry) {
-		for (const char* key : { "Overrides", "RootOverrides" }) {
-			if (entry.contains(key) && !entry.at(key).is_object()) {
-				throw std::runtime_error(std::string(key) + " must be an object");
+	void ValidateOverride(const Json& patch, bool legacyRoot = false) {
+		if (!patch.is_object()) {
+			throw std::runtime_error("Object override must be an object");
+		}
+		for (const auto& [key, value] : patch.items()) {
+			if (key == "Name" || key == "Tag") {
+				if (!value.is_string()) {
+					throw std::runtime_error(key + " override must be a string");
+				}
 			}
+			else if (key == "IsActive" || key == "IsVisible") {
+				if (!value.is_boolean()) {
+					throw std::runtime_error(key + " override must be a boolean");
+				}
+			}
+			else if (key == "Transform") {
+				if (!value.is_object()) {
+					throw std::runtime_error("Transform override must be an object");
+				}
+				for (const auto& [field, vector] : value.items()) {
+					if (field != "LocalPosition" && field != "LocalRotation" && field != "LocalScale") {
+						throw std::runtime_error("Unsupported Transform override: " + field);
+					}
+					for (const char* axis : { "X", "Y", "Z" }) {
+						if (!vector.contains(axis) || !vector.at(axis).is_number()) {
+							throw std::runtime_error("Expected numeric " + field + "." + axis + " in Transform override");
+						}
+					}
+				}
+			}
+			else if (key == "Components" && !legacyRoot) {
+				if (!value.is_object()) {
+					throw std::runtime_error("Components override must be an object");
+				}
+				for (const auto& [type, fields] : value.items()) {
+					if (!fields.is_object() || fields.contains(type)) {
+						throw std::runtime_error("Expected override fields for component: " + type);
+					}
+				}
+			}
+			else {
+				throw std::runtime_error("Unsupported object override: " + key);
+			}
+		}
+	}
+
+	void ValidatePatchFields(const Json& entry) {
+		if (const auto overrides = entry.find("Overrides"); overrides != entry.end()) {
+			if (!overrides->is_object()) {
+				throw std::runtime_error("Overrides must be an object");
+			}
+			for (const auto& [key, patch] : overrides->items()) {
+				LocalId(key, "Overrides");
+				if (!patch.is_object()) {
+					throw std::runtime_error("Overrides[" + key + "] must be an object");
+				}
+				ValidateOverride(patch);
+			}
+		}
+		if (const auto legacy = entry.find("RootOverrides"); legacy != entry.end()) {
+			ValidateOverride(*legacy, true);
 		}
 	}
 
@@ -120,7 +199,8 @@ namespace {
 			owned.insert(id);
 		}
 		std::set<int> nestedIds;
-		for (const auto& child : NestedInstances(entry)) {
+		for (const auto& [key, child] : NestedInstances(entry).items()) {
+			LocalId(key, "NestedInstances");
 			if (!IsPrefabRef(child)) {
 				throw std::runtime_error("Invalid nested prefab instance");
 			}
@@ -330,6 +410,37 @@ namespace {
 		}
 	}
 
+	template <class Visit>
+	void VisitLayerOverrides(const std::vector<Json>& layers, int localRoot, const IdMap& live, const std::map<int, Json*>& objects, Visit visit) {
+		for (const auto& layer : layers) {
+			Json source = Json::object();
+			for (const char* field : { "Overrides", "RootOverrides" }) {
+				if (layer.contains(field)) {
+					source[field] = layer.at(field);
+				}
+			}
+			if (source.empty()) {
+				continue;
+			}
+			auto metadata = serde::deserialize<OverrideMetadata>(source);
+			if (!metadata.RootOverrides.empty()) {
+				auto root = metadata.Overrides.try_emplace(std::to_string(localRoot), Json::object()).first;
+				MergeLegacyRootOverrides(root->second, metadata.RootOverrides);
+			}
+			for (auto& [key, patch] : metadata.Overrides) {
+				const int local = LocalId(key, "Overrides");
+				const auto mapped = live.find(local);
+				if (mapped != live.end()) {
+					visit(*objects.at(mapped->second), std::move(patch));
+				}
+				// A saved mapping identifies a member removed by a newer prefab. Compact drops its orphaned edits.
+				else if (!layer.contains("IdMap") || !layer.at("IdMap").contains(key)) {
+					throw std::runtime_error("Unknown local ID in Overrides: " + key + " for " + layer.at("Prefab").get<std::string>());
+				}
+			}
+		}
+	}
+
 	using ObjectIndex = std::map<int, const Json*>;
 
 	ObjectIndex IndexObjects(const Json& objects) {
@@ -366,6 +477,78 @@ namespace {
 		}
 		entry["Overrides"] = std::move(overrides);
 		entry.erase("RootOverrides");
+	}
+}
+
+IdMap ReadMap(const Json& entry) {
+	IdMap ids;
+	if (const auto map = entry.find("IdMap"); map != entry.end()) {
+		if (!map->is_object()) {
+			throw std::runtime_error("IdMap must be an object");
+		}
+		for (const auto& [key, value] : map->items()) {
+			ids.emplace(LocalId(key, "IdMap"), Id(value));
+		}
+	}
+	return ids;
+}
+
+void MergeLegacyRootOverrides(Json& patch, const Json& legacy) {
+	ValidateOverride(legacy, true);
+	for (auto it = legacy.begin(); it != legacy.end(); ++it) {
+		if (it.key() == "Transform") {
+			if (!patch.contains("Transform")) {
+				patch["Transform"] = Json::object();
+			}
+			for (auto p = it.value().begin(); p != it.value().end(); ++p) {
+				patch["Transform"][p.key()] = p.value();
+			}
+		}
+		else {
+			patch[it.key()] = it.value();
+		}
+	}
+}
+
+Json OverridesForLocal(const Json& entry, int localId, int localRoot) {
+	ValidatePatchFields(entry);
+	Json patch = Json::object();
+	if (entry.contains("Overrides") && entry["Overrides"].is_object()) {
+		const auto key = std::to_string(localId);
+		if (entry["Overrides"].contains(key)) {
+			patch = entry["Overrides"][key];
+		}
+	}
+	if (localId == localRoot && entry.contains("RootOverrides")) {
+		MergeLegacyRootOverrides(patch, entry["RootOverrides"]);
+	}
+	return patch;
+}
+
+void ApplyObjectOverrides(Json& object, const Json& overrides) {
+	ValidateOverride(overrides);
+	for (auto it = overrides.begin(); it != overrides.end(); ++it) {
+		if (it.key() == "Transform") {
+			Transform(object).update(it.value());
+		}
+		else if (it.key() == "Components") {
+			for (auto c = it.value().begin(); c != it.value().end(); ++c) {
+				Json* target = nullptr;
+				for (auto& component : object.at("Components")) {
+					if (ComponentTypeKey(component) == c.key()) {
+						target = &component;
+						break;
+					}
+				}
+				if (!target) {
+					throw std::runtime_error("Override targets missing component: " + c.key());
+				}
+				target->update(c.value());
+			}
+		}
+		else {
+			object[it.key()] = it.value();
+		}
 	}
 }
 
@@ -582,26 +765,16 @@ Expanded Resolver::expandPrefab(Json entry, const ReadFn& read, const std::vecto
 			result.objects.push_back(std::move(value));
 		}
 	}
-	std::map<int, int> locals;
-	for (const auto& [local, runtime] : live) {
-		locals.emplace(runtime, local);
-	}
+	std::map<int, Json*> objects;
 	for (auto& object : result.objects) {
-		const int runtime = Id(object.at("Id"));
-		const auto local = locals.find(runtime);
-		if (local == locals.end()) {
-			continue;
-		}
-		for (const auto& layer : defaults) {
-			ApplyObjectOverrides(object, OverridesForLocal(layer, local->second, localRoot));
-		}
-		for (const auto& layer : edits) {
-			auto patch = OverridesForLocal(layer, local->second, localRoot);
-			if (!patch.empty()) {
-				deferredOverrides[runtime].push_back(std::move(patch));
-			}
-		}
+		objects.emplace(Id(object.at("Id")), &object);
 	}
+	// A nested asset's saved IdMap can still name a descendant removed from its source prefab.
+	// Only expanded objects belong to the normalized instance and its save baseline.
+	std::erase_if(live, [&](const auto& mapping) { return !objects.contains(mapping.second); });
+	VisitLayerOverrides(defaults, localRoot, live, objects, [](Json& object, Json patch) { ApplyObjectOverrides(object, patch); });
+	VisitLayerOverrides(
+		edits, localRoot, live, objects, [&](Json& object, Json patch) { deferredOverrides[Id(object.at("Id"))].push_back(std::move(patch)); });
 	Json normalized { { "Prefab", path }, { "Id", reference.Id }, { "ParentId", reference.ParentId }, { "IdMap", WriteMap(live) } };
 	if (!nested.empty()) {
 		normalized["NestedInstances"] = std::move(nested);

@@ -11,16 +11,45 @@ public:
 	using UpdateFunc = std::function<void(Entity, QueryReference<Components>..., std::chrono::duration<double>)>;
 
 private:
-	InitFunc mOnAwake;
-	InitFunc mOnStart;
-	UpdateFunc mOnUpdate;
-	UpdateFunc mOnFixedUpdate;
-	UpdateFunc mOnLateUpdate;
-	InitFunc mOnDestroy;
+	template <typename Callback> using CallbackSlot = std::shared_ptr<const Callback>;
+
+	SystemManager& mManager;
+	CallbackSlot<InitFunc> mOnAwake {};
+	CallbackSlot<InitFunc> mOnStart {};
+	CallbackSlot<UpdateFunc> mOnUpdate {};
+	CallbackSlot<UpdateFunc> mOnFixedUpdate {};
+	CallbackSlot<UpdateFunc> mOnLateUpdate {};
+	CallbackSlot<InitFunc> mOnDestroy {};
+
+	template <typename Callback> void setCallback(SystemPhase phase, CallbackSlot<Callback>& callback, Callback&& replacement) {
+		std::shared_ptr<const Callback> previous;
+		const auto lock = mManager.lockScheduleForChange();
+		const bool enabled = static_cast<bool>(replacement);
+		previous = std::exchange(callback, enabled ? std::make_shared<const Callback>(std::move(replacement)) : nullptr);
+		if (static_cast<bool>(previous) != enabled) {
+			setPhaseEnabled(phase, enabled);
+			mManager.mIsDirty = true;
+		}
+	}
+
+	template <typename Callback> CallbackSlot<Callback> snapshotCallback(const CallbackSlot<Callback>& slot) const {
+		std::lock_guard lock(mManager.mScheduleMutex);
+		return slot;
+	}
+
+	void runUpdateCallback(World& world, const CallbackSlot<UpdateFunc>& slot, std::chrono::duration<double> dt) {
+		// A callback can replace itself. All entities in this invocation use the same callable.
+		if (const auto callback = snapshotCallback(slot)) {
+			world.getComponentManager()->forEach<Components...>(
+				[&](Entity entity, QueryReference<Components>... components) { (*callback)(entity, components..., dt); });
+		}
+	}
 
 public:
-	MultiPhaseSystem(const std::string& name, SystemManager& mgr) {
+	MultiPhaseSystem(const std::string& name, SystemManager& mgr)
+		: mManager(mgr) {
 		mName = name;
+		setPhases({});
 		auto& cm = *mgr.getWorld().getComponentManager();
 		// Populate dependency tracking
 		((AccessTraits<Components>::ReadOnly ? mReads.insert(cm.getComponentType<Components>()) : mWrites.insert(cm.getComponentType<Components>())),
@@ -29,74 +58,63 @@ public:
 
 	// Setters for each phase
 	void setOnAwake(InitFunc&& f) {
-		mOnAwake = std::move(f);
+		setCallback(SystemPhase::Awake, mOnAwake, std::move(f));
 	}
 	void setOnStart(InitFunc&& f) {
-		mOnStart = std::move(f);
+		setCallback(SystemPhase::Start, mOnStart, std::move(f));
 	}
 	void setOnUpdate(UpdateFunc&& f) {
-		mOnUpdate = std::move(f);
+		setCallback(SystemPhase::Update, mOnUpdate, std::move(f));
 	}
 	void setOnFixedUpdate(UpdateFunc&& f) {
-		mOnFixedUpdate = std::move(f);
+		setCallback(SystemPhase::FixedUpdate, mOnFixedUpdate, std::move(f));
 	}
 	void setOnLateUpdate(UpdateFunc&& f) {
-		mOnLateUpdate = std::move(f);
+		setCallback(SystemPhase::LateUpdate, mOnLateUpdate, std::move(f));
 	}
 	void setOnDestroy(InitFunc&& f) {
-		mOnDestroy = std::move(f);
+		setCallback(SystemPhase::Destroy, mOnDestroy, std::move(f));
 	}
 
 	// System interface implementations
 	void onAwake(World& world) override {
-		if (mOnAwake) {
-			world.getComponentManager()->forEach<Components...>(mOnAwake);
+		if (const auto callback = snapshotCallback(mOnAwake)) {
+			world.getComponentManager()->forEach<Components...>(*callback);
 		}
 	}
 
 	void onStart(World& world) override {
-		if (mOnStart) {
-			world.getComponentManager()->forEach<Components...>(mOnStart);
+		if (const auto callback = snapshotCallback(mOnStart)) {
+			world.getComponentManager()->forEach<Components...>(*callback);
 		}
 	}
 
 	void onUpdate(World& world, CommandBuffer& cb, std::chrono::duration<double> dt) override {
-		if (mOnUpdate) {
-			// Wrap the user function to inject dt
-			world.getComponentManager()->forEach<Components...>([&](Entity e, QueryReference<Components>... comps) { mOnUpdate(e, comps..., dt); });
-		}
+		runUpdateCallback(world, mOnUpdate, dt);
 	}
 
 	void onFixedUpdate(World& world, CommandBuffer& cb, std::chrono::duration<double> dt) override {
-		if (mOnFixedUpdate) {
-			world.getComponentManager()->forEach<Components...>(
-				[&](Entity e, QueryReference<Components>... comps) { mOnFixedUpdate(e, comps..., dt); });
-		}
+		runUpdateCallback(world, mOnFixedUpdate, dt);
 	}
 
 	void onLateUpdate(World& world, CommandBuffer& cb, std::chrono::duration<double> dt) override {
-		if (mOnLateUpdate) {
-			world.getComponentManager()->forEach<Components...>(
-				[&](Entity e, QueryReference<Components>... comps) { mOnLateUpdate(e, comps..., dt); });
-		}
+		runUpdateCallback(world, mOnLateUpdate, dt);
 	}
 
 	void onDestroy(World& world) override {
-		if (mOnDestroy) {
-			world.getComponentManager()->forEach<Components...>(mOnDestroy);
+		if (const auto callback = snapshotCallback(mOnDestroy)) {
+			world.getComponentManager()->forEach<Components...>(*callback);
 		}
 	}
 };
 
 template <typename... Components> class SystemBuilder {
-	SystemManager& mManager;
 	std::shared_ptr<MultiPhaseSystem<Components...>> mSystem;
 
 public:
 	SystemBuilder(SystemManager& manager, std::string name)
-		: mManager(manager) {
-		mSystem = std::make_shared<MultiPhaseSystem<Components...>>(name, manager);
-		mManager.addSystem(mSystem);
+		: mSystem(std::make_shared<MultiPhaseSystem<Components...>>(name, manager)) {
+		manager.addSystem(mSystem);
 	}
 
 	// Fluent API for setting phase callbacks

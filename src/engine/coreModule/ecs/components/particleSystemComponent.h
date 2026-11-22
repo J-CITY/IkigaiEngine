@@ -20,7 +20,7 @@ public:
 				.field(&Descriptor::EffectPath, "EffectPath")
 				.field(&Descriptor::AutoPlay, "AutoPlay", default_ { true })
 				.field(&Descriptor::Seed, "Seed", default_ { uint64_t(1) })
-				.field(&Descriptor::Parameters, "Parameters", default_ { PARTICLES::Parameters { } });
+				.field(&Descriptor::Parameters, "Parameters", default_ { PARTICLES::Parameters {} });
 		}
 	};
 	ParticleSystemComponent(UTILS::Ref<Object> object, const Descriptor& descriptor);
@@ -32,7 +32,7 @@ public:
 	ParticleSystemComponent& operator=(const ParticleSystemComponent&);
 	Descriptor getDescriptor() const;
 	static auto GetMembers() {
-		return std::tuple { };
+		return std::tuple {};
 	}
 	void tick(double dt);
 	void play();
@@ -55,6 +55,8 @@ public:
 	}
 
 private:
+	friend class ParticleSimulationSystem;
+
 	Descriptor mDescriptor;
 	std::shared_ptr<RESOURCES::ParticleAsset> mAsset;
 	std::unique_ptr<PARTICLES::Runtime<D>> mRuntime;

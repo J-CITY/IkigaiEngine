@@ -23,7 +23,7 @@ std::shared_ptr<IKIGAI::ECS::Object> recursiveDraw(IKIGAI::SCENE_SYSTEM::Scene& 
 	static std::optional<IKIGAI::ECS::Object::Id::ID> editNodeId;
 	static std::string editBuffer;
 
-	std::span<std::shared_ptr<IKIGAI::ECS::Object>> nodeList;
+	std::span<const std::shared_ptr<IKIGAI::ECS::Object>> nodeList;
 	if (parentEntity) {
 		nodeList = parentEntity->getChildren();
 	}

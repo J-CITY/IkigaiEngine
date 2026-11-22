@@ -11,6 +11,8 @@
 
 IKIGAI::ECS::ScriptSystem::ScriptSystem() {
 	mName = "ScriptSystem";
+	setPhases(
+		{ SystemPhase::Awake, SystemPhase::Start, SystemPhase::FixedUpdate, SystemPhase::Update, SystemPhase::LateUpdate, SystemPhase::Destroy });
 	mPriority = 0;
 	mExclusiveBatch = true;
 	auto cm = RESOURCES::ServiceManager::Get<ECS::World>().getComponentManager();

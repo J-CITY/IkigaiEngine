@@ -2,6 +2,7 @@
 #include "identifier.h"
 #include "memory/monotonicAllocator.h"
 #include <cstring>
+#include <mutex>
 #include <shared_mutex>
 #include <string_view>
 #include <unordered_map>
@@ -55,7 +56,7 @@ public:
 	}
 	Identifier find(std::string_view text) const {
 		auto it = mIndex.find(text);
-		return it == mIndex.end() ? Identifier { } : Identifier(mToken, Id<StringEntryTag>(it->second));
+		return it == mIndex.end() ? Identifier {} : Identifier(mToken, Id<StringEntryTag>(it->second));
 	}
 	std::string_view view(Identifier id) const {
 		if (!id.valid() || id.poolToken() != mToken || id.entry().value() >= mEntries.size()) {
@@ -90,7 +91,14 @@ public:
 	explicit SynchronizedStringPool(std::shared_ptr<MEMORY::IAllocator> domain, std::size_t pageBytes = 4096)
 		: mPool(std::move(domain), pageBytes) { }
 	Identifier intern(std::string_view text) {
+		{
+			std::shared_lock lock(mMutex);
+			if (const auto id = mPool.find(text); id.valid()) {
+				return id;
+			}
+		}
 		std::unique_lock lock(mMutex);
+		// Another caller may have interned the same bytes while we reacquired the lock.
 		return mPool.intern(text);
 	}
 	Identifier find(std::string_view text) const {

@@ -4,7 +4,7 @@
 #include <nlohmann/json.hpp>
 
 namespace IKIGAI::RESOURCES {
-struct ContentManifest;
+struct ContentManifestV1;
 // Activation is a main-thread startup/scene-boundary operation. stageLocal and
 // download are independent of the live VFS. The caller supplies a trusted manifest.
 class ContentService {
@@ -13,8 +13,8 @@ class ContentService {
 	std::string mPlatform;
 	std::vector<FileSystem::MountId> mMounts;
 	std::string mRelease;
-	ContentManifest validate(nlohmann::json manifest) const;
-	void verify(const ContentManifest& manifest) const;
+	ContentManifestV1 validate(nlohmann::json manifest) const;
+	void verify(const ContentManifestV1& manifest) const;
 
 public:
 	ContentService(FileSystem& files, std::filesystem::path root, std::string platform);

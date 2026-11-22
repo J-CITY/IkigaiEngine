@@ -5,14 +5,28 @@
 #include <future>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <string>
+#include <vector>
 
 namespace IKIGAI::NETWORK {
 class NetworkRuntime;
-struct TransferControl {
-	std::atomic<bool> cancelled { false };
+namespace DETAIL {
+	struct Watch;
+}
+class TransferControl {
+	friend struct DETAIL::Watch;
+	std::atomic<bool> mCancelled { false };
+	std::mutex mCancellationMutex;
+	std::vector<std::weak_ptr<const std::function<void()>>> mCancellationCallbacks;
+	void subscribeToCancellation(const std::shared_ptr<const std::function<void()>>& callback);
+
+public:
 	std::atomic<uint64_t> transferred { 0 };
+	// Cancellation is permanent for this control and wakes pending native I/O.
+	void cancel();
+	bool isCancelled() const;
 	void check() const;
 };
 struct HttpRequest {

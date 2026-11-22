@@ -1,5 +1,6 @@
 #include "scene.h"
 #include "sceneObjectDescriptor.h"
+#include "sceneSystem.h"
 #include "traceModule/trace.h"
 #include <algorithm>
 #include <cstdint>
@@ -15,6 +16,42 @@
 
 using namespace IKIGAI;
 using namespace IKIGAI::SCENE_SYSTEM;
+
+namespace {
+class SceneSystem final : public ECS::System {
+public:
+	SceneSystem(ECS::SystemPhase phase, const char* name, SceneSystemCallback callback)
+		: mCallback(callback) {
+		setName(name);
+		setPhases({ phase });
+		setLegacyImmediateExecution();
+	}
+
+	void onPhase(
+		ECS::SystemPhase, ECS::World&, ECS::CommandBuffer& commands, std::chrono::duration<double>, const ECS::SystemPhaseContext* context) override {
+		const auto* sceneContext = dynamic_cast<const ScenePhaseContext*>(context);
+		if (!sceneContext) {
+			throw std::logic_error("A scene system requires a scene phase context");
+		}
+		IKIGAI_PROFILE_SCOPE("Scene System");
+		IKIGAI_PROFILE_ZONE_TEXT(getName().data(), getName().size());
+		mCallback(*sceneContext, commands);
+	}
+
+private:
+	SceneSystemCallback mCallback;
+};
+
+template <auto Callback> void runObjectCallbacks(const ScenePhaseContext& context, ECS::CommandBuffer&) {
+	for (auto& object : context.scene.getObjects()) {
+		((*object).*Callback)(context.dt);
+	}
+}
+}
+
+ECS::System& SCENE_SYSTEM::RegisterSceneSystem(ECS::SystemManager& systems, ECS::SystemPhase phase, const char* name, SceneSystemCallback callback) {
+	return *systems.registerSystem<SceneSystem>(phase, name, callback);
+}
 
 Scene::Scene(ECS::World* world, std::unique_ptr<SceneSimulation> simulation)
 	: mSimulation(std::move(simulation))
@@ -39,7 +76,14 @@ std::shared_ptr<PHYSICS::PhysicWorld> Scene::physics3dShared() {
 	return requireSimulation().physics3dShared(*this);
 }
 void Scene::stepPhysics3D(std::chrono::duration<double> dt, bool beginDestructionFrame) {
-	requireSimulation().stepPhysics3D(*this, dt, beginDestructionFrame);
+	physics3d();
+	if (beginDestructionFrame) {
+		beginSimulationFrame();
+	}
+	runScheduledPhase(ECS::SystemPhase::Physics3D, dt);
+	if (beginDestructionFrame) {
+		presentDestructibles(1.f);
+	}
 }
 bool Scene::physics3dPaused() const {
 	return mSimulation && mSimulation->physics3dPaused();
@@ -49,7 +93,7 @@ void Scene::setPhysics3dPaused(bool paused) {
 }
 void Scene::presentDestructibles(float alpha) {
 	if (mSimulation) {
-		mSimulation->presentDestructibles(*this, alpha);
+		runScheduledPhase(ECS::SystemPhase::Present, {}, alpha);
 	}
 }
 #endif
@@ -59,7 +103,8 @@ PHYSICS2D::World& Scene::physics2d() {
 	return requireSimulation().physics2d(*this);
 }
 void Scene::stepPhysics2D(std::chrono::duration<double> dt) {
-	requireSimulation().stepPhysics2D(*this, dt);
+	physics2d();
+	runScheduledPhase(ECS::SystemPhase::Physics2D, dt);
 }
 #endif
 
@@ -95,6 +140,19 @@ Scene::~Scene() {
 }
 
 void Scene::go() {
+	if (mStarting) {
+		throw std::logic_error("Cannot recursively start the same scene");
+	}
+	if (mSimulation) {
+		getWorld().getSystemManager()->requirePhaseEntry(ECS::SystemPhase::SceneStart);
+	}
+	mStarting = true;
+	struct FinishStart {
+		bool& starting;
+		~FinishStart() {
+			starting = false;
+		}
+	} finishStart { mStarting };
 	isExecute = true;
 
 	for (auto& o : objects) {
@@ -108,7 +166,7 @@ void Scene::go() {
 		}
 	}
 	if (mSimulation) {
-		mSimulation->afterStart(*this);
+		runScheduledPhase(ECS::SystemPhase::SceneStart);
 	}
 }
 
@@ -116,22 +174,42 @@ bool Scene::getIsExecute() const {
 	return isExecute;
 }
 
+void Scene::runScheduledPhase(ECS::SystemPhase phase, std::chrono::duration<double> dt, float interpolationAlpha) {
+	using ECS::SystemPhase;
+	auto& systems = *getWorld().getSystemManager();
+	if (!mSystemsRegistered) {
+		// Gameplay scenes can share a world. The nodes use the scene supplied for each phase.
+		constexpr auto objectUpdate = "Scene.Object.Update";
+		if (!systems.getSystem<ECS::System>(objectUpdate)) {
+			RegisterSceneSystem(systems, SystemPhase::ObjectFixedUpdate, "Scene.Object.FixedUpdate", runObjectCallbacks<&ECS::Object::onFixedUpdate>);
+			RegisterSceneSystem(systems, SystemPhase::ObjectLateUpdate, "Scene.Object.LateUpdate", runObjectCallbacks<&ECS::Object::onLateUpdate>);
+			RegisterSceneSystem(systems, SystemPhase::ObjectUpdate, objectUpdate, runObjectCallbacks<&ECS::Object::onUpdate>);
+		}
+		if (mSimulation) {
+			mSimulation->registerSystems(systems);
+		}
+		mSystemsRegistered = true;
+	}
+	const ScenePhaseContext context { *this, dt, interpolationAlpha };
+	systems.runPhase(phase, dt, &context);
+}
+
 void Scene::beginSimulationFrame() {
 	if (mSimulation) {
-		mSimulation->beginFrame(*this);
+		runScheduledPhase(ECS::SystemPhase::BeginFrame);
 	}
 }
 
 void Scene::simulateFixedStep(std::chrono::duration<double> dt) {
 	IKIGAI_PROFILE_SCOPE("Fixed Simulation Step");
 	fixedUpdate(dt);
-	getWorld().getSystemManager()->runFixedUpdate(dt);
+	runScheduledPhase(ECS::SystemPhase::FixedUpdate, dt);
 	if (mSimulation) {
 #if USE_PHYSICS_3D
-		mSimulation->stepPhysics3D(*this, dt, false);
+		stepPhysics3D(dt, false);
 #endif
 #if USE_PHYSICS_2D
-		mSimulation->stepPhysics2D(*this, dt);
+		stepPhysics2D(dt);
 #endif
 	}
 	finishFixedUpdate(dt);
@@ -139,44 +217,37 @@ void Scene::simulateFixedStep(std::chrono::duration<double> dt) {
 
 void Scene::simulateFrame(std::chrono::duration<double> dt, [[maybe_unused]] float interpolationAlpha) {
 	IKIGAI_PROFILE_SCOPE("Frame Simulation");
-	auto* systems = getWorld().getSystemManager();
-	systems->runUpdate(dt);
+	runScheduledPhase(ECS::SystemPhase::Update, dt);
 	update(dt);
 #if USE_PHYSICS_3D
 	presentDestructibles(interpolationAlpha);
 #endif
 	// Object lifecycle dispatch owns component callbacks, including LogicComponent.
 	lateUpdate(dt);
-	systems->runLateUpdate(dt);
+	runScheduledPhase(ECS::SystemPhase::LateUpdate, dt);
 }
 
 void Scene::update(std::chrono::duration<double> dt) {
 	if (mSimulation) {
-		mSimulation->beforeObjectUpdate(*this, dt);
+		runScheduledPhase(ECS::SystemPhase::BeforeObjectUpdate, dt);
 	}
-	for (auto& object : objects) {
-		object->onUpdate(dt);
-	}
+	runScheduledPhase(ECS::SystemPhase::ObjectUpdate, dt);
 	if (mSimulation) {
-		mSimulation->afterObjectUpdate(*this, dt);
+		runScheduledPhase(ECS::SystemPhase::AfterObjectUpdate, dt);
 	}
 }
 
 void Scene::fixedUpdate(std::chrono::duration<double> dt) {
-	for (auto& o : objects) {
-		o->onFixedUpdate(dt);
-	}
+	runScheduledPhase(ECS::SystemPhase::ObjectFixedUpdate, dt);
 }
 void Scene::finishFixedUpdate(std::chrono::duration<double> dt) {
 	if (mSimulation) {
-		mSimulation->finishFixedUpdate(*this, dt);
+		runScheduledPhase(ECS::SystemPhase::FinishFixedUpdate, dt);
 	}
 }
 
 void Scene::lateUpdate(std::chrono::duration<double> dt) {
-	for (auto& o : objects) {
-		o->onLateUpdate(dt);
-	}
+	runScheduledPhase(ECS::SystemPhase::ObjectLateUpdate, dt);
 }
 
 std::shared_ptr<IKIGAI::ECS::Object> Scene::createObject() {
@@ -184,9 +255,8 @@ std::shared_ptr<IKIGAI::ECS::Object> Scene::createObject() {
 }
 
 std::shared_ptr<IKIGAI::ECS::Object> Scene::createObject(ECS::Entity actorID, const std::string& name, const std::string& tag) {
-	objects.push_back(MEMORY::MakeShared<ECS::Object, MEMORY::Category::Node>(actorID, name, tag, &getWorld()));
-	auto& instance = objects.back();
-	observeComponents(*instance);
+	auto instance = MEMORY::MakeShared<ECS::Object, MEMORY::Category::Node>(actorID, name, tag, &getWorld());
+	insertObject(instance, objects.size());
 	if (isExecute) {
 		instance->setActive(true);
 		if (instance->getIsActive()) {
@@ -203,8 +273,7 @@ std::shared_ptr<IKIGAI::ECS::Object> Scene::createObject(const SceneObjectDescri
 	for (const auto& component : data.Components) {
 		AddSceneComponent(*instance, component);
 	}
-	objects.push_back(instance);
-	observeComponents(*instance);
+	insertObject(instance, objects.size());
 	if (isExecute) {
 		instance->setActive(data.IsActive);
 		if (instance->getIsActive()) {
@@ -225,17 +294,7 @@ std::shared_ptr<IKIGAI::ECS::Object> Scene::createObject(const SceneObjectDescri
 }
 
 std::shared_ptr<IKIGAI::ECS::Object> Scene::createObject(const std::string& name, const std::string& tag) {
-	objects.push_back(MEMORY::MakeShared<ECS::Object, MEMORY::Category::Node>(getWorld().createEntity(), name, tag, &getWorld()));
-	auto& instance = objects.back();
-	observeComponents(*instance);
-	if (isExecute) {
-		instance->setActive(true);
-		if (instance->getIsActive()) {
-			instance->onEnable();
-			instance->onStart();
-		}
-	}
-	return instance;
+	return createObject(getWorld().createEntity(), name, tag);
 }
 
 std::weak_ptr<Scene::ComponentChanges> Scene::componentChanges() const {
@@ -275,15 +334,15 @@ void Scene::postLoadObject(ECS::Object& object) {
 std::shared_ptr<ECS::Object> Scene::createDeferredObject(const ECS::Object::Descriptor& descriptor) {
 	auto shell = descriptor;
 	shell.IsActive = false;
-	objects.push_back(MEMORY::MakeShared<ECS::Object, MEMORY::Category::Node>(shell, &getWorld(), true));
-	observeComponents(*objects.back());
-	return objects.back();
+	auto instance = MEMORY::MakeShared<ECS::Object, MEMORY::Category::Node>(shell, &getWorld(), true);
+	return insertObject(std::move(instance), objects.size());
 }
 
 void Scene::removeLastObject() {
 	if (objects.empty()) {
 		return;
 	}
+	const auto mutation = getWorld().getComponentManager()->beginStructuralChange();
 	objects.back()->detachFromParent();
 	objects.back()->dispose();
 	objects.pop_back();
@@ -409,6 +468,7 @@ void Scene::destroySubtree(int rootId) {
 	if (!root) {
 		return;
 	}
+	const auto mutation = getWorld().getComponentManager()->beginStructuralChange();
 	std::unordered_set<int> ids;
 	std::vector<std::shared_ptr<ECS::Object>> stack { root };
 	while (!stack.empty()) {
@@ -426,12 +486,15 @@ void Scene::destroySubtree(int rootId) {
 			object->detachFromParent();
 		}
 	}
+	auto firstRemoved = objects.size();
 	for (auto& object : objects) {
 		if (ids.contains(object->getIDInt())) {
+			firstRemoved = std::min(firstRemoved, object->mSceneObjectIndex);
 			object->dispose();
 		}
 	}
 	std::erase_if(objects, [&](const auto& object) { return ids.contains(object->getIDInt()); });
+	refreshObjectIndices(firstRemoved);
 	std::erase_if(prefabInstances, [&](const auto& instance) { return ids.contains(DOCUMENT::Id(instance.entry.at("Id"))); });
 }
 void Scene::restoreObjectPosition(int rootId, std::size_t objectIndex, int siblingIndex) {
@@ -439,8 +502,12 @@ void Scene::restoreObjectPosition(int rootId, std::size_t objectIndex, int sibli
 	if (!root) {
 		return;
 	}
-	std::erase(objects, root);
-	objects.insert(objects.begin() + std::min(objectIndex, objects.size()), root);
+	const auto mutation = getWorld().getComponentManager()->beginStructuralChange();
+	const auto previousIndex = root->mSceneObjectIndex;
+	const auto newIndex = std::min(objectIndex, objects.size() - 1);
+	objects.erase(objects.begin() + previousIndex);
+	objects.insert(objects.begin() + newIndex, root);
+	refreshObjectIndices(std::min(previousIndex, newIndex));
 	if (auto parent = root->getParent()) {
 		const int last = static_cast<int>(parent->getChildren().size()) - 1;
 		root->setParentInPos(parent, std::min(siblingIndex, last));
@@ -448,32 +515,43 @@ void Scene::restoreObjectPosition(int rootId, std::size_t objectIndex, int sibli
 }
 
 std::shared_ptr<ECS::Object> Scene::createObjectAfter(ECS::Object::Id parentId, const std::string& name, const std::string& tag) {
+	auto instance = MEMORY::MakeShared<ECS::Object, MEMORY::Category::Node>(getWorld().createEntity(), name, tag, &getWorld());
 	const auto iter = std::ranges::find_if(objects, [parentId](auto& e) { return e->getID() == parentId; });
-	auto resIt = objects.insert(iter + 1, MEMORY::MakeShared<ECS::Object, MEMORY::Category::Node>(getWorld().createEntity(), name, tag, &getWorld()));
-	observeComponents(**resIt);
-	return *resIt;
+	const auto position = iter != objects.end() ? iter + 1 : iter;
+	return insertObject(std::move(instance), position - objects.begin());
 }
 
 std::shared_ptr<ECS::Object> Scene::createObjectBefore(ECS::Object::Id parentId, const std::string& name, const std::string& tag) {
+	auto instance = MEMORY::MakeShared<ECS::Object, MEMORY::Category::Node>(getWorld().createEntity(), name, tag, &getWorld());
 	const auto iter = std::ranges::find_if(objects, [parentId](auto& e) { return e->getID() == parentId; });
-	auto resIt = objects.insert(iter, MEMORY::MakeShared<ECS::Object, MEMORY::Category::Node>(getWorld().createEntity(), name, tag, &getWorld()));
-	observeComponents(**resIt);
-	return *resIt;
+	return insertObject(std::move(instance), iter - objects.begin());
+}
+
+std::shared_ptr<ECS::Object> Scene::insertObject(std::shared_ptr<ECS::Object> object, std::size_t index) {
+	const auto mutation = getWorld().getComponentManager()->beginStructuralChange();
+	objects.insert(objects.begin() + index, object);
+	refreshObjectIndices(index);
+	observeComponents(*object);
+	return object;
+}
+
+void Scene::refreshObjectIndices(std::size_t first) noexcept {
+	for (auto index = first; index < objects.size(); ++index) {
+		objects[index]->mSceneObjectIndex = index;
+	}
 }
 
 bool Scene::destroyObject(std::shared_ptr<ECS::Object> p_target) {
-	auto found
-		= std::ranges::find_if(objects.begin(), objects.end(), [p_target](std::shared_ptr<ECS::Object> element) { return element == p_target; });
-
-	if (found != objects.end()) {
-		objects.erase(found);
-		// External references must not keep removed scene components or physics/render resources active.
-		p_target->dispose();
-		return true;
-	}
-	else {
+	const auto index = p_target ? getObjectIndex(*p_target) : std::nullopt;
+	if (!index) {
 		return false;
 	}
+	const auto mutation = getWorld().getComponentManager()->beginStructuralChange();
+	objects.erase(objects.begin() + *index);
+	refreshObjectIndices(*index);
+	// External references must not keep removed scene components or physics/render resources active.
+	p_target->dispose();
+	return true;
 }
 
 std::shared_ptr<IKIGAI::ECS::Object> Scene::findObjectByName(const std::string& p_name) {
@@ -532,8 +610,16 @@ std::vector<std::shared_ptr<IKIGAI::ECS::Object>> Scene::findObjectsByTag(const 
 	return actors;
 }
 
-std::span<std::shared_ptr<IKIGAI::ECS::Object>> Scene::getObjects() {
+std::span<const std::shared_ptr<IKIGAI::ECS::Object>> Scene::getObjects() const {
 	return objects;
+}
+
+std::optional<std::size_t> Scene::getObjectIndex(const ECS::Object& object) const noexcept {
+	const auto index = object.mSceneObjectIndex;
+	if (index < objects.size() && objects[index].get() == &object) {
+		return index;
+	}
+	return std::nullopt;
 }
 
 // TODO: void Scene::setMainCamera(Entity id) {}

@@ -15,7 +15,9 @@ struct WebRequest {
 };
 }
 extern "C" {
-EMSCRIPTEN_KEEPALIVE int ikigai_http_cancelled(void* pointer) { return static_cast<WebRequest*>(pointer)->control->cancelled; }
+EMSCRIPTEN_KEEPALIVE int ikigai_http_cancelled(void* pointer) {
+	return static_cast<WebRequest*>(pointer)->control->isCancelled();
+}
 EMSCRIPTEN_KEEPALIVE int ikigai_http_headers(void* pointer, int status, const char* json) {
 	auto& request = *static_cast<WebRequest*>(pointer);
 	try {
@@ -33,7 +35,9 @@ EMSCRIPTEN_KEEPALIVE int ikigai_http_body(void* pointer, const uint8_t* bytes, s
 EMSCRIPTEN_KEEPALIVE void ikigai_http_done(void* pointer, const char* error) {
 	std::unique_ptr<WebRequest> request(static_cast<WebRequest*>(pointer));
 	if (request->error) request->promise.set_exception(request->error);
-	else if (request->control->cancelled) request->promise.set_exception(std::make_exception_ptr(NetworkError(NetworkErrorCode::cancelled, "Transfer cancelled")));
+	else if (request->control->isCancelled()) {
+		request->promise.set_exception(std::make_exception_ptr(NetworkError(NetworkErrorCode::cancelled, "Transfer cancelled")));
+	}
 	else if (error) request->promise.set_exception(std::make_exception_ptr(NetworkError(NetworkErrorCode::io, error)));
 	else request->promise.set_value();
 }

@@ -177,11 +177,11 @@ struct DownloadManager::State : std::enable_shared_from_this<State> {
 			std::lock_guard lock(mutex);
 			stopping = true;
 			if (active)
-				active->control->cancelled = true;
+				active->control->cancel();
 			while (!queue.empty()) {
 				auto work = queue.front();
 				queue.pop();
-				work->control->cancelled = true;
+				work->control->cancel();
 				work->promise.set_exception(std::make_exception_ptr(NetworkError(NetworkErrorCode::cancelled, "Download manager stopped")));
 			}
 		}
@@ -223,11 +223,12 @@ struct DownloadManager::State : std::enable_shared_from_this<State> {
 						break;
 					} catch (...) {
 						work->output = std::ofstream { };
-						if (work->control->cancelled || work->attempt >= std::min(work->request.retries, 5u))
+						if (work->control->isCancelled() || work->attempt >= std::min(work->request.retries, 5u)) {
 							throw;
+						}
 						std::unique_lock lock(mutex);
 						wake.wait_for(lock, std::chrono::milliseconds(250u << work->attempt++),
-							[this, &work] { return stopping || work->control->cancelled.load(); });
+							[this, &work] { return stopping || work->control->isCancelled(); });
 					}
 				}
 			} catch (...) {
@@ -280,8 +281,9 @@ struct DownloadManager::State : std::enable_shared_from_this<State> {
 		Await(work->commit(), [self = shared_from_this(), work](std::exception_ptr error) {
 			if (error)
 				work->promise.set_exception(error);
-			else if (work->control->cancelled)
+			else if (work->control->isCancelled()) {
 				work->promise.set_exception(std::make_exception_ptr(NetworkError(NetworkErrorCode::cancelled, "Download cancelled")));
+			}
 			else
 				work->promise.set_value(work->request.destination);
 			self->next();
@@ -290,7 +292,7 @@ struct DownloadManager::State : std::enable_shared_from_this<State> {
 	void failed(const std::shared_ptr<DownloadWork>& work, std::exception_ptr error) {
 		work->output = std::ofstream { };
 		Await(work->commit(), [self = shared_from_this(), work, error](std::exception_ptr commitError) {
-			if (!commitError && !work->control->cancelled && work->attempt < std::min(work->request.retries, 5u)) {
+			if (!commitError && !work->control->isCancelled() && work->attempt < std::min(work->request.retries, 5u)) {
 				Later([self, work] { self->attempt(work); }, 250u << work->attempt++);
 				return;
 			}

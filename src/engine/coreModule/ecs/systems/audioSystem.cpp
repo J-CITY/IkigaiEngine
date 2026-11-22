@@ -42,7 +42,9 @@ namespace {
 		AudioListenerGatherSystem(const ComponentManager& components, std::shared_ptr<AudioSpatialFrame> frame)
 			: mFrame(std::move(frame)) {
 			mName = "AudioListenerGatherSystem";
+			setPhases({ SystemPhase::LateUpdate });
 			mPriority = audioPriority;
+			mPreferInline = true;
 			mValidateAccess = true;
 			mReads.insert(components.getComponentType<AudioListenerComponent>());
 			mReads.insert(components.getComponentType<TransformComponent>());
@@ -72,7 +74,9 @@ namespace {
 		AudioSourceGatherSystem(const ComponentManager& components, std::shared_ptr<AudioSpatialFrame> frame)
 			: mFrame(std::move(frame)) {
 			mName = "AudioSourceGatherSystem";
+			setPhases({ SystemPhase::LateUpdate });
 			mPriority = audioPriority;
+			mPreferInline = true;
 			mValidateAccess = true;
 			mReads.insert(components.getComponentType<AudioComponent>());
 			mReads.insert(components.getComponentType<TransformComponent>());
@@ -99,6 +103,7 @@ namespace {
 		AudioSystem(const ComponentManager& components, std::shared_ptr<AudioSpatialFrame> frame)
 			: mFrame(std::move(frame)) {
 			mName = "AudioSystem";
+			setPhases({ SystemPhase::LateUpdate });
 			mPriority = audioPriority;
 			mExclusiveBatch = true;
 			mValidateAccess = true;

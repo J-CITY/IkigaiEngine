@@ -24,6 +24,8 @@ IKIGAI::AUDIO::AudioManagerAL::~AudioManagerAL() {
 
 namespace IKIGAI::AUDIO {
 namespace {
+	constexpr std::size_t MaxCachedClipsPerType = 256;
+
 	std::string makeClipKey(const ClipByteSource& source, const SoundConfig& config, uint64_t generation) {
 		return std::to_string(generation) + ":" + source.normalizePath(config.pathSoundSource);
 	}
@@ -63,6 +65,17 @@ AudioManagerAL::ClipCache& AudioManagerAL::clipCache(SoundType type) {
 	return type == SoundType::SOUND ? mSounds : mStreams;
 }
 
+AudioManagerAL::ClipCache::iterator AudioManagerAL::reserveClipCacheEntry(ClipCache& cache, const std::string& key) {
+	if (const auto existing = cache.find(key); existing != cache.end()) {
+		return existing;
+	}
+	if (cache.size() >= MaxCachedClipsPerType) {
+		std::erase_if(cache, [](const auto& entry) { return entry.second.expired(); });
+	}
+	// The resource owns the decoded clip even if all cache entries are in use.
+	return cache.size() < MaxCachedClipsPerType ? cache.try_emplace(key).first : cache.end();
+}
+
 std::shared_ptr<SoLoud::AudioSource> AudioManagerAL::getClip(const SoundConfig& config) {
 	const auto& source = UTILS::ServiceManager::Get<const ClipByteSource>();
 	const auto key = makeClipKey(source, config, source.generation());
@@ -77,11 +90,12 @@ std::shared_ptr<SoLoud::AudioSource> AudioManagerAL::getClip(const SoundConfig& 
 	}
 	auto clip = loadClip(source, config);
 	std::lock_guard lock(mClipMutex);
-	auto& entry = cache[key];
-	if (auto existing = entry.lock()) {
-		return existing;
+	if (const auto entry = reserveClipCacheEntry(cache, key); entry != cache.end()) {
+		if (auto existing = entry->second.lock()) {
+			return existing;
+		}
+		entry->second = clip;
 	}
-	entry = clip;
 	return clip;
 }
 
@@ -144,7 +158,7 @@ AudioManagerAL::PreparedReload AudioManagerAL::prepareReload(const SoundResource
 	result.source.clip = loadClip(source, config);
 	{
 		std::lock_guard lock(mClipMutex);
-		clipCache(config.type).try_emplace(result.clipKey);
+		reserveClipCacheEntry(clipCache(config.type), result.clipKey);
 	}
 	startVoice(result.source, true, true);
 	return result;
@@ -157,7 +171,11 @@ void AudioManagerAL::finishReload(SoundResource& live, PreparedReload& prepared,
 	}
 	{
 		std::lock_guard lock(mClipMutex);
-		clipCache(live.data.type).find(prepared.clipKey)->second = live.clip;
+		auto& cache = clipCache(live.data.type);
+		// The cache may have been full or reclaimed this entry while the reload was prepared.
+		if (const auto entry = cache.find(prepared.clipKey); entry != cache.end()) {
+			entry->second = live.clip;
+		}
 	}
 	if (live.id) {
 		audioEngine->setProtectVoice(*live.id, false);

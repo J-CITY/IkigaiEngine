@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+#include <limits>
 #include <memory>
 #include <span>
 #include <string>
@@ -94,6 +96,8 @@ public:
 		static_assert(std::is_base_of_v<ComponentBase, T>, "T should derive from Component");
 
 		if (auto found = getComponent<T>(); !found) {
+			auto& components = *getWorld().getComponentManager();
+			const auto mutation = components.beginStructuralChange();
 			auto instance = T(*this, args...);
 			if (!mDeferred && getIsActive()) {
 				// TODO: call systems methods
@@ -101,7 +105,6 @@ public:
 				instance.onEnable();
 				instance.onStart();
 			}
-			auto& components = *getWorld().getComponentManager();
 			components.addComponents<T>(getID(), std::move(instance));
 
 			auto component = getComponent<T>();
@@ -192,6 +195,7 @@ private:
 		if (!result) {
 			return false;
 		}
+		const auto mutation = getWorld().getComponentManager()->beginStructuralChange();
 		// TODO: move it to ScriptComponent::onStart()
 #if USE_LUA
 
@@ -251,5 +255,7 @@ protected:
 private:
 	std::map<std::type_index, ComponentHandle<Component>> mComponents;
 	ComponentHandle<TransformComponent> mTransform;
+	friend class SCENE_SYSTEM::Scene;
+	std::size_t mSceneObjectIndex = std::numeric_limits<std::size_t>::max();
 };
 };

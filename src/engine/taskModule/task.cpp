@@ -30,6 +30,7 @@ struct ScopedJob {
 	std::size_t mEnd = 0;
 	std::shared_ptr<JobBatchState> mBatch;
 	std::vector<std::shared_ptr<JobBatchState>> mPrerequisites;
+	UTILS::TaskBorrowState mBorrowState = UTILS::TaskBorrowScope::forChild();
 	ScopedJob* mPrevious = nullptr;
 	ScopedJob* mNext = nullptr;
 };
@@ -97,9 +98,14 @@ struct PoolState : std::enable_shared_from_this<PoolState> {
 	// Queues of tasks scheduled with threadID < 0. Stable for the lifetime of the workers.
 	std::vector<ThreadSafeQueue<std::shared_ptr<ITask>>*> mUnboundQueues;
 
-	void notifyWork() {
+	void notifyWork(bool wakeAll = true) {
 		std::lock_guard<std::mutex> lock { mIdleMutex };
-		mIdleCv.notify_all();
+		if (wakeAll) {
+			mIdleCv.notify_all();
+		}
+		else {
+			mIdleCv.notify_one();
+		}
 	}
 
 	template <typename Pred> void waitForWork(Pred&& pred) {
@@ -243,8 +249,7 @@ bool PoolState::submit(
 	mInflightCounter->increment();
 	lock.unlock();
 	if (ready) {
-		std::lock_guard idleLock { mIdleMutex };
-		mIdleCv.notify_one();
+		notifyWork(false);
 	}
 	return true;
 }
@@ -407,6 +412,7 @@ void PoolState::runJob(const ScopedJob& job) {
 	const ActiveJob active { this, job.mBatch.get(), gActiveJob };
 	gActiveJob = &active;
 	try {
+		const UTILS::TaskBorrowScope borrows(job.mBorrowState);
 		IKIGAI_PROFILE_SCOPE("Execute Scoped Job");
 		if (job.mDescriptor.zoneName) {
 			IKIGAI_PROFILE_ZONE_TEXT(job.mDescriptor.zoneName, std::strlen(job.mDescriptor.zoneName));
@@ -465,28 +471,39 @@ void IKIGAI::TASK::logTaskException(const char* context, const std::exception_pt
 //--------------------- InflightCounter
 
 void InflightCounter::increment() {
-	std::lock_guard<std::mutex> lock { mMutex };
-	++mCount;
+	mCount.fetch_add(1, std::memory_order_relaxed);
 }
 
 void InflightCounter::decrement() {
-	std::lock_guard<std::mutex> lock { mMutex };
-	if (mCount > 0) {
-		--mCount;
-	}
-	if (mCount == 0) {
-		mCondition.notify_all();
+	auto count = mCount.load(std::memory_order_relaxed);
+	while (count != 0) {
+		if (mCount.compare_exchange_weak(count, count - 1, std::memory_order_release, std::memory_order_relaxed)) {
+			if (count == 1) {
+#if defined(__cpp_lib_atomic_wait)
+				mCount.notify_all();
+#else
+				std::lock_guard lock { mWaitMutex };
+				mIdle.notify_all();
+#endif
+			}
+			return;
+		}
 	}
 }
 
 void InflightCounter::waitUntilIdle() {
-	std::unique_lock<std::mutex> lock { mMutex };
-	mCondition.wait(lock, [this]() { return mCount == 0; });
+#if defined(__cpp_lib_atomic_wait)
+	for (auto pending = mCount.load(std::memory_order_acquire); pending != 0; pending = mCount.load(std::memory_order_acquire)) {
+		mCount.wait(pending, std::memory_order_relaxed);
+	}
+#else
+	std::unique_lock lock { mWaitMutex };
+	mIdle.wait(lock, [this] { return mCount.load(std::memory_order_acquire) == 0; });
+#endif
 }
 
 size_t InflightCounter::getCount() {
-	std::lock_guard<std::mutex> lock { mMutex };
-	return mCount;
+	return mCount.load(std::memory_order_acquire);
 }
 
 //--------------------- ITask
@@ -494,6 +511,12 @@ size_t InflightCounter::getCount() {
 bool ITask::isFinished() {
 	std::lock_guard<std::mutex> lock { mMutex };
 	return mIsFinished;
+}
+
+void ITask::captureSubmissionScope() noexcept {
+	if (UTILS::TaskBorrowScope::forChild() == UTILS::TaskBorrowState::Detached) {
+		mBorrowState = UTILS::TaskBorrowState::Detached;
+	}
 }
 
 bool ITask::isCancelled() {
@@ -511,6 +534,13 @@ void ITask::wait() {
 }
 
 void ITask::continueWith(std::function<void()> continuation) {
+	const auto childState = IKIGAI::UTILS::TaskBorrowScope::forChild();
+	if (childState != IKIGAI::UTILS::TaskBorrowState::Unrestricted) {
+		continuation = [childState, callback = std::move(continuation)] {
+			const IKIGAI::UTILS::TaskBorrowScope borrows(childState);
+			callback();
+		};
+	}
 	{
 		std::lock_guard<std::mutex> lock { mMutex };
 		if (!mIsFinished) {
@@ -555,13 +585,19 @@ ThreadPoolExecutor::ThreadPoolExecutor(int threadCount) {
 }
 
 std::shared_ptr<PoolState> ThreadPoolExecutor::loadPoolState() const {
-	std::lock_guard lock { mPoolStateMutex };
-	return mPoolState;
+#if defined(__cpp_lib_atomic_shared_ptr)
+	return mPoolState.load(std::memory_order_acquire);
+#else
+	return std::atomic_load_explicit(&mPoolState, std::memory_order_acquire);
+#endif
 }
 
 void ThreadPoolExecutor::storePoolState(std::shared_ptr<PoolState> pool) {
-	std::lock_guard lock { mPoolStateMutex };
-	mPoolState.swap(pool);
+#if defined(__cpp_lib_atomic_shared_ptr)
+	mPoolState.store(std::move(pool), std::memory_order_release);
+#else
+	std::atomic_store_explicit(&mPoolState, std::move(pool), std::memory_order_release);
+#endif
 }
 
 bool ThreadPoolExecutor::setup(std::optional<unsigned> threadCount) {
@@ -619,14 +655,14 @@ ThreadPoolExecutor::~ThreadPoolExecutor() {
 }
 
 bool ThreadPoolExecutor::isExecutingOnThisThread() const {
-	if (const auto pool = loadPoolState()) {
-		if (gWorkerPool == pool.get()) {
+	// Workers and active helpers keep their PoolState alive through the callback.
+	// The counter is the executor's stable identity across setup/terminate cycles.
+	if (gWorkerPool && gWorkerPool->mInflightCounter == mInflightCounter) {
+		return true;
+	}
+	for (const auto* active = gActiveJob; active; active = active->mParent) {
+		if (active->mPool->mInflightCounter == mInflightCounter) {
 			return true;
-		}
-		for (const auto* active = gActiveJob; active; active = active->mParent) {
-			if (active->mPool == pool.get()) {
-				return true;
-			}
 		}
 	}
 	return false;
@@ -752,10 +788,16 @@ std::shared_ptr<ITask> ThreadPoolExecutor::addTaskFront(std::unique_ptr<ITask>&&
 	return pool ? pool->schedule(std::move(task), threadID, true) : nullptr;
 }
 
+std::shared_ptr<ITask> ThreadPoolExecutor::schedule(std::shared_ptr<ITask> task, int threadID, bool front) {
+	auto pool = loadPoolState();
+	return pool ? pool->schedule(std::move(task), threadID, front) : nullptr;
+}
+
 std::shared_ptr<ITask> PoolState::schedule(std::shared_ptr<ITask> task, int threadID, bool front) {
 	if (!task) {
 		return nullptr;
 	}
+	task->captureSubmissionScope();
 	const auto upstream = task->getUpstreamTask();
 	const bool stealable = threadID < 0;
 	std::size_t threadIndex = 0;
@@ -849,6 +891,7 @@ void PoolState::cancelWaitingTasks() {
 }
 
 void PoolState::cancelTask(ITask& task) {
+	const UTILS::TaskBorrowScope borrows(task.mBorrowState);
 	const ActiveJob cancellation { this, nullptr, gActiveJob };
 	gActiveJob = &cancellation;
 	task.cancel();
@@ -898,7 +941,12 @@ std::shared_ptr<ITask> NewThreadExecutor::addTask(std::unique_ptr<ITask>&& task)
 	++id;
 	mThreads.push_back(std::move(thread));
 	mInflightCounter->increment();
-	return mThreads.back()->addTask(std::move(task));
+	try {
+		return mThreads.back()->addTask(std::move(task));
+	} catch (...) {
+		mInflightCounter->decrement();
+		throw;
+	}
 }
 
 size_t NewThreadExecutor::getThreadCounts() {
@@ -952,6 +1000,7 @@ void Thread::cancelPendingTasks() {
 				mPoolState->cancelTask(**task);
 			}
 			else {
+				const IKIGAI::UTILS::TaskBorrowScope borrows((*task)->mBorrowState);
 				(*task)->cancel();
 				if (mInflightCounter) {
 					mInflightCounter->decrement();
@@ -967,9 +1016,9 @@ void Thread::join() {
 	}
 }
 
-void Thread::signalWork() {
+void Thread::signalWork(bool wakeAll) {
 	if (mPoolState) {
-		mPoolState->notifyWork();
+		mPoolState->notifyWork(wakeAll);
 	}
 }
 
@@ -982,6 +1031,7 @@ size_t Thread::getUnfinishedWorkCount() {
 }
 
 std::shared_ptr<ITask> Thread::addTask(std::shared_ptr<ITask>&& task, bool stealable) {
+	task->captureSubmissionScope();
 	std::shared_ptr<ITask> l_result { task };
 	if (stealable) {
 		mUnboundQueue.push(std::move(task));
@@ -989,11 +1039,13 @@ std::shared_ptr<ITask> Thread::addTask(std::shared_ptr<ITask>&& task, bool steal
 	else {
 		mBoundQueue.push(std::move(task));
 	}
-	signalWork();
+	// Every worker can steal an unbound task. A bound task must wake its owner.
+	signalWork(!stealable);
 	return l_result;
 }
 
 std::shared_ptr<ITask> Thread::addTaskFront(std::shared_ptr<ITask>&& task, bool stealable) {
+	task->captureSubmissionScope();
 	std::shared_ptr<ITask> l_result { task };
 	if (stealable) {
 		mUnboundQueue.pushFront(std::move(task));
@@ -1001,7 +1053,7 @@ std::shared_ptr<ITask> Thread::addTaskFront(std::shared_ptr<ITask>&& task, bool 
 	else {
 		mBoundQueue.pushFront(std::move(task));
 	}
-	signalWork();
+	signalWork(!stealable);
 	return l_result;
 }
 
@@ -1065,15 +1117,18 @@ std::optional<std::shared_ptr<ITask>> Thread::trySteal() {
 }
 
 void Thread::runQueuedTask(std::shared_ptr<ITask> task) {
+	const IKIGAI::UTILS::TaskBorrowScope borrows(task->mBorrowState);
 	if (mPoolState && !mPoolState->mAcceptingTasks.load()) {
 		mPoolState->cancelTask(*task);
 		return;
 	}
 	mThreadState = ThreadState::BUSY;
 	try {
-		const std::string taskName = task->getName();
 		IKIGAI_PROFILE_SCOPE("Execute Task");
+#if defined(IKIGAI_ENABLE_TRACY)
+		const std::string taskName = task->getName();
 		IKIGAI_PROFILE_ZONE_TEXT(taskName.data(), taskName.size());
+#endif
 		executeTask(task);
 	} catch (...) {
 		// A failure before execute (for example allocating the profiling name) still settles the handle.

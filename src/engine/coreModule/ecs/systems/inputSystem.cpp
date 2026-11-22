@@ -7,6 +7,7 @@
 IKIGAI::ECS::InputSystem::InputSystem() {
 	// mComponentsRead.insert(typeid(InputComponent).name());
 	mName = "InputSystem";
+	setPhases({ SystemPhase::Update });
 	mPriority = 20;
 	mExclusiveBatch = true;
 	auto cm = RESOURCES::ServiceManager::Get<ECS::World>().getComponentManager();

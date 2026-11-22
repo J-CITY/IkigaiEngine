@@ -138,7 +138,10 @@ bool TaskSystem::setup() {
 		logTaskException("Task worker stop source startup failed", std::current_exception());
 		return false;
 	}
-	if (!mThreadPoolExecutor.setup()) {
+	// Leave CPU time for the frame owner and background work, including on machines with an unknown CPU count.
+	const auto hardwareThreads = std::thread::hardware_concurrency();
+	const auto frameWorkers = hardwareThreads > 2 ? hardwareThreads - 2 : 1u;
+	if (!mThreadPoolExecutor.setup(frameWorkers)) {
 		return false;
 	}
 	if (!mBackgroundExecutor.setup(2)) {
@@ -281,12 +284,8 @@ size_t TaskSystem::getThreadCounts() {
 	return isAccepting() ? mThreadPoolExecutor.getThreadCounts() : 0;
 }
 
-std::shared_ptr<ITask> TaskSystem::addTask(std::unique_ptr<ITask>&& task, int threadID) {
-	return isAccepting() ? mThreadPoolExecutor.addTask(std::move(task), threadID) : nullptr;
-}
-
-std::shared_ptr<ITask> TaskSystem::addTaskFront(std::unique_ptr<ITask>&& task, int threadID) {
-	return isAccepting() ? mThreadPoolExecutor.addTaskFront(std::move(task), threadID) : nullptr;
+std::shared_ptr<ITask> TaskSystem::schedule(std::shared_ptr<ITask> task, int threadID, bool front) {
+	return isAccepting() ? mThreadPoolExecutor.schedule(std::move(task), threadID, front) : nullptr;
 }
 
 std::shared_ptr<ITask> TaskSystem::addTaskInNewThread(std::unique_ptr<ITask>&& task) {
