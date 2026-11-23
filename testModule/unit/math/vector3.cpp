@@ -5,6 +5,8 @@
 
 #include "utilsModule/serialization/jsonAdapters.h"
 
+#include <stdexcept>
+
 using IKIGAI::MATH::Vector3f;
 using IKIGAI::TEST::expect;
 using IKIGAI::TEST::expectNear;
@@ -47,8 +49,8 @@ void runVector3() {
 	const Vector3f lerp1 = Vector3f::Lerp(a, b, 1.f);
 	expect(lerp1 == b, "vector3.lerp.1");
 
-	expectThrows([] { (void)Vector3f::Divide(Vector3f(1.f, 2.f, 3.f), 0.f); }, "vector3.divide.zero");
-	expectThrows(
+	expectThrows<std::logic_error>([] { (void)Vector3f::Divide(Vector3f(1.f, 2.f, 3.f), 0.f); }, "vector3.divide.zero");
+	expectThrows<std::out_of_range>(
 		[] {
 			Vector3f v;
 			(void)v[3];

@@ -1,5 +1,8 @@
 .vs/
 build/
+!/utils/build/
+/utils/build/*
+!/utils/build/reflection_*.py
 out/
 CMakeFiles/
 *.dll

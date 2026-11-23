@@ -4,6 +4,7 @@
 #include "mathModule/math.h"
 
 #include <cmath>
+#include <stdexcept>
 
 using IKIGAI::MATH::Vector4f;
 using IKIGAI::TEST::expect;
@@ -54,7 +55,7 @@ void runVector4() {
 	}
 	expect(zeroNormalizeSafe, "vector4.normalize.zero");
 
-	expectThrows(
+	expectThrows<std::out_of_range>(
 		[] {
 			Vector4f v;
 			(void)v[4];

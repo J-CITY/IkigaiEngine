@@ -3,7 +3,8 @@
 
 #include "mathModule/math.h"
 
-#include <cmath>
+#include <limits>
+#include <stdexcept>
 
 using IKIGAI::MATH::Matrix3f;
 using IKIGAI::MATH::Vector3f;
@@ -22,7 +23,7 @@ namespace {
 		for (unsigned row = 0; row < 3; ++row) {
 			for (unsigned col = 0; col < 3; ++col) {
 				const float expected = row == col ? 1.f : 0.f;
-				if (std::fabs(at(m, row, col) - expected) > eps) {
+				if (!near(at(m, row, col), expected, eps)) {
 					return false;
 				}
 			}
@@ -33,7 +34,7 @@ namespace {
 	bool matrixNear(const Matrix3f& a, const Matrix3f& b, float eps = 1e-4f) {
 		for (unsigned row = 0; row < 3; ++row) {
 			for (unsigned col = 0; col < 3; ++col) {
-				if (std::fabs(at(a, row, col) - at(b, row, col)) > eps) {
+				if (!near(at(a, row, col), at(b, row, col), eps)) {
 					return false;
 				}
 			}
@@ -46,6 +47,8 @@ namespace {
 void runMatrix3() {
 	const Matrix3f identity = Matrix3f::Identity;
 	expectNear(Matrix3f::Determinant(identity), 1.f, "matrix3.det.identity");
+	const Matrix3f nonFinite(1.f, 0.f, 0.f, 0.f, 1.f, 0.f, 0.f, 0.f, std::numeric_limits<float>::quiet_NaN());
+	expect(!matrixNearIdentity(nonFinite) && !matrixNear(nonFinite, identity), "matrix3.comparisons.rejectNaN");
 
 	const Matrix3f m(2.f, 0.f, 0.f, 0.f, 3.f, 0.f, 0.f, 0.f, 4.f);
 	expect(matrixNear(identity * m, m), "matrix3.identity.multiply");
@@ -63,7 +66,7 @@ void runMatrix3() {
 	expectNear(col0.y, 4.f, "matrix3.column.y");
 	expectNear(col0.z, 7.f, "matrix3.column.z");
 
-	expectThrows([] { (void)Matrix3f::Inverse(Matrix3f::Zero); }, "matrix3.inverse.singular");
+	expectThrows<std::logic_error>([] { (void)Matrix3f::Inverse(Matrix3f::Zero); }, "matrix3.inverse.singular");
 }
 
 } // namespace IKIGAI::TEST::MATH

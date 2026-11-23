@@ -4,6 +4,7 @@
 #include "mathModule/geometry/aabb.h"
 
 #include <limits>
+#include <stdexcept>
 
 using IKIGAI::MATH::GEOMETRY::Aabb;
 using IKIGAI::TEST::expect;
@@ -31,7 +32,7 @@ void runAabb() {
 	expect(merged.min[0] == 0.f && merged.min[1] == 0.f && merged.min[2] == 0.f, "aabb.merge.min");
 	expect(merged.max[0] == 2.f && merged.max[1] == 2.f && merged.max[2] == 2.f, "aabb.merge.max");
 
-	expectThrows(
+	expectThrows<std::invalid_argument>(
 		[] {
 			Box invalid;
 			invalid.min = { 1.f, 0.f, 0.f };
@@ -40,7 +41,7 @@ void runAabb() {
 		},
 		"aabb.validate.min_gt_max");
 
-	expectThrows(
+	expectThrows<std::invalid_argument>(
 		[] {
 			Box invalid;
 			invalid.min = { std::numeric_limits<float>::quiet_NaN(), 0.f, 0.f };

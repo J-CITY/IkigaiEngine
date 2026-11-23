@@ -11,7 +11,12 @@ function(ikigai_add_reflection)
     set(root "${IKIGAI_CODEGEN_ROOT}")
     set(output_dir "${CMAKE_BINARY_DIR}/generated")
     set(tool "${root}/utils/build/IkigaiHeaderTool.py")
-    set(parser "${root}/utils/build/header_parser.py")
+    set(tool_inputs "${tool}"
+        "${root}/utils/build/header_parser.py"
+        "${root}/utils/build/reflection_annotations.py"
+        "${root}/utils/build/reflection_model.py"
+        "${root}/utils/build/reflection_render.py"
+        "${root}/uv.lock")
     set(headers)
     foreach(module IN LISTS IKIGAI_MODULE_MANIFEST_NAMES)
         foreach(file IN LISTS IKIGAI_MANIFEST_${module})
@@ -22,7 +27,7 @@ function(ikigai_add_reflection)
         endforeach()
     endforeach()
     # Header edits can add/remove reflected types, changing the output manifest.
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${headers} "${tool}" "${parser}")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${headers} ${tool_inputs})
     execute_process(COMMAND "${Python3_EXECUTABLE}" "${tool}"
         "${root}/src" "${output_dir}" --list-outputs
         OUTPUT_VARIABLE manifest OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -44,7 +49,7 @@ function(ikigai_add_reflection)
     add_custom_command(OUTPUT "${stamp}" ${outputs}
         COMMAND "${Python3_EXECUTABLE}" "${tool}" "${root}/src" "${output_dir}"
         COMMAND "${CMAKE_COMMAND}" -E touch "${stamp}" ${outputs}
-        DEPENDS ${headers} "${tool}" "${parser}" "${input_manifest}"
+        DEPENDS ${headers} ${tool_inputs} "${input_manifest}"
         COMMENT "Generating engine reflection in the build tree" VERBATIM)
     add_custom_target(ikigai_reflection DEPENDS "${stamp}" ${outputs})
     set_property(TARGET ikigai_reflection PROPERTY IKIGAI_GENERATED_SOURCES "${sources}")

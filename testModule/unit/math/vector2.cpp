@@ -3,6 +3,8 @@
 
 #include "mathModule/vector2.h"
 
+#include <stdexcept>
+
 using IKIGAI::MATH::Vector2f;
 using IKIGAI::TEST::expect;
 using IKIGAI::TEST::expectNear;
@@ -30,7 +32,7 @@ void runVector2() {
 	expectNear(unit.x, 1.f, "vector2.normalize.x");
 	expectNear(unit.y, 0.f, "vector2.normalize.y");
 
-	expectThrows(
+	expectThrows<std::out_of_range>(
 		[] {
 			Vector2f v;
 			(void)v[2];

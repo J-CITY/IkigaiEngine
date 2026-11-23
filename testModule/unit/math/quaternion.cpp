@@ -4,6 +4,7 @@
 #include "mathModule/math.h"
 
 #include <cmath>
+#include <stdexcept>
 
 using IKIGAI::MATH::Matrix4f;
 using IKIGAI::MATH::QuaternionF;
@@ -54,8 +55,14 @@ void runQuaternion() {
 	const QuaternionF b = rotY;
 	expect(quatNear(QuaternionF::Slerp(a, b, 0.f), a), "quaternion.slerp.0");
 	expect(quatNear(QuaternionF::Slerp(a, b, 1.f), b), "quaternion.slerp.1");
+	// At one third of a quarter turn the rotation is 30 degrees.
+	const auto third = QuaternionF::Slerp(a, b, 1.f / 3.f);
+	const auto point = QuaternionF::RotatePoint(Vector3f { 1.f, 0.f, 0.f }, third);
+	expectNear(point.x, std::sqrt(3.f) / 2.f, "quaternion.slerp.third.x");
+	expectNear(point.y, 0.f, "quaternion.slerp.third.y");
+	expectNear(point.z, -0.5f, "quaternion.slerp.third.z");
 
-	expectThrows(
+	expectThrows<std::logic_error>(
 		[] {
 			const QuaternionF denorm(2.f, 0.f, 0.f, 0.f);
 			(void)QuaternionF::ToMatrix4(denorm);

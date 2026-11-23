@@ -3,8 +3,8 @@
 
 #include "mathModule/math.h"
 
-#include <cmath>
-#include <cstdint>
+#include <limits>
+#include <stdexcept>
 
 using IKIGAI::MATH::Matrix4f;
 using IKIGAI::MATH::TO_RADIANS;
@@ -25,7 +25,7 @@ namespace {
 		for (unsigned row = 0; row < 4; ++row) {
 			for (unsigned col = 0; col < 4; ++col) {
 				const float expected = row == col ? 1.f : 0.f;
-				if (std::fabs(at(m, row, col) - expected) > eps) {
+				if (!near(at(m, row, col), expected, eps)) {
 					return false;
 				}
 			}
@@ -47,6 +47,13 @@ void runMatrix4() {
 	expectNear(rotated.x, 0.f, "matrix4.rotateY.x");
 	expectNear(rotated.y, 0.f, "matrix4.rotateY.y");
 	expectNear(rotated.z, -1.f, "matrix4.rotateY.z");
+	// Rotate (1, 2, 3) to (3, 2, -1), then add (2, 3, 4).
+	const auto composed = (translation * rotY) * Vector3f { 1.f, 2.f, 3.f };
+	expectNear(composed.x, 5.f, "matrix4.compose.x");
+	expectNear(composed.y, 5.f, "matrix4.compose.y");
+	expectNear(composed.z, 3.f, "matrix4.compose.z");
+	const auto nonFinite = Matrix4f::Translation(Vector3f { std::numeric_limits<float>::quiet_NaN(), 0.f, 0.f });
+	expect(!matrixNearIdentity(nonFinite), "matrix4.identityComparison.rejectsNaN");
 
 	const Matrix4f m = Matrix4f::Scaling(Vector3f(2.f, 3.f, 4.f)) * Matrix4f::Translation(Vector3f(1.f, 2.f, 3.f));
 	const Matrix4f inv = Matrix4f::Inverse(m);
@@ -78,7 +85,7 @@ void runMatrix4() {
 	expectNear(Vector3f::Dot(rightAxis, forwardAxis), 0.f, "matrix4.view.right.forward");
 	expectNear(Vector3f::Dot(upAxis, forwardAxis), 0.f, "matrix4.view.up.forward");
 
-	expectThrows([] { (void)Matrix4f::Inverse(Matrix4f::Zero); }, "matrix4.inverse.singular");
+	expectThrows<std::logic_error>([] { (void)Matrix4f::Inverse(Matrix4f::Zero); }, "matrix4.inverse.singular");
 }
 
 } // namespace IKIGAI::TEST::MATH

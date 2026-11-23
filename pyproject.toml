@@ -6,6 +6,8 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "certifi>=2025.1.31",
     "gdown>=5.2",
+    "tree-sitter>=0.26.1",
+    "tree-sitter-cpp>=0.23.4",
 ]
 
 [project.optional-dependencies]

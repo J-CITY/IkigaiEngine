@@ -26,6 +26,8 @@ jobs:
       - uses: actions/checkout@v7
       - name: Initialize core and test header dependencies
         run: git submodule update --init --depth 1 -- 3rd/serdepp 3rd/json 3rd/nameof 3rd/magic_enum
+      - name: Initialize VFS test dependencies
+        run: git submodule update --init --recursive --depth 1 -- 3rd/vfspp
       - name: Configure without graphics SDKs or local test sources
         run: cmake --preset ${{ matrix.preset }}
       - name: Build production core libraries
@@ -50,11 +52,20 @@ jobs:
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
+      - name: Initialize Vulkan and DX12 build dependencies
+        run: >-
+          git submodule update --init --recursive --depth 1 --
+          3rd/ArgParse 3rd/assimp 3rd/fmt 3rd/freetype 3rd/glslang
+          3rd/imgui/IconFont 3rd/imgui/imgui 3rd/json 3rd/lua
+          3rd/magic_enum 3rd/nameof 3rd/serdepp 3rd/sol 3rd/soloud 3rd/stb 3rd/vfspp
+          3rd/SDL3 3rd/SPIRV-Cross 3rd/SPIRV-Reflect 3rd/volk 3rd/Vulkan-Headers 3rd/VMA 3rd/D3D12MA
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - name: Install locked build-host dependencies
+        run: |
+          python -m pip install uv
+          python -m uv sync --locked
       - name: Configure production renderer without local tests
         run: >-
           cmake --preset windows -B build/windows/renderer

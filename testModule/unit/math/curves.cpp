@@ -3,6 +3,8 @@
 
 #include "mathModule/curves.h"
 
+#include <stdexcept>
+
 using IKIGAI::MATH::CURVES::Curve;
 using IKIGAI::MATH::CURVES::evaluateAtTime;
 using IKIGAI::MATH::CURVES::FloatCurve;
@@ -15,13 +17,14 @@ using IKIGAI::MATH::CURVES::SegmentInterpolation;
 using IKIGAI::TEST::expect;
 using IKIGAI::TEST::expectNear;
 using IKIGAI::TEST::expectThrows;
+using IKIGAI::TEST::require;
 
 namespace IKIGAI::TEST::MATH {
 namespace {
 
 	void expectEasingEnds(InterpolationType type, const char* zeroName, const char* oneName) {
 		const auto fn = getEasing(type);
-		expect(fn != nullptr, zeroName);
+		require(fn != nullptr, zeroName);
 		expectNear(fn(0.f), 0.f, zeroName);
 		expectNear(fn(1.f), 1.f, oneName);
 	}
@@ -61,14 +64,14 @@ void runCurves() {
 	step.validate();
 	expectNear(step.evaluate(0.5f), 3.f, "curves.float.step");
 
-	expectThrows(
+	expectThrows<std::invalid_argument>(
 		[] {
 			FloatCurve empty;
 			empty.validate();
 		},
 		"curves.float.empty");
 
-	expectThrows(
+	expectThrows<std::invalid_argument>(
 		[] {
 			FloatCurve unordered;
 			unordered.keys = {

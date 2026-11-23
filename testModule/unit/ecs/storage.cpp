@@ -29,10 +29,10 @@ namespace {
 		const Entity loaded { Entity::ID { entity.getUniqueId().value() + 4096 } };
 		world.registerEntity(loaded);
 		expect(world.createEntity().getUniqueId().value() > loaded.getUniqueId().value(), "generated IDs advance past imported IDs");
-		expectThrows([&] { world.registerEntity(Entity {}); }, "invalid IDs cannot be registered");
+		expectThrows<std::invalid_argument>([&] { world.registerEntity(Entity {}); }, "invalid IDs cannot be registered");
 		otherWorld.registerEntity(entity);
 		const auto entityHandle = components.getEntityHandle(entity);
-		expectThrows([&] { world.registerEntity(entity); }, "duplicate IDs cannot be registered in one world");
+		expectThrows<std::logic_error>([&] { world.registerEntity(entity); }, "duplicate IDs cannot be registered in one world");
 		const auto position = components.addComponent(entity, Position { 10 });
 		expect(components.resolveEntity(entityHandle) == entity, "live entity resolves");
 		expect(!otherWorld.getComponentManager()->resolveEntity(entityHandle), "foreign entity handle is rejected");
@@ -97,8 +97,9 @@ namespace {
 		}
 		const auto compact = entities.front();
 		const auto dense = entities.back();
-		expectThrows([&] { world.registerEntity(compact); }, "records remain unique when dense and compact storage share an ID page");
-		expectThrows([&] { world.registerEntity(dense); }, "dense records remain unique after supplied IDs switch to pages");
+		expectThrows<std::logic_error>(
+			[&] { world.registerEntity(compact); }, "records remain unique when dense and compact storage share an ID page");
+		expectThrows<std::logic_error>([&] { world.registerEntity(dense); }, "dense records remain unique after supplied IDs switch to pages");
 		const auto compactHandle = components.addComponent(compact, Position { 1 });
 		const auto denseHandle = components.addComponent(dense, Position { 12 });
 		world.destroyEntity(compact);
@@ -190,7 +191,7 @@ namespace {
 		expect(updated && updated->value == 9, "mixed query writes the owning component");
 
 		components.forEach<Read<Position>>([&](Entity e, const Position&) {
-			expectThrows([&] { world.destroyEntity(e); }, "immediate structural edit during a query is rejected");
+			expectThrows<std::logic_error>([&] { world.destroyEntity(e); }, "immediate structural edit during a query is rejected");
 		});
 	}
 
@@ -467,12 +468,13 @@ void checkIndexedTransitionFailure() {
 	using namespace ECS;
 	World world { ArchetypeLayout::SharedRows };
 	auto& components = *world.getComponentManager();
-	expectThrows([&] { components.registerComponent<ThrowingValue>(); }, "shared rows reject potentially throwing dense relocation");
+	expectThrows<std::invalid_argument>(
+		[&] { components.registerComponent<ThrowingValue>(); }, "shared rows reject potentially throwing dense relocation");
 	components.registerComponent<ThrowingValue>(StorageType::Sparse);
 	components.registerComponent<Health>(StorageType::Sparse);
 	const auto entity = world.createEntity();
 	const auto position = components.addComponent(entity, Position { 17 });
-	expectThrows([&] { components.addComponents(entity, Velocity { 5 }, Health { 10 }, ThrowingValue { true }); },
+	expectThrows<std::runtime_error>([&] { components.addComponents(entity, Velocity { 5 }, Health { 10 }, ThrowingValue { true }); },
 		"a failed sparse insertion aborts the prepared indexed transition");
 	expect(components.resolveComponent(position) && components.resolveComponent(position)->value == 17, "the original row survives a failed append");
 	expect(!components.checkComponent<Health>(entity) && !components.checkComponent<Velocity>(entity), "failed append leaves no added components");
@@ -558,7 +560,8 @@ void checkArchetypeBatch(ECS::ArchetypeLayout layout) {
 	}
 	const auto previous = components.addComponent(entities.front(), Shield { 1 });
 	const std::array missing { entities.back(), Entity {} };
-	expectThrows([&] { components.addArchetypeComponentBatch(missing, Shield { 10 }); }, "invalid entity is detected before changing the batch");
+	expectThrows<std::out_of_range>(
+		[&] { components.addArchetypeComponentBatch(missing, Shield { 10 }); }, "invalid entity is detected before changing the batch");
 	expect(!components.checkComponent<Shield>(entities.back()), "batch preflight leaves valid candidates unchanged on failure");
 
 	std::vector<Entity> edits(entities.rbegin(), entities.rend());
@@ -655,9 +658,9 @@ void checkGenerationRange() {
 	struct TestGeneration;
 	IdSequence<TestGeneration, std::uint8_t, 1, 5> sequence;
 	expect(sequence.nextRange(3).value() == 1, "generation reservation starts at the next free generation");
-	expectThrows([&] { sequence.nextRange(3); }, "generation reservation checks the entire range");
+	expectThrows<std::overflow_error>([&] { sequence.nextRange(3); }, "generation reservation checks the entire range");
 	expect(sequence.next().value() == 4 && sequence.nextRange(1).value() == 5, "failed generation reservation leaves the sequence intact");
-	expectThrows([&] { sequence.next(); }, "sequence is exhausted after reserving its last generation");
+	expectThrows<std::overflow_error>([&] { sequence.next(); }, "sequence is exhausted after reserving its last generation");
 }
 
 void checkScatteredArchetypeBatch() {
