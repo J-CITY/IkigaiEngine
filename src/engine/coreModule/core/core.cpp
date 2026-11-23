@@ -18,8 +18,8 @@
 #include "coreModule/ecs/componentCatalog.h"
 #include "coreModule/ecs/components/particleSystemComponent.h"
 #include "coroutineModule/scheduler.h"
-#include "resourceModule/particleManager.h"
 #include "imguiViewsModule/viewHost.h"
+#include "resourceModule/particleManager.h"
 #include "utilsModule/assertion.h"
 #include "utilsModule/log/loggerDefine.h"
 
@@ -31,8 +31,8 @@
 #include <iostream>
 #include <resourceModule/jsonLoader.h>
 #include <stdexcept>
-#include <utilsModule/log/logger.h>
 #include <utility>
+#include <utilsModule/log/logger.h>
 #include <vector>
 
 #include "../config.h"
@@ -74,7 +74,6 @@
 #include <sceneModule/sceneManager.h>
 #include <taskModule/taskSystem.h>
 
-#include "aiModule/navigation/pathQuery.h"
 #include "coreModule/ecs/components/batchComponent.h"
 #include "coreModule/ecs/components/renderTargetComponent.h"
 #include "ecsModule/world.h"
@@ -84,8 +83,11 @@
 #endif
 #include "renderModule/gameRenderer.h"
 #include "renderModule/render.h"
+#if USE_AI
+#include "aiModule/navigation/pathQuery.h"
 #include "resourceModule/behaviorTreeManager.h"
 #include "resourceModule/blackboardManager.h"
+#endif
 #include "resourceModule/skeletonAnimationManager.h"
 #include "resourceModule/skeletonBlendspaceManager.h"
 #include "resourceModule/skeletonManager.h"
@@ -404,8 +406,10 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 
 	skeletonLoader = std::make_unique<RESOURCES::SkeletonLoader>();
 	skeletalStateGraphLoader = std::make_unique<RESOURCES::SkeletonStateGraphLoader>();
+#if USE_AI
 	behaviorTreeLoader = std::make_unique<RESOURCES::BehaviorTreeLoader>();
 	blackboardLoader = std::make_unique<RESOURCES::BlackboardLoader>();
+#endif
 #if USE_PHYSICS_3D
 	ragdollLoader = std::make_unique<RESOURCES::RagdollLoader>();
 	RESOURCES::ServiceManager::Set<RESOURCES::RagdollLoader>(ragdollLoader.get());
@@ -419,9 +423,11 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonLoader>(skeletonLoader.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonStateGraphLoader>(skeletalStateGraphLoader.get());
+#if USE_AI
 	RESOURCES::ServiceManager::Set<RESOURCES::BehaviorTreeLoader>(behaviorTreeLoader.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::BlackboardLoader>(blackboardLoader.get());
 	AI::registerDefaultPathQuery();
+#endif
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonBlendspaceLoader>(skeletonBlendspaceLoader.get());
 	RESOURCES::ServiceManager::Set<RESOURCES::SkeletonAnimationLoader>(skeletonAnimationLoader.get());
 	ConfigureSceneResourcePreparation(*sceneManager);

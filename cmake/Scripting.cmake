@@ -47,5 +47,3 @@ function(ikigai_configure_scripting target)
         set_property(TARGET ${target} PROPERTY SOURCES "${sources}")
     endif()
 endfunction()
-
-include("${CMAKE_CURRENT_LIST_DIR}/../utils/tests/cmake/Scripting.cmake" OPTIONAL)

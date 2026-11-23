@@ -229,9 +229,6 @@ target_link_libraries(main PRIVATE ikigai_vector)
 ikigai_apply_feature_definitions(main)
 
 ikigai_configure_scripting(main)
-if(COMMAND ikigai_add_scripting_tests)
-    ikigai_add_scripting_tests(main)
-endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/Networking.cmake")
 ikigai_configure_network(main)

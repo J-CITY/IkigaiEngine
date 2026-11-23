@@ -337,20 +337,8 @@ set_target_properties(${APP_NAME} PROPERTIES LINK_FLAGS "/NODEFAULTLIB:LIBCMT /N
 
 # Independent vector geometry and SDF font module
 target_link_libraries(${APP_NAME} PRIVATE ikigai_vector)
-if(IKIGAI_VECTOR_TESTS)
-    add_executable(ikigai_vector_components_tests "${IKIGAI_PLATFORM_ROOT}/utils/tests/vector_components.cpp")
-    get_target_property(vector_engine_includes ${APP_NAME} INCLUDE_DIRECTORIES)
-    target_include_directories(ikigai_vector_components_tests PRIVATE ${vector_engine_includes})
-    target_compile_features(ikigai_vector_components_tests PRIVATE cxx_std_20)
-    target_compile_definitions(ikigai_vector_components_tests PRIVATE NOMINMAX)
-    target_compile_options(ikigai_vector_components_tests PRIVATE /bigobj)
-    add_test(NAME vector_components COMMAND ikigai_vector_components_tests)
-endif()
 
 ikigai_configure_scripting(${APP_NAME})
-if(COMMAND ikigai_add_scripting_tests)
-    ikigai_add_scripting_tests(${APP_NAME})
-endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/../Networking.cmake")
 ikigai_configure_network(${APP_NAME})

@@ -27,8 +27,3 @@ endif()
 if(EMSCRIPTEN)
     target_link_options(ikigai_coroutines INTERFACE -fexceptions)
 endif()
-
-option(IKIGAI_COROUTINE_TESTS "Unsupported legacy coroutine test attachment" OFF)
-if(IKIGAI_COROUTINE_TESTS)
-    message(FATAL_ERROR "IKIGAI_COROUTINE_TESTS no longer attaches tests to production. The coroutine suite must first be migrated to the optional testModule.")
-endif()

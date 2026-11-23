@@ -1,17 +1,6 @@
 include_guard(GLOBAL)
 option(USE_JSON_VIEWS "Enable JSON editor/debug windows independently of USE_EDITOR" ON)
-option(IKIGAI_JSON_VIEW_TESTS "Build headless JSON view/controller regression tests" OFF)
-if(IKIGAI_JSON_VIEW_TESTS)
-    enable_testing()
-endif()
 
 function(ikigai_configure_json_views target)
     target_compile_definitions(${target} PRIVATE USE_JSON_VIEWS=$<BOOL:${USE_JSON_VIEWS}>)
-    if(IKIGAI_JSON_VIEW_TESTS)
-        ikigai_configure_json_view_tests(${target})
-    endif()
 endfunction()
-
-if(IKIGAI_JSON_VIEW_TESTS)
-    include("${CMAKE_CURRENT_LIST_DIR}/../utils/tests/cmake/JsonViews.cmake" OPTIONAL)
-endif()

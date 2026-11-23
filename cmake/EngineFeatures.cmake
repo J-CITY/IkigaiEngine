@@ -18,6 +18,23 @@ endif()
 foreach(ikigai_source_list PROJECT_ABSOLUTE_SOURCES PROJECT_SOURCES)
     ikigai_exclude_sources(${ikigai_source_list}
         "EcsDemo.cpp")
+    # These modules stay out of the link. Call sites compile against header stubs
+    # (capture, profiler) or are omitted with the ECS glue (AI).
+    if(NOT USE_AI)
+        ikigai_exclude_sources(${ikigai_source_list} ${IKIGAI_MANIFEST_aiModule}
+            "engine/coreModule/ecs/characterBehaviorHost.cpp"
+            "engine/coreModule/ecs/components/behaviorTreeComponent.cpp"
+            "engine/coreModule/ecs/components/blackboardComponent.cpp"
+            "engine/coreModule/ecs/systems/behaviorTreeSystem.cpp"
+            "engine/resourceModule/behaviorTreeManager.cpp"
+            "engine/resourceModule/blackboardManager.cpp")
+    endif()
+    if(NOT USE_CAPTURE)
+        ikigai_exclude_sources(${ikigai_source_list} ${IKIGAI_MANIFEST_captureModule})
+    endif()
+    if(NOT USE_PROFILER)
+        ikigai_exclude_sources(${ikigai_source_list} ${IKIGAI_MANIFEST_profilerModule})
+    endif()
     if(USE_RAY_TRACING)
         ikigai_exclude_sources(${ikigai_source_list}
             "engine/renderModule/gameRayTracingStub.cpp")
@@ -34,5 +51,8 @@ endforeach()
 function(ikigai_apply_feature_definitions target)
     target_compile_definitions(${target} PRIVATE
         USE_CHEATS=$<IF:$<CONFIG:Debug>,1,0>
-        USE_RAY_TRACING=$<BOOL:${USE_RAY_TRACING}>)
+        USE_RAY_TRACING=$<BOOL:${USE_RAY_TRACING}>
+        USE_AI=$<BOOL:${USE_AI}>
+        USE_CAPTURE=$<BOOL:${USE_CAPTURE}>
+        USE_PROFILER=$<BOOL:${USE_PROFILER}>)
 endfunction()

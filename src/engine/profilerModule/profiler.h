@@ -7,11 +7,16 @@
 
 #include "profilerReport.h"
 
+#ifndef USE_PROFILER
+#define USE_PROFILER 1
+#endif
+
 namespace IKIGAI::PROFILER {
 struct ProfilerSpy;
 
 class Profiler final {
 public:
+#if USE_PROFILER
 	Profiler();
 	ProfilerReport GenerateReport();
 
@@ -29,8 +34,33 @@ public:
 
 	static std::vector<ProfilerReport> getReportHistory();
 	static std::vector<float> getReportHistoryDurations();
+#else
+	Profiler() = default;
+	ProfilerReport GenerateReport() {
+		return {};
+	}
+	void ClearHistory() { }
+	void Update(float) { }
+	void UpdateEnd() { }
+	static void Save(ProfilerSpy&) { }
+	static bool IsEnabled() {
+		return false;
+	}
+	static void ToggleEnable() { }
+	static void Enable() { }
+	static void Disable() { }
+	static void IncreaseLevel() { }
+	static void DecreaseLevel() { }
+	static std::vector<ProfilerReport> getReportHistory() {
+		return {};
+	}
+	static std::vector<float> getReportHistoryDurations() {
+		return {};
+	}
+#endif
 
 private:
+#if USE_PROFILER
 	static constexpr uint32_t kReportHistoryCapacity = 256;
 
 	ProfilerReport generateReportUnlocked() const;
@@ -53,5 +83,6 @@ private:
 	static inline std::vector<ProfilerReport> __REPORT_HISTORY;
 	static inline std::vector<float> __REPORT_HISTORY_DURATIONS;
 	static inline uint32_t __REPORT_HISTORY_NEXT = 0;
+#endif
 };
 }

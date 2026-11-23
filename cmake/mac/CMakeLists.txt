@@ -330,9 +330,6 @@ endif()
 target_link_libraries(${APP_NAME} PRIVATE ikigai_vector)
 
 ikigai_configure_scripting(${APP_NAME})
-if(COMMAND ikigai_add_scripting_tests)
-    ikigai_add_scripting_tests(${APP_NAME})
-endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/../Networking.cmake")
 ikigai_configure_network(${APP_NAME})

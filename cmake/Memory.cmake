@@ -2,11 +2,6 @@
 include_guard(GLOBAL)
 include("${CMAKE_CURRENT_LIST_DIR}/MemoryTracking.cmake")
 
-option(IKIGAI_MEMORY_TESTS "Legacy allocator test attachment (configure testModule separately)" OFF)
-if(IKIGAI_MEMORY_TESTS)
-    message(FATAL_ERROR "IKIGAI_MEMORY_TESTS no longer attaches tests to production. Configure the optional testModule separately.")
-endif()
-
 get_filename_component(IKIGAI_MEMORY_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(IKIGAI_MEMORY_DIR "${IKIGAI_MEMORY_ROOT}/src/engine/utilsModule/memory")
 if(NOT TARGET ikigai_memory)

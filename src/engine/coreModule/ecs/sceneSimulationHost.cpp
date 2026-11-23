@@ -4,7 +4,6 @@
 #include "coreModule/ecs/components/ambientSphereLight.h"
 #include "coreModule/ecs/components/cameraComponent.h"
 #include "coreModule/ecs/components/directionalLight.h"
-#include "coreModule/ecs/systems/behaviorTreeSystem.h"
 #include "coreModule/ecs/systems/environmentSystem.h"
 #include "coreModule/ecs/systems/particleSimulationSystem.h"
 #include "coreModule/ecs/systems/skeletalStateGraphSystem.h"
@@ -22,6 +21,9 @@
 #endif
 #if USE_PHYSICS_2D
 #include "coreModule/ecs/systems/physics2dSystem.h"
+#endif
+#if USE_AI
+#include "coreModule/ecs/systems/behaviorTreeSystem.h"
 #endif
 #include <algorithm>
 #include <stdexcept>
@@ -137,19 +139,41 @@ namespace {
 
 		// Property bindings can target arbitrary components, so keep the fixed-step consumers ordered.
 		constexpr auto finishFixed = SystemPhase::FinishFixedUpdate;
+		const char* beforeVariables = nullptr;
+#if USE_AI
 		RegisterSceneSystem(systems, finishFixed, "BehaviorTree.ApplyCommands",
 			[](const ScenePhaseContext& frame, CommandBuffer&) { BehaviorTreeSystem::applyCommands(frame.scene); });
-		auto beforeVariables = "BehaviorTree.ApplyCommands";
+		beforeVariables = "BehaviorTree.ApplyCommands";
+#endif
 #if USE_PHYSICS_3D
-		registerAfter(systems, finishFixed, "Character.FixedUpdate", beforeVariables,
-			[](const ScenePhaseContext& frame, CommandBuffer&) { CharacterSystem::fixedUpdate(frame.scene, float(frame.dt.count())); });
+		if (beforeVariables) {
+			registerAfter(systems, finishFixed, "Character.FixedUpdate", beforeVariables,
+				[](const ScenePhaseContext& frame, CommandBuffer&) { CharacterSystem::fixedUpdate(frame.scene, float(frame.dt.count())); });
+		}
+		else {
+			RegisterSceneSystem(systems, finishFixed, "Character.FixedUpdate",
+				[](const ScenePhaseContext& frame, CommandBuffer&) { CharacterSystem::fixedUpdate(frame.scene, float(frame.dt.count())); });
+		}
 		beforeVariables = "Character.FixedUpdate";
 #endif
-		registerAfter(systems, finishFixed, "VariableContext.Update", beforeVariables,
-			[](const ScenePhaseContext& frame, CommandBuffer&) { VariableContextSystem::update(frame.scene); });
+		if (beforeVariables) {
+			registerAfter(systems, finishFixed, "VariableContext.Update", beforeVariables,
+				[](const ScenePhaseContext& frame, CommandBuffer&) { VariableContextSystem::update(frame.scene); });
+		}
+		else {
+			RegisterSceneSystem(systems, finishFixed, "VariableContext.Update",
+				[](const ScenePhaseContext& frame, CommandBuffer&) { VariableContextSystem::update(frame.scene); });
+		}
+#if USE_AI
 		registerAfter(systems, finishFixed, "BehaviorTree.Update", "VariableContext.Update",
 			[](const ScenePhaseContext& frame, CommandBuffer&) { BehaviorTreeSystem::update(frame.scene, frame.dt.count()); });
-		registerAfter(systems, finishFixed, "SkeletalStateGraph.Update", "BehaviorTree.Update",
+#endif
+		registerAfter(systems, finishFixed, "SkeletalStateGraph.Update",
+#if USE_AI
+			"BehaviorTree.Update",
+#else
+			"VariableContext.Update",
+#endif
 			[](const ScenePhaseContext& frame, CommandBuffer&) { SkeletalStateGraphSystem::update(frame.scene, float(frame.dt.count())); });
 #if USE_PHYSICS_3D
 		registerAfter(systems, finishFixed, "Ragdoll.AfterAnimation", "SkeletalStateGraph.Update",
