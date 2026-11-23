@@ -59,3 +59,4 @@ utils/tools/graphify.ps1
 # Machine-specific CMake overrides are not shared project configuration.
 /CMakeUserPresets.json
 
+/utils/tools/out

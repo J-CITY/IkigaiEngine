@@ -234,7 +234,7 @@ def write_dependency_graph(net):
     graph_container = '<div id="mynetwork"'
     html = net.generate_html().replace(graph_container, legend + graph_container, 1)
     body, footer = html.rsplit("</body>", 1)
-    output = Path("engine_dependencies.html")
+    output = Path("out/engine_dependencies.html")
     output.write_text(body + interaction + "</body>" + footer, encoding="utf-8")
     print(f"🎉 Интерактивный граф сохранен в: {output}")
 
