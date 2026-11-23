@@ -14,6 +14,7 @@ include(CMakeDependentOption)
 include("${CMAKE_CURRENT_LIST_DIR}/../EngineOptions.cmake")
 ikigai_configure_engine_options(win)
 option(USE_GPU_DRIVEN "Build GPU scene submission for ordinary meshes" ON)
+option(IKIGAI_MSVC_PARALLEL_COMPILE "Enable parallel compiler processes within each MSBuild project" ON)
 
 
 # --- Directory Setup ---
@@ -216,7 +217,10 @@ ikigai_configure_reflection(${APP_NAME})
 
 # Properties
 set_target_properties(${APP_NAME} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-target_compile_options(${APP_NAME} PRIVATE /bigobj /MP12 /Zm200)
+target_compile_options(${APP_NAME} PRIVATE /bigobj)
+if(IKIGAI_MSVC_PARALLEL_COMPILE)
+    target_compile_options(${APP_NAME} PRIVATE /MP12)
+endif()
 
 # Definitions
 target_compile_definitions(${APP_NAME} PRIVATE NOMINMAX)

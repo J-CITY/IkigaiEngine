@@ -2,6 +2,7 @@
 include_guard(GLOBAL)
 include("${CMAKE_CURRENT_LIST_DIR}/Math.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/JsonSerde.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/StopToken.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/VMeshFormat.cmake")
 get_filename_component(IKIGAI_VG_RUNTIME_DIR "${CMAKE_CURRENT_LIST_DIR}/../src/engine/virtualGeometryModule/runtime" ABSOLUTE)
 
@@ -17,6 +18,7 @@ add_library(ikigai_virtual_geometry STATIC
     "${IKIGAI_VG_RUNTIME_DIR}/virtualMeshPageSource.h")
 target_link_libraries(ikigai_virtual_geometry PUBLIC ikigai_math ikigai_vmesh_format ikigai_json_serde)
 target_compile_features(ikigai_virtual_geometry PUBLIC cxx_std_20)
+ikigai_enable_stop_token(ikigai_virtual_geometry)
 set_target_properties(ikigai_virtual_geometry PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(MSVC)
     target_compile_options(ikigai_virtual_geometry PRIVATE /utf-8)

@@ -72,5 +72,63 @@ jobs:
           -DUSE_VULKAN=${{ matrix.backend == 'Vulkan' && 'ON' || 'OFF' }} -DUSE_OPENGL=OFF
           -DUSE_DX12=${{ matrix.backend == 'DX12' && 'ON' || 'OFF' }} -DUSE_GPU_DRIVEN=ON
           -DUSE_NETWORK=OFF -DUSE_IKIGAI_SCRIPT=OFF -DENABLE_OPT=OFF -DIKIGAI_BUILD_TEST_MODULE=OFF
+          -DIKIGAI_MSVC_PARALLEL_COMPILE=OFF
       - name: Build the engine
-        run: cmake --build build/windows/renderer --config ${{ matrix.configuration }} --target IkigaiEngine --parallel 2
+        run: >-
+          cmake --build build/windows/renderer --config ${{ matrix.configuration }} --target IkigaiEngine --parallel 2
+          -- /p:UseStructuredOutput=false
+
+  unix-renderer:
+    name: ${{ matrix.platform }} ${{ matrix.backend }} Release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            platform: Linux
+            preset: linux-release
+            backend: Vulkan
+            backend_option: USE_VULKAN
+          - os: macos-15
+            platform: macOS
+            preset: mac-release
+            backend: Metal
+            backend_option: USE_METAL
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Initialize desktop renderer dependencies
+        run: >-
+          git submodule update --init --recursive --depth 1 --
+          3rd/ArgParse 3rd/assimp 3rd/fmt 3rd/freetype 3rd/glslang
+          3rd/imgui/IconFont 3rd/imgui/imgui 3rd/json 3rd/lua
+          3rd/magic_enum 3rd/nameof 3rd/serdepp 3rd/sol 3rd/soloud 3rd/stb 3rd/vfspp
+          3rd/SDL3 3rd/SPIRV-Cross 3rd/SPIRV-Reflect 3rd/volk 3rd/Vulkan-Headers
+      - name: Initialize the Vulkan memory allocator
+        if: matrix.backend == 'Vulkan'
+        run: git submodule update --init --depth 1 -- 3rd/VMA
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config zlib1g-dev libx11-dev libxext-dev libasound2-dev
+      - name: Select the macOS build toolchain
+        if: runner.os == 'macOS'
+        run: |
+          export DEVELOPER_DIR=/Applications/Xcode_26.3.app/Contents/Developer
+          xcodebuild -version
+          printf 'DEVELOPER_DIR=%s\nMACOSX_DEPLOYMENT_TARGET=15.0\n' "$DEVELOPER_DIR" >> "$GITHUB_ENV"
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install locked build-host dependencies
+        run: |
+          python -m pip install uv
+          python -m uv sync --locked
+      - name: Configure production renderer without local tests
+        run: >-
+          cmake --preset ${{ matrix.preset }}
+          -D${{ matrix.backend_option }}=ON -DUSE_OPENGL=OFF
+          -DUSE_NETWORK=OFF -DUSE_IKIGAI_SCRIPT=OFF -DIKIGAI_BUILD_TEST_MODULE=OFF
+      - name: Build the engine
+        run: cmake --build --preset ${{ matrix.preset }} --target IkigaiEngine --parallel 2

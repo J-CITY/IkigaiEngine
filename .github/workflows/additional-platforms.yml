@@ -1,0 +1,89 @@
+name: Additional platform builds
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  platform-build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Web Release
+            platform: web
+            runner: ubuntu-24.04
+            submodules: 3rd/emsdk
+          - name: Android arm64 Debug
+            platform: android
+            runner: ubuntu-24.04
+            submodules: 3rd/freetype 3rd/SDL3
+          - name: Quest arm64 Debug
+            platform: quest
+            runner: ubuntu-24.04
+            submodules: 3rd/freetype 3rd/SDL3 3rd/OpenXR-SDK
+          - name: iOS arm64 Simulator Metal Release
+            platform: ios
+            runner: macos-15
+            submodules: 3rd/freetype 3rd/SDL3 3rd/volk 3rd/Vulkan-Headers
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Initialize build dependencies
+        run: >-
+          git submodule update --init --recursive --depth 1 --
+          3rd/ArgParse 3rd/assimp 3rd/fmt 3rd/glslang 3rd/imgui/IconFont 3rd/imgui/imgui
+          3rd/json 3rd/lua 3rd/magic_enum 3rd/nameof 3rd/serdepp 3rd/sol 3rd/soloud
+          3rd/stb 3rd/vfspp 3rd/SPIRV-Cross 3rd/SPIRV-Reflect ${{ matrix.submodules }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install locked build-host dependencies
+        run: |
+          python -m pip install uv
+          python -m uv sync --locked
+      - name: Build Web with the repository Emscripten version
+        if: matrix.platform == 'web'
+        run: >-
+          .venv/bin/python run_vs.py --preset web-release --skip-setup --build
+          --target IkigaiEngine --parallel 2 --no-log
+          -DUSE_NETWORK=OFF -DUSE_IKIGAI_SCRIPT=OFF -DIKIGAI_BUILD_TEST_MODULE=OFF
+      - name: Install Android SDK and NDK packages
+        if: matrix.platform == 'android' || matrix.platform == 'quest'
+        run: |
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          sdkmanager --install 'platforms;android-35' 'build-tools;34.0.0' 'cmake;3.22.1' 'ndk;27.0.12077973'
+          printf '%s/bin\n' "$JAVA_HOME" >> "$GITHUB_PATH"
+          printf 'JAVA_HOME=%s\nANDROID_NDK_ROOT=%s/ndk/27.0.12077973\n' "$JAVA_HOME" "$ANDROID_HOME" >> "$GITHUB_ENV"
+      - name: Generate the Gradle project
+        if: matrix.platform == 'android' || matrix.platform == 'quest'
+        run: >-
+          .venv/bin/python run_vs.py --preset ${{ matrix.platform }} --skip-setup
+          --build-type Debug --abi arm64-v8a --no-log
+          -DUSE_NETWORK=OFF -DUSE_IKIGAI_SCRIPT=OFF -DIKIGAI_BUILD_TEST_MODULE=OFF
+          -DCMAKE_JOB_POOLS=ci_compile=2 -DCMAKE_JOB_POOL_COMPILE=ci_compile
+      - name: Build the Debug APK
+        if: matrix.platform == 'android' || matrix.platform == 'quest'
+        working-directory: build/${{ matrix.platform }}
+        run: ./gradlew --no-daemon --max-workers=2 :app:assembleDebug
+      - name: Select Xcode
+        if: matrix.platform == 'ios'
+        run: |
+          export DEVELOPER_DIR=/Applications/Xcode_26.3.app/Contents/Developer
+          xcodebuild -version
+          printf 'DEVELOPER_DIR=%s\n' "$DEVELOPER_DIR" >> "$GITHUB_ENV"
+      - name: Configure iOS Metal for the simulator
+        if: matrix.platform == 'ios'
+        run: >-
+          cmake --preset ios
+          -DCMAKE_OSX_SYSROOT=iphonesimulator -DCMAKE_OSX_ARCHITECTURES=arm64
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=18.0
+          -DUSE_METAL=ON -DUSE_OPENGL=OFF
+          -DUSE_NETWORK=OFF -DUSE_IKIGAI_SCRIPT=OFF -DIKIGAI_BUILD_TEST_MODULE=OFF
+      - name: Build the iOS simulator app
+        if: matrix.platform == 'ios'
+        run: cmake --build --preset ios-release --target IkigaiEngine --parallel 2
