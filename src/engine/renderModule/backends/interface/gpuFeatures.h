@@ -3,8 +3,7 @@
 #include <stdexcept>
 
 namespace IKIGAI::RENDER {
-// GPU-driven rendering capabilities. Only Vulkan and DirectX 12 implement them;
-// other backends report every feature as unsupported and keep their legacy paths.
+// Drivers report each supported GPU-driven operation independently.
 struct GpuFeatures {
 	bool Compute = false;
 	bool BufferUsageFlags = false;

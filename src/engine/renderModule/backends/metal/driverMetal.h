@@ -2,6 +2,8 @@
 #ifdef METAL_BACKEND
 
 #include <array>
+#include <atomic>
+#include <deque>
 #include <map>
 #include <memory>
 #include <optional>
@@ -62,7 +64,31 @@ public:
 
 	void draw(uint32_t count, uint32_t offset, uint32_t instance) override;
 	void dispatch(uint32_t x, uint32_t y, uint32_t z) override;
+	GpuFeatures gpuFeatures() const override;
+	void fillBuffer(const std::shared_ptr<StorageBufferInterface>&, size_t offset, size_t size, uint32_t value) override;
+	void fillBuffers(std::span<const BufferFill>) override;
+	void copyBuffer(const std::shared_ptr<StorageBufferInterface>& source, size_t sourceOffset,
+		const std::shared_ptr<StorageBufferInterface>& destination, size_t destinationOffset, size_t size) override;
+	std::vector<uint8_t> readBuffer(const std::shared_ptr<StorageBufferInterface>&, size_t offset, size_t size) override;
+	uint64_t requestBufferReadback(const std::shared_ptr<StorageBufferInterface>&, size_t offset, size_t size) override;
+	bool collectBufferReadback(uint64_t ticket, std::vector<uint8_t>& bytes) override;
+	void drawIndexedIndirect(const std::shared_ptr<StorageBufferInterface>&, size_t offset, uint32_t drawCount, uint32_t stride) override;
+	void drawIndexedIndirectCount(const std::shared_ptr<StorageBufferInterface>& arguments, size_t offset,
+		const std::shared_ptr<StorageBufferInterface>& count, size_t countOffset, uint32_t maxDrawCount, uint32_t stride) override;
+	void dispatchIndirect(const std::shared_ptr<StorageBufferInterface>&, size_t offset) override;
 	std::vector<float> readTexture(std::shared_ptr<TextureInterface> texture, unsigned mip, unsigned layer) override;
+	std::shared_ptr<RayTracingProgram> createComputeProgram(const RayTracingProgramResource&) override;
+	void dispatchComputeProgram(const RayTracingDispatch&) override;
+#if USE_RAY_TRACING
+	RayTracingCapabilities rayTracingCapabilities() const override;
+	std::shared_ptr<RayTracingProgram> createRayTracingProgram(const RayTracingProgramResource&) override;
+	void dispatchRayQueries(const RayTracingDispatch&) override;
+	std::shared_ptr<VertexBufferInterface> createRayTracingVertexBuffer(const void*, size_t, size_t) override;
+	std::shared_ptr<AccelerationStructure> createBottomLevelAS(const std::vector<RayTracingGeometry>&, bool = false) override;
+	std::shared_ptr<AccelerationStructure> createTopLevelAS(const std::vector<RayTracingInstance>&, bool = false) override;
+	void refitBottomLevelAS(const std::shared_ptr<AccelerationStructure>&) override;
+	void refitTopLevelAS(const std::shared_ptr<AccelerationStructure>&, const std::vector<RayTracingInstance>&) override;
+#endif
 	BindlessCapabilities bindlessCapabilities() const override;
 	uint32_t maxFragmentSampledTextures() const override {
 		return 31;
@@ -87,6 +113,7 @@ public:
 
 	std::shared_ptr<UniformBufferInterface> createUniformBuffer(const void* data, size_t size) override;
 	std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void* data, size_t size, size_t stride) override;
+	std::shared_ptr<StorageBufferInterface> createStorageBuffer(const void* data, size_t size, size_t stride, BufferUsage usage) override;
 	std::shared_ptr<TextureInterface> createTexture(
 		const std::string& path, bool generateMipmap, UTILS::IAllocator* allocator = nullptr, TextureDeleter deleter = nullptr) override;
 	std::shared_ptr<TextureInterface> createTextureAtlas(
@@ -140,16 +167,42 @@ public:
 	State mCurrentState;
 
 private:
+	friend class StorageBufferMetal;
+	id<MTLCommandBuffer> beginGpuCommands(const char* operation);
+	static void checkComputeGrid(MTLSize groups);
+	void checkComputeThreads(id<MTLComputePipelineState> state, MTLSize threads) const;
+	void encodeDispatch(MTLSize groups, id<MTLBuffer> arguments = nil, size_t offset = 0);
+	void uploadStorageBuffer(id<MTLBuffer> destination, const void* data, size_t size, size_t offset);
+	void encodeBufferCopy(id<MTLCommandBuffer> command, id<MTLBuffer> source, size_t sourceOffset,
+		id<MTLBuffer> destination, size_t destinationOffset, size_t size);
+	id<MTLComputePipelineState> bufferTransferPipeline(bool fill);
+	MTLPrimitiveType currentPrimitiveType() const;
+
+	struct BufferReadback {
+		id<MTLBuffer> Staging = nil;
+		size_t Offset = 0;
+		size_t Size = 0;
+	};
+	struct PendingBufferReadback {
+		BufferReadback Copy;
+		std::shared_ptr<std::atomic<MTLCommandBufferStatus>> Status;
+		uint64_t Ticket = 0;
+	};
+	BufferReadback encodeBufferReadback(id<MTLCommandBuffer> command, id<MTLBuffer> source, size_t offset, size_t size);
+
+	void executeMetalProgram(const RayTracingDispatch&, bool rayQuery);
 	void beginPass();
 	void ensurePass();
 	void endPass();
 	void ensureTargets(NSUInteger width, NSUInteger height, NSUInteger samples);
-	bool ensurePipeline();
+	bool ensurePipeline(bool indirect = false);
+	void ensureCountDrawResources(uint32_t capacity);
 	void applyFixedState();
 	void bindResources();
 	void bindArgumentResources(ShaderType stage, id<MTLComputeCommandEncoder> compute = nil);
 	std::vector<id<MTLBuffer>> mBindlessArgumentBuffers;
-	void bindBufferSizeConstants();
+	NSUInteger mArgumentPageOffset = 0;
+	void bindBufferSizeConstants(id<MTLComputeCommandEncoder> compute = nil);
 	id<MTLBuffer> snapshotUniform(id<MTLBuffer> source, NSUInteger& outOffset);
 	void bindMissingShaderResources();
 	void ensureFallbackTexture();
@@ -193,8 +246,17 @@ private:
 
 	std::map<std::string, id<MTLRenderPipelineState>> mPipelines;
 	std::map<std::string, id<MTLComputePipelineState>> mComputePipelines;
+	id<MTLLibrary> mBufferTransferLibrary = nil;
+	id<MTLArgumentEncoder> mCountDrawArgumentEncoder = nil;
+	id<MTLComputePipelineState> mCountDrawPipeline = nil;
+	id<MTLIndirectCommandBuffer> mCountDrawCommands = nil;
+	id<MTLBuffer> mCountDrawBindings = nil;
+	id<MTLBuffer> mCountDrawRange = nil;
+	id<MTLComputePipelineState> mBufferFillPipeline = nil;
+	id<MTLComputePipelineState> mBufferCopyPipeline = nil;
+	std::deque<PendingBufferReadback> mPendingBufferReadbacks;
+	uint64_t mNextBufferReadbackTicket = 1;
 	std::map<std::string, id<MTLDepthStencilState>> mDepthStates;
-	id<MTLBuffer> mBufferSizeConstants = nil;
 	id<MTLBuffer> mUniformStaging = nil;
 	NSUInteger mUniformStagingOffset = 0;
 	id<MTLBuffer> mFallbackBuffer = nil;

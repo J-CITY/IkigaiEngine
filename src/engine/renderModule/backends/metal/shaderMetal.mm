@@ -105,6 +105,14 @@ namespace IKIGAI::RENDER {
 		adoptReloadedShader(*replacement);
 	}
 
+	id<MTLArgumentEncoder> ShaderMetal::argumentEncoder(ShaderType stage) {
+		auto& encoder = mArgumentEncoders[stage];
+		if (!encoder) {
+			encoder = [function(stage) newArgumentEncoderWithBufferIndex:kMetalBindlessArgumentBufferIndex];
+		}
+		return encoder;
+	}
+
 	bool ShaderMetal::adoptReloadedShader(ShaderInterface& prepared) noexcept {
 		auto* replacement = dynamic_cast<ShaderMetal*>(&prepared);
 		if (!replacement) {
@@ -124,6 +132,7 @@ namespace IKIGAI::RENDER {
 		std::swap(mTessPartition, replacement->mTessPartition);
 		mSamplerBindings.swap(replacement->mSamplerBindings);
 		mArgumentIds.swap(replacement->mArgumentIds);
+		mArgumentEncoders.swap(replacement->mArgumentEncoders);
 		++mGeneration;
 		return true;
 	}
@@ -313,18 +322,20 @@ namespace IKIGAI::RENDER {
 				}
                 if (bindingMode()==ShaderBindingMode::Bindless) {
                     if (uniform.mSet!=0) throw std::runtime_error("Metal bindless ABI requires descriptor set zero");
-                    if (uniform.mRuntimeArray) throw std::runtime_error("Metal bindless profile requires bounded arrays");
                     if (isBindlessResource(uniform)) {
                         const auto caps=DriverInterface::Get()->bindlessCapabilities();
                         const bool sampled=uniform.mType==ShaderReflection::UniformType::SAMPLER_2D ||
                             uniform.mType==ShaderReflection::UniformType::SAMPLER_CUBE ||
                             uniform.mType==ShaderReflection::UniformType::SAMPLER_3D ||
                             uniform.mType==ShaderReflection::UniformType::SAMPLER_2D_ARRAY;
-                        if ((!sampled && uniform.mType!=ShaderReflection::UniformType::STORAGE_BUFFER) ||
+                        if ((uniform.mRuntimeArray && !caps.runtimeArrays) ||
+                            (!sampled && uniform.mType!=ShaderReflection::UniformType::STORAGE_BUFFER) ||
                             descriptorCount(uniform)>(sampled?caps.maxSampledTextures:caps.maxStorageBuffers))
                             throw std::runtime_error("Unsupported Metal bindless table type/capacity");
                     }
-                    ArgumentIds ids;ids.count=descriptorCount(uniform);ids.resource=argumentCursor;argumentCursor+=ids.count;
+                    // SPIRV-Cross uses binding.count for the argument-buffer array extent,
+                    // including runtime descriptor arrays bounded by BindlessCapacity.
+                    ArgumentIds ids;ids.count=binding.count;ids.resource=argumentCursor;argumentCursor+=ids.count;
                     if (IsTextureUniform(uniform.mType)) {ids.sampler=argumentCursor;argumentCursor+=ids.count;}
                     mArgumentIds[stage][static_cast<uint32_t>(uniform.mBind)]=ids;
                     binding.desc_set=0;binding.binding=uniform.mBind;

@@ -20,6 +20,8 @@ namespace IKIGAI::RENDER {
 		const std::vector<Vertex>& rayTracingVertices() const override { return mCanonicalVertices; }
 		const std::vector<unsigned>& rayTracingIndices() const override { return mCanonicalIndices; }
 
+		std::shared_ptr<IndexBufferInterface> rayTracingIndexBuffer() const override { return mIndexBuffer; }
+
 	private:
 		void init(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices, unsigned materialIndex);
 		void createBuffers(const std::vector<Vertex>& vertices, const std::vector<unsigned>& indices);

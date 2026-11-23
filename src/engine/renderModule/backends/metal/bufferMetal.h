@@ -5,6 +5,7 @@
 #include "../interface/storageBufferInterface.h"
 #include "../interface/vertexBufferInterface.h"
 #include "../interface/indexBufferInterface.h"
+#include "../interface/gpuFeatures.h"
 
 #import <Metal/Metal.h>
 
@@ -24,7 +25,7 @@ namespace IKIGAI::RENDER {
 
     class StorageBufferMetal : public StorageBufferInterface {
     public:
-        StorageBufferMetal(size_t sz, size_t stride);
+        StorageBufferMetal(size_t sz, size_t stride, BufferUsage usage = BufferUsage::NONE, const void* data = nullptr);
         virtual ~StorageBufferMetal() override = default;
         
         void bind() override {}
@@ -34,9 +35,11 @@ namespace IKIGAI::RENDER {
         void setSubData(const void* data, size_t sz, size_t offset) override;
         
         id<MTLBuffer> getBuffer() const { return mBuffer; }
+        BufferUsage getUsage() const { return mUsage; }
 
     private:
-        id<MTLBuffer> mBuffer;
+        const BufferUsage mUsage;
+        id<MTLBuffer> mBuffer = nil;
     };
 
     class VertexBufferMetal : public VertexBufferInterface {
