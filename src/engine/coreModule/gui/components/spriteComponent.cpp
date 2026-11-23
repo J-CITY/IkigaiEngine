@@ -2,6 +2,7 @@
 #include "../../core/core.h"
 #include "../../ecs/object.h"
 #include "guiModule/font.h"
+#include "guiModule/guiGeometry.h"
 #include "renderModule/render.h"
 #include "resourceModule/materialManager.h"
 #include "resourceModule/particleManager.h"
@@ -568,26 +569,93 @@ InteractionComponent::Descriptor InteractionComponent::getDescriptor() const {
 	d.Type = GetType<InteractionComponent>();
 	d.Width = mWidth;
 	d.Height = mHeight;
+	d.Enabled = mEnabled;
+	d.Focusable = mFocusable;
+	d.KeyboardActivation = mKeyboardActivation;
+	d.HoldDuration = mHoldDuration;
 	return d;
 }
 
 InteractionComponent::InteractionComponent(UTILS::Ref<ECS::Object> obj, const Descriptor& descriptor)
-	: InteractionComponent(obj, descriptor.Width, descriptor.Height) { }
+	: InteractionComponent(obj, descriptor.Width, descriptor.Height) {
+	mEnabled = descriptor.Enabled;
+	mFocusable = descriptor.Focusable;
+	mKeyboardActivation = descriptor.KeyboardActivation;
+	mHoldDuration = std::max(0.f, descriptor.HoldDuration);
+}
 
 InteractionComponent::InteractionComponent(UTILS::Ref<ECS::Object> obj, const ComponentBase::Descriptor& descriptor)
 	: InteractionComponent(obj, static_cast<const Descriptor&>(descriptor)) { }
 
-bool InteractionComponent::contains(float x, float y) {
-	auto left = obj->getTransform()->getWorldPosition().x;
-	auto top = obj->getTransform()->getWorldPosition().y;
-	auto width = obj->getTransform()->getTransform().getLocalSize().x * obj->getTransform()->getWorldScale().x;
-	auto height = obj->getTransform()->getTransform().getLocalSize().y * obj->getTransform()->getWorldScale().y;
-	float minX = std::min(left, (left + width));
-	float maxX = std::max(left, (left + width));
-	float minY = std::min(top, (top + height));
-	float maxY = std::max(top, (top + height));
+const std::vector<GUI::Event>& InteractionComponent::guiEvents() const {
+	return mGuiEvents;
+}
 
-	return (x >= minX) && (x < maxX) && (y >= minY) && (y < maxY);
+void InteractionComponent::clearGuiEvents() {
+	mGuiEvents.clear();
+}
+
+void InteractionComponent::emitGuiEvent(const GUI::Event& event) {
+	const auto value = event;
+	mGuiEvents.push_back(value);
+	std::function<void()> callback;
+	switch (value.type) {
+	case GUI::EventType::HoverIn:
+		mHovered = true;
+		mCurEvent = GuiEventType::COVER;
+		callback = mOnCover;
+		break;
+	case GUI::EventType::HoverOut:
+		mHovered = false;
+		mCurEvent = GuiEventType::UNCOVER;
+		callback = mOnUncover;
+		break;
+	case GUI::EventType::Press:
+		mPressed = true;
+		mHoldElapsed = 0.f;
+		mHoldProgress = 0.f;
+		mCurEvent = GuiEventType::PRESS;
+		callback = mOnPress;
+		break;
+	case GUI::EventType::PressCancel:
+	case GUI::EventType::PressFinish:
+		mPressed = false;
+		mHoldElapsed = 0.f;
+		mHoldProgress = 0.f;
+		mCurEvent = GuiEventType::RELEASE;
+		callback = mOnRelease;
+		break;
+	case GUI::EventType::FocusIn:
+		mFocused = true;
+		break;
+	case GUI::EventType::FocusOut:
+		mFocused = false;
+		break;
+	default:
+		break;
+	}
+	const auto typedCallback = mOnGuiEvent;
+	if (typedCallback) {
+		typedCallback(value);
+	}
+	if (callback) {
+		callback();
+	}
+}
+
+MATH::Vector2f InteractionComponent::hitSize() const {
+	const auto size = obj.get().getTransform()->getTransform().getLocalSize();
+	return { mWidth > 0.f ? mWidth : size.x, mHeight > 0.f ? mHeight : size.y };
+}
+
+bool InteractionComponent::contains(float x, float y) {
+	const auto matrix = GUI::canvasGeometry(obj.get()).correction * obj->getTransform()->getWorldMatrix();
+	const auto point = GUI::localPoint(matrix, { x, y });
+	if (!point) {
+		return false;
+	}
+	const auto size = hitSize();
+	return point->x >= 0.f && point->x < size.x && point->y >= 0.f && point->y < size.y;
 }
 
 ClipComponent::ClipComponent(Object& obj)

@@ -2,6 +2,7 @@
 #include "../../ecs/components/component.h"
 #include "mathModule/math.h"
 #include "reflectionModule/reflection_macros.h"
+#include <optional>
 
 namespace IKIGAI::ECS {
 IKI_CLASS(Groups = [Component])
@@ -47,6 +48,9 @@ public:
 		: SdfTextComponent(obj, static_cast<const Descriptor&>(descriptor)) { }
 	Descriptor getDescriptor() const;
 	uint64_t configurationHash() const;
+	[[nodiscard]] const std::string& displayText() const;
+	void setRuntimeText(std::string text);
+	void clearRuntimeText();
 	IKI_PROPERTY(Flags = [USE_IN_EDITOR_COMPONENT_INSPECTOR], EditWidget = STRING)
 	std::string Text = "SDF text";
 	IKI_PROPERTY(Flags = [USE_IN_EDITOR_COMPONENT_INSPECTOR], EditWidget = STRING)
@@ -114,6 +118,9 @@ public:
 				UTILS::Meta_t { { UTILS::MetaParam::FLAGS, UTILS::MetaInfo::USE_IN_EDITOR_COMPONENT_INSPECTOR },
 				{ UTILS::MetaParam::EDIT_WIDGET, UTILS::WidgetType::DRAG_INT } }) };
 	}
+
+private:
+	std::optional<std::string> mRuntimeText;
 };
 template <> inline std::string GetType<SdfTextComponent>() {
 	return "class IKIGAI::ECS::SdfTextComponent";

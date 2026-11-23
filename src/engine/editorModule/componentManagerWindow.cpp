@@ -28,9 +28,11 @@
 #include "componentEditorCatalog.h"
 #include "coreModule/ecs/componentCatalog.h"
 #include "coreModule/ecs/object.h"
+#include "coreModule/gui/components/guiAnimationComponent.h"
 #include "ecsModule/weakPtr.h"
 #include "editorModule/imguiHelper/imguiWidgets.h"
 #include "editorRender.h"
+#include "guiAnimationInspector.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "misc/cpp/imgui_stdlib.h"
@@ -336,6 +338,9 @@ void ComponentInspectorWindow::drawComponent(std::shared_ptr<ECS::Object> select
 		}
 		if (auto interactor = dynamic_cast<ECS::VegetationInteractorComponent*>(component.get())) {
 			DrawVegetationInteractorEditor(*interactor);
+		}
+		if (auto animation = dynamic_cast<ECS::GuiAnimationComponent*>(component.get())) {
+			drawGuiAnimationInspector(*animation);
 		}
 		if (auto facial = dynamic_cast<ECS::FacialAnimationComponent*>(component.get())) {
 			if (auto model = selectObject->getComponent<ECS::ModelRenderer>(); model && model->getModel()) {

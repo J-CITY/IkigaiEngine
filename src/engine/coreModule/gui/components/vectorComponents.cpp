@@ -58,6 +58,18 @@ SdfTextComponent::Descriptor SdfTextComponent::getDescriptor() const {
 	d.Order = Order;
 	return d;
 }
+
+const std::string& SdfTextComponent::displayText() const {
+	return mRuntimeText ? *mRuntimeText : Text;
+}
+
+void SdfTextComponent::setRuntimeText(std::string text) {
+	mRuntimeText = std::move(text);
+}
+
+void SdfTextComponent::clearRuntimeText() {
+	mRuntimeText.reset();
+}
 VectorShapeComponent::VectorShapeComponent(UTILS::Ref<Object> object)
 	: ComponentBase(object) {
 	__NAME__ = "VectorShapeComponent";
@@ -176,7 +188,7 @@ VectorCanvasComponent::Descriptor VectorCanvasComponent::getDescriptor() const {
 
 uint64_t SdfTextComponent::configurationHash() const {
 	uint64_t h = 0;
-	fieldHash(h, Text);
+	fieldHash(h, displayText());
 	fieldHash(h, Font);
 	fieldHash(h, Size);
 	fieldHash(h, WrapWidth);

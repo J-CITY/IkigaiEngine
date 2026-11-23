@@ -31,6 +31,16 @@ InputManager::InputManager(IKIGAI::WINDOW::Window& _window)
 	mGamepadRemoveListener = mWindow.gamepadRemoveEvent.add(std::bind(&InputManager::removeGamepad, this, std::placeholders::_1));
 #ifdef USE_SDL
 	mTouchFingerListener = mWindow.touchFingerEvent.add(std::bind(&InputManager::onTouchFinger, this, std::placeholders::_1));
+	mTextCommittedListener = mWindow.textCommittedEvent.add([this](std::string_view text) {
+		if (mTextInputEnabled) {
+			mTextInputEvents.push_back({ TextInputEvent::Type::Commit, std::string(text) });
+		}
+	});
+	mTextCompositionListener = mWindow.textCompositionEvent.add([this](std::string_view text, int cursor) {
+		if (mTextInputEnabled) {
+			mTextInputEvents.push_back({ TextInputEvent::Type::Composition, std::string(text), cursor });
+		}
+	});
 #endif
 }
 
@@ -48,6 +58,9 @@ InputManager::~InputManager() {
 	mWindow.gamepadRemoveEvent.removeListener(mGamepadRemoveListener);
 #ifdef USE_SDL
 	mWindow.touchFingerEvent.removeListener(mTouchFingerListener);
+	mWindow.textCommittedEvent.removeListener(mTextCommittedListener);
+	mWindow.textCompositionEvent.removeListener(mTextCompositionListener);
+	setTextInputEnabled(false);
 #endif
 }
 
@@ -57,6 +70,28 @@ void InputManager::setUiCaptureProvider(UiCaptureProvider provider) {
 
 InputManager::UiCapture InputManager::getUiCapture() const {
 	return mUiCaptureProvider ? mUiCaptureProvider() : UiCapture {};
+}
+
+bool InputManager::hasWindowFocus() const {
+	return mWindow.hasFocus();
+}
+
+void InputManager::setTextInputEnabled(bool enabled) {
+#ifdef USE_SDL
+	if (enabled == mTextInputEnabled || !mWindow.setTextInputEnabled(enabled)) {
+		return;
+	}
+	mTextInputEnabled = enabled;
+	if (!enabled) {
+		mTextInputEvents.clear();
+	}
+#else
+	(void)enabled;
+#endif
+}
+
+const std::vector<InputManager::TextInputEvent>& InputManager::textInputEventsThisFrame() const {
+	return mTextInputEvents;
 }
 
 void InputManager::beginInputFrame(std::chrono::duration<double> dt) {
@@ -235,12 +270,18 @@ void InputManager::endFrame() {
 	mGamepadReleasedThisFrame.clear();
 	mMouseDelta = {};
 	mPointerEvents.clear();
+	mTextInputEvents.clear();
 }
 
 void InputManager::onKeyPressed(int p_key) {
 	const auto key = static_cast<EKey>(p_key);
 	mKeyEvents[key] = EKeyState::KEY_DOWN;
 	mKeysPressedThisFrame.insert(key);
+	if (mTextInputEnabled) {
+		const bool shift = isKeyPressed(EKey::KEY_LEFT_SHIFT) || isKeyPressed(EKey::KEY_RIGHT_SHIFT);
+		const bool control = isKeyPressed(EKey::KEY_LEFT_CONTROL) || isKeyPressed(EKey::KEY_RIGHT_CONTROL);
+		mTextInputEvents.push_back({ .type = TextInputEvent::Type::KeyPress, .key = key, .shift = shift, .control = control });
+	}
 }
 
 void InputManager::onKeyReleased(int p_key) {
@@ -249,15 +290,22 @@ void InputManager::onKeyReleased(int p_key) {
 	mKeysReleasedThisFrame.insert(key);
 }
 
+MATH::Vector2f InputManager::getMouseEventPosition() const {
+#ifdef USE_SDL
+	return mWindow.getMouseEventPosition();
+#else
+	const auto position = getMousePosition();
+	return { static_cast<float>(position.x), static_cast<float>(position.y) };
+#endif
+}
+
 void InputManager::onMouseButtonPressed(int p_button) {
 	const auto button = static_cast<EMouseButton>(p_button);
 	mMouseButtonEvents[button] = EMouseButtonState::MOUSE_DOWN;
 	mMousePressedThisFrame.insert(button);
 	if (button == EMouseButton::MOUSE_BUTTON_LEFT) {
 		mMousePointerDown = true;
-		const auto pos = getMousePosition();
-		pushPointerEvent(
-			{ kMousePointerId, PointerPhase::Began, PointerSource::Mouse, { static_cast<float>(pos.x), static_cast<float>(pos.y) }, {} });
+		pushPointerEvent({ kMousePointerId, PointerPhase::Began, PointerSource::Mouse, getMouseEventPosition(), {} });
 	}
 }
 
@@ -267,9 +315,7 @@ void InputManager::onMouseButtonReleased(int p_button) {
 	mMouseReleasedThisFrame.insert(button);
 	if (button == EMouseButton::MOUSE_BUTTON_LEFT) {
 		mMousePointerDown = false;
-		const auto pos = getMousePosition();
-		pushPointerEvent(
-			{ kMousePointerId, PointerPhase::Ended, PointerSource::Mouse, { static_cast<float>(pos.x), static_cast<float>(pos.y) }, {} });
+		pushPointerEvent({ kMousePointerId, PointerPhase::Ended, PointerSource::Mouse, getMouseEventPosition(), {} });
 		mDragCapture.release(kMousePointerId);
 	}
 }
@@ -278,9 +324,7 @@ void InputManager::onMouseMoved(float dx, float dy) {
 	mMouseDelta.x += dx;
 	mMouseDelta.y += dy;
 	if (mMousePointerDown) {
-		const auto pos = getMousePosition();
-		pushPointerEvent(
-			{ kMousePointerId, PointerPhase::Moved, PointerSource::Mouse, { static_cast<float>(pos.x), static_cast<float>(pos.y) }, { dx, dy } });
+		pushPointerEvent({ kMousePointerId, PointerPhase::Moved, PointerSource::Mouse, getMouseEventPosition(), { dx, dy } });
 	}
 }
 

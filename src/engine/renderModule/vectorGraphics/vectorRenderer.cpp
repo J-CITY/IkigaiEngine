@@ -212,7 +212,7 @@ std::vector<PreparedDraw> VectorRenderer::prepare(ECS::Object& object, float pix
 				o.letterSpacing = c->LetterSpacing;
 				o.lineSpacing = c->LineSpacing;
 				o.color = color(c->Color);
-				auto text = layoutText(*font, c->Text, o);
+				auto text = layoutText(*font, c->displayText(), o);
 				cache.font = font;
 				cache.text = std::move(text);
 				cache.key = signature;

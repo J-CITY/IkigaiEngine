@@ -43,7 +43,11 @@
 #include "coreModule/ecs/sceneSimulationHost.h"
 #include "coreModule/ecs/systemBatchExecutor.h"
 #include "coreModule/gui/components/vectorComponents.h"
+#include "guiModule/guiAnimationSystem.h"
+#include "guiModule/guiFieldSystem.h"
+#include "guiModule/guiInputSystem.h"
 #include "guiModule/guiLayoutSystem.h"
+#include "guiModule/guiWidgetSystem.h"
 #include "inputActionStorage.h"
 #include "networkModule/networkRuntime.h"
 #include "renderModule/backends/interface/textureAssetSource.h"
@@ -371,6 +375,10 @@ Core::Core(const PlatformStartup& platform, const std::string& initialScene)
 		sysMgr->registerSystem<ECS::ScriptSystem>();
 #endif
 		sysMgr->registerSystem<ECS::GuiLayoutSystem>();
+		sysMgr->registerSystem<ECS::GuiInputSystem>();
+		sysMgr->registerSystem<ECS::GuiWidgetSystem>();
+		sysMgr->registerSystem<ECS::GuiFieldSystem>();
+		sysMgr->registerSystem<ECS::GuiAnimationSystem>();
 		sysMgr->registerSystem<ECS::PropertyAnimationSystem>();
 		sysMgr->registerSystem<ECS::InputSystem>();
 		ECS::registerAudioSystems(*sysMgr);

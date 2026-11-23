@@ -3,6 +3,7 @@
 #include "../../ecs/components/component.h"
 #include <renderModule/spine/spineDrawable.h>
 
+#include "guiModule/guiEvent.h"
 #include "mathModule/math.h"
 #include "particleModule/particles.h"
 #include "renderModule/backends/interface/textureInterface.h"
@@ -515,6 +516,21 @@ namespace ECS {
 	enum class GuiEventType { NONE, COVER, PRESS, PRESS_CONTINUE, RELEASE, UNCOVER };
 	class InteractionComponent : public ComponentBase {
 	public:
+		bool mEnabled = true;
+		bool mFocusable = true;
+		bool mKeyboardActivation = true;
+		bool mFocused = false;
+		bool mHovered = false;
+		bool mPressed = false;
+		float mHoldDuration = 0.f;
+		float mHoldElapsed = 0.f;
+		float mHoldProgress = 0.f;
+
+		const std::vector<GUI::Event>& guiEvents() const;
+		void clearGuiEvents();
+		void emitGuiEvent(const GUI::Event& event);
+		std::function<void(const GUI::Event&)> mOnGuiEvent;
+
 		GuiEventType mCurEvent = GuiEventType::NONE;
 
 		std::function<void()> mOnPress;
@@ -533,15 +549,23 @@ namespace ECS {
 
 		struct Descriptor : public ComponentBase::Descriptor {
 			std::string Type;
-			float Height;
-			float Width;
+			float Height = 0.f;
+			float Width = 0.f;
+			bool Enabled = true;
+			bool Focusable = true;
+			bool KeyboardActivation = true;
+			float HoldDuration = 0.f;
 			template <class Context> constexpr static auto serde(Context& context, Descriptor& value) {
 				using Self = Descriptor;
 				using namespace serde::attribute;
 				serde::serde_struct(context, value)
 					.field(&Self::Type, "InteractionComponentType")
 					.field(&Self::Width, "Width")
-					.field(&Self::Height, "Height");
+					.field(&Self::Height, "Height")
+					.field(&Self::Enabled, "Enabled", default_ { true })
+					.field(&Self::Focusable, "Focusable", default_ { true })
+					.field(&Self::KeyboardActivation, "KeyboardActivation", default_ { true })
+					.field(&Self::HoldDuration, "HoldDuration", default_ { 0.f });
 			}
 		};
 		[[nodiscard]] Descriptor getDescriptor() const;
@@ -556,6 +580,14 @@ namespace ECS {
 					UTILS::Meta_t { { UTILS::MetaParam::FLAGS, UTILS::MetaInfo::USE_IN_EDITOR_COMPONENT_INSPECTOR } }),
 				IKIGAI::UTILS::MakeMemberInfo("Height", &InteractionComponent::mHeight,
 					UTILS::Meta_t { { UTILS::MetaParam::FLAGS, UTILS::MetaInfo::USE_IN_EDITOR_COMPONENT_INSPECTOR } }),
+				IKIGAI::UTILS::MakeMemberInfo("Enabled", &InteractionComponent::mEnabled,
+					UTILS::Meta_t { { UTILS::MetaParam::FLAGS, UTILS::MetaInfo::USE_IN_EDITOR_COMPONENT_INSPECTOR } }),
+				IKIGAI::UTILS::MakeMemberInfo("Focusable", &InteractionComponent::mFocusable,
+					UTILS::Meta_t { { UTILS::MetaParam::FLAGS, UTILS::MetaInfo::USE_IN_EDITOR_COMPONENT_INSPECTOR } }),
+				IKIGAI::UTILS::MakeMemberInfo("KeyboardActivation", &InteractionComponent::mKeyboardActivation,
+					UTILS::Meta_t { { UTILS::MetaParam::FLAGS, UTILS::MetaInfo::USE_IN_EDITOR_COMPONENT_INSPECTOR } }),
+				IKIGAI::UTILS::MakeMemberInfo("HoldDuration", &InteractionComponent::mHoldDuration,
+					UTILS::Meta_t { { UTILS::MetaParam::FLAGS, UTILS::MetaInfo::USE_IN_EDITOR_COMPONENT_INSPECTOR } }),
 				// IKIGAI::UTILS::MakeMemberInfo("Font", &SpriteAnimateComponent::mFont,
 				// UTILS::Meta_t{
 				//	{UTILS::MetaParam::FLAGS, UTILS::MetaInfo::USE_IN_EDITOR_COMPONENT_INSPECTOR}
@@ -563,8 +595,11 @@ namespace ECS {
 			};
 		}
 
-		// private:
+		[[nodiscard]] MATH::Vector2f hitSize() const;
 		bool contains(float x, float y);
+
+	private:
+		std::vector<GUI::Event> mGuiEvents;
 	};
 
 	template <> inline std::string IKIGAI::ECS::GetType<InteractionComponent>() {

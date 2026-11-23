@@ -15,6 +15,7 @@
 #include "coreModule/config.h"
 #include "editorModule/imguiHelper/ImGuiFileBrowser.h"
 #include "fileBrowser.h"
+#include "guiAnimationGraphEditor.h"
 #include "imgui.h"
 #include "menuBar.h"
 #include "misc/cpp/imgui_stdlib.h"
@@ -184,6 +185,7 @@ void EditorRender::draw() {
 	for (auto& win : mData->mWindows) {
 		win->draw();
 	}
+	drawGuiAnimationGraphEditor();
 
 	if (!GlobalState.mResPath.empty()) {
 		switch (GlobalState.mResType) {

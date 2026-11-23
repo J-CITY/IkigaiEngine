@@ -172,13 +172,33 @@ void Object::setVisible(bool val) {
 	mIsVisible = val;
 }
 
+void Object::setRuntimeHidden(bool hidden) {
+	mRuntimeHidden = hidden;
+}
+
 bool Object::getIsSelfVisible() const {
 	return mIsVisible;
 }
 
 bool Object::getIsVisible() const {
 	auto p = mParent.lock();
-	return mIsVisible && (p ? p->getIsVisible() : true);
+	return mIsVisible && !mRuntimeHidden && (!p || p->getIsVisible());
+}
+
+Object::ObjPtr Object::findUniqueChild(std::string_view name) const {
+	if (name.empty()) {
+		return nullptr;
+	}
+	ObjPtr match;
+	for (const auto& child : mChildren) {
+		if (child && child->getName() == name) {
+			if (match) {
+				return nullptr;
+			}
+			match = child;
+		}
+	}
+	return match;
 }
 
 void Object::setID(ECS::Entity val) {

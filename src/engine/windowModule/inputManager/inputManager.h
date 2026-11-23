@@ -308,9 +308,21 @@ public:
 		bool mouse = false;
 	};
 	using UiCaptureProvider = UiCapture (*)();
+	struct TextInputEvent {
+		enum class Type { Commit, Composition, KeyPress };
+		Type type = Type::Commit;
+		std::string text;
+		int compositionCursor = -1;
+		EKey key = EKey::KEY_UNKNOWN;
+		bool shift = false;
+		bool control = false;
+	};
 
 	void setUiCaptureProvider(UiCaptureProvider provider);
 	[[nodiscard]] UiCapture getUiCapture() const;
+	[[nodiscard]] bool hasWindowFocus() const;
+	void setTextInputEnabled(bool enabled);
+	[[nodiscard]] const std::vector<TextInputEvent>& textInputEventsThisFrame() const;
 
 	InputManager(WINDOW::Window& p_window);
 	~InputManager();
@@ -358,6 +370,7 @@ public:
 
 private:
 	void pushPointerEvent(PointerEvent event);
+	[[nodiscard]] MATH::Vector2f getMouseEventPosition() const;
 #ifdef USE_SDL
 	void onTouchFinger(const WINDOW::TouchFingerEvent& event);
 #endif
@@ -392,6 +405,8 @@ private:
 	EVENT::Event<>::ID mGamepadAddListener = EVENT::Event<>::ID(0);
 	EVENT::Event<>::ID mGamepadRemoveListener = EVENT::Event<>::ID(0);
 	EVENT::Event<>::ID mTouchFingerListener = EVENT::Event<>::ID(0);
+	EVENT::Event<>::ID mTextCommittedListener = EVENT::Event<>::ID(0);
+	EVENT::Event<>::ID mTextCompositionListener = EVENT::Event<>::ID(0);
 
 	std::unordered_map<EKey, EKeyState> mKeyEvents;
 	std::unordered_map<EMouseButton, EMouseButtonState> mMouseButtonEvents;
@@ -404,10 +419,12 @@ private:
 	MATH::Vector2f mMouseDelta;
 	std::vector<INPUT::Gamepad> mGamepads;
 	std::vector<PointerEvent> mPointerEvents;
+	std::vector<TextInputEvent> mTextInputEvents;
 	SwipeRecognizer mSwipeRecognizer;
 	DragCapture mDragCapture;
 	VirtualStick mVirtualStick;
 	float mFrameDeltaSeconds = 0.0f;
 	bool mMousePointerDown = false;
+	bool mTextInputEnabled = false;
 };
 }

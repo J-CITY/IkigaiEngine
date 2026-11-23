@@ -53,7 +53,7 @@ void MenuBar::draw() {
 				demo("Environment - Landscape and Weather", "/scenes/environment-demo.json");
 				demo("3D Physics", "/scenes/physics-3d-demo.json", USE_PHYSICS_3D);
 				demo("2D Physics", "/scenes/physics-2d-demo.json", USE_PHYSICS_2D);
-				demo("GUI - Curves and SDF", "/scenes/gui-demo.json");
+				demo("GUI - Widgets and Curves", "/scenes/gui-demo.json");
 				demo("Particles - 2D and 3D", "/scenes/particles-demo.json");
 				ImGui::Separator();
 #if USE_PHYSICS_3D

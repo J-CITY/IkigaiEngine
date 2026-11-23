@@ -1,0 +1,42 @@
+{
+  "Kind": "Sequence",
+  "Children": [
+    {
+      "Kind": "Parallel",
+      "Children": [
+        {
+          "Kind": "Tween",
+          "Property": "Scale",
+          "Time": 0.12,
+          "Value": 1.08,
+          "Easing": "QUADRATIC_OUT"
+        },
+        {
+          "Kind": "Tween",
+          "Property": "Opacity",
+          "Time": 0.12,
+          "Value": 0.65
+        }
+      ]
+    },
+    { "Kind": "Wait", "Time": 0.15 },
+    {
+      "Kind": "Parallel",
+      "Children": [
+        {
+          "Kind": "Tween",
+          "Property": "Scale",
+          "Time": 0.15,
+          "Value": 1.0,
+          "Easing": "QUADRATIC_OUT"
+        },
+        {
+          "Kind": "Tween",
+          "Property": "Opacity",
+          "Time": 0.15,
+          "Value": 1.0
+        }
+      ]
+    }
+  ]
+}

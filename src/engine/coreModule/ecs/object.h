@@ -5,6 +5,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 #include <typeindex>
 #include <vector>
 
@@ -56,6 +57,7 @@ public:
 	void setTag(const std::string& tag);
 	void setActive(bool val);
 	void setVisible(bool val);
+	void setRuntimeHidden(bool hidden);
 
 	[[nodiscard]] bool getIsSelfActive() const;
 	[[nodiscard]] bool getIsActive() const;
@@ -75,6 +77,7 @@ public:
 	[[nodiscard]] ObjPtr getParent() const;
 	[[nodiscard]] ECS::Entity getParentID() const;
 	std::span<ObjPtr> getChildren();
+	[[nodiscard]] ObjPtr findUniqueChild(std::string_view name) const;
 
 	void markAsDestroy();
 
@@ -246,6 +249,7 @@ protected:
 
 	bool mIsActive = true;
 	bool mIsVisible = true;
+	bool mRuntimeHidden = false;
 	bool mIsDestroyed = false;
 	bool mIsReady = false;
 

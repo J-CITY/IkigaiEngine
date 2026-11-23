@@ -44,6 +44,7 @@
 #include "coreModule/gui/components/spriteComponent.h"
 #include "coreModule/gui/components/vectorComponents.h"
 #include "guiModule/font.h"
+#include "guiModule/guiGeometry.h"
 #include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/light.h"
 #include "renderModule/render.h"
@@ -3338,7 +3339,13 @@ void GameRenderer::renderGui(SCENE_SYSTEM::Scene& scene, bool worldVectors) {
 	if (!mGuiTextMaterial) {
 		mGuiTextMaterial = loader.loadResource("/materials/render/portable/text.mat");
 	}
-	auto projection = MATH::Matrix4f::CreateOrthographic(0, uboData.ViewportSize.x, uboData.ViewportSize.y, 0, -1, 1);
+	const auto displaySize = mContext.window->getPixelSize();
+	const MATH::Vector2f guiSize = worldVectors ? uboData.ViewportSize : MATH::Vector2f(float(displaySize.x), float(displaySize.y));
+	if (guiSize.x <= 0 || guiSize.y <= 0) {
+		return;
+	}
+	const MATH::Vector2f targetScale { uboData.ViewportSize.x / guiSize.x, uboData.ViewportSize.y / guiSize.y };
+	auto projection = MATH::Matrix4f::CreateOrthographic(0, guiSize.x, guiSize.y, 0, -1, 1);
 	if (DriverInterface::settings.backend != RenderSettings::Backend::OPENGL) {
 		auto correction = MATH::Matrix4f::Identity;
 		correction(2, 2) = .5f;
@@ -3375,92 +3382,35 @@ void GameRenderer::renderGui(SCENE_SYSTEM::Scene& scene, bool worldVectors) {
 		}
 		return vertices;
 	};
-	auto sceneObjects = scene.getObjects();
-	std::vector<std::shared_ptr<ECS::Object>> objects(sceneObjects.begin(), sceneObjects.end());
-	auto canvasFor = [](auto object) {
-		while (object) {
-			if (auto canvas = object->template getComponent<ECS::VectorCanvasComponent>()) {
-				return canvas;
-			}
-			object = object->getParent();
-		}
-		return decltype(object->template getComponent<ECS::VectorCanvasComponent>()) {};
+	struct Entry {
+		std::shared_ptr<ECS::Object> object;
+		GUI::CanvasGeometry canvas;
+		std::pair<int, std::int64_t> order;
 	};
-	auto orderFor = [&](auto object) {
-		auto canvas = canvasFor(object);
-		int order = canvas ? canvas->Order : 0, layer = canvas ? canvas->SortingLayer : 0;
-		if (auto c = object->template getComponent<ECS::VectorShapeComponent>()) {
-			order += c->Order;
-		}
-		else if (auto c = object->template getComponent<ECS::VectorPathComponent>()) {
-			order += c->Order;
-		}
-		else if (auto c = object->template getComponent<ECS::SdfTextComponent>()) {
-			order += c->Order;
-		}
-		return std::pair { layer, order };
-	};
-	std::stable_sort(objects.begin(), objects.end(), [&](auto a, auto b) { return orderFor(a) < orderFor(b); });
-	for (auto& object : objects) {
+	std::vector<Entry> objects;
+	objects.reserve(scene.getObjects().size());
+	for (const auto& object : scene.getObjects()) {
 		if (!object->getIsActive() || !object->getIsVisible()) {
 			continue;
 		}
-		auto canvas = canvasFor(object);
-		bool world = canvas && canvas->WorldSpace;
-		if (worldVectors && !world) {
+		const auto canvas = GUI::canvasGeometry(*object);
+		if (!worldVectors || canvas.worldSpace) {
+			objects.push_back({ object, canvas, GUI::drawOrder(*object, canvas) });
+		}
+	}
+	std::stable_sort(objects.begin(), objects.end(), [](const Entry& a, const Entry& b) { return a.order < b.order; });
+	const auto cameraMatrix = MATH::Matrix4f::Transpose(uboData.View * uboData.Projection);
+	for (const auto& entry : objects) {
+		const auto& object = entry.object;
+		const auto& canvasCorrection = entry.canvas.correction;
+		const bool world = entry.canvas.worldSpace;
+		const auto bounds = GUI::clipBounds(*object, guiSize, worldVectors ? &cameraMatrix : nullptr);
+		if (bounds.empty()) {
 			continue;
 		}
-		auto canvasCorrection = MATH::Matrix4f::Identity;
-		if (canvas && canvas->DpiScale != 1.f) {
-			auto root = canvas->obj->getTransform()->getTransform().getWorldMatrix();
-			auto scale = MATH::Matrix4f::Identity;
-			scale(0, 0) = scale(1, 1) = std::clamp(canvas->DpiScale, .01f, 100.f);
-			canvasCorrection = root * scale * MATH::Matrix4f::Inverse(root);
-		}
-		float left = 0, top = 0, right = uboData.ViewportSize.x, bottom = uboData.ViewportSize.y;
-		bool clipped = false;
-		for (auto ancestor = object; ancestor; ancestor = ancestor->getParent()) {
-			if (auto clip = ancestor->getComponent<ECS::ClipComponent>()) {
-				auto matrix = canvasCorrection * ancestor->getTransform()->getTransform().getWorldMatrix();
-				float minX = right, minY = bottom, maxX = left, maxY = top;
-				for (const auto& corner : { MATH::Vector4f(0, 0, 0, 1), MATH::Vector4f(clip->mWidth, 0, 0, 1), MATH::Vector4f(0, clip->mHeight, 0, 1),
-					 MATH::Vector4f(clip->mWidth, clip->mHeight, 0, 1) }) {
-					auto local = corner;
-					if (worldVectors) {
-						local.y = -local.y;
-					}
-					auto point = matrix * local;
-					if (worldVectors) {
-						auto camera = MATH::Matrix4f::Transpose(uboData.View * uboData.Projection);
-						point = camera * point;
-						if (point.w <= 1e-4f) {
-							continue;
-						}
-						point.x = (point.x / point.w * .5f + .5f) * uboData.ViewportSize.x;
-						point.y = (.5f - point.y / point.w * .5f) * uboData.ViewportSize.y;
-					}
-					minX = std::min(minX, point.x);
-					minY = std::min(minY, point.y);
-					maxX = std::max(maxX, point.x);
-					maxY = std::max(maxY, point.y);
-				}
-				left = std::max(left, minX);
-				top = std::max(top, minY);
-				right = std::min(right, maxX);
-				bottom = std::min(bottom, maxY);
-				clipped = true;
-			}
-		}
-		if (clipped) {
-			if (right <= left || bottom <= top) {
-				continue;
-			}
-			guiClip = { { left, top }, { right - left, bottom - top } };
-			guiClipped = true;
-		}
-		else {
-			guiClipped = false;
-		}
+		guiClipped = bounds.clipped;
+		guiClip = { { bounds.minimum.x * targetScale.x, bounds.minimum.y * targetScale.y },
+			{ (bounds.maximum.x - bounds.minimum.x) * targetScale.x, (bounds.maximum.y - bounds.minimum.y) * targetScale.y } };
 		if (!worldVectors && (object->getComponent<ECS::ParticleSystem2DComponent>() || object->getComponent<ECS::SpriteParticleComponent>())) {
 			mVectorRenderer->flushPending(renderer);
 			if (!mParticleRenderer) {
@@ -3469,6 +3419,7 @@ void GameRenderer::renderGui(SCENE_SYSTEM::Scene& scene, bool worldVectors) {
 			mParticleRenderer->drawScreen(*object, renderer, MATH::Matrix4f::Transpose(projection), guiClip, guiClipped, canvasCorrection);
 		}
 		const auto& transform = object->getTransform()->getTransform();
+		auto matrix = canvasCorrection * transform.getWorldMatrix();
 		auto animatedSprite = object->getComponent<ECS::SpriteAnimateComponent>();
 		auto plainSprite = object->getComponent<ECS::SpriteComponent>();
 		ECS::SpriteComponent* sprite = plainSprite ? plainSprite.get() : nullptr;
@@ -3486,7 +3437,7 @@ void GameRenderer::renderGui(SCENE_SYSTEM::Scene& scene, bool worldVectors) {
 			uv.mY = 1 - uv.mY;
 			uv.mH = -uv.mH;
 			submit(quad(0, 0, size.x, size.y, uv, sprite->mColor), { 0, 1, 2, 2, 3, 0 }, sprite->mTexture, mGuiSpriteMaterial,
-				transform.getWorldMatrix(), sprite->mIs3D);
+				sprite->mIs3D ? transform.getWorldMatrix() : matrix, sprite->mIs3D);
 		}
 		if (auto label = object->getComponent<ECS::LabelComponent>(); !worldVectors && label && label->mFont && label->mFont->texture) {
 			std::vector<Vertex> vertices;
@@ -3509,7 +3460,7 @@ void GameRenderer::renderGui(SCENE_SYSTEM::Scene& scene, bool worldVectors) {
 				}
 				x += ch.Advance / 64.0f;
 			}
-			submit(vertices, indices, label->mFont->texture, mGuiTextMaterial, transform.getWorldMatrix(), label->mIs3D);
+			submit(vertices, indices, label->mFont->texture, mGuiTextMaterial, label->mIs3D ? transform.getWorldMatrix() : matrix, label->mIs3D);
 		}
 		if (auto component = object->getComponent<ECS::SpineComponent>();
 			!worldVectors && component && component->spine && component->spine->_drawable) {
@@ -3524,8 +3475,8 @@ void GameRenderer::renderGui(SCENE_SYSTEM::Scene& scene, bool worldVectors) {
 					indices.push_back(static_cast<unsigned>(vertices.size()));
 					vertices.push_back(vertex);
 				}
-				submit(vertices, indices, SPINE::SpineTextureLoader::getTexture(state.texture), mGuiSpriteMaterial, transform.getWorldMatrix(),
-					component->mIs3D, { state.blendSrc, state.blendDst });
+				submit(vertices, indices, SPINE::SpineTextureLoader::getTexture(state.texture), mGuiSpriteMaterial,
+					component->mIs3D ? transform.getWorldMatrix() : matrix, component->mIs3D, { state.blendSrc, state.blendDst });
 			};
 			skeleton->draw();
 			skeleton->submit = {};
@@ -3534,7 +3485,6 @@ void GameRenderer::renderGui(SCENE_SYSTEM::Scene& scene, bool worldVectors) {
 			continue;
 		}
 		float pixelScale = 1;
-		auto matrix = canvasCorrection * transform.getWorldMatrix();
 		if (world) {
 			auto camera = MATH::Matrix4f::Transpose(uboData.View * uboData.Projection);
 			auto project = [&](MATH::Vector4f p) {
@@ -3571,7 +3521,7 @@ void GameRenderer::renderGui(SCENE_SYSTEM::Scene& scene, bool worldVectors) {
 			}
 			mVectorRenderer->enqueue(std::move(vertices), draw.mesh->indices, draw.texture, material->getShader(),
 				world ? uboData.View * uboData.Projection : MATH::Matrix4f::Transpose(projection), { BlendMode::ONE, BlendMode::ONE_MINUS_SRC_ALPHA },
-				{ world && canvas->DepthTest ? DepthFunction::LESS_EQUAL : DepthFunction::ALWAYS, false }, guiClip, guiClipped, draw.sdf,
+				{ world && entry.canvas.depthTest ? DepthFunction::LESS_EQUAL : DepthFunction::ALWAYS, false }, guiClip, guiClipped, draw.sdf,
 				draw.effects);
 		}
 	}

@@ -7,6 +7,7 @@
 #include <serdepp/attribute/default.hpp>
 #include <serdepp/serializer.hpp>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <utilsModule/event.h>
 #include <vector>
@@ -71,6 +72,8 @@ public:
 	EVENT::Event<const SDL_Event&> sdlEvent;
 	EVENT::Event<int> keyPressedEvent;
 	EVENT::Event<int> keyReleasedEvent;
+	EVENT::Event<std::string_view> textCommittedEvent;
+	EVENT::Event<std::string_view, int> textCompositionEvent;
 	EVENT::Event<int> mouseButtonPressedEvent;
 	EVENT::Event<int> mouseButtonReleasedEvent;
 	EVENT::Event<float, float> mouseMovedEvent;
@@ -96,6 +99,7 @@ public:
 	[[nodiscard]] bool getIsMainWindow() const;
 
 	[[nodiscard]] MATH::Vector2i getMousePos() const;
+	[[nodiscard]] MATH::Vector2f getMouseEventPosition() const;
 	void setSize(unsigned int width, unsigned int height);
 	[[nodiscard]] MATH::Vector2u getSize() const;
 	[[nodiscard]] MATH::Vector2u getPixelSize() const;
@@ -123,6 +127,8 @@ public:
 	void show() const;
 	void focus() const;
 	[[nodiscard]] bool hasFocus() const;
+	bool setTextInputEnabled(bool enabled) const;
+	void clearTextComposition() const;
 
 	void pollEvent();
 	void draw(const std::function<void()>& beforeSwap = {}) const;

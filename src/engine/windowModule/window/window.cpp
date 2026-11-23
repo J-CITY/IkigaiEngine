@@ -2,6 +2,7 @@
 #ifdef USE_SDL
 #include <SDL3/SDL.h>
 #include <map>
+#include <optional>
 #include <set>
 #if defined(__APPLE__)
 #include <TargetConditionals.h>
@@ -39,6 +40,7 @@ struct Window::Internal {
 	::SDL_Window* mWindow = nullptr;
 	SDL_GLContext mContext = nullptr;
 	bool mIsFocus = true;
+	std::optional<MATH::Vector2f> mMouseEventPosition;
 	std::set<SDL_Gamepad*> mGamepads;
 
 	void addGamepad(SDL_Gamepad* gp) {
@@ -150,19 +152,16 @@ MATH::Vector2u Window::getSize() const {
 
 	displayHeight = static_cast<uint32_t>(EM_ASM_INT({ return document.getElementById('canvas').height; }));
 #else
+	if (mContext && mContext->mWindow) {
+		int width = 0;
+		int height = 0;
+		if (SDL_GetWindowSize(mContext->mWindow, &width, &height) && width > 0 && height > 0) {
+			return { static_cast<unsigned>(width), static_cast<unsigned>(height) };
+		}
+	}
 	switch (GetCurrentPlatform()) {
 	case Platform::IOS:
 	case Platform::ANDROIDOS: {
-		if (mContext && mContext->mWindow) {
-			int w = 0;
-			int h = 0;
-			SDL_GetWindowSize(mContext->mWindow, &w, &h);
-			if (w > 0 && h > 0) {
-				displayWidth = static_cast<uint32_t>(w);
-				displayHeight = static_cast<uint32_t>(h);
-				break;
-			}
-		}
 		const SDL_DisplayMode* displayMode = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
 		if (displayMode) {
 			displayWidth = static_cast<uint32_t>(displayMode->w);
@@ -171,7 +170,6 @@ MATH::Vector2u Window::getSize() const {
 		break;
 	}
 	default: {
-		// For other platforms we'll just show a fixed size window.
 		displayWidth = mWindowSettings.size.x;
 		displayHeight = mWindowSettings.size.y;
 		break;
@@ -367,6 +365,26 @@ bool Window::hasFocus() const {
 	return mContext->mIsFocus;
 }
 
+MATH::Vector2f Window::getMouseEventPosition() const {
+	if (mContext->mMouseEventPosition) {
+		return *mContext->mMouseEventPosition;
+	}
+	const auto position = getMousePos();
+	return { static_cast<float>(position.x), static_cast<float>(position.y) };
+}
+
+bool Window::setTextInputEnabled(bool enabled) const {
+	auto* window = mContext->mWindow;
+	if (SDL_TextInputActive(window) == enabled) {
+		return true;
+	}
+	return enabled ? SDL_StartTextInput(window) : SDL_StopTextInput(window);
+}
+
+void Window::clearTextComposition() const {
+	SDL_ClearComposition(mContext->mWindow);
+}
+
 void Window::pollEvent() {
 	SDL_Event event;
 	while (SDL_PollEvent(&event)) {
@@ -391,19 +409,44 @@ void Window::pollEvent() {
 		case SDL_EVENT_KEY_UP:
 			keyReleasedEvent.run(event.key.scancode);
 			break;
+		case SDL_EVENT_TEXT_INPUT:
+			if (event.text.windowID == getId() && event.text.text) {
+				textCommittedEvent.run(event.text.text);
+			}
+			break;
+		case SDL_EVENT_TEXT_EDITING:
+			if (event.edit.windowID == getId()) {
+				textCompositionEvent.run(event.edit.text ? event.edit.text : "", event.edit.start);
+			}
+			break;
 		case SDL_EVENT_MOUSE_BUTTON_DOWN:
-			mouseButtonPressedEvent.run(event.button.button);
+			if (event.button.which != SDL_TOUCH_MOUSEID) {
+				mContext->mMouseEventPosition = MATH::Vector2f { event.button.x, event.button.y };
+				mouseButtonPressedEvent.run(event.button.button);
+				mContext->mMouseEventPosition.reset();
+			}
 			break;
 		case SDL_EVENT_MOUSE_BUTTON_UP:
-			mouseButtonReleasedEvent.run(event.button.button);
+			if (event.button.which != SDL_TOUCH_MOUSEID) {
+				mContext->mMouseEventPosition = MATH::Vector2f { event.button.x, event.button.y };
+				mouseButtonReleasedEvent.run(event.button.button);
+				mContext->mMouseEventPosition.reset();
+			}
 			break;
 		case SDL_EVENT_MOUSE_MOTION:
-			mouseMovedEvent.run(event.motion.xrel, event.motion.yrel);
+			if (event.motion.which != SDL_TOUCH_MOUSEID) {
+				mContext->mMouseEventPosition = MATH::Vector2f { event.motion.x, event.motion.y };
+				mouseMovedEvent.run(event.motion.xrel, event.motion.yrel);
+				mContext->mMouseEventPosition.reset();
+			}
 			break;
 		case SDL_EVENT_FINGER_DOWN:
 		case SDL_EVENT_FINGER_UP:
 		case SDL_EVENT_FINGER_MOTION:
 		case SDL_EVENT_FINGER_CANCELED: {
+			if (event.tfinger.touchID == SDL_MOUSE_TOUCHID) {
+				break;
+			}
 			const auto size = getSize();
 			TouchFingerEvent touch;
 			touch.fingerId = static_cast<std::int64_t>(event.tfinger.fingerID);
