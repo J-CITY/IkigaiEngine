@@ -17,17 +17,28 @@ jobs:
         include:
           - os: ubuntu-24.04
             preset: core-linux
+            test_generator: Ninja Multi-Config
           - os: windows-2022
             preset: core-windows
+            test_generator: Visual Studio 17 2022
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - name: Initialize math header dependencies
+      - name: Initialize core and test header dependencies
         run: git submodule update --init --depth 1 -- 3rd/serdepp 3rd/json 3rd/nameof 3rd/magic_enum
       - name: Configure without graphics SDKs or local test sources
         run: cmake --preset ${{ matrix.preset }}
       - name: Build production core libraries
         run: cmake --build --preset ${{ matrix.preset }}-release --parallel 2
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Configure standalone tests
+        run: cmake -S testModule -B build/ci-tests -G "${{ matrix.test_generator }}"
+      - name: Build standalone tests
+        run: cmake --build build/ci-tests --config Release --parallel 2
+      - name: Run standalone tests
+        run: ctest --test-dir build/ci-tests -C Release --output-on-failure --no-tests=error
 
   windows-renderer:
     name: Windows ${{ matrix.backend }} ${{ matrix.configuration }}

@@ -2,6 +2,7 @@
 #include "vector2.h"
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -1883,14 +1884,14 @@ public:
 		*this = Divide(*this, other);
 		return *this;
 	}
-	float& operator()(uint8_t row, uint8_t column) {
+	float& operator()(std::uint8_t row, std::uint8_t column) {
 		if (row >= 4 || column >= 4) {
 			throw std::out_of_range("Invalid index : " + std::to_string(row) + "," + std::to_string(column) + " is out of range");
 		}
 		return data[4 * row + column];
 	}
 
-	void setRow(uint8_t row, const Vector4<T>& vec) {
+	void setRow(std::uint8_t row, const Vector4<T>& vec) {
 		if (row >= 4) {
 			throw std::out_of_range("Invalid index : " + std::to_string(row) + " is out of range");
 		}
@@ -1901,7 +1902,7 @@ public:
 		data[4 * row + 3] = vec.w;
 	}
 
-	void setCol(uint8_t col, const Vector4<T>& vec) {
+	void setCol(std::uint8_t col, const Vector4<T>& vec) {
 		if (col >= 4) {
 			throw std::out_of_range("Invalid index : " + std::to_string(col) + " is out of range");
 		}
@@ -1912,7 +1913,7 @@ public:
 		data[col + 12] = vec.w;
 	}
 
-	Vector4<T> getRow(uint8_t row) {
+	Vector4<T> getRow(std::uint8_t row) {
 		if (row >= 4) {
 			throw std::out_of_range("Invalid index : " + std::to_string(row) + " is out of range");
 		}
@@ -1920,7 +1921,7 @@ public:
 		return Vector4(data[4 * row], data[4 * row + 1], data[4 * row + 2], data[4 * row + 3]);
 	}
 
-	Vector4<T> getCol(uint8_t col) {
+	Vector4<T> getCol(std::uint8_t col) {
 		if (col >= 4) {
 			throw std::out_of_range("Invalid index : " + std::to_string(col) + " is out of range");
 		}
