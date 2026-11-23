@@ -1,4 +1,5 @@
 #include "skeletonStateGraphManager.h"
+#include "utilsModule/expressions/expressionDescriptor.h"
 
 #include "serviceManager.h"
 #include "skeletalModule/characterAnimation.h"

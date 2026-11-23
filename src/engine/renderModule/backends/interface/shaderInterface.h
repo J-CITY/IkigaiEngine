@@ -103,6 +103,8 @@ public:
 };
 
 std::vector<uint32_t> CompileGlslToSpirv(IKIGAI::RENDER::ShaderType stage, const std::string& code, const std::vector<std::string>& defines);
+std::vector<uint32_t> CompileGlslToSpirv(IKIGAI::RENDER::ShaderType stage, const std::string& code,
+	const std::vector<std::string>& defines, bool preserveRuntimeLengths);
 std::optional<std::vector<uint32_t>> TryDecodeSpirv(std::string_view source);
 std::string CompileSpirvToHlsl(const std::vector<uint32_t>& spirv, uint32_t version);
 std::string CompileSpirvToGlsl(

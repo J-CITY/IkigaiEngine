@@ -542,6 +542,11 @@ const TBuiltInResource DefaultTBuiltInResource = {
 
 std::vector<uint32_t> IKIGAI::RENDER::CompileGlslToSpirv(
 	IKIGAI::RENDER::ShaderType stage, const std::string& code, const std::vector<std::string>& defines) {
+	return CompileGlslToSpirv(stage, code, defines, false);
+}
+
+std::vector<uint32_t> IKIGAI::RENDER::CompileGlslToSpirv(
+	IKIGAI::RENDER::ShaderType stage, const std::string& code, const std::vector<std::string>& defines, [[maybe_unused]] bool preserveRuntimeLengths) {
 	static const std::unordered_map<IKIGAI::RENDER::ShaderType, EShLanguage> StageMap
 		= { { IKIGAI::RENDER::ShaderType::VERTEX, EShLangVertex }, { IKIGAI::RENDER::ShaderType::FRAGMENT, EShLangFragment },
 			  { IKIGAI::RENDER::ShaderType::GEOMETRY, EShLangGeometry }, { IKIGAI::RENDER::ShaderType::TESSELLATION_CONTROL, EShLangTessControl },
@@ -558,20 +563,22 @@ std::vector<uint32_t> IKIGAI::RENDER::CompileGlslToSpirv(
 	std::string appleCode;
 	const std::string* source = &code;
 #if defined(__APPLE__)
-	appleCode = code;
-	for (const auto* lightType : { "LightOGL", "Light" }) {
-		const std::string runtimeLights = std::string(lightType) + " lights[]";
-		const std::string fixedLights = std::string(lightType) + " lights[64]";
-		for (size_t pos = 0; (pos = appleCode.find(runtimeLights, pos)) != std::string::npos; pos += fixedLights.size()) {
-			appleCode.replace(pos, runtimeLights.size(), fixedLights);
+	if (!preserveRuntimeLengths) {
+		appleCode = code;
+		for (const auto* lightType : { "LightOGL", "Light" }) {
+			const std::string runtimeLights = std::string(lightType) + " lights[]";
+			const std::string fixedLights = std::string(lightType) + " lights[64]";
+			for (size_t pos = 0; (pos = appleCode.find(runtimeLights, pos)) != std::string::npos; pos += fixedLights.size()) {
+				appleCode.replace(pos, runtimeLights.size(), fixedLights);
+			}
 		}
+		const std::string runtimeLength = "engine_Lights.lights.length()";
+		const std::string fixedLength = "64";
+		for (size_t pos = 0; (pos = appleCode.find(runtimeLength, pos)) != std::string::npos; pos += fixedLength.size()) {
+			appleCode.replace(pos, runtimeLength.size(), fixedLength);
+		}
+		source = &appleCode;
 	}
-	const std::string runtimeLength = "engine_Lights.lights.length()";
-	const std::string fixedLength = "64";
-	for (size_t pos = 0; (pos = appleCode.find(runtimeLength, pos)) != std::string::npos; pos += fixedLength.size()) {
-		appleCode.replace(pos, runtimeLength.size(), fixedLength);
-	}
-	source = &appleCode;
 #endif
 	std::string preamble;
 

@@ -368,7 +368,7 @@ public:
 	virtual RayTracingCapabilities rayTracingCapabilities() const {
 		return {};
 	}
-	// GPU-driven rendering contract (gpuFeatures.h). Vulkan and DirectX 12 only.
+	// GPU-driven rendering contract (gpuFeatures.h). Query support per operation.
 	// Commands are recorded into the current frame; the driver inserts the barriers
 	// needed between compute writes and indirect/vertex/index/transfer reads.
 	virtual GpuFeatures gpuFeatures() const {

@@ -18,6 +18,7 @@ namespace IKIGAI::RENDER {
 			if (stage==ShaderType::COMPUTE) return mComputeFunction;
 			return nil;
 		}
+		id<MTLArgumentEncoder> argumentEncoder(ShaderType stage);
 		explicit ShaderMetal(const ShaderResource& res);
 		ShaderMetal(const std::string& vertexPath, const std::string& fragmentPath);
 		~ShaderMetal() override;
@@ -62,6 +63,7 @@ namespace IKIGAI::RENDER {
 		}
 
 	private:
+		std::map<ShaderType, id<MTLArgumentEncoder>> mArgumentEncoders;
 		id<MTLFunction> mComputeFunction = nil;
 		id<MTLFunction> mVertexFunction = nil;
 		id<MTLFunction> mFragmentFunction = nil;
