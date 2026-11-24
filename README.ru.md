@@ -8,6 +8,13 @@ Ikigai Engine — кроссплатформенный игровой движо
 
 [Быстрый старт](#быстрый-старт) · [Возможности](#возможности) · [Платформы](#платформы) · [Структура репозитория](#структура-репозитория) · [English](README.md)
 
+## CI
+
+[![Renderer production checks](https://github.com/J-CITY/IkigaiEngine/actions/workflows/renderer-core.yml/badge.svg?branch=ecs)](https://github.com/J-CITY/IkigaiEngine/actions/workflows/renderer-core.yml?query=branch%3Aecs)
+[![Additional platform builds](https://github.com/J-CITY/IkigaiEngine/actions/workflows/additional-platforms.yml/badge.svg?branch=ecs)](https://github.com/J-CITY/IkigaiEngine/actions/workflows/additional-platforms.yml?query=branch%3Aecs)
+
+Дополнительные платформенные сборки запускаются вручную.
+
 ## Быстрый старт
 
 Понадобятся Git, CMake 3.22+, компилятор с поддержкой C++20 и интернет для первоначальной загрузки зависимостей и ресурсов. На Windows установите Visual Studio 2022 с рабочей нагрузкой **«Разработка классических приложений на C++»**.
@@ -320,6 +327,19 @@ SoLoud обеспечивает двумерный и позиционный 3D-
 | [`testModule/`](testModule) | Опциональные тесты и инструменты, включая отдельную утилиту сбора отчётов о сбоях на Windows |
 
 В отчёте об ошибке укажите платформу, графический бэкенд и сцену или шаги воспроизведения. Форматируйте изменения в C++ по [`.clang-format`](.clang-format) и добавляйте новые файлы движка в список исходников соответствующего CMake-модуля.
+
+## Благодарности
+
+Спасибо авторам этих проектов:
+
+- [diharaw/animation-system](https://github.com/diharaw/animation-system)
+- [diharaw/hybrid-rendering](https://github.com/diharaw/hybrid-rendering)
+- [MxEngine](https://github.com/asc-community/MxEngine)
+- [im-neo-sequencer](https://gitlab.com/GroGy/im-neo-sequencer)
+- [Overload](https://github.com/Overload-Technologies/Overload)
+- [skygfx](https://github.com/okhmanyuk-ev/skygfx)
+- [mtrebi/memory-allocators](https://github.com/mtrebi/memory-allocators) — реализации аллокаторов памяти.
+- [GLM](https://github.com/g-truc/glm), [webgl-noise](https://github.com/ashima/webgl-noise) — основа реализации симплексного шума.
 
 ## Лицензия
 

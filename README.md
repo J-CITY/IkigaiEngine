@@ -8,6 +8,13 @@ Ikigai Engine is a cross-platform C++20 game engine and a learning project for r
 
 [Quick start](#quick-start) · [Features](#features) · [Platforms](#platforms) · [Source guide](#source-guide) · [Русский](README.ru.md)
 
+## CI
+
+[![Renderer production checks](https://github.com/J-CITY/IkigaiEngine/actions/workflows/renderer-core.yml/badge.svg?branch=ecs)](https://github.com/J-CITY/IkigaiEngine/actions/workflows/renderer-core.yml?query=branch%3Aecs)
+[![Additional platform builds](https://github.com/J-CITY/IkigaiEngine/actions/workflows/additional-platforms.yml/badge.svg?branch=ecs)](https://github.com/J-CITY/IkigaiEngine/actions/workflows/additional-platforms.yml?query=branch%3Aecs)
+
+Additional platform builds run on demand.
+
 ## Quick start
 
 You’ll need Git, CMake 3.22+, a C++20 toolchain, and internet access for the initial dependency and asset setup. On Windows, install Visual Studio 2022 with the **Desktop development with C++** workload.
@@ -320,6 +327,19 @@ Pass `-p` to select a launcher platform and `-g` to include graphics backends. A
 | [`testModule/`](testModule) | Optional tests and tools, including the separate Windows crash reporter |
 
 When reporting a bug, include the platform, graphics backend, and scene or steps needed to reproduce it. Format C++ changes with the repository’s [`.clang-format`](.clang-format) and register new engine files in the corresponding CMake module manifest.
+
+## Thanks
+
+Thanks to the authors of these projects:
+
+- [diharaw/animation-system](https://github.com/diharaw/animation-system)
+- [diharaw/hybrid-rendering](https://github.com/diharaw/hybrid-rendering)
+- [MxEngine](https://github.com/asc-community/MxEngine)
+- [im-neo-sequencer](https://gitlab.com/GroGy/im-neo-sequencer)
+- [Overload](https://github.com/Overload-Technologies/Overload)
+- [skygfx](https://github.com/okhmanyuk-ev/skygfx)
+- [mtrebi/memory-allocators](https://github.com/mtrebi/memory-allocators) — memory allocator implementations.
+- [GLM](https://github.com/g-truc/glm), [webgl-noise](https://github.com/ashima/webgl-noise) — the basis for the simplex noise implementation.
 
 ## License
 
