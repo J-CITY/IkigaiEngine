@@ -1,0 +1,35 @@
+{
+  "Version": 2,
+  "Model": "/models/destruction-demo/column.gltf",
+  "Materials": [
+    "/materials/physics-demo/blue.mat"
+  ],
+  "InteriorMaterial": "/materials/physics-demo/amber.mat",
+  "Mass": 6.0,
+  "Static": true,
+  "Support": "Anchored",
+  "SupportAnchors": [
+    {
+      "Id": 1,
+      "Center": {
+        "X": 0,
+        "Y": -2.24,
+        "Z": 0
+      },
+      "HalfExtents": {
+        "X": 0.82,
+        "Y": 0.12,
+        "Z": 0.82
+      },
+      "Orientation": {
+        "X": 0,
+        "Y": 0,
+        "Z": 0,
+        "W": 1
+      }
+    }
+  ],
+  "Lifetime": 90.0,
+  "MaximumPieces": 24,
+  "MaximumDepth": 8
+}

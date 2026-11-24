@@ -40,6 +40,10 @@ if(platform STREQUAL "auto")
     endif()
 endif()
 
+if(IKIGAI_BUILD_TEST_MODULE)
+    enable_testing()
+endif()
+
 if(platform MATCHES "^(windows|linux|mac|ios|web|android|quest)$")
     add_subdirectory("cmake/${platform}")
 else()

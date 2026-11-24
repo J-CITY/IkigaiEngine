@@ -114,7 +114,7 @@ SegmentSeparation convexSegmentSeparation(const ConvexPolyhedron& hull, Vec3 sta
 		}
 	}
 	float distance = std::sqrt(best);
-	return { distance - radius, distance > 1e-8f ? (segmentPoint - surfacePoint) / distance : hull.faces.front().normal, surfacePoint };
+	return { distance - radius, distance > 1e-8f ? (segmentPoint - surfacePoint) * (1.f / distance) : hull.faces.front().normal, surfacePoint };
 }
 
 bool collideConvex(const ShapeView3D& a, const ShapeView3D& b, Manifold3D& output) {

@@ -20,6 +20,7 @@ public:
 	void reset();
 	bool simulated() const;
 	void capture();
+	void relocate(RagdollFrame root);
 	void interpolate(float alpha);
 	void applyImpulse(std::size_t segment, MATH::Vector3f impulse, MATH::Vector3f worldPoint);
 	void update(float) override;

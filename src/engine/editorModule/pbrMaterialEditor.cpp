@@ -1,11 +1,15 @@
 #include "pbrMaterialEditor.h"
 #ifdef USE_EDITOR
+#include "coreModule/ecs/components/materialRenderer.h"
+#include "coreModule/ecs/object.h"
 #include "imgui.h"
 #include "misc/cpp/imgui_stdlib.h"
+#include "renderModule/backends/interface/driverInterface.h"
 #include "renderModule/backends/interface/materialInterface.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/jsonLoader.h"
 #include "resourceModule/serviceManager.h"
+#include "sceneModule/scene.h"
 #include <algorithm>
 #include <future>
 
@@ -46,6 +50,93 @@ namespace {
 		ImGui::SliderFloat("Height influence", &layer.HeightInfluence, 0.0f, 16.0f);
 		ImGui::SliderFloat("Transition width", &layer.TransitionWidth, .0001f, 1.0f);
 	}
+}
+
+void DrawLayeredMaterialPlayground(SCENE_SYSTEM::Scene& scene) {
+	const auto object = scene.findObjectByName("Painted steel");
+	const auto renderer = object ? object->getComponent<ECS::MaterialRenderer>() : UTILS::WeakPtr<ECS::MaterialRenderer> {};
+	if (!renderer || !renderer->GetMaterialAtIndex(0)) {
+		return;
+	}
+	enum class Preview { Composite, Steel, Mask };
+	struct PlaygroundState {
+		std::weak_ptr<void> scene {};
+		RENDER::MaterialResource original {};
+		Preview preview = Preview::Composite;
+		float wear = 0;
+		float lightAngle = -33.f;
+		std::string error {};
+	};
+	static PlaygroundState state;
+	if (state.scene.lock() != scene.lifetime) {
+		state = {};
+		state.scene = scene.lifetime;
+		state.original = renderer->GetMaterialAtIndex(0)->getDescriptor();
+	}
+	if (state.original.PbrLayers.Layers.empty()) {
+		return;
+	}
+	const auto* viewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos({ viewport->Pos.x + 12, viewport->Pos.y + ImGui::GetFrameHeight() + 8 }, ImGuiCond_FirstUseEver);
+	if (!ImGui::Begin("Layered Materials", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+		ImGui::End();
+		return;
+	}
+
+	bool changed = false;
+	if (ImGui::RadioButton("Coated", state.preview == Preview::Composite)) {
+		state.preview = Preview::Composite;
+		changed = true;
+	}
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Bare steel", state.preview == Preview::Steel)) {
+		state.preview = Preview::Steel;
+		changed = true;
+	}
+	ImGui::SameLine();
+	if (ImGui::RadioButton("Mask", state.preview == Preview::Mask)) {
+		state.preview = Preview::Mask;
+		changed = true;
+	}
+	ImGui::BeginDisabled(state.preview != Preview::Composite);
+	ImGui::SliderFloat("Wear", &state.wear, 0.f, 1.f, "%.2f");
+	changed |= ImGui::IsItemDeactivatedAfterEdit();
+	ImGui::EndDisabled();
+	if (ImGui::SliderFloat("Light azimuth", &state.lightAngle, -85.f, 0.f, "%.0f deg")) {
+		if (const auto sun = scene.findObjectByName("Sun")) {
+			auto rotation = sun->getTransform()->getLocalRotationDeg();
+			rotation.y = state.lightAngle;
+			sun->getTransform()->setLocalRotationDeg(rotation);
+		}
+	}
+	if (changed) {
+		try {
+			auto draft = state.original;
+			switch (state.preview) {
+			case Preview::Composite:
+				draft.PbrLayers.Layers.front().Weight = 1.f - state.wear;
+				break;
+			case Preview::Steel:
+				draft.PbrLayers.Layers.clear();
+				break;
+			case Preview::Mask:
+				draft.Uniforms["u_AlbedoMap"] = draft.PbrLayers.Layers.front().MaskMap;
+				draft.Uniforms["data_UBOu_Albedo"] = MATH::Vector4f { 1, 1, 1, 1 };
+				draft.Uniforms["data_UBOu_Metallic"] = 0.f;
+				draft.Uniforms["data_UBOu_Roughness"] = 1.f;
+				draft.PbrLayers.Layers.clear();
+				break;
+			}
+			renderer->setMaterial(0, RENDER::DriverInterface::Get()->createMaterial(draft));
+			state.error.clear();
+		} catch (const std::exception& error) {
+			state.error = error.what();
+		}
+	}
+	if (!state.error.empty()) {
+		ImGui::TextWrapped("%s", state.error.c_str());
+	}
+	ImGui::End();
 }
 
 void DrawPbrMaterialEditor(RENDER::MaterialInterface& material) {

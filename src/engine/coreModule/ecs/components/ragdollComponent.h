@@ -32,8 +32,10 @@ public:
 	}
 	void activate();
 	void reset();
+	void relocate(MATH::Vector3f position, MATH::QuaternionF rotation);
 	void applyImpulse(std::size_t segment, MATH::Vector3f impulse, MATH::Vector3f worldPoint);
 	RagdollState state() const;
+	bool ownsBody(PHYSICS::Id body) const;
 	const std::string& lastError() const;
 	void onDisable() override;
 	void onDestroy() override;

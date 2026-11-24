@@ -36,6 +36,9 @@
           "GeometryCulling": false,
           "GeometryBVHCulling": false,
           "LightCulling": false
+        },
+        {
+          "PhysicsGrabComponentType": "PhysicsGrabComponent"
         }
       ]
     },

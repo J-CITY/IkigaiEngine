@@ -1,0 +1,1901 @@
+{
+  "RenderPipeline": "/renderPipeline/vector-sdf.json",
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": -7
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 60,
+          "Near": 0.1,
+          "Far": 100,
+          "Size": 5,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Hold to confirm button",
+      "Id": 25,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 428,
+            "Y": 110,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "InteractionComponentType": "class IKIGAI::ECS::InteractionComponent",
+          "Width": 278,
+          "Height": 48,
+          "HoldDuration": 0.8
+        },
+        {
+          "GuiAnimationComponentType": "class IKIGAI::ECS::GuiAnimationComponent",
+          "Bindings": [
+            {
+              "Event": "HoverIn",
+              "Target": "Face",
+              "Property": "Scale",
+              "Keys": [
+                {
+                  "Time": 0.16,
+                  "Value": 1.045,
+                  "Easing": "QUADRATIC_OUT"
+                }
+              ]
+            },
+            {
+              "Event": "HoverOut",
+              "Target": "Face",
+              "Property": "Scale",
+              "Keys": [
+                {
+                  "Time": 0.14,
+                  "Value": 1.0,
+                  "Easing": "QUADRATIC_OUT"
+                }
+              ]
+            },
+            {
+              "Event": "Press",
+              "Target": "Face",
+              "Property": "Scale",
+              "Keys": [
+                {
+                  "Time": 0.08,
+                  "Value": 0.985,
+                  "Easing": "QUADRATIC_OUT"
+                }
+              ]
+            },
+            {
+              "Event": "PressFinish",
+              "Target": "Face",
+              "Property": "Scale",
+              "Keys": [
+                {
+                  "Time": 0.16,
+                  "Value": 1.0,
+                  "Easing": "QUADRATIC_OUT"
+                }
+              ]
+            },
+            {
+              "Event": "PressCancel",
+              "Target": "Face",
+              "Property": "Scale",
+              "Keys": [
+                {
+                  "Time": 0.16,
+                  "Value": 1.0,
+                  "Easing": "QUADRATIC_OUT"
+                }
+              ]
+            },
+            {
+              "Event": "FocusIn",
+              "Target": "Focus outline",
+              "Property": "Opacity",
+              "Keys": [
+                {
+                  "Time": 0.13,
+                  "Value": 1.0,
+                  "Easing": "QUADRATIC_OUT"
+                }
+              ]
+            },
+            {
+              "Event": "FocusOut",
+              "Target": "Focus outline",
+              "Property": "Opacity",
+              "Keys": [
+                {
+                  "Time": 0.15,
+                  "Value": 0.12,
+                  "Easing": "QUADRATIC_OUT"
+                }
+              ]
+            },
+            {
+              "Event": "Activate",
+              "Target": "Face",
+              "GraphPath": "/animations/gui/confirm-button.json"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Face",
+      "Id": 26,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 278,
+            "Y": 48
+          },
+          "Radii": {
+            "X": 10,
+            "Y": 10
+          },
+          "Color": {
+            "X": 0.14,
+            "Y": 0.23,
+            "Z": 0.47,
+            "W": 1
+          },
+          "Order": 12
+        },
+        {
+          "ProgressBarComponentType": "class IKIGAI::ECS::ProgressBarComponent",
+          "Extent": 262,
+          "Fill": "Hold fill",
+          "HoldSource": "Parent"
+        }
+      ],
+      "ParentId": 25
+    },
+    {
+      "Name": "Hold fill",
+      "Id": 27,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 8,
+            "Y": 7,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 262,
+            "Y": 34
+          },
+          "Radii": {
+            "X": 6,
+            "Y": 6
+          },
+          "Color": {
+            "X": 0.16,
+            "Y": 0.49,
+            "Z": 0.72,
+            "W": 1
+          },
+          "Order": 13
+        }
+      ],
+      "ParentId": 26
+    },
+    {
+      "Name": "Hold label",
+      "Id": 28,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 65,
+            "Y": 11,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Hold to confirm",
+          "Size": 19,
+          "Color": {
+            "X": 0.96,
+            "Y": 0.98,
+            "Z": 1.0,
+            "W": 1
+          },
+          "Order": 14
+        }
+      ],
+      "ParentId": 26
+    },
+    {
+      "Name": "Focus outline",
+      "Id": 29,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -4,
+            "Y": -4,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 286,
+            "Y": 56
+          },
+          "Radii": {
+            "X": 13,
+            "Y": 13
+          },
+          "Color": {
+            "X": 0.45,
+            "Y": 0.73,
+            "Z": 1.0,
+            "W": 0.12
+          },
+          "Order": 11
+        }
+      ],
+      "ParentId": 25
+    },
+    {
+      "Name": "Widget panel",
+      "Id": 30,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 16,
+            "Y": 28,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 754,
+            "Y": 465
+          },
+          "Radii": {
+            "X": 14,
+            "Y": 14
+          },
+          "Color": {
+            "X": 0.025,
+            "Y": 0.04,
+            "Z": 0.07,
+            "W": 1
+          },
+          "Order": -10
+        }
+      ]
+    },
+    {
+      "Name": "Widgets heading",
+      "Id": 31,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 22,
+            "Y": 16,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Widget playground",
+          "Size": 28,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 30
+    },
+    {
+      "Name": "Checkbox",
+      "Id": 32,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 22,
+            "Y": 70,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 28,
+            "Y": 28
+          },
+          "Radii": {
+            "X": 7,
+            "Y": 7
+          },
+          "Color": {
+            "X": 0.115,
+            "Y": 0.17,
+            "Z": 0.275,
+            "W": 1
+          },
+          "Order": 1
+        },
+        {
+          "InteractionComponentType": "class IKIGAI::ECS::InteractionComponent",
+          "Width": 28,
+          "Height": 28,
+          "KeyboardActivation": true,
+          "Focusable": true
+        },
+        {
+          "CheckboxComponentType": "class IKIGAI::ECS::CheckboxComponent",
+          "Mark": "Check mark"
+        }
+      ],
+      "ParentId": 30
+    },
+    {
+      "Name": "Check mark",
+      "Id": 33,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 6,
+            "Y": 6,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 16,
+            "Y": 16
+          },
+          "Radii": {
+            "X": 4,
+            "Y": 4
+          },
+          "Color": {
+            "X": 0.18,
+            "Y": 0.61,
+            "Z": 0.87,
+            "W": 1
+          },
+          "Order": 2
+        }
+      ],
+      "ParentId": 32
+    },
+    {
+      "Name": "Checkbox label",
+      "Id": 34,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 59,
+            "Y": 72,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Checkbox",
+          "Size": 17,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 30
+    },
+    {
+      "Name": "Loading spinner",
+      "Id": 35,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 335,
+            "Y": 67,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 4,
+          "Size": {
+            "X": 28,
+            "Y": 28
+          },
+          "Color": {
+            "X": 0.18,
+            "Y": 0.61,
+            "Z": 0.87,
+            "W": 1
+          },
+          "StrokeColor": {
+            "X": 0.18,
+            "Y": 0.61,
+            "Z": 0.87,
+            "W": 1
+          },
+          "StrokeWidth": 3,
+          "Order": 2
+        },
+        {
+          "LoadingSpinnerComponentType": "class IKIGAI::ECS::LoadingSpinnerComponent",
+          "ArcDegrees": 285
+        }
+      ],
+      "ParentId": 30
+    },
+    {
+      "Name": "Text input",
+      "Id": 36,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 22,
+            "Y": 117,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 345,
+            "Y": 44
+          },
+          "Radii": {
+            "X": 7,
+            "Y": 7
+          },
+          "Color": {
+            "X": 0.115,
+            "Y": 0.17,
+            "Z": 0.275,
+            "W": 1
+          },
+          "Order": 1
+        },
+        {
+          "InteractionComponentType": "class IKIGAI::ECS::InteractionComponent",
+          "Width": 345,
+          "Height": 44,
+          "KeyboardActivation": false,
+          "Focusable": true
+        },
+        {
+          "GuiTextInputComponentType": "class IKIGAI::ECS::GuiTextInputComponent",
+          "Placeholder": "Type here",
+          "Label": "Text",
+          "MaxLength": 28
+        }
+      ],
+      "ParentId": 30
+    },
+    {
+      "Name": "Text",
+      "Id": 37,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 12,
+            "Y": 11,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "",
+          "Size": 17,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 36
+    },
+    {
+      "Name": "Combo box",
+      "Id": 38,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 22,
+            "Y": 177,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 345,
+            "Y": 44
+          },
+          "Radii": {
+            "X": 7,
+            "Y": 7
+          },
+          "Color": {
+            "X": 0.115,
+            "Y": 0.17,
+            "Z": 0.275,
+            "W": 1
+          },
+          "Order": 1
+        },
+        {
+          "InteractionComponentType": "class IKIGAI::ECS::InteractionComponent",
+          "Width": 345,
+          "Height": 44,
+          "KeyboardActivation": true,
+          "Focusable": true
+        },
+        {
+          "GuiComboBoxComponentType": "class IKIGAI::ECS::GuiComboBoxComponent",
+          "Placeholder": "Choose quality",
+          "Label": "Selection",
+          "Popup": "Choices",
+          "Options": [
+            {
+              "Object": "Balanced",
+              "Text": "Balanced"
+            },
+            {
+              "Object": "Quality",
+              "Text": "Quality"
+            }
+          ]
+        }
+      ],
+      "ParentId": 30
+    },
+    {
+      "Name": "Selection",
+      "Id": 39,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 12,
+            "Y": 11,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "",
+          "Size": 17,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 38
+    },
+    {
+      "Name": "Dropdown arrow",
+      "Id": 40,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 315,
+            "Y": 19,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorPathComponentType": "class IKIGAI::ECS::VectorPathComponent",
+          "Commands": "M 0 0 L 6 6 L 12 0",
+          "StrokeWidth": 2,
+          "StrokeColor": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 38
+    },
+    {
+      "Name": "Choices",
+      "Id": 41,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 46,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 345,
+            "Y": 84
+          },
+          "Radii": {
+            "X": 7,
+            "Y": 7
+          },
+          "Color": {
+            "X": 0.115,
+            "Y": 0.17,
+            "Z": 0.275,
+            "W": 1
+          },
+          "Order": 1
+        },
+        {
+          "VectorCanvasComponentType": "class IKIGAI::ECS::VectorCanvasComponent",
+          "SortingLayer": 1
+        }
+      ],
+      "ParentId": 38
+    },
+    {
+      "Name": "Balanced",
+      "Id": 42,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 4,
+            "Y": 4,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 337,
+            "Y": 36
+          },
+          "Radii": {
+            "X": 4,
+            "Y": 4
+          },
+          "Color": {
+            "X": 0.1,
+            "Y": 0.18,
+            "Z": 0.3,
+            "W": 1
+          },
+          "Order": 2
+        },
+        {
+          "InteractionComponentType": "class IKIGAI::ECS::InteractionComponent",
+          "Width": 337,
+          "Height": 36,
+          "KeyboardActivation": true,
+          "Focusable": true
+        }
+      ],
+      "ParentId": 41
+    },
+    {
+      "Name": "Balanced label",
+      "Id": 43,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 8,
+            "Y": 7,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Balanced",
+          "Size": 17,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 42
+    },
+    {
+      "Name": "Quality",
+      "Id": 44,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 4,
+            "Y": 44,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 337,
+            "Y": 36
+          },
+          "Radii": {
+            "X": 4,
+            "Y": 4
+          },
+          "Color": {
+            "X": 0.1,
+            "Y": 0.18,
+            "Z": 0.3,
+            "W": 1
+          },
+          "Order": 2
+        },
+        {
+          "InteractionComponentType": "class IKIGAI::ECS::InteractionComponent",
+          "Width": 337,
+          "Height": 36,
+          "KeyboardActivation": true,
+          "Focusable": true
+        }
+      ],
+      "ParentId": 41
+    },
+    {
+      "Name": "Quality label",
+      "Id": 45,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 8,
+            "Y": 7,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Quality",
+          "Size": 17,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 44
+    },
+    {
+      "Name": "Slider heading",
+      "Id": 46,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 22,
+            "Y": 239,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Slider",
+          "Size": 17,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 30
+    },
+    {
+      "Name": "Slider",
+      "Id": 47,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 31,
+            "Y": 265,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "InteractionComponentType": "class IKIGAI::ECS::InteractionComponent",
+          "Width": 327,
+          "Height": 31,
+          "KeyboardActivation": true,
+          "Focusable": true
+        },
+        {
+          "SliderComponentType": "class IKIGAI::ECS::SliderComponent",
+          "Min": 0,
+          "Max": 100,
+          "Value": 40,
+          "Step": 5,
+          "Thumb": "Slider thumb"
+        }
+      ],
+      "ParentId": 30
+    },
+    {
+      "Name": "Slider track",
+      "Id": 48,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 12,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 327,
+            "Y": 7
+          },
+          "Radii": {
+            "X": 7,
+            "Y": 7
+          },
+          "Color": {
+            "X": 0.12,
+            "Y": 0.26,
+            "Z": 0.43,
+            "W": 1
+          },
+          "Order": 1
+        }
+      ],
+      "ParentId": 47
+    },
+    {
+      "Name": "Slider thumb",
+      "Id": 49,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 15,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        }
+      ],
+      "ParentId": 47
+    },
+    {
+      "Name": "Thumb shape",
+      "Id": 50,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -9,
+            "Y": -9,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 18,
+            "Y": 18
+          },
+          "Radii": {
+            "X": 9,
+            "Y": 9
+          },
+          "Color": {
+            "X": 0.18,
+            "Y": 0.61,
+            "Z": 0.87,
+            "W": 1
+          },
+          "Order": 2
+        }
+      ],
+      "ParentId": 49
+    },
+    {
+      "Name": "Scroll heading",
+      "Id": 51,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 414,
+            "Y": 178,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Drag to scroll",
+          "Size": 17,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 30
+    },
+    {
+      "Name": "Scroll view",
+      "Id": 52,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 414,
+            "Y": 218,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 345,
+            "Y": 200
+          },
+          "Radii": {
+            "X": 7,
+            "Y": 7
+          },
+          "Color": {
+            "X": 0.115,
+            "Y": 0.17,
+            "Z": 0.275,
+            "W": 1
+          },
+          "Order": 1
+        },
+        {
+          "InteractionComponentType": "class IKIGAI::ECS::InteractionComponent",
+          "Width": 345,
+          "Height": 200,
+          "KeyboardActivation": false,
+          "Focusable": false
+        },
+        {
+          "ClipComponentType": "class IKIGAI::ECS::ClipComponent",
+          "Width": 345,
+          "Height": 200
+        },
+        {
+          "ScrollViewComponentType": "class IKIGAI::ECS::ScrollViewComponent",
+          "Content": "Scroll content",
+          "ContentSize": {
+            "X": 345,
+            "Y": 280
+          }
+        }
+      ],
+      "ParentId": 30
+    },
+    {
+      "Name": "Scroll content",
+      "Id": 53,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        }
+      ],
+      "ParentId": 52
+    },
+    {
+      "Name": "Pointer capture",
+      "Id": 54,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 8,
+            "Y": 8,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 329,
+            "Y": 46
+          },
+          "Radii": {
+            "X": 5,
+            "Y": 5
+          },
+          "Color": {
+            "X": 0.1,
+            "Y": 0.18,
+            "Z": 0.3,
+            "W": 1
+          },
+          "Order": 2
+        }
+      ],
+      "ParentId": 53
+    },
+    {
+      "Name": "Pointer capture label",
+      "Id": 55,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 10,
+            "Y": 11,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Pointer capture",
+          "Size": 17,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 54
+    },
+    {
+      "Name": "Focus and keyboard",
+      "Id": 56,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 8,
+            "Y": 62,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 329,
+            "Y": 46
+          },
+          "Radii": {
+            "X": 5,
+            "Y": 5
+          },
+          "Color": {
+            "X": 0.1,
+            "Y": 0.18,
+            "Z": 0.3,
+            "W": 1
+          },
+          "Order": 2
+        }
+      ],
+      "ParentId": 53
+    },
+    {
+      "Name": "Focus and keyboard label",
+      "Id": 57,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 10,
+            "Y": 11,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Focus and keyboard",
+          "Size": 17,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 56
+    },
+    {
+      "Name": "Animation bindings",
+      "Id": 58,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 8,
+            "Y": 116,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 329,
+            "Y": 46
+          },
+          "Radii": {
+            "X": 5,
+            "Y": 5
+          },
+          "Color": {
+            "X": 0.1,
+            "Y": 0.18,
+            "Z": 0.3,
+            "W": 1
+          },
+          "Order": 2
+        }
+      ],
+      "ParentId": 53
+    },
+    {
+      "Name": "Animation bindings label",
+      "Id": 59,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 10,
+            "Y": 11,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Animation bindings",
+          "Size": 17,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 58
+    },
+    {
+      "Name": "Custom curves",
+      "Id": 60,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 8,
+            "Y": 170,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 329,
+            "Y": 46
+          },
+          "Radii": {
+            "X": 5,
+            "Y": 5
+          },
+          "Color": {
+            "X": 0.1,
+            "Y": 0.18,
+            "Z": 0.3,
+            "W": 1
+          },
+          "Order": 2
+        }
+      ],
+      "ParentId": 53
+    },
+    {
+      "Name": "Custom curves label",
+      "Id": 61,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 10,
+            "Y": 11,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Custom curves",
+          "Size": 17,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 60
+    },
+    {
+      "Name": "Parallel nodes",
+      "Id": 62,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 8,
+            "Y": 224,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VectorShapeComponentType": "class IKIGAI::ECS::VectorShapeComponent",
+          "Shape": 1,
+          "Size": {
+            "X": 329,
+            "Y": 46
+          },
+          "Radii": {
+            "X": 5,
+            "Y": 5
+          },
+          "Color": {
+            "X": 0.1,
+            "Y": 0.18,
+            "Z": 0.3,
+            "W": 1
+          },
+          "Order": 2
+        }
+      ],
+      "ParentId": 53
+    },
+    {
+      "Name": "Parallel nodes label",
+      "Id": 63,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 10,
+            "Y": 11,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Parallel nodes",
+          "Size": 17,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 62
+    },
+    {
+      "Name": "Hold for progress",
+      "Id": 100,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 414,
+            "Y": 46,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Hold for progress",
+          "Size": 17,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 30
+    },
+    {
+      "Name": "Drag the thumb",
+      "Id": 101,
+      "IsActive": true,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 22,
+            "Y": 306,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "SdfTextComponentType": "class IKIGAI::ECS::SdfTextComponent",
+          "Text": "Drag the thumb",
+          "Size": 17,
+          "Color": {
+            "X": 0.9,
+            "Y": 0.94,
+            "Z": 1,
+            "W": 1
+          },
+          "Order": 4
+        }
+      ],
+      "ParentId": 30
+    }
+  ]
+}

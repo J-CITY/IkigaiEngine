@@ -6,6 +6,7 @@
 #include "skeletalComponent.h"
 #include "skeletalStateGraphComponent.h"
 #include "traversalComponent.h"
+#include <algorithm>
 
 namespace IKIGAI::ECS {
 RagdollComponent::RagdollComponent(UTILS::Ref<Object> owner)
@@ -27,6 +28,11 @@ void RagdollComponent::activate() {
 	mActivateRequested = true;
 	mResetRequested = false;
 }
+void RagdollComponent::relocate(MATH::Vector3f position, MATH::QuaternionF rotation) {
+	if (mInstance) {
+		mInstance->relocate({ position, rotation });
+	}
+}
 void RagdollComponent::reset() {
 	mResetRequested = true;
 	mActivateRequested = false;
@@ -37,6 +43,9 @@ void RagdollComponent::applyImpulse(std::size_t segment, MATH::Vector3f impulse,
 		throw std::invalid_argument("Invalid ragdoll impulse");
 	}
 	mImpulses.push_back({ segment, impulse, point });
+}
+bool RagdollComponent::ownsBody(PHYSICS::Id body) const {
+	return mInstance && std::ranges::find(mInstance->bodies(), body) != mInstance->bodies().end();
 }
 RagdollState RagdollComponent::state() const {
 	return mInstance && mInstance->simulated() ? RagdollState::Simulated : RagdollState::Animated;

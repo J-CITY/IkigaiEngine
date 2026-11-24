@@ -1,0 +1,9 @@
+{
+  "id": "demo_playgrounds",
+  "platforms": [
+    "windows",
+    "linux",
+    "macos"
+  ],
+  "requires": []
+}

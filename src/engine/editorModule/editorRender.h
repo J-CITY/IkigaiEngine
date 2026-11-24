@@ -28,6 +28,7 @@ class EditorRender : public CORE::EditorFrontend {
 public:
 	struct GlobalState {
 		std::shared_ptr<ECS::Object> mSelectObject;
+		bool mSceneEditing = false;
 		std::shared_ptr<RENDER::MaterialInterface> mSelectMaterial;
 
 		std::string mDndStringPayload;

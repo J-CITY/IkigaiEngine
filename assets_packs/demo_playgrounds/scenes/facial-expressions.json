@@ -1,0 +1,213 @@
+{
+  "RenderPipeline": "/renderPipeline/migrated-lite.json",
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0.12,
+            "Z": -4.65
+          },
+          "LocalRotation": {
+            "X": 1.5,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 44,
+          "Near": 0.1,
+          "Far": 100,
+          "Size": 6,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Sun",
+      "Id": 2,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 32,
+            "Y": -33,
+            "Z": 0
+          }
+        },
+        {
+          "DirectionalLightType": "DirectionalLight",
+          "Color": {
+            "X": 1,
+            "Y": 0.94,
+            "Z": 0.85
+          },
+          "Intensity": 3,
+          "Distance": 100,
+          "CastShadows": false,
+          "ShadowNear": 0.1,
+          "ShadowFar": 60
+        }
+      ]
+    },
+    {
+      "Name": "Ceramic face",
+      "Id": 3,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/face-demo/ceramic-face.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Ceramic",
+            "Eye whites",
+            "Ink"
+          ],
+          "Materials": [
+            "/materials/face-demo/ceramic.mat",
+            "/materials/face-demo/eye-whites.mat",
+            "/materials/face-demo/ink.mat"
+          ]
+        },
+        {
+          "FacialAnimationComponentType": "FacialAnimationComponent",
+          "Clips": [
+            {
+              "Name": "Joy",
+              "Duration": 1.0,
+              "Loop": true,
+              "Tracks": [
+                {
+                  "Target": "Smile",
+                  "Keys": [
+                    {
+                      "Time": 0.0,
+                      "Value": 1.0
+                    }
+                  ]
+                },
+                {
+                  "Target": "Brow raise",
+                  "Keys": [
+                    {
+                      "Time": 0.0,
+                      "Value": 0.26
+                    }
+                  ]
+                },
+                {
+                  "Target": "Blink",
+                  "Keys": [
+                    {
+                      "Time": 0.0,
+                      "Value": 0.17
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Name": "Sadness",
+              "Duration": 1.0,
+              "Loop": true,
+              "Tracks": [
+                {
+                  "Target": "Frown",
+                  "Keys": [
+                    {
+                      "Time": 0.0,
+                      "Value": 1.0
+                    }
+                  ]
+                },
+                {
+                  "Target": "Blink",
+                  "Keys": [
+                    {
+                      "Time": 0.0,
+                      "Value": 0.24
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Name": "Surprise",
+              "Duration": 1.0,
+              "Loop": true,
+              "Tracks": [
+                {
+                  "Target": "Jaw open",
+                  "Keys": [
+                    {
+                      "Time": 0.0,
+                      "Value": 1.0
+                    }
+                  ]
+                },
+                {
+                  "Target": "Brow raise",
+                  "Keys": [
+                    {
+                      "Time": 0.0,
+                      "Value": 1.0
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

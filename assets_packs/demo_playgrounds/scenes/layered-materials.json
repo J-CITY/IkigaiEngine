@@ -1,0 +1,120 @@
+{
+  "RenderPipeline": "/renderPipeline/migrated-lite.json",
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 3.1,
+            "Y": 2.2,
+            "Z": -6.5
+          },
+          "LocalRotation": {
+            "X": 11,
+            "Y": -25,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 55,
+          "Near": 0.1,
+          "Far": 100,
+          "Size": 6,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Sun",
+      "Id": 2,
+      "ParentId": -1,
+      "IsActive": true,
+      "IsVisible": true,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 32,
+            "Y": -33,
+            "Z": 0
+          }
+        },
+        {
+          "DirectionalLightType": "DirectionalLight",
+          "Color": {
+            "X": 1,
+            "Y": 0.94,
+            "Z": 0.85
+          },
+          "Intensity": 3,
+          "Distance": 100,
+          "CastShadows": true,
+          "ShadowNear": 0.1,
+          "ShadowFar": 60
+        }
+      ]
+    },
+    {
+      "Name": "Painted steel",
+      "Id": 3,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0.65,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 3,
+            "Y": 0,
+            "Z": -8
+          },
+          "LocalScale": {
+            "X": 4.2,
+            "Y": 2.6,
+            "Z": 0.36
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/layered-demo/painted-steel.mat"
+          ]
+        }
+      ]
+    }
+  ]
+}

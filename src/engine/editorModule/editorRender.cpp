@@ -13,17 +13,23 @@
 #include "cameraControlWindow.h"
 #include "componentManagerWindow.h"
 #include "coreModule/config.h"
+#include "coreModule/ecs/components/facialAnimationComponent.h"
+#include "coreModule/ecs/components/modelRenderer.h"
+#include "destructionEditor.h"
 #include "editorModule/imguiHelper/ImGuiFileBrowser.h"
 #include "fileBrowser.h"
 #include "guiAnimationGraphEditor.h"
 #include "imgui.h"
 #include "menuBar.h"
 #include "misc/cpp/imgui_stdlib.h"
+#include "pbrMaterialEditor.h"
+#include "physicsDebugWindow.h"
 #include "profillerWindow.h"
 #include "renderModule/backends/interface/resourceStruct.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
 #include "sceneModule/sceneManager.h"
+#include "sceneTransformTool.h"
 #include "statWindow.h"
 #include "textureWatcher.h"
 #include "treeWindow.h"
@@ -34,11 +40,56 @@
 
 using namespace IKIGAI::EDITOR;
 
+namespace {
+void drawFacialExpressions(IKIGAI::SCENE_SYSTEM::Scene& scene) {
+	using namespace IKIGAI;
+	const auto object = scene.findObjectByName("Ceramic face");
+	if (!object) {
+		return;
+	}
+	const auto facial = object->getComponent<ECS::FacialAnimationComponent>();
+	const auto renderer = object->getComponent<ECS::ModelRenderer>();
+	if (!facial || !renderer || !renderer->getModel()) {
+		return;
+	}
+	const auto* viewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos({ viewport->Pos.x + 12, viewport->Pos.y + ImGui::GetFrameHeight() + 8 }, ImGuiCond_FirstUseEver);
+	if (!ImGui::Begin("Facial Expressions", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+		ImGui::End();
+		return;
+	}
+	try {
+		facial->bind(*renderer->getModel());
+		if (ImGui::Button("Neutral")) {
+			facial->clearWeights();
+		}
+		for (const auto& clip : facial->availableClips()) {
+			ImGui::SameLine();
+			if (ImGui::Button(clip.c_str())) {
+				facial->clearWeights();
+				facial->play(clip);
+			}
+		}
+		for (const auto& target : facial->availableTargets()) {
+			float value = facial->weight(target);
+			if (ImGui::SliderFloat(target.c_str(), &value, 0.f, 1.f)) {
+				facial->setWeight(target, value);
+			}
+		}
+	} catch (const std::exception& error) {
+		ImGui::TextWrapped("%s", error.what());
+	}
+	ImGui::End();
+}
+}
+
 struct EditorRender::Internal {
 	std::unique_ptr<MenuBar> mMenu;
 	ProfillerWindow mProfiler;
 	SurfaceBrushWindow mSurfaceBrushes;
 	EnvironmentWindow mEnvironment;
+	SceneTransformTool mSceneTransform;
+	bool mWorkspaceVisible = true;
 	TimelineAnimationWindow* mTimelineAnimation = nullptr;
 
 	std::list<std::unique_ptr<EditorWindow>> mWindows;
@@ -129,7 +180,7 @@ EditorRender::EditorRender() {
 		IKIGAI::RESOURCES::ServiceManager::Get<IKIGAI::INPUT_SYSTEM::InputManager>().setUiCaptureProvider([] {
 			if (ImGui::GetCurrentContext()) {
 				const auto& io = ImGui::GetIO();
-				return IKIGAI::INPUT_SYSTEM::InputManager::UiCapture { io.WantCaptureKeyboard, io.WantCaptureMouse };
+				return IKIGAI::INPUT_SYSTEM::InputManager::UiCapture { io.WantCaptureKeyboard, io.WantCaptureMouse || GlobalState.mSceneEditing };
 			}
 			return IKIGAI::INPUT_SYSTEM::InputManager::UiCapture {};
 		});
@@ -139,19 +190,29 @@ EditorRender::EditorRender() {
 void EditorRender::draw() {
 	static std::weak_ptr<void> historyScene;
 	auto& manager = PREFABS::Manager();
-	if (manager.hasCurrentScene() && historyScene.expired()) {
+	const auto sourcePath = manager.getCurrentSceneSourcePath();
+	const std::string_view path = sourcePath.starts_with('/') ? std::string_view(sourcePath).substr(1) : std::string_view(sourcePath);
+	const bool destructionPlayground = path == "scenes/destruction-playground.json";
+	const bool layeredPlayground = path == "scenes/layered-materials.json";
+	const bool facialPlayground = path == "scenes/facial-expressions.json";
+	if (manager.hasCurrentScene() && historyScene.lock() != manager.getCurrentScene().lifetime) {
 		GlobalState.mCommandHistory.clear();
 		GlobalState.mSelectObject.reset();
 		historyScene = manager.getCurrentScene().lifetime;
+		mData->mWorkspaceVisible = path != "scenes/gui-widgets.json" && !destructionPlayground && !layeredPlayground && !facialPlayground;
+		if (!mData->mWorkspaceVisible) {
+			mData->mSceneTransform.enabled = false;
+		}
 	}
 	if (GlobalState.mSelectObject && !GlobalState.mSelectObject->isAlive()) {
 		GlobalState.mSelectObject.reset();
 	}
 	PREFABS::CompletePending();
-	if (!mData->mSurfaceBrushes.isPainting() && ImGui::IsKeyPressed(ImGuiKey_Z, false) && ImGui::GetIO().KeyCtrl && !ImGui::GetIO().KeyShift) {
+	if (!mData->mSceneTransform.active() && !mData->mSurfaceBrushes.isPainting() && ImGui::IsKeyPressed(ImGuiKey_Z, false) && ImGui::GetIO().KeyCtrl
+		&& !ImGui::GetIO().KeyShift) {
 		PREFABS::Try([] { GlobalState.mCommandHistory.undo(); });
 	}
-	if (!mData->mSurfaceBrushes.isPainting()
+	if (!mData->mSceneTransform.active() && !mData->mSurfaceBrushes.isPainting()
 		&& ((ImGui::IsKeyPressed(ImGuiKey_Y, false) && ImGui::GetIO().KeyCtrl)
 			|| (ImGui::IsKeyPressed(ImGuiKey_Z, false) && ImGui::GetIO().KeyCtrl && ImGui::GetIO().KeyShift))) {
 		PREFABS::Try([] { GlobalState.mCommandHistory.redo(); });
@@ -160,6 +221,8 @@ void EditorRender::draw() {
 	mData->mMenu->draw();
 	if (ImGui::BeginMainMenuBar()) {
 		if (ImGui::BeginMenu("Window")) {
+			ImGui::MenuItem("Scene Editing", nullptr, &mData->mSceneTransform.enabled);
+			ImGui::MenuItem("Editor Panels", nullptr, &mData->mWorkspaceVisible);
 			bool profilerOpen = mData->mProfiler.isOpen();
 			if (ImGui::MenuItem("Profiler", nullptr, &profilerOpen)) {
 				mData->mProfiler.setOpen(profilerOpen);
@@ -179,13 +242,33 @@ void EditorRender::draw() {
 		ImGui::Text("%.1f FPS | %.1f ms", fps, fps > 0 ? 1000.0f / fps : 0.0f);
 		ImGui::EndMainMenuBar();
 	}
-	mData->mProfiler.draw();
-	mData->mSurfaceBrushes.draw();
-	mData->mEnvironment.draw();
-	for (auto& win : mData->mWindows) {
-		win->draw();
+	if (mData->mWorkspaceVisible) {
+		if (manager.hasCurrentScene()) {
+			DrawPhysicsDebug(manager.getCurrentScene());
+		}
+		mData->mProfiler.draw();
+		mData->mSurfaceBrushes.draw();
+		mData->mEnvironment.draw();
+		for (auto& win : mData->mWindows) {
+			win->draw();
+		}
+		drawGuiAnimationGraphEditor();
 	}
-	drawGuiAnimationGraphEditor();
+	if (manager.hasCurrentScene()) {
+		mData->mSceneTransform.draw(manager.getCurrentScene());
+#if USE_PHYSICS_3D
+		if (destructionPlayground) {
+			DrawDestructionPlayground(manager.getCurrentScene(), !mData->mSceneTransform.capturesMouse());
+		}
+#endif
+		if (layeredPlayground) {
+			DrawLayeredMaterialPlayground(manager.getCurrentScene());
+		}
+		if (facialPlayground) {
+			drawFacialExpressions(manager.getCurrentScene());
+		}
+	}
+	GlobalState.mSceneEditing = mData->mSceneTransform.capturesMouse();
 
 	if (!GlobalState.mResPath.empty()) {
 		switch (GlobalState.mResType) {

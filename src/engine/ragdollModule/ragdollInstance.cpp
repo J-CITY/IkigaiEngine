@@ -130,6 +130,24 @@ void RagdollInstance::reset() {
 bool RagdollInstance::simulated() const {
 	return !mBodies.empty() && !mWorld.expired();
 }
+void RagdollInstance::relocate(RagdollFrame root) {
+	auto world = mWorld.lock();
+	if (!world || !simulated() || std::any_of(mBodies.begin(), mBodies.end(), [&](auto id) { return !world->body(id); })) {
+		return;
+	}
+	const auto rotation = Q::Normalize(root.rotation * Q::Conjugate(mRoot.rotation));
+	for (auto id : mBodies) {
+		const auto& body = *world->body(id);
+		world->teleport(
+			id, root.position + rotation * (body.getPosition() - mSimulationRoot.position), Q::Normalize(rotation * body.getOrientation()));
+		world->setVelocity(id, {}, {});
+	}
+	mPelvisOffset = rotation * mPelvisOffset;
+	mRoot = mSimulationRoot = root;
+	capture();
+	mPrevious = mCurrent;
+	interpolate(1);
+}
 void RagdollInstance::capture() {
 	if (auto world = mWorld.lock(); world && !mBodies.empty()) {
 		for (auto id : mBodies) {

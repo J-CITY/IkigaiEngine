@@ -1,0 +1,138 @@
+{
+  "RenderPipeline": "/renderPipeline/migrated-lite.json",
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 22,
+            "Z": -43
+          },
+          "LocalRotation": {
+            "X": 24,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 60.0,
+          "Near": 0.1,
+          "Far": 150.0,
+          "Size": 5.0,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        },
+        {
+          "IkigaiScriptComponentType": "class IKIGAI::ECS::IkigaiScriptComponent",
+          "Path": "PicaPicaCamera"
+        }
+      ]
+    },
+    {
+      "Name": "Sun",
+      "Id": 2,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 45,
+            "Y": -30,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "DirectionalLightType": "class IKIGAI::ECS::DirectionalLight",
+          "Color": {
+            "X": 1.0,
+            "Y": 0.9,
+            "Z": 0.75
+          },
+          "Intensity": 2.0,
+          "Distance": 100.0,
+          "CastShadows": true
+        }
+      ]
+    },
+    {
+      "Id": 3,
+      "Name": "Voxel coast",
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "ChunkModelRendererType": "ChunkModelRenderer",
+          "Voxels": {
+            "ChunksX": 4,
+            "ChunksY": 2,
+            "ChunksZ": 4,
+            "ChunkSize": 16,
+            "Noise": {
+              "Seed": 17,
+              "Frequency": 0.042,
+              "Amplitude": 11,
+              "Octaves": 3
+            },
+            "BuildBudget": 4,
+            "SeaLevel": -1,
+            "SnowHeight": 5
+          }
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "ground",
+            "rock",
+            "sand",
+            "snow",
+            "water"
+          ],
+          "Materials": [
+            "/materials/surface/ground.mat",
+            "/materials/surface/rock.mat",
+            "/materials/surface/sand.mat",
+            "/materials/surface/snow.mat",
+            "/materials/surface/water.mat"
+          ]
+        }
+      ]
+    }
+  ]
+}

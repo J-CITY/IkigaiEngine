@@ -97,6 +97,7 @@ function(ikigai_configure_physics3d target)
             "engine/physicsModule/rigidJoint.cpp"
             "engine/physicsModule/rigidJointSolver.cpp")
         ikigai_exclude_sources(sources
+            "engine/coreModule/ecs/components/physicsGrabComponent.cpp"
             "engine/coreModule/ecs/components/physics3dComponent.cpp"
             "engine/coreModule/ecs/components/physicsComponent.cpp"
             "engine/coreModule/ecs/systems/physics3dSystem.cpp"

@@ -2,6 +2,30 @@
 
 [Сравнение Ikigai, EnTT и Flecs](RESULTS.md)
 
+## Генерация графиков статьи
+
+Скрипт `utils/tools/generate_ecs_charts.py` содержит данные всех четырёх PNG из статьи. В `CHARTS` редактируются значения, подписи и пояснения, в `THEMES` — цвета. Числа взяты из таблиц отчёта с исходной точностью, подписи округляются как на картинках. Генерация использует только встроенные данные. Нужны Python 3.10+ и Matplotlib.
+
+```powershell
+python -m pip install matplotlib
+python utils/tools/generate_ecs_charts.py --theme light
+python utils/tools/generate_ecs_charts.py --theme dark --format png svg
+python utils/tools/generate_ecs_charts.py --theme paper --charts mixed batches
+```
+
+По умолчанию результаты записываются в `build/ecs-charts/<theme>/`. Имена `iteration`, `mixed`, `lifecycle` и `batches` соответствуют картинкам статьи. Можно изменить палитру, шрифт, размер и разрешение изображения или применить стиль Matplotlib. Темы скрипта задают цвета поверх `--mpl-style`.
+
+```powershell
+python utils/tools/generate_ecs_charts.py --charts iteration --theme dark --font 'DejaVu Sans' --font-size 14 --figsize 16 7 --dpi 200 --colors '#8392a5' '#64d2ff' '#ffd166' '#c4a1ff' --output-dir build/ecs-charts/custom
+python utils/tools/generate_ecs_charts.py --mpl-style seaborn-v0_8-whitegrid --format png pdf
+```
+
+Для обновления всех четырёх изображений, на которые ссылается статья, укажите её каталог картинок. Файлы с теми же именами будут перезаписаны.
+
+```powershell
+python utils/tools/generate_ecs_charts.py --theme light --output-dir testModule/benchmarks/ecs/pulse-charts
+```
+
 Адаптер Ikigai в сравнительной матрице создаёт мир с `ArchetypeLayout::SharedRows`. Для архетипных компонентов этот экспериментальный режим требует `noexcept` у конструктора перемещения, присваивания перемещением и деструктора. Обычный `World()` использует `ArchetypeLayout::PerColumn`.
 
 Сборка использует три локальных checkout в каталоге рядом с движком. Ниже команды PowerShell из корня IkigaiEngine.
@@ -32,6 +56,12 @@ $filter = '^(movement<(IkigaiCompact|IkigaiMixed|EnTT|FlecsUncached|FlecsCached)
 - `IkigaiMixed` использует те же данные и ту же операцию при 10% и 50% совпадений. Скорость хранится в sparse-пуле.
 - `structural` измеряет создание и удаление пустых сущностей, добавление, снятие и цикл добавления/снятия компонента у сущности с позицией. Для раздельных добавления и снятия целевое хранилище подготавливается вне таймера. В цикле одна пара считается двумя операциями.
 - Время сравнения берётся из `real_time`. Для наносекунд на элемент медиану делят на число совпадений, а для структурных операций на число операций. Исходные повторы и коэффициент вариации записываются в JSON. Подготовка мира, проверка результата и очистка фикстур находятся вне измеряемого участка.
+
+`Relations` измеряет добавление `Follows` между существующими сущностями, обход целей каждого источника и удаление одной цели с очисткой входящих связей. У каждого источника четыре цели. Три общие для всех, четвёртая назначается по группам. Добавление и обход работают с 16 384 источниками. Удаление проверяет пары «число источников / входящих связей» 1 024 / 32, 16 384 / 32 и 16 384 / 512. Показатель `items_per_second` учитывает отдельные связи при добавлении и обходе и удалённые цели при удалении. Каждый повтор удаления использует 16 заново собранных графов.
+
+```powershell
+& $exe '--benchmark_filter=^Relations/' --benchmark_min_time=0.10s --benchmark_repetitions=9 --benchmark_enable_random_interleaving=true --benchmark_out=build/ecs/relations-comparison.json --benchmark_out_format=json
+```
 
 `Ikigai/MixedRows/Lookup` использует тот же порядок ID из sparse-пула, что и `IkigaiMixed`. Таймер охватывает поиск записи и суммирование номеров архетипных строк. Время делится на число ID в sparse-пуле.
 

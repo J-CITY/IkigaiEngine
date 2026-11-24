@@ -52,7 +52,12 @@ void MenuBar::draw() {
 				demo("Ragdoll", "/scenes/ragdoll-demo.json", USE_PHYSICS_3D);
 				demo("Environment - Landscape and Weather", "/scenes/environment-demo.json");
 				demo("3D Physics", "/scenes/physics-3d-demo.json", USE_PHYSICS_3D);
+				demo("Destruction Playground", "/scenes/destruction-playground.json", USE_PHYSICS_3D);
+				demo("Layered Materials", "/scenes/layered-materials.json");
+				demo("Facial Expressions", "/scenes/facial-expressions.json");
 				demo("2D Physics", "/scenes/physics-2d-demo.json", USE_PHYSICS_2D);
+				demo("Voxel Landscape", "/scenes/voxel-coast.json");
+				demo("GUI - Widget Playground", "/scenes/gui-widgets.json");
 				demo("GUI - Widgets and Curves", "/scenes/gui-demo.json");
 				demo("Particles - 2D and 3D", "/scenes/particles-demo.json");
 				ImGui::Separator();

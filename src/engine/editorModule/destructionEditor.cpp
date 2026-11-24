@@ -1,11 +1,15 @@
 #include "destructionEditor.h"
 #if defined(USE_EDITOR) && USE_PHYSICS_3D
+#include "coreModule/ecs/components/cameraComponent.h"
 #include "coreModule/ecs/components/destructibleMeshComponent.h"
 #include "coreModule/ecs/object.h"
 #include "coreModule/ecs/sceneSimulationHost.h"
 #include "imgui.h"
-#include "sceneModule/sceneManager.h"
+
 #include "editorModule/imguiHelper/ImGuizmo.h"
+#include "physicsModule/characterMotor.h"
+#include "sceneModule/sceneManager.h"
+#include "scenePicking.h"
 #include <algorithm>
 #include <misc/cpp/imgui_stdlib.h>
 
@@ -160,6 +164,53 @@ namespace {
 		draw->PopClipRect();
 	}
 }
+void DrawDestructionPlayground(SCENE_SYSTEM::Scene& scene, bool acceptSceneClick) {
+	const auto column = scene.findObjectByName("Stone column");
+	const auto destructible = column ? column->getComponent<ECS::DestructibleMeshComponent>() : UTILS::WeakPtr<ECS::DestructibleMeshComponent> {};
+	if (!destructible) {
+		return;
+	}
+	static float impulse = 6.f;
+	const auto* viewport = ImGui::GetMainViewport();
+	const auto mouse = ImGui::GetIO().MouseClickedPos[ImGuiMouseButton_Left];
+	const bool strike = acceptSceneClick && !ImGui::GetIO().WantCaptureMouse && ImGui::IsMouseClicked(ImGuiMouseButton_Left)
+		&& ImGui::IsMouseHoveringRect(viewport->Pos, { viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y }, false);
+	ImGui::SetNextWindowPos({ viewport->Pos.x + 12, viewport->Pos.y + ImGui::GetFrameHeight() + 8 }, ImGuiCond_FirstUseEver);
+	if (ImGui::Begin("Destruction Playground", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+		ImGui::TextUnformatted("Click the column to strike at that height.");
+		ImGui::SliderFloat("Impulse", &impulse, 0.f, 20.f, "%.1f N s");
+		if (ImGui::Button("Reset column")) {
+			destructible->reset();
+		}
+		ImGui::Text("Pieces: %zu    Pending: %zu", destructible->pieces().size(), destructible->pendingRequests());
+		if (!destructible->lastError().empty()) {
+			ImGui::TextWrapped("%s", destructible->lastError().c_str());
+		}
+	}
+	ImGui::End();
+	const auto camera = scene.findMainCamera();
+	if (!strike || !camera || destructible->pieces().empty() || viewport->Size.x <= 0 || viewport->Size.y <= 0) {
+		return;
+	}
+	const auto& optics = camera->getCamera();
+	const auto inverse = MATH::Matrix4f::Inverse(optics.getProjectionMatrix() * optics.getViewMatrix());
+	const auto ray = unprojectSceneRay(
+		inverse, { (mouse.x - viewport->Pos.x) * 2.f / viewport->Size.x - 1.f, 1.f - (mouse.y - viewport->Pos.y) * 2.f / viewport->Size.y });
+	if (ray.length <= 0) {
+		return;
+	}
+	const auto hit = PHYSICS::CHARACTER::raycast(scene.physics3d(), ray.origin, ray.direction * ray.length, { .layer = ~0u, .staticsOnly = false });
+	if (!hit) {
+		return;
+	}
+	const auto found = std::ranges::find(destructible->pieces(), hit.body, &DESTRUCTION::DestructiblePiece::body);
+	if (found != destructible->pieces().end()) {
+		// The cut slopes in the direction of the impact so fragments rotate as they separate.
+		const auto plane = MATH::Vector3f { 0, 1, 0 } + ray.direction * .18f;
+		destructible->slicePiece(found->id, hit.point, plane, ray.direction * impulse);
+	}
+}
+
 void DrawDestructionEditor(ECS::DestructibleMeshComponent& component) {
 	auto& state = draft(component);
 	auto& scene = RESOURCES::ServiceManager::Get<SCENE_SYSTEM::SceneManager>().getCurrentScene();
