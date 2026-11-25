@@ -1,0 +1,9 @@
+{
+  "ShaderPath": "/shaders/water/ocean.shader",
+  "IsDeferred": true,
+  "BackfaceCulling": false,
+  "NeedFileWatch": true,
+  "Uniforms": {
+    "u_FoamMask": "/textures/water/sea-foam.texture"
+  }
+}

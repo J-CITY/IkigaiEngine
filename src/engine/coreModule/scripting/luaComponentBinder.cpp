@@ -9,11 +9,11 @@
 #include <coreModule/ecs/components/directionalLight.h>
 #include <coreModule/ecs/components/materialRenderer.h>
 #include <coreModule/ecs/components/modelRenderer.h>
+#include <coreModule/ecs/components/particleSystemComponent.h>
 #include <coreModule/ecs/components/pointLight.h>
 #include <coreModule/ecs/components/spotLight.h>
 #include <coreModule/ecs/components/transform.h>
 #include <coreModule/ecs/object.h>
-
 
 using namespace IKIGAI::SCRIPTING;
 
@@ -22,6 +22,9 @@ void LuaComponentBinder::BindComponent(sol::state& p_luaState) {
 	using namespace IKIGAI::ECS;
 
 	p_luaState.new_usertype<ComponentBase>("Component", "GetOwner", [](ComponentBase& p_component) -> const Object& { return p_component.obj; });
+
+	p_luaState.new_usertype<ParticleSystem3DComponent>(
+		"ParticleSystem3D", "Restart", &ParticleSystem3DComponent::restart, "Stop", &ParticleSystem3DComponent::stop);
 
 	p_luaState.new_usertype<TransformComponent>(
 		"Transform", sol::base_classes, sol::bases<ComponentBase>(),

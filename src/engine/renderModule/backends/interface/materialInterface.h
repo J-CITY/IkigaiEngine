@@ -23,6 +23,7 @@ protected:
 	bool mDepthWriting = true;
 	bool mColorWriting = true;
 	unsigned mGpuInstances = 1;
+	bool mUseSurfaceGeometryShader = false;
 	bool mIsDeferred = false;
 
 	bool mIsCastShadow = true;
@@ -87,6 +88,12 @@ public:
 		return false;
 	}
 
+	bool usesSurfaceGeometryShader() const {
+		return mUseSurfaceGeometryShader;
+	}
+	void useSurfaceGeometryShader(bool enabled) {
+		mUseSurfaceGeometryShader = enabled;
+	}
 	unsigned getGPUInstances() const {
 		return mGpuInstances;
 	}

@@ -1,4 +1,5 @@
 #include "sceneSimulationHost.h"
+#include "coreModule/ecs/systems/waterSystem.h"
 
 #include "coreModule/ecs/componentTypes.h"
 #include "coreModule/ecs/components/ambientSphereLight.h"
@@ -222,6 +223,12 @@ namespace {
 			engineSimulation(frame.scene).mPhysics2D->onFixedUpdate(frame.scene.getWorld(), commands, frame.dt);
 		});
 #endif
+#if !USE_PHYSICS_3D
+		RegisterSceneSystem(systems, finishFixed, "Water.Advance",
+			[](const ScenePhaseContext& frame, CommandBuffer&) { WaterSystem::advance(frame.scene, float(frame.dt.count())); });
+#endif
+		RegisterSceneSystem(systems, SystemPhase::BeforeObjectUpdate, "Water.Present",
+			[](const ScenePhaseContext& frame, CommandBuffer&) { WaterSystem::present(frame.scene); });
 		// Resolve the environment's typed light reference before scene loading reports success.
 		RegisterSceneSystem(systems, SystemPhase::SceneStart, environmentStart, [](const ScenePhaseContext& frame, CommandBuffer&) {
 			if (auto* environment = EnvironmentSystem::active(frame.scene)) {

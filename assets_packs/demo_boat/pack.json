@@ -1,0 +1,12 @@
+{
+  "id": "demo_boat",
+  "platforms": [
+    "windows",
+    "linux",
+    "macos"
+  ],
+  "requires": [
+    "ocean",
+    "weather"
+  ]
+}

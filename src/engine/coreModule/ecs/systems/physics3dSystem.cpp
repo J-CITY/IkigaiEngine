@@ -1,4 +1,5 @@
 #include "physics3dSystem.h"
+#include "waterSystem.h"
 #if USE_PHYSICS_3D
 #include "coreModule/ecs/components/physics3dComponent.h"
 #include "coreModule/ecs/components/physicsComponent.h"
@@ -16,7 +17,7 @@ template <class C> void release(Object& o) {
 		c->runtime.reset();
 	}
 }
-template <class C, class Create> void synchronize(C& c, const std::shared_ptr<P::World>& world, Physics3DLease::Kind kind, Create create) {
+template <class C, class Create> bool synchronize(C& c, const std::shared_ptr<P::World>& world, Physics3DLease::Kind kind, Create create) {
 	auto signature = serde::serialize<nlohmann::json>(c.getDescriptor()).dump();
 	bool valid = c.runtime && c.runtime->world.lock() == world && c.runtime->signature == signature;
 	if (valid) {
@@ -36,7 +37,7 @@ template <class C, class Create> void synchronize(C& c, const std::shared_ptr<P:
 		}
 	}
 	if (valid) {
-		return;
+		return false;
 	}
 	c.runtime.reset();
 	auto lease = std::make_shared<Physics3DLease>();
@@ -45,6 +46,62 @@ template <class C, class Create> void synchronize(C& c, const std::shared_ptr<P:
 	lease->signature = std::move(signature);
 	lease->id = create();
 	c.runtime = std::move(lease);
+	return true;
+}
+template <class C, class Create> void synchronizeSoftBody(C& component, const Object& object, const std::shared_ptr<P::World>& world, Create create) {
+	const bool created = synchronize(component, world, Physics3DLease::Kind::Soft, create);
+	auto& lease = *component.runtime;
+	const auto position = object.tryGetTransform()->getLocalPosition();
+	const auto rotation = object.tryGetTransform()->getLocalRotation();
+	if (!created) {
+		if (position == lease.particleFramePosition && rotation == lease.particleFrameRotation) {
+			return;
+		}
+		const auto previousRotation = MATH::QuaternionF::ToMatrix3(lease.particleFrameRotation);
+		const auto currentRotation = MATH::QuaternionF::ToMatrix3(rotation);
+		auto rotate = [&](P::Vec3 vector) { return currentRotation.transform(previousRotation.transformTranspose(vector)); };
+		auto& body = *world->softBody(lease.id);
+		if (rotation == lease.particleFrameRotation) {
+			const auto offset = position - lease.particleFramePosition;
+			for (auto& particle : body.particles) {
+				particle.position += offset;
+			}
+			for (auto& previous : body.previous) {
+				previous += offset;
+			}
+		}
+		else {
+			for (auto& particle : body.particles) {
+				particle.position = position + rotate(particle.position - lease.particleFramePosition);
+				particle.velocity = rotate(particle.velocity);
+			}
+			for (auto& previous : body.previous) {
+				previous = position + rotate(previous - lease.particleFramePosition);
+			}
+		}
+	}
+	lease.particleFramePosition = position;
+	lease.particleFrameRotation = rotation;
+}
+void publishSoftBodyPosition(Object& object, SoftBody3DComponent& component, const P::SoftBody& body) {
+	// Generated grids are centered. Custom meshes keep their authored local origin.
+	P::Vec3 center {};
+	for (const auto& particle : body.particles) {
+		center += particle.position;
+	}
+	const float inverseCount = 1.0f / static_cast<float>(body.particles.size());
+	center *= inverseCount;
+	const auto& vertices = component.settings.Vertices;
+	if (!vertices.empty()) {
+		P::Vec3 restCenter {};
+		for (const auto& vertex : vertices) {
+			restCenter += vertex;
+		}
+		center -= MATH::QuaternionF::ToMatrix3(component.runtime->particleFrameRotation).transform(restCenter * inverseCount);
+	}
+	// Publish the same origin to rendering and to the next tick's edit detection.
+	component.runtime->particleFramePosition = center;
+	object.tryGetTransform()->setLocalPosition(center);
 }
 void gridDimensions(int w, int h, int d, float spacing) {
 	if (w < 1 || h < 1 || d < 1 || w > 64 || h > 64 || d > 64 || !std::isfinite(spacing) || spacing <= 0) {
@@ -88,11 +145,12 @@ P::SoftBodyDef softDefinition(const SoftBody3DComponent::Descriptor& s, const Ob
 		if (s.Width < 2 || s.Height < 2 || s.Depth < 2) {
 			throw std::invalid_argument("Soft volume needs at least 2x2x2 particles");
 		}
+		const P::Vec3 gridCenter = P::Vec3(s.Width - 1, s.Height - 1, s.Depth - 1) * (0.5f * s.Spacing);
 		for (int z = 0; z < s.Depth; ++z) {
 			for (int y = 0; y < s.Height; ++y) {
 				for (int x = 0; x < s.Width; ++x) {
 					d.particles.push_back(
-						{ point({ x * s.Spacing, y * s.Spacing, z * s.Spacing }), {}, s.PinTop && y == s.Height - 1 ? 0 : 1 / s.ParticleMass });
+						{ point(P::Vec3(x, y, z) * s.Spacing - gridCenter), {}, s.PinTop && y == s.Height - 1 ? 0 : 1 / s.ParticleMass });
 				}
 			}
 		}
@@ -303,11 +361,11 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 		}
 		if (soft) {
 			auto& c = *soft;
-			synchronize(c, mSimulation, Physics3DLease::Kind::Soft, [&] { return mSimulation->createSoftBody(softDefinition(c.settings, o)); });
+			synchronizeSoftBody(c, o, mSimulation, [&] { return mSimulation->createSoftBody(softDefinition(c.settings, o)); });
 		}
 		if (cloth) {
 			auto& c = *cloth;
-			synchronize(c, mSimulation, Physics3DLease::Kind::Soft, [&] {
+			synchronizeSoftBody(c, o, mSimulation, [&] {
 				auto& s = c.settings;
 				P::ClothDef d;
 				d.width = s.Width;
@@ -355,7 +413,7 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 	}
 	if (!paused || singleStep) {
 		try {
-			mSimulation->step(static_cast<float>(dt.count()));
+			WaterSystem::stepPhysics(mScene, *mSimulation, static_cast<float>(dt.count()));
 			mLastStepSucceeded = true;
 		} catch (const P::ContactBudgetExceeded& error) {
 			// The kernel restored the last committed tick, including pending forces.
@@ -369,6 +427,9 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 	}
 	singleStep = false;
 	for (auto& object : objects) {
+		if (auto soft = object->getComponent<SoftBody3DComponent>(); mLastStepSucceeded && soft && soft->runtime) {
+			publishSoftBodyPosition(*object, *soft, *mSimulation->softBody(soft->runtime->id));
+		}
 		if (auto c = object->getComponent<Physics3DComponent>(); c && c->runtime) {
 			if (auto* b = mSimulation->body(c->simulationId()); b && b->type == P::BodyType::Dynamic) {
 				object->tryGetTransform()->setLocalPosition(b->getPosition());

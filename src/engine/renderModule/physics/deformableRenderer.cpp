@@ -60,8 +60,8 @@ void DeformableRenderer::update(SCENE_SYSTEM::Scene& scene) {
 		if (create) {
 			entry.uv.resize(snapshot.positions.size());
 		}
-		auto rotation = MATH::QuaternionF::ToMatrix3(object->tryGetTransform()->getLocalRotation());
-		auto origin = object->tryGetTransform()->getLocalPosition();
+		auto rotation = MATH::QuaternionF::ToMatrix3(lease->particleFrameRotation);
+		auto origin = lease->particleFramePosition;
 		std::vector<SurfaceVertex> vertices(snapshot.positions.size());
 		for (std::size_t i = 0; i < vertices.size(); ++i) {
 			auto& v = vertices[i];

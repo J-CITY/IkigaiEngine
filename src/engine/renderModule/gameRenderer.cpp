@@ -374,7 +374,10 @@ void GameRenderer::drawGpuScene(bool shadow) {
 #endif
 
 void GameRenderer::drawDrawable(const Drawable& drawable, const GpuSceneDraw* indirect) {
-	auto material = mOverrideMaterial ? mOverrideMaterial : drawable.material;
+	const bool surfaceGeometry
+		= drawable.material && drawable.material->usesSurfaceGeometryShader() && mActiveStage && mActiveStage->mDrawContent == DrawContent::DEFERRED;
+	const bool overrideShader = mOverrideMaterial && !surfaceGeometry;
+	auto material = overrideShader ? mOverrideMaterial : drawable.material;
 	const bool gpuMaterialDraw = indirect && bool(indirect->MaterialIds);
 #if defined(IKIGAI_USE_GPU_DRIVEN)
 	if (gpuMaterialDraw) {
@@ -384,7 +387,7 @@ void GameRenderer::drawDrawable(const Drawable& drawable, const GpuSceneDraw* in
 	if (!material || !drawable.mesh) {
 		return;
 	}
-	if (mOverrideMaterial && drawable.material && drawable.material->hasShader() && drawable.material->getShader()->supportsPbrLayers()) {
+	if (overrideShader && drawable.material && drawable.material->hasShader() && drawable.material->getShader()->supportsPbrLayers()) {
 		const auto passShader = mOverrideMaterial->getShader();
 		const auto count = drawable.material->getShader()->compiledPbrLayerCount();
 		if (passShader->pbrLayerVariant().empty()) {
@@ -400,7 +403,7 @@ void GameRenderer::drawDrawable(const Drawable& drawable, const GpuSceneDraw* in
 		}
 		material = variant;
 	}
-	if (!gpuMaterialDraw && mOverrideMaterial && drawable.material) {
+	if (!gpuMaterialDraw && overrideShader && drawable.material) {
 		for (const auto& [key, value] : mOverrideDefaults) {
 			material->set(key, value);
 		}
@@ -481,7 +484,7 @@ void GameRenderer::drawDrawable(const Drawable& drawable, const GpuSceneDraw* in
 			mGpuSceneMaterials->bind(*render, indirect->MaterialIds);
 		}
 #endif
-		if (!gpuMaterialDraw && mOverrideMaterial && mActiveStage) {
+		if (!gpuMaterialDraw && overrideShader && mActiveStage) {
 			const auto shader = material->getShader();
 			if (mActiveStage->mResolved.Shader == shader) {
 				for (const auto& texture : mActiveStage->mResolved.Textures) {

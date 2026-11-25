@@ -1,0 +1,222 @@
+{
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": -3.2,
+            "Y": 1.95,
+            "Z": -4.5
+          },
+          "LocalRotation": {
+            "X": 17,
+            "Y": 36,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 56,
+          "Near": 0.1,
+          "Far": 150.0,
+          "Size": 5.0,
+          "GeometryCulling": false,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        },
+        {
+          "IkigaiScriptComponentType": "class IKIGAI::ECS::IkigaiScriptComponent",
+          "Path": "PicaPicaCamera"
+        }
+      ]
+    },
+    {
+      "Name": "Sun",
+      "Id": 2,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 45,
+            "Y": -30,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "DirectionalLightType": "class IKIGAI::ECS::DirectionalLight",
+          "Color": {
+            "X": 1.0,
+            "Y": 0.9,
+            "Z": 0.75
+          },
+          "Intensity": 2.0,
+          "Distance": 100.0,
+          "CastShadows": true
+        }
+      ]
+    },
+    {
+      "Name": "Environment",
+      "Id": 20,
+      "Components": [
+        {
+          "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "EnvironmentComponentType": "class IKIGAI::ECS::EnvironmentComponent",
+          "Sun": {
+            "ObjectId": 2,
+            "Component": "DirectionalLight"
+          },
+          "Environment": {
+            "TimeOfDay": 16,
+            "DayDuration": 600,
+            "AnimateTime": false,
+            "SunAzimuth": 25.0,
+            "Clouds": "Cumulus",
+            "CloudCoverage": 0.35,
+            "CloudDarkness": 0.22,
+            "Precipitation": "Clear",
+            "PrecipitationIntensity": 0.0,
+            "MaxParticles": 1024,
+            "CollisionBudget": 64,
+            "WindDirection": {
+              "X": 1.0,
+              "Y": 0.2
+            },
+            "WindSpeed": 4,
+            "WetnessRate": 0.16,
+            "SurfaceWeatherQueryBudget": 32
+          }
+        }
+      ]
+    },
+    {
+      "Name": "Open water",
+      "Id": 3,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 140,
+            "Y": 1,
+            "Z": 140
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/water/surface.glb"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/water/ocean.mat",
+            "/materials/water/ocean.mat"
+          ]
+        },
+        {
+          "WaterComponentType": "WaterComponent"
+        }
+      ]
+    },
+    {
+      "Name": "Rowboat",
+      "Id": 4,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0.02,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          }
+        },
+        {
+          "Physics3DComponentType": "Physics3DComponent",
+          "FloatOnWater": true,
+          "ShapeKind": 1,
+          "HalfSize": {
+            "X": 0.59,
+            "Y": 0.28,
+            "Z": 1.9
+          },
+          "Mass": 280.0,
+          "AllowSleep": false,
+          "AngularDamping": 0.22
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/rowboat/rowboat.glb"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/rowboat/hull.mat",
+            "/materials/rowboat/hull.mat"
+          ]
+        }
+      ]
+    }
+  ],
+  "RenderPipeline": "/renderPipeline/environment-demo.json"
+}

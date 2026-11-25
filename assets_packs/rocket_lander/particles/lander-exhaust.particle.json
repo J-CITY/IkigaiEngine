@@ -1,0 +1,108 @@
+{
+  "Version": 1,
+  "Dimension": "3D",
+  "Emitters": [
+    {
+      "Id": "exhaust",
+      "SimulationSpace": "local",
+      "Capacity": 90,
+      "Timing": {
+        "Duration": 1,
+        "Loops": 0
+      },
+      "Emission": {
+        "Rate": {
+          "Mode": "constant",
+          "Value": 95
+        }
+      },
+      "Spawn": [
+        {
+          "Id": "origin",
+          "Type": "Shape",
+          "Shape": "sphere",
+          "Radius": 0.04
+        },
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "uniform",
+            "Min": 0.09,
+            "Max": 0.24,
+            "RandomChannels": "independent"
+          },
+          "Size": {
+            "Mode": "constant",
+            "Value": [
+              0.052,
+              0.09
+            ]
+          },
+          "Color": {
+            "Mode": "uniform",
+            "Min": [
+              1,
+              0.3,
+              0.07,
+              1
+            ],
+            "Max": [
+              1,
+              0.85,
+              0.3,
+              1
+            ],
+            "RandomChannels": "independent"
+          },
+          "Velocity": {
+            "Mode": "uniform",
+            "Min": [
+              -0.25,
+              -3,
+              -0.2
+            ],
+            "Max": [
+              0.25,
+              -1.6,
+              0.2
+            ],
+            "RandomChannels": "independent"
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "motion",
+          "Type": "IntegrateMotion"
+        },
+        {
+          "Id": "fade",
+          "Type": "AlphaOverLife",
+          "Operation": "multiplyBase",
+          "Value": {
+            "Mode": "curve",
+            "Domain": "particleNormalizedAge",
+            "Keys": [
+              {
+                "Time": 0,
+                "Value": 1,
+                "Interpolation": "linear"
+              },
+              {
+                "Time": 1,
+                "Value": 0
+              }
+            ]
+          }
+        }
+      ],
+      "Renderer": {
+        "Type": "billboard3D",
+        "Alignment": "camera",
+        "Blend": "additive",
+        "DepthTest": true
+      }
+    }
+  ]
+}

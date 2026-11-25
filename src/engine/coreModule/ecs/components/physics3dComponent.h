@@ -24,10 +24,12 @@ public:
 		MATH::Vector3f AngularVelocity = MATH::Vector3f(0);
 		float LinearDamping = 0.05f;
 		float AngularDamping = 0.05f;
+		bool FloatOnWater = false;
 		bool AllowSleep = true;
 		template <class Context> static constexpr auto serde(Context& context, Descriptor& value) {
 			serde::serde_struct(context, value)
 				.field(&Descriptor::Type, "Physics3DComponentType")
+				.field(&Descriptor::FloatOnWater, "FloatOnWater", serde::attribute::default_ { false })
 				.field(&Descriptor::BodyMode, "BodyMode", serde::attribute::default_ { 1 })
 				.field(&Descriptor::ShapeKind, "ShapeKind", serde::attribute::default_ { 1 })
 				.field(&Descriptor::Radius, "Radius", serde::attribute::default_ { 0.5f })

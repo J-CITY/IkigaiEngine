@@ -9,12 +9,12 @@
 #include <coreModule/ecs/components/directionalLight.h>
 #include <coreModule/ecs/components/materialRenderer.h>
 #include <coreModule/ecs/components/modelRenderer.h>
+#include <coreModule/ecs/components/particleSystemComponent.h>
 #include <coreModule/ecs/components/pointLight.h>
 #include <coreModule/ecs/components/scriptComponent.h>
 #include <coreModule/ecs/components/spotLight.h>
 #include <coreModule/ecs/components/transform.h>
 #include <coreModule/ecs/object.h>
-
 
 using namespace IKIGAI::SCRIPTING;
 
@@ -29,6 +29,7 @@ void IKIGAI::SCRIPTING::LuaActorBinder::BindActor(sol::state& p_luaState) {
 		&Object::detachFromParent, "Destroy", &Object::markAsDestroy, "IsSelfActive", &Object::getIsSelfActive, "IsActive", &Object::getIsActive,
 		"SetActive", &Object::setActive,
 
+		"GetParticleSystem3D", [](Object& object) { return object.getComponent<ParticleSystem3DComponent>().get(); },
 		/* Components Getters */
 		"GetTransform", [](Object& p_this) -> TransformComponent* { return p_this.getComponent<TransformComponent>().get(); }, "GetCamera",
 		[](Object& p_this) -> CameraComponent* { return p_this.getComponent<CameraComponent>().get(); },

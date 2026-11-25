@@ -43,7 +43,7 @@ public:
 		File::FileType mResType;
 		CommandHistory mCommandHistory;
 	};
-	inline static GlobalState GlobalState;
+	static GlobalState GlobalState;
 
 	struct Internal;
 
@@ -56,5 +56,7 @@ public:
 	void openSurfaceBrushes();
 	void drawPopup();
 };
+
+inline struct EditorRender::GlobalState EditorRender::GlobalState;
 }
 #endif

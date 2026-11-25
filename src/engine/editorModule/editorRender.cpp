@@ -1,4 +1,7 @@
 #include "editorRender.h"
+#include "coreModule/ecs/components/environmentComponent.h"
+#include "coreModule/ecs/components/waterComponent.h"
+#include "coreModule/ecs/systems/environmentSystem.h"
 #include "environmentWindow.h"
 #include "prefabEditor.h"
 #include "resourceModule/jsonLoader.h"
@@ -42,6 +45,85 @@
 using namespace IKIGAI::EDITOR;
 
 namespace {
+void drawWaterWindow(IKIGAI::SCENE_SYSTEM::Scene& scene, bool& open) {
+	using namespace IKIGAI;
+	const auto* viewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos({ viewport->WorkPos.x + 10, viewport->WorkPos.y + 10 }, ImGuiCond_FirstUseEver);
+	if (ImGui::Begin("Water and Wind", &open, ImGuiWindowFlags_AlwaysAutoResize)) {
+		bool found = false;
+		for (auto& water : scene.getWorld().getComponentManager()->getComponentsArray<ECS::WaterComponent>()) {
+			if (!scene.getObjectIndex(water.obj.get())) {
+				continue;
+			}
+			found = true;
+			ImGui::PushItemWidth(138.f);
+			ImGui::PushID(&water);
+			ImGui::TextUnformatted(water.obj->getName().c_str());
+			auto settings = water.getDescriptor();
+			auto preset = ENVIRONMENT::Preset::Custom;
+			bool changed = false;
+			if (ImGui::Button("Calm")) {
+				settings.Amplitude = .012f;
+				settings.Wavelength = 8;
+				settings.WindSpeed = .3f;
+				settings.Current = 0;
+				settings.Foam = 0;
+				settings.Roughness = .06f;
+				preset = ENVIRONMENT::Preset::Clear;
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Breeze")) {
+				settings.Amplitude = .16f;
+				settings.Wavelength = 7;
+				settings.WindSpeed = 4;
+				settings.Current = .12f;
+				settings.Foam = .35f;
+				settings.Roughness = .14f;
+				preset = ENVIRONMENT::Preset::WhiteClouds;
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Storm")) {
+				settings.Amplitude = 1.05f;
+				settings.Wavelength = 11;
+				settings.WindSpeed = 19;
+				settings.Current = .35f;
+				settings.Foam = .9f;
+				settings.Roughness = .25f;
+				preset = ENVIRONMENT::Preset::Storm;
+			}
+			changed |= ImGui::SliderFloat("Amplitude (m)", &settings.Amplitude, 0, 2);
+			changed |= ImGui::SliderFloat("Wavelength (m)", &settings.Wavelength, 2, 40);
+			bool windChanged = ImGui::SliderFloat("Wind (m/s)", &settings.WindSpeed, 0, 40);
+			windChanged |= ImGui::SliderFloat("Heading (deg)", &settings.Heading, -180, 180);
+			changed |= ImGui::SliderFloat("Current (m/s)", &settings.Current, -3, 3);
+			changed |= ImGui::ColorEdit3("Water color", &settings.Color.x);
+			changed |= ImGui::SliderFloat("Roughness", &settings.Roughness, .04f, 1);
+			changed |= ImGui::SliderFloat("Whitecaps", &settings.Foam, 0, 1);
+			changed |= ImGui::SliderFloat("Hull foam", &settings.HullFoam, 0, 1);
+			if (changed || windChanged || preset != ENVIRONMENT::Preset::Custom) {
+				water.configure(settings);
+			}
+			if (windChanged || preset != ENVIRONMENT::Preset::Custom) {
+				if (auto* env = ECS::EnvironmentSystem::active(scene)) {
+					auto weather = env->settings();
+					if (preset != ENVIRONMENT::Preset::Custom) {
+						weather = ENVIRONMENT::presetSettings(preset, weather);
+					}
+					const float angle = settings.Heading * .01745329252f;
+					weather.WindDirection = { std::cos(angle), std::sin(angle) };
+					weather.WindSpeed = settings.WindSpeed;
+					env->apply(weather);
+				}
+			}
+			ImGui::PopItemWidth();
+			ImGui::PopID();
+		}
+		if (!found) {
+			ImGui::TextUnformatted("Add a WaterComponent to this scene.");
+		}
+	}
+	ImGui::End();
+}
 void drawFacialExpressions(IKIGAI::SCENE_SYSTEM::Scene& scene) {
 	using namespace IKIGAI;
 	const auto object = scene.findObjectByName("Ceramic face");
@@ -91,6 +173,7 @@ struct EditorRender::Internal {
 	EnvironmentWindow mEnvironment;
 	SceneTransformTool mSceneTransform;
 	ScreenProbeRoomControls mScreenProbeRoom;
+	bool mWaterOpen = false;
 	bool mWorkspaceVisible = true;
 	TimelineAnimationWindow* mTimelineAnimation = nullptr;
 
@@ -205,17 +288,20 @@ void EditorRender::draw() {
 	const bool softBody = path == std::string_view(SoftBodyPath).substr(1);
 	const bool particleEvents = path == std::string_view(ParticleEventPath).substr(1);
 	const bool weatherDemo = path == "scenes/environment-demo.json";
-	const bool focusedDemo
-		= screenProbeRoom || virtualGeometryGallery || furRabbit || cloth2D || cloth3D || softBody || particleEvents || weatherDemo;
+	const bool rocketLander = path == "scenes/rocket-lander.json";
+	const bool boatDemo = path == "scenes/drifting-boat.json";
+	const bool focusedDemo = screenProbeRoom || virtualGeometryGallery || furRabbit || cloth2D || cloth3D || softBody || particleEvents || weatherDemo
+		|| boatDemo || rocketLander;
 	if (manager.hasCurrentScene() && historyScene.lock() != manager.getCurrentScene().lifetime) {
 		GlobalState.mCommandHistory.clear();
 		GlobalState.mSelectObject.reset();
 		historyScene = manager.getCurrentScene().lifetime;
 		mData->mScreenProbeRoom.reset();
+		mData->mWaterOpen = boatDemo;
 		mData->mWorkspaceVisible
 			= path != "scenes/gui-widgets.json" && !destructionPlayground && !layeredPlayground && !facialPlayground && !focusedDemo;
 		if (focusedDemo) {
-			ImGui::SetWindowCollapsed("Camera Tools", true);
+			ImGui::SetWindowCollapsed("Camera Tools###json-view/camera_tools", true);
 		}
 		if (!mData->mWorkspaceVisible) {
 			mData->mSceneTransform.enabled = false;
@@ -249,6 +335,7 @@ void EditorRender::draw() {
 			if (ImGui::MenuItem("Surface Brushes", nullptr, &surfaceOpen)) {
 				mData->mSurfaceBrushes.setOpen(surfaceOpen);
 			}
+			ImGui::MenuItem("Water and Wind", nullptr, &mData->mWaterOpen);
 			bool environmentOpen = mData->mEnvironment.isOpen();
 			if (ImGui::MenuItem("Environment", nullptr, &environmentOpen)) {
 				mData->mEnvironment.setOpen(environmentOpen);
@@ -263,6 +350,9 @@ void EditorRender::draw() {
 	if ((mData->mWorkspaceVisible || cloth2D) && manager.hasCurrentScene()) {
 		DrawPhysicsDebug(manager.getCurrentScene(), cloth2D);
 	}
+	if (mData->mWaterOpen && manager.hasCurrentScene()) {
+		drawWaterWindow(manager.getCurrentScene(), mData->mWaterOpen);
+	}
 	if (mData->mWorkspaceVisible || weatherDemo) {
 		mData->mEnvironment.draw();
 	}
@@ -275,7 +365,9 @@ void EditorRender::draw() {
 		drawGuiAnimationGraphEditor();
 	}
 	if (manager.hasCurrentScene()) {
-		mData->mSceneTransform.draw(manager.getCurrentScene(), destructionPlayground);
+		if (!rocketLander || mData->mWorkspaceVisible || mData->mSceneTransform.enabled) {
+			mData->mSceneTransform.draw(manager.getCurrentScene(), destructionPlayground);
+		}
 #if USE_PHYSICS_3D
 		if (destructionPlayground) {
 			DrawDestructionPlayground(manager.getCurrentScene(), !mData->mSceneTransform.capturesMouse());

@@ -419,9 +419,10 @@ const RENDER::Frustum* SurfaceView(const RENDER::RenderChunk& output, const REND
 }
 bool IsOrdinaryGpuMesh(const RENDER::MeshInterface& mesh, const RENDER::MaterialInterface& material) {
 	const auto shader = material.getShader();
-	return mesh.getIndexCount() && mesh.getOffset() == 0 && !mesh.vertexLayout() && mesh.morphTargets().empty() && !material.isBlendable()
-		&& (shader || material.isDeferred()) && material.getGPUInstances() == 1 && material.pbrLayers().Layers.empty()
-		&& (!shader || !shader->supportsPbrLayers()) && material.deformation().Mode == RENDER::DeformationMode::None;
+	return !material.usesSurfaceGeometryShader() && mesh.getIndexCount() && mesh.getOffset() == 0 && !mesh.vertexLayout()
+		&& mesh.morphTargets().empty() && !material.isBlendable() && (shader || material.isDeferred()) && material.getGPUInstances() == 1
+		&& material.pbrLayers().Layers.empty() && (!shader || !shader->supportsPbrLayers())
+		&& material.deformation().Mode == RENDER::DeformationMode::None;
 }
 
 void AppendGpuLod(ECS::ModelLODRenderer& renderer, ChunkContext& ctx, RENDER::GpuSceneSnapshot& snapshot) {

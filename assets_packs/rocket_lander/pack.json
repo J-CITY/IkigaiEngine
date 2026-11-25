@@ -1,0 +1,9 @@
+{
+  "id": "rocket_lander",
+  "platforms": [
+    "*"
+  ],
+  "requires": [
+    "gui"
+  ]
+}

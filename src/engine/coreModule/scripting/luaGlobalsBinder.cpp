@@ -98,6 +98,11 @@ void LuaGlobalsBinder::BindGlobals(sol::state& p_luaState) {
 	p_luaState.create_named_table("Debug");
 	p_luaState.create_named_table("Inputs");
 	p_luaState.create_named_table("Scenes");
+	p_luaState.create_named_table("Window");
+	p_luaState["Window"]["GetPixelSize"] = []() {
+		const auto size = RESOURCES::ServiceManager::Get<WINDOW::Window>().getPixelSize();
+		return Vector2f(static_cast<float>(size.x), static_cast<float>(size.y));
+	};
 	p_luaState.create_named_table("Resources");
 	p_luaState.create_named_table("Math");
 	p_luaState.create_named_table("Physics");

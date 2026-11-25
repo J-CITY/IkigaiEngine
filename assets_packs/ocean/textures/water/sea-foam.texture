@@ -1,0 +1,8 @@
+{
+  "PathTexture": [
+    "/textures/water/sea-foam.png"
+  ],
+  "UseMipmap": true,
+  "WrapS": "REPEAT",
+  "WrapT": "REPEAT"
+}

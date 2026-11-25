@@ -22,6 +22,7 @@
 #include "coreModule/ecs/components/transform.h"
 #include "coreModule/ecs/components/vegetationInteractorComponent.h"
 #include "coreModule/ecs/components/virtualMeshRenderer.h"
+#include "coreModule/ecs/components/waterComponent.h"
 
 namespace IKIGAI::EDITOR::detail {
 void registerRenderComponentEditors(ComponentEditorRegistry& registry) {
@@ -29,7 +30,8 @@ void registerRenderComponentEditors(ComponentEditorRegistry& registry) {
 		ECS::ChunkModelRenderer, ECS::DirectionalLight, ECS::EnvironmentComponent, ECS::FacialAnimationComponent, ECS::FoliageComponent,
 		ECS::MaterialRenderer, ECS::ModelRenderer, ECS::ModelLODRenderer, ECS::ParticleSystem2DComponent, ECS::ParticleSystem3DComponent,
 		ECS::PointLight, ECS::RenderTargetComponent, ECS::SkeletalAnimationComponent, ECS::SkeletalComponent, ECS::SkeletalStateGraphComponent,
-		ECS::SpotLight, ECS::SurfaceComponent, ECS::TransformComponent, ECS::VegetationInteractorComponent, ECS::VirtualMeshRenderer>(registry);
+		ECS::SpotLight, ECS::SurfaceComponent, ECS::WaterComponent, ECS::TransformComponent, ECS::VegetationInteractorComponent,
+		ECS::VirtualMeshRenderer>(registry);
 }
 }
 #endif

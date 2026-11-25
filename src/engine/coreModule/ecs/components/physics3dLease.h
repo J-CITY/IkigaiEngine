@@ -10,10 +10,13 @@ struct Physics3DLease {
 	PHYSICS::Id id = 0;
 	Kind kind = Kind::Body;
 	std::string signature;
+	PHYSICS::Vec3 particleFramePosition {};
+	MATH::QuaternionF particleFrameRotation { 0, 0, 0, 1 };
 	~Physics3DLease() {
-		if (!id)
+		if (!id) {
 			return;
-		if (auto w = world.lock())
+		}
+		if (auto w = world.lock()) {
 			switch (kind) {
 			case Kind::Body:
 				w->destroyBody(id);
@@ -28,6 +31,7 @@ struct Physics3DLease {
 				w->forces.remove(id);
 				break;
 			}
+		}
 	}
 };
 }

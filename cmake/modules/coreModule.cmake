@@ -103,6 +103,8 @@ set(IKIGAI_MANIFEST_coreModule
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/skeletalStateGraphComponent.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/spotLight.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/spotLight.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/waterComponent.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/systems/waterSystem.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/surfaceComponent.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/surfaceComponent.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/thirdPersonCameraComponent.cpp"
