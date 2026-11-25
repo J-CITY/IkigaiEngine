@@ -1,0 +1,5 @@
+{
+  "id": "demo_rendering",
+  "platforms": ["windows", "linux", "macos"],
+  "requires": ["raytracing", "virtual_geometry"]
+}

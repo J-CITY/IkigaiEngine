@@ -3,6 +3,9 @@
 #include "prefabEditor.h"
 #ifdef USE_EDITOR
 #include "imgui.h"
+#include "renderingDemos.h"
+#include "resourceModule/fileSystem/fileSystem.h"
+#include "resourceModule/serviceManager.h"
 #include "sceneModule/sceneManager.h"
 
 using namespace IKIGAI::EDITOR;
@@ -56,10 +59,18 @@ void MenuBar::draw() {
 				demo("Layered Materials", "/scenes/layered-materials.json");
 				demo("Facial Expressions", "/scenes/facial-expressions.json");
 				demo("2D Physics", "/scenes/physics-2d-demo.json", USE_PHYSICS_2D);
+				demo("2D Cloth - Wind", Cloth2DPath, USE_PHYSICS_2D);
+				demo("3D Cloth - Wind", Cloth3DPath, USE_PHYSICS_3D);
+				demo("3D Soft Body", SoftBodyPath, USE_PHYSICS_3D);
 				demo("Voxel Landscape", "/scenes/voxel-coast.json");
 				demo("GUI - Widget Playground", "/scenes/gui-widgets.json");
 				demo("GUI - Widgets and Curves", "/scenes/gui-demo.json");
 				demo("Particles - 2D and 3D", "/scenes/particles-demo.json");
+				demo("Particles - Events", ParticleEventPath);
+				const auto& content = RESOURCES::ServiceManager::Get<RESOURCES::FileSystem>();
+				demo("Lumen-style - Screen Probe GI", ScreenProbeRoomPath, content.isFileExist(ScreenProbeRoomPath));
+				demo("Nanite-style - Virtual Geometry", VirtualGeometryGalleryPath, content.isFileExist(VirtualGeometryGalleryPath));
+				demo("Fur - Rabbit", FurRabbitPath, content.isFileExist(FurRabbitPath));
 				ImGui::Separator();
 #if USE_PHYSICS_3D
 				if (ImGui::MenuItem("Third Person - Parkour Playground", nullptr,

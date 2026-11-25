@@ -23,10 +23,11 @@ struct SceneLocalTransform {
 
 class SceneTransformTool {
 public:
-	void draw(SCENE_SYSTEM::Scene& scene);
+	void draw(SCENE_SYSTEM::Scene& scene, bool previewOwnsClick);
 	bool active() const;
 	bool capturesMouse() const;
 	bool enabled = false;
+	bool showMarkers = true;
 
 private:
 	enum class Gesture { None, Surface, Gizmo };
@@ -39,9 +40,11 @@ private:
 	MATH::Vector3f mAnchor {};
 	MATH::Vector3f mPlaneNormal {};
 	MATH::Vector3f mWorldStart {};
+	ImVec2 mSurfacePress {};
 	ImGuizmo::OPERATION mOperation = ImGuizmo::TRANSLATE;
 	ImGuizmo::MODE mSpace = ImGuizmo::WORLD;
 	Gesture mGesture = Gesture::None;
+	bool mSurfaceMoved = false;
 	bool mWaitForRelease = false;
 };
 }

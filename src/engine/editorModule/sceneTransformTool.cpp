@@ -1,7 +1,13 @@
 #include "sceneTransformTool.h"
 
 #ifdef USE_EDITOR
+#include "coreModule/ecs/components/ambientLight.h"
+#include "coreModule/ecs/components/ambientSphereLight.h"
 #include "coreModule/ecs/components/cameraComponent.h"
+#include "coreModule/ecs/components/directionalLight.h"
+#include "coreModule/ecs/components/particleSystemComponent.h"
+#include "coreModule/ecs/components/pointLight.h"
+#include "coreModule/ecs/components/spotLight.h"
 #include "coreModule/gui/components/spriteComponent.h"
 #include "coreModule/gui/components/vectorComponents.h"
 #include "editorRender.h"
@@ -24,6 +30,11 @@
 #include "imgui.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <optional>
+#if defined(USE_SDL) && defined(_WIN32)
+#include <SDL3/SDL.h>
+#endif
 
 namespace IKIGAI::EDITOR {
 namespace {
@@ -131,7 +142,7 @@ namespace {
 
 		bool project(Vec3 point, ImVec2& screen) const {
 			const auto clip = viewProjection * MATH::Vector4f { point.x, point.y, point.z, 1 };
-			if (clip.w <= 0 || clip.z < -clip.w || clip.z > clip.w) {
+			if (clip.w <= 0 || std::abs(clip.x) > clip.w || std::abs(clip.y) > clip.w || std::abs(clip.z) > clip.w) {
 				return false;
 			}
 			screen = { origin.x + (clip.x / clip.w + 1) * size.x * .5f, origin.y + (1 - clip.y / clip.w) * size.y * .5f };
@@ -139,15 +150,64 @@ namespace {
 		}
 	};
 
+	enum class Marker { Pivot, Light, Emitter, Camera };
+
+	bool screenEmitter(const ECS::Object& object) {
+		return object.getComponent<ECS::ParticleSystem2DComponent>() || object.getComponent<ECS::SpriteParticleComponent>();
+	}
+
+	Marker markerFor(const ECS::Object& object) {
+		if (object.getComponent<ECS::DirectionalLight>() || object.getComponent<ECS::PointLight>() || object.getComponent<ECS::SpotLight>()
+			|| object.getComponent<ECS::AmbientLight>() || object.getComponent<ECS::AmbientSphereLight>()) {
+			return Marker::Light;
+		}
+		if (screenEmitter(object) || object.getComponent<ECS::ParticleSystem3DComponent>()) {
+			return Marker::Emitter;
+		}
+		return object.getComponent<ECS::CameraComponent>() ? Marker::Camera : Marker::Pivot;
+	}
+
+	void drawMarker(ImDrawList& draw, ImVec2 position, Marker marker, bool selected) {
+		const auto color = selected ? IM_COL32(255, 195, 65, 255) : IM_COL32(158, 214, 255, 240);
+		const auto at = [position](float x, float y) { return ImVec2 { position.x + x, position.y + y }; };
+		if (marker == Marker::Pivot) {
+			draw.AddCircleFilled(position, 3.f, color);
+			return;
+		}
+		draw.AddCircleFilled(position, 9.f, IM_COL32(16, 25, 37, 235), 16);
+		switch (marker) {
+		case Marker::Light:
+			draw.AddCircle(position, 3.f, color, 12, 1.4f);
+			for (unsigned index = 0; index < 8; ++index) {
+				const float angle = index * MATH::PI / 4.f;
+				const float x = std::cos(angle);
+				const float y = std::sin(angle);
+				draw.AddLine(at(x * 4.8f, y * 4.8f), at(x * 7.f, y * 7.f), color, 1.25f);
+			}
+			break;
+		case Marker::Emitter:
+			draw.AddCircleFilled(at(-3.5f, 3.f), 2.3f, color);
+			draw.AddCircleFilled(at(0.5f, -.5f), 1.9f, color);
+			draw.AddCircleFilled(at(4.f, -4.f), 1.45f, color);
+			break;
+		case Marker::Camera:
+			draw.AddRect(at(-6, -3.5f), at(1, 3.5f), color, 1.f);
+			draw.AddTriangle(at(1, 0), at(6, -3.5f), at(6, 3.5f), color);
+			break;
+		case Marker::Pivot:
+			break;
+		}
+	}
+
 	bool screenSpace(const ECS::Object& object) {
-		const bool gui = object.getComponent<ECS::InteractionComponent>() || object.getComponent<ECS::SdfTextComponent>()
+		const bool gui = screenEmitter(object) || object.getComponent<ECS::InteractionComponent>() || object.getComponent<ECS::SdfTextComponent>()
 			|| object.getComponent<ECS::VectorShapeComponent>() || object.getComponent<ECS::VectorPathComponent>()
 			|| object.getComponent<ECS::VectorCanvasComponent>() || object.getComponent<ECS::SpriteComponent>()
 			|| object.getComponent<ECS::RootGuiComponent>();
 		return gui && !GUI::canvasGeometry(object).worldSpace;
 	}
 
-	ScenePick pickGui(SCENE_SYSTEM::Scene& scene, const View& view, MATH::Vector2f extent, ImDrawList& markers, bool clicked) {
+	ScenePick pickGui(SCENE_SYSTEM::Scene& scene, const View& view, MATH::Vector2f extent, ImDrawList* markers, bool clicked, bool editWidgets) {
 		const auto mouse = clicked ? ImGui::GetIO().MouseClickedPos[ImGuiMouseButton_Left] : ImGui::GetMousePos();
 		const MATH::Vector2f pixel { (mouse.x - view.origin.x) * extent.x / view.size.x, (mouse.y - view.origin.y) * extent.y / view.size.y };
 		ScenePick best {};
@@ -160,9 +220,11 @@ namespace {
 			const auto matrix = canvas.correction * object->tryGetTransform()->getWorldMatrix();
 			const auto origin = matrix * Vec3 {};
 			const auto clip = GUI::clipBounds(*object, extent);
-			if (clip.contains({ origin.x, origin.y })) {
-				const ImVec2 screen { view.origin.x + origin.x * view.size.x / extent.x, view.origin.y + origin.y * view.size.y / extent.y };
-				markers.AddCircleFilled(screen, 3, IM_COL32(158, 214, 255, 220));
+			const auto marker = markerFor(*object);
+			const bool showMarker = markers && (editWidgets || marker == Marker::Emitter);
+			const ImVec2 screen { view.origin.x + origin.x * view.size.x / extent.x, view.origin.y + origin.y * view.size.y / extent.y };
+			if (showMarker && clip.contains({ origin.x, origin.y })) {
+				drawMarker(*markers, screen, marker, object == EditorRender::GlobalState.mSelectObject);
 			}
 			if (!clicked || !clip.contains(pixel)) {
 				continue;
@@ -179,7 +241,8 @@ namespace {
 				size = shape->Size;
 			}
 			const auto order = GUI::drawOrder(*object, canvas);
-			const bool overOrigin = std::abs(pixel.x - origin.x) <= 6 && std::abs(pixel.y - origin.y) <= 6;
+			const float radius = marker == Marker::Emitter ? 10.f : 5.f;
+			const bool overOrigin = showMarker && std::abs(mouse.x - screen.x) <= radius && std::abs(mouse.y - screen.y) <= radius;
 			const bool inside = local->x >= 0 && local->y >= 0 && local->x <= size.x && local->y <= size.y;
 			if ((overOrigin || inside) && (!best.object || order >= top)) {
 				top = order;
@@ -189,40 +252,22 @@ namespace {
 		return best;
 	}
 
-#if USE_PHYSICS_3D
-	std::shared_ptr<ECS::Object> pickPhysicsObject(SCENE_SYSTEM::Scene& scene, const SceneRay& ray) {
-		if (ray.length <= 0 || !scene.simulation()) {
-			return {};
-		}
-		const auto hit
-			= PHYSICS::CHARACTER::raycast(scene.physics3d(), ray.origin, ray.direction * ray.length, { .layer = ~0u, .staticsOnly = false });
-		if (!hit) {
-			return {};
-		}
-		for (const auto& object : scene.getObjects()) {
-			if (!object->isAlive() || !object->getIsActive()) {
-				continue;
-			}
-			if (auto rigid = object->getComponent<ECS::Physics3DComponent>(); rigid && rigid->simulationId() == hit.body) {
-				return object;
-			}
-			if (auto ragdoll = object->getComponent<ECS::RagdollComponent>(); ragdoll && ragdoll->ownsBody(hit.body)) {
-				return object;
-			}
-		}
-		return {};
-	}
-#endif
-
-	ScenePick pick(SCENE_SYSTEM::Scene& scene, const ECS::Object& camera, const View& view, ImDrawList& markers, bool clicked) {
+	std::optional<ScenePick> pick(SCENE_SYSTEM::Scene& scene, const ECS::Object& camera, const View& view, ImDrawList* markers, bool clicked,
+		bool preferPhysics, bool previewOwnsClick) {
 		const auto mouse = clicked ? ImGui::GetIO().MouseClickedPos[ImGuiMouseButton_Left] : ImGui::GetMousePos();
 		const auto ray = view.ray(mouse);
 		ScenePick best { {}, ray.length };
+		ScenePick marked { {}, ray.length };
+		float markerOffset = std::numeric_limits<float>::infinity();
+		bool previewStrike = false;
 #if USE_PHYSICS_3D
 		PHYSICS::CHARACTER::Hit bodyHit {};
 		if (clicked && ray.length > 0 && scene.simulation()) {
 			bodyHit = PHYSICS::CHARACTER::raycast(scene.physics3d(), ray.origin, ray.direction * ray.length, { .layer = ~0u, .staticsOnly = false });
 		}
+#else
+		(void)preferPhysics;
+		(void)previewOwnsClick;
 #endif
 		const auto& selected = EditorRender::GlobalState.mSelectObject;
 		for (const auto& object : scene.getObjects()) {
@@ -230,39 +275,66 @@ namespace {
 				continue;
 			}
 #if USE_PHYSICS_3D
-			if (auto ragdoll = object->getComponent<ECS::RagdollComponent>(); ragdoll && ragdoll->state() == ECS::RagdollState::Simulated) {
-				if (bodyHit && bodyHit.distance < best.distance && ragdoll->ownsBody(bodyHit.body)) {
-					best = { object, bodyHit.distance };
-				}
+			if (previewOwnsClick && bodyHit) {
+				const auto destructible = object->getComponent<ECS::DestructibleMeshComponent>();
+				previewStrike |= destructible
+					&& std::ranges::find(destructible->pieces(), bodyHit.body, &DESTRUCTION::DestructiblePiece::body) != destructible->pieces().end();
+			}
+			const auto rigid = object->getComponent<ECS::Physics3DComponent>();
+			const auto ragdoll = object->getComponent<ECS::RagdollComponent>();
+			const bool simulatedRagdoll = ragdoll && ragdoll->state() == ECS::RagdollState::Simulated;
+			const bool physicalPick
+				= (preferPhysics && rigid && rigid->simulationId() == bodyHit.body) || (simulatedRagdoll && ragdoll->ownsBody(bodyHit.body));
+			if (bodyHit && physicalPick && bodyHit.distance <= best.distance + .001f) {
+				best = { object, bodyHit.distance };
+			}
+			if (simulatedRagdoll) {
 				continue;
 			}
 #endif
-			// Geometry tests are only needed for a press. A zero-length ray classifies marker-only objects.
+			// A zero-length ray classifies marker-only objects without testing triangles.
 			const auto intersection = intersectSceneObject(*object, clicked ? ray : SceneRay {});
 			if (intersection.hasGeometry) {
-				if (clicked && intersection.distance < best.distance) {
+				if (clicked && intersection.distance < best.distance - .001f) {
 					best = { object, intersection.distance };
 				}
 				continue;
 			}
+			if (!markers) {
+				continue;
+			}
+#if USE_PHYSICS_3D
+			if (preferPhysics && rigid && rigid->simulationId()) {
+				continue;
+			}
+#endif
 			const auto position = object->tryGetTransform()->getWorldPosition();
 			ImVec2 screen {};
 			if (!view.project(position, screen)) {
 				continue;
 			}
-			const ImU32 color = object == selected ? IM_COL32(255, 195, 65, 255) : IM_COL32(158, 214, 255, 220);
-			markers.AddCircleFilled(screen, 4, color);
+			const auto marker = markerFor(*object);
+			drawMarker(*markers, screen, marker, object == selected);
 			const float x = screen.x - mouse.x;
 			const float y = screen.y - mouse.y;
-			const float distance = (position - ray.origin).dot(ray.direction);
-			if (clicked && x * x + y * y <= 64 && distance >= 0 && distance < best.distance) {
-				best = { object, distance };
+			const float offset = x * x + y * y;
+			const float radius = marker == Marker::Pivot ? 5.f : 10.f;
+			if (offset > radius * radius) {
+				continue;
 			}
-			if (x * x + y * y <= 64) {
-				markers.AddText({ screen.x + 8, screen.y - 7 }, color, object->getName().c_str());
+			const float distance = (position - ray.origin).dot(ray.direction);
+			if (distance >= 0 && (offset < markerOffset || (offset == markerOffset && distance < marked.distance))) {
+				marked = { object, distance };
+				markerOffset = offset;
 			}
 		}
-		return best;
+		if (marked.object) {
+			markers->AddText({ mouse.x + 12, mouse.y - 7 }, IM_COL32(224, 241, 255, 255), marked.object->getName().c_str());
+		}
+		if (previewStrike) {
+			return std::nullopt;
+		}
+		return marked.object ? marked : best;
 	}
 
 	bool canEdit(const ECS::Object& object) {
@@ -349,8 +421,30 @@ void SceneTransformTool::finish(bool cancel) {
 	mGesture = Gesture::None;
 }
 
-void SceneTransformTool::draw(SCENE_SYSTEM::Scene& scene) {
-	const bool down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+void SceneTransformTool::draw(SCENE_SYSTEM::Scene& scene, bool previewOwnsClick) {
+	auto& io = ImGui::GetIO();
+	bool down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+	bool focusLost = io.AppFocusLost;
+	auto dragCursor = ImGui::GetMousePos();
+#if defined(USE_SDL) && defined(_WIN32)
+	if (mGesture == Gesture::Surface) {
+		// A secondary ImGui viewport can change ImGui's focus and mouse state mid-drag.
+		float screenX = 0;
+		float screenY = 0;
+		down = (SDL_GetGlobalMouseState(&screenX, &screenY) & SDL_BUTTON_LMASK) != 0;
+		focusLost = SDL_GetKeyboardFocus() == nullptr;
+		if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+			dragCursor = { screenX, screenY };
+		}
+		else {
+			const auto& window = RESOURCES::ServiceManager::Get<WINDOW::Window>();
+			int x = 0;
+			int y = 0;
+			SDL_GetWindowPosition(window.getSDLWindow(), &x, &y);
+			dragCursor = { screenX - x, screenY - y };
+		}
+	}
+#endif
 	if (!down) {
 		mWaitForRelease = false;
 	}
@@ -360,7 +454,6 @@ void SceneTransformTool::draw(SCENE_SYSTEM::Scene& scene) {
 #else
 	constexpr bool physicsPicking = false;
 #endif
-	const bool transformsAvailable = enabled || physicsPicking;
 	auto& selected = EditorRender::GlobalState.mSelectObject;
 	if (active()) {
 		const auto object = mObject.lock();
@@ -370,15 +463,15 @@ void SceneTransformTool::draw(SCENE_SYSTEM::Scene& scene) {
 			mWaitForRelease = down;
 			ImGuizmo::Enable(false);
 		}
-		else if (!transformsAvailable || (!enabled && mGesture == Gesture::Surface) || !camera || object != selected || !object || !object->isAlive()
-			|| !canEdit(*object) || object->getParent() != mParent.lock() || ImGui::GetIO().AppFocusLost
-			|| ImGui::IsKeyPressed(ImGuiKey_Escape, false)) {
+		else if ((!enabled && mGesture == Gesture::Surface) || !camera || !object || !object->isAlive() || !canEdit(*object)
+			|| object->getParent() != mParent.lock() || focusLost || ImGui::IsKeyPressed(ImGuiKey_Escape, false)
+			|| (mGesture == Gesture::Gizmo && object != selected)) {
 			finish(true);
 			mWaitForRelease = down;
 			ImGuizmo::Enable(false);
 		}
 	}
-	if (!transformsAvailable || !camera) {
+	if (!camera) {
 		return;
 	}
 	auto* viewport = ImGui::GetMainViewport();
@@ -489,31 +582,29 @@ void SceneTransformTool::draw(SCENE_SYSTEM::Scene& scene) {
 			applyGizmo(*selected, matrix, mOperation);
 		}
 	}
-	if (active() && !down) {
+	if (mGesture == Gesture::Gizmo && !down) {
 		finish(false);
 	}
 	const bool pickPressed = clicked && !active() && !overGizmo;
-	if (!enabled) {
-#if USE_PHYSICS_3D
-		if (pickPressed && physicsPicking) {
-			selected = pickPhysicsObject(scene, view.ray(ImGui::GetIO().MouseClickedPos[ImGuiMouseButton_Left]));
-		}
-#endif
-		return;
-	}
-	auto& markers = *ImGui::GetBackgroundDrawList(viewport);
-	auto guiHit = pickGui(scene, guiView, pixelExtent, markers, pickPressed);
-	auto hit = pick(scene, camera->obj.get(), view, markers, pickPressed && !guiHit.object);
+	auto* markers = showMarkers ? ImGui::GetBackgroundDrawList(viewport) : nullptr;
+	auto guiHit = pickGui(scene, guiView, pixelExtent, markers, pickPressed, enabled);
+	auto hit = pick(scene, camera->obj.get(), view, markers, pickPressed && !guiHit.object, physicsPicking && !enabled, previewOwnsClick && !enabled);
 	if (guiHit.object) {
+		// In preview, interactive widgets keep their click. Screen emitters use their editor markers.
+		if (!enabled && !screenEmitter(*guiHit.object)) {
+			return;
+		}
 		hit = std::move(guiHit);
 	}
-	if (pickPressed) {
-		selected = hit.object;
-		if (selected && canEdit(*selected)) {
+	if (pickPressed && hit) {
+		selected = hit->object;
+		if (enabled && selected && canEdit(*selected)) {
 			const bool gui = screenSpace(*selected);
-			const auto ray = (gui ? guiView : view).ray(ImGui::GetIO().MouseClickedPos[ImGuiMouseButton_Left]);
+			mSurfacePress = io.MouseClickedPos[ImGuiMouseButton_Left];
+			mSurfaceMoved = false;
+			const auto ray = (gui ? guiView : view).ray(mSurfacePress);
 			begin(selected, Gesture::Surface);
-			mAnchor = ray.origin + ray.direction * hit.distance;
+			mAnchor = ray.origin + ray.direction * hit->distance;
 			mPlaneNormal = gui ? Vec3 { 0, 0, -1 } : camera->obj->tryGetTransform()->getWorldForward();
 			mWorldStart = selected->tryGetTransform()->getWorldPosition();
 			if (gui) {
@@ -521,14 +612,30 @@ void SceneTransformTool::draw(SCENE_SYSTEM::Scene& scene) {
 			}
 		}
 	}
-	if (mGesture == Gesture::Surface && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-		const auto ray = (screenSpace(*selected) ? guiView : view).ray(ImGui::GetMousePos());
-		const float denominator = ray.direction.dot(mPlaneNormal);
-		if (std::abs(denominator) > 1e-6f) {
-			const auto target = ray.origin + ray.direction * ((mAnchor - ray.origin).dot(mPlaneNormal) / denominator);
-			auto value = read(*selected);
-			value.position = localPosition(*selected, mWorldStart + target - mAnchor);
-			applyTransform(*selected, value);
+
+	if (mGesture == Gesture::Surface) {
+		auto object = mObject.lock();
+		const bool validCursor = ImGui::IsMousePosValid(&dragCursor);
+		if (validCursor) {
+			const float x = dragCursor.x - mSurfacePress.x;
+			const float y = dragCursor.y - mSurfacePress.y;
+			mSurfaceMoved |= x * x + y * y > io.MouseDragThreshold * io.MouseDragThreshold;
+		}
+		if (object && mSurfaceMoved && validCursor) {
+			const auto ray = (screenSpace(*object) ? guiView : view).ray(dragCursor);
+			const float denominator = ray.direction.dot(mPlaneNormal);
+			if (std::abs(denominator) > 1e-6f) {
+				const auto target = ray.origin + ray.direction * ((mAnchor - ray.origin).dot(mPlaneNormal) / denominator);
+				auto value = read(*object);
+				value.position = localPosition(*object, mWorldStart + target - mAnchor);
+				applyTransform(*object, value);
+			}
+		}
+		if (down) {
+			ImGui::SetNextFrameWantCaptureMouse(true);
+		}
+		else {
+			finish(false);
 		}
 	}
 }

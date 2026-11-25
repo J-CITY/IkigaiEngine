@@ -4,6 +4,7 @@
 #include "coreModule/ecs/components/chunkModelRenderer.h"
 #include "coreModule/ecs/components/modelRenderer.h"
 #include "coreModule/ecs/components/surfaceComponent.h"
+#include "coreModule/ecs/components/virtualMeshRenderer.h"
 #include "coreModule/ecs/object.h"
 #include "renderModule/backends/interface/meshInterface.h"
 #include "renderModule/backends/interface/modelInterface.h"
@@ -136,10 +137,21 @@ SceneRay unprojectSceneRay(const MATH::Matrix4f& inverseViewProjection, MATH::Ve
 SceneObjectIntersection intersectSceneObject(ECS::Object& object, const SceneRay& ray) {
 	const auto surface = object.getComponent<ECS::SurfaceComponent>();
 	const auto voxels = object.getComponent<ECS::ChunkModelRenderer>();
-	const auto renderer = object.getComponent<ECS::ModelRenderer>();
-	const auto lod = object.getComponent<ECS::ModelLODRenderer>();
-	if (!(surface || voxels || renderer || lod) || ray.length <= 0) {
-		return { bool(surface || voxels || renderer || lod), ray.length };
+	std::shared_ptr<RENDER::ModelInterface> model;
+	if (const auto renderer = object.getComponent<ECS::ModelRenderer>()) {
+		model = renderer->getModel();
+	}
+	if (!model) {
+		if (const auto lod = object.getComponent<ECS::ModelLODRenderer>()) {
+			model = lod->getModelByDistance((object.tryGetTransform()->getWorldPosition() - ray.origin).magnitude());
+		}
+		else if (const auto virtualMesh = object.getComponent<ECS::VirtualMeshRenderer>()) {
+			model = virtualMesh->getFallbackModel();
+		}
+	}
+	const bool hasGeometry = surface || voxels || (model && !model->getMeshes().empty());
+	if (!hasGeometry || ray.length <= 0) {
+		return { hasGeometry, ray.length };
 	}
 	const auto& world = object.tryGetTransform()->getWorldMatrix();
 	if (std::abs(MATH::Matrix4f::Determinant(world)) <= 1e-12f) {
@@ -156,17 +168,7 @@ SceneObjectIntersection intersectSceneObject(ECS::Object& object, const SceneRay
 	if (voxels) {
 		return { true, voxelHit(*voxels, local) };
 	}
-	std::shared_ptr<RENDER::ModelInterface> model;
-	if (renderer) {
-		model = renderer->getModel();
-	}
-	if (!model && lod) {
-		model = lod->getModelByDistance((object.tryGetTransform()->getWorldPosition() - ray.origin).magnitude());
-	}
-	if (model) {
-		return { true, modelHit(*model, local) };
-	}
-	return { false, ray.length };
+	return { true, modelHit(*model, local) };
 }
 }
 #endif

@@ -3,6 +3,7 @@
 #include "spatialGrid.h"
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <set>
 #include <stdexcept>
 
@@ -346,9 +347,13 @@ void PhysicWorld::stepParticles(float dt) {
 		bool fluid;
 	};
 	std::vector<Ref> all, liquid;
-	for (auto& [id, s] : mSoft) {
-		for (std::size_t i = 0; i < s.particles.size(); ++i) {
-			all.push_back({ &s.particles[i], id, i, s.radius, s.layer, s.mask, false });
+	const bool needsParticleContacts
+		= mSoft.size() > 1 || !mFluids.empty() || std::ranges::any_of(mSoft, [](const auto& entry) { return entry.second.selfCollision; });
+	if (needsParticleContacts) {
+		for (auto& [id, s] : mSoft) {
+			for (std::size_t i = 0; i < s.particles.size(); ++i) {
+				all.push_back({ &s.particles[i], id, i, s.radius, s.layer, s.mask, false });
+			}
 		}
 	}
 	for (auto& [id, f] : mFluids) {
@@ -365,6 +370,48 @@ void PhysicWorld::stepParticles(float dt) {
 	}
 	std::vector<float> lambdas(liquid.size());
 	std::vector<Vec3> corrections(liquid.size());
+	using ParticlePair = std::pair<std::size_t, std::size_t>;
+	struct Edge {
+		Id owner = 0;
+		std::size_t a = 0;
+		std::size_t b = 0;
+		float radius = 0;
+		std::uint32_t layer = 0;
+		std::uint32_t mask = 0;
+	};
+	// Connectivity stays fixed throughout the solver iterations. Only the spatial indexes need rebuilding.
+	std::map<Id, std::vector<ParticlePair>> linkedPairs;
+	std::vector<Edge> edges;
+	for (const auto& [id, body] : mSoft) {
+		if (body.selfCollision) {
+			auto& pairs = linkedPairs[id];
+			pairs.reserve(body.links.size());
+			for (const auto& link : body.links) {
+				pairs.emplace_back(std::min(link.a, link.b), std::max(link.a, link.b));
+			}
+			std::sort(pairs.begin(), pairs.end());
+		}
+		if (!body.selfCollision && mSoft.size() == 1) {
+			continue;
+		}
+		std::vector<ParticlePair> uniqueEdges;
+		uniqueEdges.reserve(body.triangles.size() * 3);
+		for (const auto& triangle : body.triangles) {
+			for (int index = 0; index < 3; ++index) {
+				const auto a = triangle[index], b = triangle[(index + 1) % 3];
+				uniqueEdges.emplace_back(std::min(a, b), std::max(a, b));
+			}
+		}
+		std::sort(uniqueEdges.begin(), uniqueEdges.end());
+		uniqueEdges.erase(std::unique(uniqueEdges.begin(), uniqueEdges.end()), uniqueEdges.end());
+		for (const auto& [a, b] : uniqueEdges) {
+			edges.push_back({ id, a, b, body.radius, body.layer, body.mask });
+		}
+	}
+	const auto linked = [&](Id owner, std::size_t a, std::size_t b) {
+		const auto& pairs = linkedPairs.at(owner);
+		return std::binary_search(pairs.begin(), pairs.end(), ParticlePair { std::min(a, b), std::max(a, b) });
+	};
 	for (int iteration = 0; iteration < settings.particleIterations; ++iteration) {
 		for (auto& [id, s] : mSoft) {
 			for (std::size_t i = 0; i < s.links.size(); ++i) {
@@ -455,19 +502,12 @@ void PhysicWorld::stepParticles(float dt) {
 				if (!(a.layer & b.mask) || !(b.layer & a.mask)) {
 					continue;
 				}
-				if (a.owner == b.owner) {
-					auto& s = mSoft.at(a.owner);
-					if (!s.selfCollision) {
-						continue;
-					}
-					if (std::any_of(s.links.begin(), s.links.end(),
-							[&](auto l) { return (l.a == a.index && l.b == b.index) || (l.b == a.index && l.a == b.index); })) {
-						continue;
-					}
-				}
 				auto delta = b.p->position - a.p->position;
 				float distance = delta.magnitude(), den = a.p->inverseMass + b.p->inverseMass, r = a.radius + b.radius;
 				if (distance >= r || den < 1e-12f) {
+					continue;
+				}
+				if (a.owner == b.owner && (!mSoft.at(a.owner).selfCollision || linked(a.owner, a.index, b.index))) {
 					continue;
 				}
 				auto n = distance > 1e-8f ? delta * (1 / distance) : Vec3(1, 0, 0);
@@ -486,7 +526,7 @@ void PhysicWorld::stepParticles(float dt) {
 		std::vector<Face> faces;
 		SpatialGrid surface(*mPipeline.neighbors, cellSize);
 		for (auto& [id, s] : mSoft) {
-			if (s.impermeable || s.selfCollision) {
+			if (!all.empty() && (s.impermeable || s.selfCollision)) {
 				for (auto t : s.triangles) {
 					auto &a = s.particles[t[0]], &b = s.particles[t[1]], &c = s.particles[t[2]];
 					surface.insert(faces.size(), minimum(minimum(a.position, b.position), c.position) - Vec3(s.radius),
@@ -505,29 +545,18 @@ void PhysicWorld::stepParticles(float dt) {
 				if (r.fluid && !s.impermeable) {
 					continue;
 				}
-				if (r.owner == f.owner) {
-					if (!s.selfCollision || std::find(f.indices.begin(), f.indices.end(), r.index) != f.indices.end()) {
-						continue;
-					}
-					bool adjacent = false;
-					for (auto l : s.links) {
-						if (l.a == r.index || l.b == r.index) {
-							auto other = l.a == r.index ? l.b : l.a;
-							if (std::find(f.indices.begin(), f.indices.end(), other) != f.indices.end()) {
-								adjacent = true;
-								break;
-							}
-						}
-					}
-					if (adjacent) {
-						continue;
-					}
+				if (r.owner == f.owner && (!s.selfCollision || std::find(f.indices.begin(), f.indices.end(), r.index) != f.indices.end())) {
+					continue;
 				}
 				auto bary = weights(r.p->position, f.a->position, f.b->position, f.c->position);
 				auto nearest = f.a->position * bary.x + f.b->position * bary.y + f.c->position * bary.z;
 				auto delta = r.p->position - nearest;
 				float length = delta.magnitude(), radius = r.radius + f.radius;
 				if (length >= radius) {
+					continue;
+				}
+				if (r.owner == f.owner
+					&& std::any_of(f.indices.begin(), f.indices.end(), [&](auto vertex) { return linked(r.owner, r.index, vertex); })) {
 					continue;
 				}
 				auto n = length > 1e-8f ? delta * (1 / length) : (f.b->position - f.a->position).cross(f.c->position - f.a->position);
@@ -548,26 +577,12 @@ void PhysicWorld::stepParticles(float dt) {
 			}
 		}
 		// Edge/edge contacts cover crossings with no vertex near a triangle.
-		struct Edge {
-			Id owner;
-			std::size_t a, b;
-			float radius;
-			std::uint32_t layer, mask;
-		};
-		std::vector<Edge> edges;
 		SpatialGrid edgeGrid(*mPipeline.neighbors, cellSize);
-		for (auto& [id, s] : mSoft) {
-			std::set<std::pair<std::size_t, std::size_t>> unique;
-			for (auto t : s.triangles) {
-				for (int k = 0; k < 3; ++k) {
-					unique.emplace(std::min(t[k], t[(k + 1) % 3]), std::max(t[k], t[(k + 1) % 3]));
-				}
-			}
-			for (auto [a, b] : unique) {
-				auto p = s.particles[a].position, q = s.particles[b].position;
-				edgeGrid.insert(edges.size(), minimum(p, q) - Vec3(s.radius), maximum(p, q) + Vec3(s.radius));
-				edges.push_back({ id, a, b, s.radius, s.layer, s.mask });
-			}
+		for (std::size_t i = 0; i < edges.size(); ++i) {
+			const auto& edge = edges[i];
+			const auto& particles = mSoft.at(edge.owner).particles;
+			const auto p = particles[edge.a].position, q = particles[edge.b].position;
+			edgeGrid.insert(i, minimum(p, q) - Vec3(edge.radius), maximum(p, q) + Vec3(edge.radius));
 		}
 		for (std::size_t i = 0; i < edges.size(); ++i) {
 			auto& e = edges[i];
@@ -584,17 +599,8 @@ void PhysicWorld::stepParticles(float dt) {
 				if (!(e.layer & f.mask) || !(f.layer & e.mask)) {
 					continue;
 				}
-				if (e.owner == f.owner) {
-					if (!sa.selfCollision || e.a == f.a || e.a == f.b || e.b == f.a || e.b == f.b) {
-						continue;
-					}
-					bool adjacent = std::any_of(sa.links.begin(), sa.links.end(), [&](auto l) {
-						return ((l.a == e.a || l.a == e.b) && (l.b == f.a || l.b == f.b))
-							|| ((l.b == e.a || l.b == e.b) && (l.a == f.a || l.a == f.b));
-					});
-					if (adjacent) {
-						continue;
-					}
+				if (e.owner == f.owner && (!sa.selfCollision || e.a == f.a || e.a == f.b || e.b == f.a || e.b == f.b)) {
+					continue;
 				}
 				auto &c = sb.particles[f.a], &d = sb.particles[f.b];
 				auto u = b.position - a.position, v = d.position - c.position, r = a.position - c.position;
@@ -615,6 +621,10 @@ void PhysicWorld::stepParticles(float dt) {
 				auto delta = a.position + u * s - c.position - v * t;
 				float length = delta.magnitude(), radius = e.radius + f.radius;
 				if (length >= radius) {
+					continue;
+				}
+				if (e.owner == f.owner
+					&& (linked(e.owner, e.a, f.a) || linked(e.owner, e.a, f.b) || linked(e.owner, e.b, f.a) || linked(e.owner, e.b, f.b))) {
 					continue;
 				}
 				auto n = length > 1e-8f ? delta * (1 / length) : u.cross(v);

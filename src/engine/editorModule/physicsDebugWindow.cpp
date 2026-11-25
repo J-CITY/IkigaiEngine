@@ -59,14 +59,21 @@ namespace {
 #endif
 
 #if USE_PHYSICS_2D
-	void drawPhysics2D(SCENE_SYSTEM::PhysicsDebugState<PHYSICS2D::World> state) {
+	void drawPhysics2D(SCENE_SYSTEM::PhysicsDebugState<PHYSICS2D::World> state, bool clothPreview) {
 		using namespace PHYSICS2D;
 		auto& [world, paused, singleStep] = state;
 		if (world.bodies().empty() && world.softBodies().empty() && world.fluids().empty()) {
 			return;
 		}
-		ImGui::SetNextWindowSize(ImVec2(850, 620), ImGuiCond_FirstUseEver);
-		if (!ImGui::Begin("2D Physics")) {
+		if (clothPreview) {
+			const auto* viewport = ImGui::GetMainViewport();
+			ImGui::SetNextWindowPos({ viewport->Pos.x + 12, viewport->Pos.y + 119 }, ImGuiCond_Appearing);
+			ImGui::SetNextWindowSize({ std::min(780.f, viewport->Size.x - 24.f), std::max(325.f, viewport->Size.y - 134.f) }, ImGuiCond_Appearing);
+		}
+		else {
+			ImGui::SetNextWindowSize(ImVec2(850, 620), ImGuiCond_FirstUseEver);
+		}
+		if (!ImGui::Begin(clothPreview ? "Cloth simulation" : "2D Physics")) {
 			ImGui::End();
 			return;
 		}
@@ -80,8 +87,12 @@ namespace {
 		ImGui::Checkbox("Sleeping", &world.settings.sleeping);
 		ImGui::Text("Bodies: %zu  Joints: %zu  Soft: %zu  Fluids: %zu", world.bodies().size(), world.joints().size(), world.softBodies().size(),
 			world.fluids().size());
-		static float zoom = 55;
-		static ImVec2 pan(0, 3);
+		static float physicsZoom = 55;
+		static float clothZoom = 82;
+		static ImVec2 physicsPan(0, 3);
+		static ImVec2 clothPan(0, 2.25f);
+		auto& zoom = clothPreview ? clothZoom : physicsZoom;
+		auto& pan = clothPreview ? clothPan : physicsPan;
 		static bool showGrid = true;
 		ImGui::SliderFloat("Pixels/unit", &zoom, 10, 160);
 		ImGui::Checkbox("Spatial grid", &showGrid);
@@ -121,7 +132,7 @@ namespace {
 
 }
 
-void DrawPhysicsDebug(SCENE_SYSTEM::Scene& scene) {
+void DrawPhysicsDebug(SCENE_SYSTEM::Scene& scene, [[maybe_unused]] bool clothPreview) {
 	auto* simulation = scene.simulation();
 	if (!simulation) {
 		return;
@@ -133,7 +144,7 @@ void DrawPhysicsDebug(SCENE_SYSTEM::Scene& scene) {
 #endif
 #if USE_PHYSICS_2D
 	if (auto state = simulation->physics2dDebug()) {
-		drawPhysics2D(*state);
+		drawPhysics2D(*state, clothPreview);
 	}
 #endif
 }

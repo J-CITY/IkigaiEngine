@@ -227,6 +227,14 @@ template <int D> void Runtime<D>::restart(uint64_t seed) {
 	for (size_t i = 0; i < mEmitters.size(); ++i)
 		mEmitters[i].particles.reserve(mDefinition->emitters[i].capacity);
 }
+template <int D> void Runtime<D>::setEventSpawnsEnabled(bool enabled) {
+	mEventSpawnsEnabled = enabled;
+}
+
+template <int D> bool Runtime<D>::eventSpawnsEnabled() const {
+	return mEventSpawnsEnabled;
+}
+
 template <int D> void Runtime<D>::setParameter(const std::string& name, const std::vector<float>& value) {
 	auto it = mParameters.find(name);
 	if (it == mParameters.end() || it->second.size() != value.size())
@@ -637,6 +645,9 @@ template <int D> void Runtime<D>::step(float dt, size_t manualEmitter, uint32_t 
 			event.velocity = transform(event.velocity);
 		}
 		mEvents.push_back(event);
+		if (!mEventSpawnsEnabled) {
+			return;
+		}
 		for (const auto& route : e.events) {
 			const uint64_t key = p.randomKey ^ route.id ^ hash(type == EventType::Birth ? "birth" : "death");
 			if (route.on != type || random01(key) >= route.probability)

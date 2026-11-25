@@ -7,13 +7,13 @@
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 0,
-            "Y": 6,
-            "Z": -12
+            "X": -2.8,
+            "Y": 3.45,
+            "Z": -6.5
           },
           "LocalRotation": {
-            "X": 12,
-            "Y": 0,
+            "X": 18,
+            "Y": 22,
             "Z": 0
           },
           "LocalScale": {
@@ -25,7 +25,7 @@
         {
           "CameraComponentType": "class IKIGAI::ECS::CameraComponent",
           "Mode": "PERSPECTIVE",
-          "Fov": 60.0,
+          "Fov": 56,
           "Near": 0.1,
           "Far": 150.0,
           "Size": 5.0,
@@ -292,9 +292,9 @@
             "Z": 2
           },
           "LocalScale": {
-            "X": 1,
+            "X": 1.45,
             "Y": 0.15,
-            "Z": 1
+            "Z": 1.42
           },
           "LocalRotation": {
             "X": 0,
@@ -377,9 +377,9 @@
           "Physics3DComponentType": "class IKIGAI::ECS::Physics3DComponent",
           "BodyMode": 0,
           "HalfSize": {
-            "X": 1,
+            "X": 1.45,
             "Y": 0.15,
-            "Z": 1
+            "Z": 1.42
           },
           "ShapeKind": 1
         }
@@ -569,6 +569,228 @@
                 "Z": 0.96
               }
             }
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Shelter post",
+      "Id": 120,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0.72,
+            "Y": 0.72,
+            "Z": 0.75
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.085,
+            "Y": 1.13,
+            "Z": 0.085
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/weather/cube.obj"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Shelter post",
+      "Id": 121,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0.72,
+            "Y": 0.72,
+            "Z": 3.25
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.085,
+            "Y": 1.13,
+            "Z": 0.085
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/weather/cube.obj"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Shelter post",
+      "Id": 122,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 3.28,
+            "Y": 0.72,
+            "Z": 0.75
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.085,
+            "Y": 1.13,
+            "Z": 0.085
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/weather/cube.obj"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Shelter post",
+      "Id": 123,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 3.28,
+            "Y": 0.72,
+            "Z": 3.25
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.085,
+            "Y": 1.13,
+            "Z": 0.085
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/weather/cube.obj"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Sheltered test surface",
+      "Id": 124,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 2.12,
+            "Y": 0.31,
+            "Z": 1.35
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.58,
+            "Y": 0.36,
+            "Z": 0.62
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/weather/cube.obj"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/ground.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Exposed test surface",
+      "Id": 125,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0.31,
+            "Z": 1.35
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 0.58,
+            "Y": 0.36,
+            "Z": 0.62
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/weather/cube.obj"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "default"
+          ],
+          "Materials": [
+            "/materials/weather/ground.mat"
           ]
         }
       ]

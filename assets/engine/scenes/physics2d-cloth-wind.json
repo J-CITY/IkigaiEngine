@@ -77,8 +77,8 @@
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": -0.5,
-            "Y": 3,
+            "X": -1.25,
+            "Y": 3.65,
             "Z": 0
           },
           "LocalRotation": {
@@ -94,8 +94,10 @@
         },
         {
           "Cloth2DComponentType": "class IKIGAI::ECS::Cloth2DComponent",
-          "Width": 8,
-          "Height": 8
+          "Width": 11,
+          "Height": 13,
+          "Spacing": 0.2375,
+          "BendCompliance": 0.003
         }
       ]
     },
@@ -108,7 +110,7 @@
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
             "X": 0,
-            "Y": 0,
+            "Y": 0.9,
             "Z": 0
           },
           "LocalRotation": {
@@ -125,13 +127,19 @@
         {
           "ForceField2DComponentType": "class IKIGAI::ECS::ForceField2DComponent",
           "Vector": {
-            "X": 1,
+            "X": 5,
             "Y": 0
           },
           "Targets": 4,
-          "GustAmplitude": 0.25
+          "GustAmplitude": 0.42,
+          "Kind": 3,
+          "Linear": 0.12,
+          "Quadratic": 0.03,
+          "GustFrequency": 0.6,
+          "Radius": 1.85
         }
       ]
     }
-  ]
+  ],
+  "RenderPipeline": "/renderPipeline/vector-sdf.json"
 }

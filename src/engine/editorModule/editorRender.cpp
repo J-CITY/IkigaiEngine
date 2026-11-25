@@ -26,6 +26,7 @@
 #include "physicsDebugWindow.h"
 #include "profillerWindow.h"
 #include "renderModule/backends/interface/resourceStruct.h"
+#include "renderingDemos.h"
 #include "resourceModule/fileSystem/fileSystem.h"
 #include "resourceModule/serviceManager.h"
 #include "sceneModule/sceneManager.h"
@@ -89,6 +90,7 @@ struct EditorRender::Internal {
 	SurfaceBrushWindow mSurfaceBrushes;
 	EnvironmentWindow mEnvironment;
 	SceneTransformTool mSceneTransform;
+	ScreenProbeRoomControls mScreenProbeRoom;
 	bool mWorkspaceVisible = true;
 	TimelineAnimationWindow* mTimelineAnimation = nullptr;
 
@@ -195,11 +197,26 @@ void EditorRender::draw() {
 	const bool destructionPlayground = path == "scenes/destruction-playground.json";
 	const bool layeredPlayground = path == "scenes/layered-materials.json";
 	const bool facialPlayground = path == "scenes/facial-expressions.json";
+	const bool screenProbeRoom = path == std::string_view(ScreenProbeRoomPath).substr(1);
+	const bool virtualGeometryGallery = path == std::string_view(VirtualGeometryGalleryPath).substr(1);
+	const bool furRabbit = path == std::string_view(FurRabbitPath).substr(1);
+	const bool cloth2D = path == std::string_view(Cloth2DPath).substr(1);
+	const bool cloth3D = path == std::string_view(Cloth3DPath).substr(1);
+	const bool softBody = path == std::string_view(SoftBodyPath).substr(1);
+	const bool particleEvents = path == std::string_view(ParticleEventPath).substr(1);
+	const bool weatherDemo = path == "scenes/environment-demo.json";
+	const bool focusedDemo
+		= screenProbeRoom || virtualGeometryGallery || furRabbit || cloth2D || cloth3D || softBody || particleEvents || weatherDemo;
 	if (manager.hasCurrentScene() && historyScene.lock() != manager.getCurrentScene().lifetime) {
 		GlobalState.mCommandHistory.clear();
 		GlobalState.mSelectObject.reset();
 		historyScene = manager.getCurrentScene().lifetime;
-		mData->mWorkspaceVisible = path != "scenes/gui-widgets.json" && !destructionPlayground && !layeredPlayground && !facialPlayground;
+		mData->mScreenProbeRoom.reset();
+		mData->mWorkspaceVisible
+			= path != "scenes/gui-widgets.json" && !destructionPlayground && !layeredPlayground && !facialPlayground && !focusedDemo;
+		if (focusedDemo) {
+			ImGui::SetWindowCollapsed("Camera Tools", true);
+		}
 		if (!mData->mWorkspaceVisible) {
 			mData->mSceneTransform.enabled = false;
 		}
@@ -222,6 +239,7 @@ void EditorRender::draw() {
 	if (ImGui::BeginMainMenuBar()) {
 		if (ImGui::BeginMenu("Window")) {
 			ImGui::MenuItem("Scene Editing", nullptr, &mData->mSceneTransform.enabled);
+			ImGui::MenuItem("Object Markers", nullptr, &mData->mSceneTransform.showMarkers);
 			ImGui::MenuItem("Editor Panels", nullptr, &mData->mWorkspaceVisible);
 			bool profilerOpen = mData->mProfiler.isOpen();
 			if (ImGui::MenuItem("Profiler", nullptr, &profilerOpen)) {
@@ -242,20 +260,22 @@ void EditorRender::draw() {
 		ImGui::Text("%.1f FPS | %.1f ms", fps, fps > 0 ? 1000.0f / fps : 0.0f);
 		ImGui::EndMainMenuBar();
 	}
+	if ((mData->mWorkspaceVisible || cloth2D) && manager.hasCurrentScene()) {
+		DrawPhysicsDebug(manager.getCurrentScene(), cloth2D);
+	}
+	if (mData->mWorkspaceVisible || weatherDemo) {
+		mData->mEnvironment.draw();
+	}
 	if (mData->mWorkspaceVisible) {
-		if (manager.hasCurrentScene()) {
-			DrawPhysicsDebug(manager.getCurrentScene());
-		}
 		mData->mProfiler.draw();
 		mData->mSurfaceBrushes.draw();
-		mData->mEnvironment.draw();
 		for (auto& win : mData->mWindows) {
 			win->draw();
 		}
 		drawGuiAnimationGraphEditor();
 	}
 	if (manager.hasCurrentScene()) {
-		mData->mSceneTransform.draw(manager.getCurrentScene());
+		mData->mSceneTransform.draw(manager.getCurrentScene(), destructionPlayground);
 #if USE_PHYSICS_3D
 		if (destructionPlayground) {
 			DrawDestructionPlayground(manager.getCurrentScene(), !mData->mSceneTransform.capturesMouse());
@@ -266,6 +286,24 @@ void EditorRender::draw() {
 		}
 		if (facialPlayground) {
 			drawFacialExpressions(manager.getCurrentScene());
+		}
+		if (screenProbeRoom) {
+			mData->mScreenProbeRoom.draw(manager.getCurrentScene());
+		}
+		if (virtualGeometryGallery) {
+			DrawVirtualGeometryGallery(manager.getCurrentScene());
+		}
+		if (furRabbit) {
+			DrawFurRabbit(manager.getCurrentScene());
+		}
+		if (cloth2D || cloth3D) {
+			DrawClothWind(manager.getCurrentScene(), cloth2D);
+		}
+		if (softBody) {
+			DrawSoftBodyDemo();
+		}
+		if (particleEvents) {
+			DrawParticleEvents(manager.getCurrentScene());
 		}
 	}
 	GlobalState.mSceneEditing = mData->mSceneTransform.capturesMouse();

@@ -1,0 +1,397 @@
+{
+  "RenderPipeline": "/renderPipeline/vg-visibility-resident.json",
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 3.3,
+            "Z": -9.8
+          },
+          "LocalRotation": {
+            "X": 8,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 53,
+          "Near": 0.1,
+          "Far": 80,
+          "Size": 6,
+          "GeometryCulling": true,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ],
+      "Id": 1
+    },
+    {
+      "Name": "Gallery floor",
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": -0.17,
+            "Z": 3.6
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 16,
+            "Y": 0.34,
+            "Z": 26
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/rendering-demos/gallery.mat"
+          ]
+        }
+      ],
+      "Id": 2
+    },
+    {
+      "Name": "Gallery backdrop",
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 3.3,
+            "Z": 10.2
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 19,
+            "Y": 6.6,
+            "Z": 0.3
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/rendering-demos/gallery.mat"
+          ]
+        }
+      ],
+      "Id": 3
+    },
+    {
+      "Name": "Center plinth",
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0.32,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 3.15,
+            "Y": 0.64,
+            "Z": 1.95
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/rendering-demos/plinth.mat"
+          ]
+        }
+      ],
+      "Id": 4
+    },
+    {
+      "Name": "Left plinth",
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -3.6,
+            "Y": 0.32,
+            "Z": 2.7
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 3.15,
+            "Y": 0.64,
+            "Z": 1.95
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/rendering-demos/plinth.mat"
+          ]
+        }
+      ],
+      "Id": 5
+    },
+    {
+      "Name": "Right plinth",
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 4,
+            "Y": 0.32,
+            "Z": 5.1
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 3.15,
+            "Y": 0.64,
+            "Z": 1.95
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/rendering-demos/plinth.mat"
+          ]
+        }
+      ],
+      "Id": 6
+    },
+    {
+      "Name": "Bronze ring",
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 2.1,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 8,
+            "Y": -18,
+            "Z": 13
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VirtualMeshRendererType": "VirtualMeshRenderer",
+          "Path": "/models/geometry-gallery/engraved-ring.vmesh",
+          "VisibilityBuffers": false,
+          "Materials": [
+            "/materials/rendering-demos/bronze.mat",
+            "/materials/rendering-demos/bronze.mat"
+          ],
+          "ErrorThreshold": 1.0
+        }
+      ],
+      "Id": 7
+    },
+    {
+      "Name": "Jade ring",
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -3.6,
+            "Y": 2.1,
+            "Z": 2.7
+          },
+          "LocalRotation": {
+            "X": 8,
+            "Y": 23,
+            "Z": -10
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VirtualMeshRendererType": "VirtualMeshRenderer",
+          "Path": "/models/geometry-gallery/engraved-ring.vmesh",
+          "VisibilityBuffers": false,
+          "Materials": [
+            "/materials/rendering-demos/jade.mat",
+            "/materials/rendering-demos/jade.mat"
+          ],
+          "ErrorThreshold": 1.0
+        }
+      ],
+      "Id": 8
+    },
+    {
+      "Name": "Violet ring",
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 4,
+            "Y": 2.1,
+            "Z": 5.1
+          },
+          "LocalRotation": {
+            "X": 8,
+            "Y": -21,
+            "Z": 5
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "VirtualMeshRendererType": "VirtualMeshRenderer",
+          "Path": "/models/geometry-gallery/engraved-ring.vmesh",
+          "VisibilityBuffers": false,
+          "Materials": [
+            "/materials/rendering-demos/violet.mat",
+            "/materials/rendering-demos/violet.mat"
+          ],
+          "ErrorThreshold": 1.0
+        }
+      ],
+      "Id": 9
+    },
+    {
+      "Name": "Gallery key",
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -5,
+            "Y": 5,
+            "Z": -3
+          },
+          "LocalRotation": {
+            "X": 32,
+            "Y": 24,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "DirectionalLightType": "DirectionalLight",
+          "Color": {
+            "X": 1,
+            "Y": 0.91,
+            "Z": 0.78
+          },
+          "Intensity": 2.8,
+          "Distance": 80,
+          "CastShadows": false
+        }
+      ],
+      "Id": 10
+    },
+    {
+      "Name": "Gallery fill",
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 5,
+            "Y": 4,
+            "Z": -5
+          },
+          "LocalRotation": {
+            "X": 18,
+            "Y": -34,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "DirectionalLightType": "DirectionalLight",
+          "Color": {
+            "X": 0.62,
+            "Y": 0.76,
+            "Z": 1
+          },
+          "Intensity": 1.45,
+          "Distance": 80,
+          "CastShadows": false
+        }
+      ],
+      "Id": 11
+    }
+  ]
+}

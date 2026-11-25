@@ -257,7 +257,9 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 				f.targets = static_cast<unsigned>(s.Targets);
 				return mSimulation->forces.add(f);
 			});
-			mSimulation->forces.field(c.simulationId())->center = o.tryGetTransform()->getWorldPosition();
+			auto* runtimeField = mSimulation->forces.field(c.simulationId());
+			runtimeField->center = o.tryGetTransform()->getWorldPosition();
+			runtimeField->vector = c.settings.Vector;
 		}
 		if (rigid) {
 			auto& c = *rigid;

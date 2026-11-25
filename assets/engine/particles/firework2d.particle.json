@@ -36,8 +36,8 @@
           "Size": {
             "Mode": "constant",
             "Value": [
-              3,
-              3
+              4.5,
+              4.5
             ]
           },
           "Color": {
@@ -167,15 +167,15 @@
           "Type": "Initialize",
           "Lifetime": {
             "Mode": "uniform",
-            "Min": 0.15,
-            "Max": 0.25,
+            "Min": 0.48,
+            "Max": 0.62,
             "RandomChannels": "independent"
           },
           "Size": {
             "Mode": "constant",
             "Value": [
-              4,
-              10
+              6,
+              17
             ]
           },
           "Color": {
@@ -190,12 +190,12 @@
           "Velocity": {
             "Mode": "uniform",
             "Min": [
-              -20,
-              -300
+              -38,
+              -265
             ],
             "Max": [
-              20,
-              -250
+              38,
+              -210
             ],
             "RandomChannels": "independent"
           }
@@ -323,7 +323,8 @@
       ],
       "Renderer": {
         "Type": "sprite2D",
-        "Blend": "alpha"
+        "Blend": "alpha",
+        "RenderSpace": "screen"
       }
     }
   ]

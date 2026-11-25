@@ -6,6 +6,9 @@
 #include "sceneModule/sceneManager.h"
 #include "windowModule/inputManager/inputManager.h"
 #include "windowModule/window/window.h"
+#ifdef USE_SDL
+#include <SDL3/SDL.h>
+#endif
 
 namespace IKIGAI::ECS {
 namespace {
@@ -30,12 +33,25 @@ void PhysicsGrabComponent::onUpdate(std::chrono::duration<double>) {
 	auto& input = RESOURCES::ServiceManager::Get<InputManager>();
 	auto& window = RESOURCES::ServiceManager::Get<WINDOW::Window>();
 	const auto button = EMouseButton::MOUSE_BUTTON_LEFT;
-	if (!window.hasFocus() || input.getUiCapture().mouse || input.isPointerCaptured(kMousePointerId) || !input.isMouseButtonPressed(button)) {
+	const bool pressed = input.wasMouseButtonPressedThisFrame(button);
+	bool down = input.isMouseButtonPressed(button);
+#if defined(_WIN32)
+	if (mBody) {
+		// Focus transitions between platform viewports can synthesize a local button release.
+		down = (SDL_GetGlobalMouseState(nullptr, nullptr) & SDL_BUTTON_LMASK) != 0;
+	}
+#endif
+	if (!down || !SDL_GetKeyboardFocus()) {
 		onDisable();
 		return;
 	}
-	const bool pressed = input.wasMouseButtonPressedThisFrame(button);
-	if (!pressed && !mBody) {
+	if (pressed) {
+		onDisable();
+		if (SDL_GetKeyboardFocus() != window.getSDLWindow() || input.getUiCapture().mouse || input.isPointerCaptured(kMousePointerId)) {
+			return;
+		}
+	}
+	else if (!mBody) {
 		return;
 	}
 	auto& scene = RESOURCES::ServiceManager::Get<SCENE_SYSTEM::SceneManager>().getCurrentScene();
@@ -57,16 +73,28 @@ void PhysicsGrabComponent::onUpdate(std::chrono::duration<double>) {
 		const auto start = unproject(-1);
 		return std::pair { start, unproject(1) - start };
 	};
-	const auto mouse = input.getMousePosition();
-	const auto [start, delta] = cursorRay({ float(mouse.x), float(mouse.y) });
+	const auto position = input.getMousePosition();
+	MATH::Vector2f mouse { float(position.x), float(position.y) };
+#if defined(_WIN32)
+	// SDL_GetMouseState follows the focused viewport. A held grab stays in game-window coordinates across editor panels.
+	if (mBody && SDL_GetMouseFocus() != window.getSDLWindow()) {
+		float screenX = 0;
+		float screenY = 0;
+		int windowX = 0;
+		int windowY = 0;
+		SDL_GetGlobalMouseState(&screenX, &screenY);
+		SDL_GetWindowPosition(window.getSDLWindow(), &windowX, &windowY);
+		mouse = { screenX - windowX, screenY - windowY };
+	}
+#endif
+	const auto [start, delta] = cursorRay(mouse);
 	if (!PHYSICS_COMMON::finite(start) || !PHYSICS_COMMON::finite(delta)) {
 		onDisable();
 		return;
 	}
 	if (pressed) {
-		onDisable();
 		// A frame can receive the press and several moves. Pick at the press, then follow the current cursor.
-		const auto events = input.pointerEventsThisFrame();
+		const auto& events = input.pointerEventsThisFrame();
 		const auto press = std::find_if(events.rbegin(), events.rend(),
 			[](const auto& event) { return event.pointerId == kMousePointerId && event.phase == PointerPhase::Began; });
 		if (press == events.rend()) {

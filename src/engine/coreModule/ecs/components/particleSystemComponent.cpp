@@ -65,6 +65,12 @@ template <int D> void ParticleSystemComponent<D>::restart(uint64_t seed) {
 	if (mRuntime)
 		mRuntime->restart(seed);
 }
+template <int D> void ParticleSystemComponent<D>::setEventSpawnsEnabled(bool enabled) {
+	if (mRuntime) {
+		mRuntime->setEventSpawnsEnabled(enabled);
+	}
+}
+
 template <int D> void ParticleSystemComponent<D>::setParameter(const std::string& name, const std::vector<float>& value) {
 	if (!mRuntime)
 		throw std::logic_error("Particle effect not loaded");

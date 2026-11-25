@@ -79,6 +79,8 @@ set(IKIGAI_MANIFEST_editorModule
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/prefabEditor.h"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/profillerWindow.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/profillerWindow.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/editorModule/renderingDemos.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/editorModule/renderingDemos.h"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/resourceEditorWindow.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/resourceEditorWindow.h"
     "${IKIGAI_SOURCE_ROOT}/engine/editorModule/statWindow.cpp"

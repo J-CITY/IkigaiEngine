@@ -5,5 +5,5 @@ class Scene;
 }
 
 namespace IKIGAI::EDITOR {
-void DrawPhysicsDebug(SCENE_SYSTEM::Scene& scene);
+void DrawPhysicsDebug(SCENE_SYSTEM::Scene& scene, bool clothPreview = false);
 }

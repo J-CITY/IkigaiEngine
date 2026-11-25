@@ -143,6 +143,8 @@ public:
 	void stop(bool clear = false);
 	void restart(uint64_t seed);
 	void setParameter(const std::string& name, const std::vector<float>& value);
+	void setEventSpawnsEnabled(bool enabled);
+	bool eventSpawnsEnabled() const;
 	void emit(size_t emitter, uint32_t count);
 	void update(double dt, const MATH::Matrix4f& transform = MATH::Matrix4f::Identity);
 	bool isAlive() const;
@@ -186,6 +188,7 @@ private:
 	uint64_t mSeed = 1, mDroppedSteps = 0;
 	double mTime = 0, mAccumulator = 0;
 	bool mInitial = true, mHaveTransform = false;
+	bool mEventSpawnsEnabled = true;
 	MATH::Matrix4f mTransform = MATH::Matrix4f::Identity;
 	MATH::Vector3f mEmitterVelocity { }, mLastOrigin { };
 	void step(float dt, size_t manualEmitter = SIZE_MAX, uint32_t manualCount = 0);

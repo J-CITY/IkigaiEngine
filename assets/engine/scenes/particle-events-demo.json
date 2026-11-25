@@ -43,8 +43,8 @@
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 700,
-            "Y": 450,
+            "X": 210,
+            "Y": 335,
             "Z": 0
           },
           "LocalRotation": {
@@ -74,8 +74,8 @@
         {
           "TransformComponentType": "class IKIGAI::ECS::TransformComponent",
           "LocalPosition": {
-            "X": 0,
-            "Y": 0,
+            "X": -1.55,
+            "Y": -0.55,
             "Z": 0
           },
           "LocalRotation": {
@@ -97,5 +97,6 @@
         }
       ]
     }
-  ]
+  ],
+  "RenderPipeline": "/renderPipeline/particles-demo.json"
 }

@@ -1,0 +1,40 @@
+{
+  "ShaderPath": "/shaders/render/portable/vegetation.shader",
+  "DepthTest": true,
+  "DepthWriting": true,
+  "BackfaceCulling": true,
+  "Blendable": false,
+  "GpuInstances": 1,
+  "Uniforms": {
+    "data_UBOu_Albedo": {
+      "X": 0.77,
+      "Y": 0.65,
+      "Z": 0.47,
+      "W": 1
+    },
+    "data_UBOu_TextureTiling": {
+      "X": 1,
+      "Y": 1
+    },
+    "data_UBOu_TextureOffset": {
+      "X": 0,
+      "Y": 0
+    },
+    "data_UBOu_Metallic": 0.0,
+    "data_UBOu_Roughness": 0.91,
+    "data_UBOu_EnableNormalMapping": false
+  },
+  "Deformation": {
+    "Mode": "Fur",
+    "FurLength": 0.085,
+    "FurShells": 24,
+    "FurDensity": 0.73,
+    "WeatherResponse": 0
+  },
+  "PbrLayers": {
+    "Version": 1,
+    "AlphaMode": "Masked",
+    "AlphaCutoff": 0.5,
+    "Layers": []
+  }
+}

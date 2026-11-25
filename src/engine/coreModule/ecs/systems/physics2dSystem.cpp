@@ -115,7 +115,9 @@ void Physics2DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 				return mSimulation->forces.add(f);
 			});
 			auto center = o.tryGetTransform()->getWorldPosition();
-			mSimulation->forces.field(c.simulationId())->center = { center.x, center.y };
+			auto* runtimeField = mSimulation->forces.field(c.simulationId());
+			runtimeField->center = { center.x, center.y };
+			runtimeField->vector = vec(c.settings.Vector);
 		}
 		if ((bool(rigid) + bool(soft) + bool(fluid) + bool(cloth)) > 1) {
 			throw std::invalid_argument("An object may have only one of rigid, soft or fluid 2D components");

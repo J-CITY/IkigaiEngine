@@ -1,0 +1,270 @@
+{
+  "RenderPipeline": "/renderPipeline/migrated-lite.json",
+  "Objects": [
+    {
+      "Name": "Camera",
+      "Id": 1,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 3.25,
+            "Y": 2.16,
+            "Z": -5.4
+          },
+          "LocalRotation": {
+            "X": 6,
+            "Y": -31,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "CameraComponentType": "CameraComponent",
+          "Mode": "PERSPECTIVE",
+          "Fov": 41,
+          "Near": 0.1,
+          "Far": 60,
+          "Size": 5,
+          "GeometryCulling": true,
+          "GeometryBVHCulling": false,
+          "LightCulling": false
+        }
+      ]
+    },
+    {
+      "Name": "Rabbit",
+      "Id": 2,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0.16,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/fur-rabbit/rabbit.glb"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Coat",
+            "Tail",
+            "InnerEar",
+            "Eye",
+            "EyeGlint",
+            "Nose"
+          ],
+          "Materials": [
+            "/materials/rendering-demos/rabbit-coat.mat",
+            "/materials/rendering-demos/rabbit-tail.mat",
+            "/materials/rendering-demos/rabbit-ear.mat",
+            "/materials/rendering-demos/rabbit-eye.mat",
+            "/materials/rendering-demos/rabbit-eye-glint.mat",
+            "/materials/rendering-demos/rabbit-nose.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Pedestal",
+      "Id": 3,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 0.0,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 3.25,
+            "Y": 0.27,
+            "Z": 2.55
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/rendering-demos/studio-pedestal.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Studio floor",
+      "Id": 4,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": -0.23,
+            "Z": 0
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 16,
+            "Y": 0.21,
+            "Z": 18
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/rendering-demos/gallery.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Studio backdrop",
+      "Id": 5,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 0,
+            "Y": 4.1,
+            "Z": 5.3
+          },
+          "LocalRotation": {
+            "X": 0,
+            "Y": 0,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 14,
+            "Y": 8.2,
+            "Z": 0.22
+          }
+        },
+        {
+          "ModelRendererType": "ModelRenderer",
+          "Path": "/models/physics-demo/unit-box.gltf"
+        },
+        {
+          "MaterialRendererType": "MaterialRenderer",
+          "MaterialNames": [
+            "Demo"
+          ],
+          "Materials": [
+            "/materials/rendering-demos/gallery.mat"
+          ]
+        }
+      ]
+    },
+    {
+      "Name": "Warm key",
+      "Id": 6,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": -4,
+            "Y": 5,
+            "Z": -3
+          },
+          "LocalRotation": {
+            "X": 38,
+            "Y": 32,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "DirectionalLightType": "DirectionalLight",
+          "Color": {
+            "X": 1,
+            "Y": 0.89,
+            "Z": 0.75
+          },
+          "Intensity": 2.25,
+          "Distance": 40,
+          "CastShadows": true,
+          "ShadowFar": 22
+        }
+      ]
+    },
+    {
+      "Name": "Cool rim",
+      "Id": 7,
+      "Components": [
+        {
+          "TransformComponentType": "TransformComponent",
+          "LocalPosition": {
+            "X": 4,
+            "Y": 4,
+            "Z": 4
+          },
+          "LocalRotation": {
+            "X": 28,
+            "Y": -141,
+            "Z": 0
+          },
+          "LocalScale": {
+            "X": 1,
+            "Y": 1,
+            "Z": 1
+          }
+        },
+        {
+          "DirectionalLightType": "DirectionalLight",
+          "Color": {
+            "X": 0.66,
+            "Y": 0.84,
+            "Z": 1
+          },
+          "Intensity": 3.3,
+          "Distance": 40,
+          "CastShadows": false,
+          "ShadowFar": 22
+        }
+      ]
+    }
+  ]
+}
