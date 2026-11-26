@@ -1,0 +1,222 @@
+{
+  "Version": 1,
+  "Dimension": "3D",
+  "Parameters": {
+    "ExhaustRate": {
+      "Type": "float",
+      "Default": 0
+    },
+    "NitroRate": {
+      "Type": "float",
+      "Default": 0
+    }
+  },
+  "Emitters": [
+    {
+      "Id": "turbine",
+      "SimulationSpace": "local",
+      "Capacity": 12,
+      "Timing": {
+        "Duration": 1,
+        "Loops": 0
+      },
+      "Emission": {
+        "Rate": {
+          "Mode": "parameter",
+          "Parameter": "ExhaustRate"
+        }
+      },
+      "Spawn": [
+        {
+          "Id": "origin",
+          "Type": "Shape",
+          "Shape": "sphere",
+          "Radius": 0.055
+        },
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "uniform",
+            "Min": 0.055,
+            "Max": 0.14,
+            "RandomChannels": "independent"
+          },
+          "Size": {
+            "Mode": "constant",
+            "Value": [
+              0.085,
+              0.11
+            ]
+          },
+          "Color": {
+            "Mode": "uniform",
+            "Min": [
+              0.75,
+              0.16,
+              0.035,
+              0.5
+            ],
+            "Max": [
+              1,
+              0.61,
+              0.1,
+              0.84
+            ],
+            "RandomChannels": "independent"
+          },
+          "Velocity": {
+            "Mode": "uniform",
+            "Min": [
+              -0.21,
+              -0.15,
+              -4.5
+            ],
+            "Max": [
+              0.21,
+              0.2,
+              -1.6
+            ],
+            "RandomChannels": "independent"
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "motion",
+          "Type": "IntegrateMotion"
+        },
+        {
+          "Id": "fade",
+          "Type": "AlphaOverLife",
+          "Operation": "multiplyBase",
+          "Value": {
+            "Mode": "curve",
+            "Domain": "particleNormalizedAge",
+            "Keys": [
+              {
+                "Time": 0,
+                "Value": 1,
+                "Interpolation": "linear"
+              },
+              {
+                "Time": 1,
+                "Value": 0
+              }
+            ]
+          }
+        }
+      ],
+      "Renderer": {
+        "Type": "billboard3D",
+        "Alignment": "camera",
+        "Blend": "additive",
+        "DepthTest": true,
+        "Texture": "/textures/vehicle/plume.png"
+      }
+    },
+    {
+      "Id": "nitro",
+      "SimulationSpace": "local",
+      "Capacity": 32,
+      "Timing": {
+        "Duration": 1,
+        "Loops": 0
+      },
+      "Emission": {
+        "Rate": {
+          "Mode": "parameter",
+          "Parameter": "NitroRate"
+        }
+      },
+      "Spawn": [
+        {
+          "Id": "origin",
+          "Type": "Shape",
+          "Shape": "sphere",
+          "Radius": 0.055
+        },
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "uniform",
+            "Min": 0.11,
+            "Max": 0.23,
+            "RandomChannels": "independent"
+          },
+          "Size": {
+            "Mode": "constant",
+            "Value": [
+              0.16,
+              0.28
+            ]
+          },
+          "Color": {
+            "Mode": "uniform",
+            "Min": [
+              0.055,
+              0.22,
+              1,
+              0.7
+            ],
+            "Max": [
+              0.34,
+              0.86,
+              1,
+              1
+            ],
+            "RandomChannels": "independent"
+          },
+          "Velocity": {
+            "Mode": "uniform",
+            "Min": [
+              -0.2,
+              -0.18,
+              -10
+            ],
+            "Max": [
+              0.2,
+              0.22,
+              -6
+            ],
+            "RandomChannels": "independent"
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "motion",
+          "Type": "IntegrateMotion"
+        },
+        {
+          "Id": "fade",
+          "Type": "AlphaOverLife",
+          "Operation": "multiplyBase",
+          "Value": {
+            "Mode": "curve",
+            "Domain": "particleNormalizedAge",
+            "Keys": [
+              {
+                "Time": 0,
+                "Value": 1,
+                "Interpolation": "linear"
+              },
+              {
+                "Time": 1,
+                "Value": 0
+              }
+            ]
+          }
+        }
+      ],
+      "Renderer": {
+        "Type": "billboard3D",
+        "Alignment": "camera",
+        "Blend": "additive",
+        "DepthTest": true,
+        "Texture": "/textures/vehicle/plume.png"
+      }
+    }
+  ]
+}

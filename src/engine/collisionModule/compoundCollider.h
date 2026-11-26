@@ -18,9 +18,13 @@ public:
 	static constexpr std::size_t MaxChildren = 32;
 	explicit CompoundCollider3D(std::vector<Child> children);
 	std::span<const Child> children() const;
+	const MATH::GEOMETRY::Aabb<3>& localBounds() const {
+		return mLocalBounds;
+	}
 
 private:
 	const std::vector<Child> mChildren;
+	MATH::GEOMETRY::Aabb<3> mLocalBounds {};
 };
 
 // A non-compound shape is one leaf with index zero. Views borrow their shape's storage.

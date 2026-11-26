@@ -4,13 +4,27 @@
 #include "mathModule/math.h"
 #include "physics3dLease.h"
 #include "reflectionModule/reflection_macros.h"
+#include <optional>
 
 namespace IKIGAI::ECS {
 IKI_CLASS(Groups = [Component])
 class Physics3DComponent : public ComponentBase {
 	IKI_GENERATED_BODY(Physics3DComponent)
 public:
+	struct ColliderBox {
+		MATH::Vector3f Position {};
+		MATH::Vector3f Rotation {};
+		MATH::Vector3f HalfSize { .5f, .5f, .5f };
+		bool operator==(const ColliderBox&) const = default;
+		template <class C> static void serde(C& context, ColliderBox& value) {
+			serde::serde_struct(context, value)
+				.field(&ColliderBox::Position, "Position")
+				.field(&ColliderBox::Rotation, "Rotation")
+				.field(&ColliderBox::HalfSize, "HalfSize");
+		}
+	};
 	struct Descriptor : ComponentBase::Descriptor {
+		std::vector<ColliderBox> Boxes {};
 		std::string Type;
 		int BodyMode = 1;
 		int ShapeKind = 1;
@@ -18,6 +32,7 @@ public:
 		MATH::Vector3f HalfSize = MATH::Vector3f(0.5f);
 		float Mass = 1.0f;
 		float Friction = 0.5f;
+		PHYSICS::RoadSurface Surface = PHYSICS::RoadSurface::Collider;
 		float Restitution = 0.1f;
 		float GravityScale = 1.0f;
 		MATH::Vector3f Velocity = MATH::Vector3f(0);
@@ -26,15 +41,21 @@ public:
 		float AngularDamping = 0.05f;
 		bool FloatOnWater = false;
 		bool AllowSleep = true;
+		auto values() const {
+			return std::tie(Boxes, Type, BodyMode, ShapeKind, Radius, HalfSize, Mass, Friction, Surface, Restitution, GravityScale, Velocity,
+				AngularVelocity, LinearDamping, AngularDamping, FloatOnWater, AllowSleep);
+		}
 		template <class Context> static constexpr auto serde(Context& context, Descriptor& value) {
 			serde::serde_struct(context, value)
 				.field(&Descriptor::Type, "Physics3DComponentType")
 				.field(&Descriptor::FloatOnWater, "FloatOnWater", serde::attribute::default_ { false })
 				.field(&Descriptor::BodyMode, "BodyMode", serde::attribute::default_ { 1 })
 				.field(&Descriptor::ShapeKind, "ShapeKind", serde::attribute::default_ { 1 })
+				.field(&Descriptor::Boxes, "Boxes", serde::attribute::default_ { std::vector<ColliderBox> {} })
 				.field(&Descriptor::Radius, "Radius", serde::attribute::default_ { 0.5f })
 				.field(&Descriptor::HalfSize, "HalfSize", serde::attribute::default_ { MATH::Vector3f(0.5f) })
 				.field(&Descriptor::Mass, "Mass", serde::attribute::default_ { 1.0f })
+				.field(&Descriptor::Surface, "Surface", serde::attribute::default_ { PHYSICS::RoadSurface::Collider })
 				.field(&Descriptor::Friction, "Friction", serde::attribute::default_ { 0.5f })
 				.field(&Descriptor::Restitution, "Restitution", serde::attribute::default_ { 0.1f })
 				.field(&Descriptor::GravityScale, "GravityScale", serde::attribute::default_ { 1.0f })
@@ -52,7 +73,9 @@ public:
 	Descriptor getDescriptor() const {
 		return settings;
 	}
+	PHYSICS::Shape colliderShape() const;
 	Descriptor settings;
+	std::optional<Descriptor> synchronizedSettings {};
 	std::shared_ptr<Physics3DLease> runtime;
 	PHYSICS::Vec3 pendingForce, pendingImpulse;
 	PHYSICS::Body* body() const {
@@ -60,13 +83,15 @@ public:
 		return w ? w->body(runtime->id) : nullptr;
 	}
 	void applyForce(PHYSICS::Vec3 f) {
-		if (!PHYSICS_COMMON::finite(f))
+		if (!PHYSICS_COMMON::finite(f)) {
 			throw std::invalid_argument("Invalid force");
+		}
 		pendingForce += f;
 	}
 	void applyImpulse(PHYSICS::Vec3 j) {
-		if (!PHYSICS_COMMON::finite(j))
+		if (!PHYSICS_COMMON::finite(j)) {
 			throw std::invalid_argument("Invalid impulse");
+		}
 		pendingImpulse += j;
 	}
 	std::uint64_t simulationId() const {
@@ -182,7 +207,7 @@ public:
 	IKI_PROPERTY(Name = AllowSleep, Type = bool, Getter = getAllowSleep, Setter = setAllowSleep, Flags = [USE_IN_EDITOR_COMPONENT_INSPECTOR],
 		EditWidget = BOOL)
 	static auto GetMembers() {
-		return std::tuple { };
+		return std::tuple {};
 	}
 };
 IKI_CLASS(Groups = [Component])
@@ -202,8 +227,8 @@ public:
 		float Damping = 0.5f;
 		bool PinTop = false;
 		bool SelfCollision = false;
-		std::vector<MATH::Vector3f> Vertices = { };
-		std::vector<int> Tetrahedra = { };
+		std::vector<MATH::Vector3f> Vertices = {};
+		std::vector<int> Tetrahedra = {};
 		template <class Context> static constexpr auto serde(Context& context, Descriptor& value) {
 			serde::serde_struct(context, value)
 				.field(&Descriptor::Type, "SoftBody3DComponentType")
@@ -218,8 +243,8 @@ public:
 				.field(&Descriptor::Damping, "Damping", serde::attribute::default_ { 0.5f })
 				.field(&Descriptor::PinTop, "PinTop", serde::attribute::default_ { false })
 				.field(&Descriptor::SelfCollision, "SelfCollision", serde::attribute::default_ { false })
-				.field(&Descriptor::Vertices, "Vertices", serde::attribute::default_ { std::vector<MATH::Vector3f> { } })
-				.field(&Descriptor::Tetrahedra, "Tetrahedra", serde::attribute::default_ { std::vector<int> { } });
+				.field(&Descriptor::Vertices, "Vertices", serde::attribute::default_ { std::vector<MATH::Vector3f> {} })
+				.field(&Descriptor::Tetrahedra, "Tetrahedra", serde::attribute::default_ { std::vector<int> {} });
 		}
 	};
 	explicit SoftBody3DComponent(UTILS::Ref<Object> obj);
@@ -230,6 +255,7 @@ public:
 		return settings;
 	}
 	Descriptor settings;
+	std::optional<Descriptor> synchronizedSettings {};
 	std::shared_ptr<Physics3DLease> runtime;
 	std::uint64_t simulationId() const {
 		return runtime ? runtime->id : 0;
@@ -326,7 +352,7 @@ public:
 	IKI_PROPERTY(Name = SelfCollision, Type = bool, Getter = getSelfCollision, Setter = setSelfCollision, Flags = [USE_IN_EDITOR_COMPONENT_INSPECTOR],
 		EditWidget = BOOL)
 	static auto GetMembers() {
-		return std::tuple { };
+		return std::tuple {};
 	}
 };
 IKI_CLASS(Groups = [Component])
@@ -372,6 +398,7 @@ public:
 		return settings;
 	}
 	Descriptor settings;
+	std::optional<Descriptor> synchronizedSettings {};
 	std::shared_ptr<Physics3DLease> runtime;
 	std::uint64_t simulationId() const {
 		return runtime ? runtime->id : 0;
@@ -477,7 +504,7 @@ public:
 	IKI_PROPERTY(Name = Impermeable, Type = bool, Getter = getImpermeable, Setter = setImpermeable, Flags = [USE_IN_EDITOR_COMPONENT_INSPECTOR],
 		EditWidget = BOOL)
 	static auto GetMembers() {
-		return std::tuple { };
+		return std::tuple {};
 	}
 };
 IKI_CLASS(Groups = [Component])
@@ -517,6 +544,7 @@ public:
 		return settings;
 	}
 	Descriptor settings;
+	std::optional<Descriptor> synchronizedSettings {};
 	std::shared_ptr<Physics3DLease> runtime;
 	std::uint64_t simulationId() const {
 		return runtime ? runtime->id : 0;
@@ -598,7 +626,7 @@ public:
 	IKI_PROPERTY(Name = Viscosity, Type = float, Getter = getViscosity, Setter = setViscosity, Flags = [USE_IN_EDITOR_COMPONENT_INSPECTOR],
 		EditWidget = DRAG_FLOAT)
 	static auto GetMembers() {
-		return std::tuple { };
+		return std::tuple {};
 	}
 };
 IKI_CLASS(Groups = [Component])
@@ -648,6 +676,7 @@ public:
 		return settings;
 	}
 	Descriptor settings;
+	std::optional<Descriptor> synchronizedSettings {};
 	std::shared_ptr<Physics3DLease> runtime;
 	std::uint64_t simulationId() const {
 		return runtime ? runtime->id : 0;
@@ -768,7 +797,7 @@ public:
 	IKI_PROPERTY(
 		Name = Targets, Type = int, Getter = getTargets, Setter = setTargets, Flags = [USE_IN_EDITOR_COMPONENT_INSPECTOR], EditWidget = DRAG_INT)
 	static auto GetMembers() {
-		return std::tuple { };
+		return std::tuple {};
 	}
 };
 template <> inline std::string GetType<Physics3DComponent>() {

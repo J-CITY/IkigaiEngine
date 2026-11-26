@@ -10,10 +10,12 @@ ParticleSystemComponent<D>::ParticleSystemComponent(UTILS::Ref<Object> object, c
 	mDescriptor.Type = GetType<ParticleSystemComponent<D>>();
 	mAsset = RESOURCES::ServiceManager::Get<RESOURCES::ParticleLoader>().loadResource(descriptor.EffectPath);
 	mRuntime = std::make_unique<PARTICLES::Runtime<D>>(mAsset->definition, descriptor.Seed);
-	for (const auto& [name, value] : descriptor.Parameters)
+	for (const auto& [name, value] : descriptor.Parameters) {
 		mRuntime->setParameter(name, value);
-	if (!descriptor.AutoPlay)
+	}
+	if (!descriptor.AutoPlay) {
 		mRuntime->pause();
+	}
 }
 template <int D>
 ParticleSystemComponent<D>::ParticleSystemComponent(UTILS::Ref<Object> object, const ComponentBase::Descriptor& descriptor)
@@ -41,29 +43,40 @@ template <int D> auto ParticleSystemComponent<D>::getDescriptor() const -> Descr
 	return d;
 }
 template <int D> void ParticleSystemComponent<D>::tick(double dt) {
-	if (mRuntime)
+	if (mRuntime) {
 		mRuntime->update(dt, obj->getTransform()->getTransform().getWorldMatrix());
+	}
 }
 template <int D> void ParticleSystemComponent<D>::play() {
-	if (mRuntime)
+	if (mRuntime) {
 		mRuntime->play();
+	}
 }
 template <int D> void ParticleSystemComponent<D>::pause() {
-	if (mRuntime)
+	if (mRuntime) {
 		mRuntime->pause();
+	}
 }
 template <int D> void ParticleSystemComponent<D>::resume() {
-	if (mRuntime)
+	if (mRuntime) {
 		mRuntime->resume();
+	}
 }
 template <int D> void ParticleSystemComponent<D>::stop(bool clear) {
-	if (mRuntime)
+	if (mRuntime) {
 		mRuntime->stop(clear);
+	}
 }
 template <int D> void ParticleSystemComponent<D>::restart(uint64_t seed) {
 	mDescriptor.Seed = seed;
-	if (mRuntime)
+	if (mRuntime) {
 		mRuntime->restart(seed);
+	}
+}
+template <int D> void ParticleSystemComponent<D>::setRuntimeParameter(const std::string& name, const std::vector<float>& value) {
+	if (mRuntime) {
+		mRuntime->setParameter(name, value);
+	}
 }
 template <int D> void ParticleSystemComponent<D>::setEventSpawnsEnabled(bool enabled) {
 	if (mRuntime) {
@@ -72,8 +85,9 @@ template <int D> void ParticleSystemComponent<D>::setEventSpawnsEnabled(bool ena
 }
 
 template <int D> void ParticleSystemComponent<D>::setParameter(const std::string& name, const std::vector<float>& value) {
-	if (!mRuntime)
+	if (!mRuntime) {
 		throw std::logic_error("Particle effect not loaded");
+	}
 	mRuntime->setParameter(name, value);
 	mDescriptor.Parameters[name] = value;
 }

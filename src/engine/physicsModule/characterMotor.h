@@ -1,5 +1,5 @@
 #pragma once
-#include "physicWorld.h"
+#include "worldQueries.h"
 #include <algorithm>
 #include <cmath>
 
@@ -9,22 +9,9 @@ struct Capsule {
 	Vec3 feet {};
 	float radius = .3f, height = 1.8f;
 };
-struct Hit {
-	Id body = 0;
-	float fraction = 1, distance = 0;
-	Vec3 point {}, normal { 0, 1, 0 };
-	explicit operator bool() const {
-		return body != 0;
-	}
-};
-struct Filter {
-	std::uint32_t layer = 1, mask = ~0u;
-	Id ignore = 0;
-	bool staticsOnly = true;
-	bool accepts(const Body& b) const {
-		return b.id != ignore && (!staticsOnly || b.type == BodyType::Static) && (b.layer & mask) && (layer & b.mask);
-	}
-};
+using QUERY::Filter;
+using QUERY::Hit;
+using QUERY::raycast;
 inline float length(Vec3 v) {
 	return std::sqrt(v.dot(v));
 }
@@ -42,7 +29,6 @@ struct Separation {
 Separation separation(const Capsule& capsule, const Body& body);
 Hit sweep(const World& world, Capsule capsule, Vec3 displacement, Filter filter = {}, float skin = .002f, float minNormalY = -2);
 bool overlaps(const World& world, Capsule capsule, Filter filter = {}, float tolerance = .001f);
-Hit raycast(const World& world, Vec3 origin, Vec3 delta, Filter filter = {});
 
 struct TraversalPlan {
 	Id obstacle = 0;

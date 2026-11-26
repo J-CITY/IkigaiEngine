@@ -126,6 +126,7 @@ namespace AUDIO {
 		void play(SoundResource& source);
 		void unpause(SoundResource& source);
 		void setVolume(SoundResource& source, float vol);
+		void setPlaybackSpeed(const SoundResource& source, float speed);
 		void setVolume(AudioMixerSource& source, float vol);
 		void setGlobalVolume(float vol);
 		void setPan(SoundResource& source, float vol);

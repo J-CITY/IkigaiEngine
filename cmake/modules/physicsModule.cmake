@@ -1,6 +1,9 @@
 # Explicit source manifest for physicsModule.
 # Add new production files here; generated reflection files are owned by Codegen.cmake.
 set(IKIGAI_MANIFEST_physicsModule
+    "${IKIGAI_SOURCE_ROOT}/engine/physicsModule/vehicle.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/physicsModule/vehicle.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/physicsModule/worldQueries.h"
     "${IKIGAI_SOURCE_ROOT}/engine/physicsModule/body.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/physicsModule/body.h"
     "${IKIGAI_SOURCE_ROOT}/engine/physicsModule/broadPhase.h"

@@ -3,6 +3,7 @@
 #if USE_PHYSICS_3D
 #include "coreModule/ecs/components/physics3dComponent.h"
 #include "coreModule/ecs/components/physicsComponent.h"
+#include "coreModule/ecs/components/vehicleComponent.h"
 #include "sceneModule/scene.h"
 #include "utilsModule/log/logger.h"
 #include <iostream>
@@ -18,8 +19,15 @@ template <class C> void release(Object& o) {
 	}
 }
 template <class C, class Create> bool synchronize(C& c, const std::shared_ptr<P::World>& world, Physics3DLease::Kind kind, Create create) {
-	auto signature = serde::serialize<nlohmann::json>(c.getDescriptor()).dump();
-	bool valid = c.runtime && c.runtime->world.lock() == world && c.runtime->signature == signature;
+	std::string signature;
+	bool valid = c.runtime && c.runtime->world.lock() == world;
+	if constexpr (std::is_same_v<C, Physics3DComponent>) {
+		valid = valid && c.synchronizedSettings && c.synchronizedSettings->values() == c.settings.values();
+	}
+	else {
+		signature = serde::serialize<nlohmann::json>(c.getDescriptor()).dump();
+		valid = valid && c.runtime->signature == signature;
+	}
 	if (valid) {
 		switch (kind) {
 		case Physics3DLease::Kind::Body:
@@ -45,6 +53,9 @@ template <class C, class Create> bool synchronize(C& c, const std::shared_ptr<P:
 	lease->kind = kind;
 	lease->signature = std::move(signature);
 	lease->id = create();
+	if constexpr (std::is_same_v<C, Physics3DComponent>) {
+		c.synchronizedSettings = c.settings;
+	}
 	c.runtime = std::move(lease);
 	return true;
 }
@@ -323,16 +334,17 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 			auto& c = *rigid;
 			auto& s = c.settings;
 			synchronize(c, mSimulation, Physics3DLease::Kind::Body, [&] {
-				if (s.BodyMode < 0 || s.BodyMode > 1 || s.ShapeKind < 0 || s.ShapeKind > 1) {
+				if (s.BodyMode < 0 || s.BodyMode > 1) {
 					throw std::invalid_argument("Invalid 3D body/shape kind");
 				}
 				P::BodyDef d;
 				d.type = s.BodyMode ? P::BodyType::Dynamic : P::BodyType::Static;
-				d.shape = s.ShapeKind ? P::Shape::box(s.HalfSize) : P::Shape::sphere(s.Radius);
+				d.shape = c.colliderShape();
 				d.position = o.tryGetTransform()->getLocalPosition();
 				d.orientation = o.tryGetTransform()->getLocalRotation();
 				d.mass = s.Mass;
 				d.friction = s.Friction;
+				d.roadSurface = s.Surface;
 				d.restitution = s.Restitution;
 				d.gravityScale = s.GravityScale;
 				d.velocity = s.Velocity;
@@ -343,6 +355,27 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 				return mSimulation->createBody(d);
 			});
 			auto* b = mSimulation->body(c.simulationId());
+			if (auto driver = o.getComponent<VehicleComponent>()) {
+				auto* car = mSimulation->vehicle(b->id);
+				if (!car) {
+					car = &mSimulation->attachVehicle(b->id, driver->config());
+				}
+				mSimulation->configureVehicle(b->id, driver->config());
+				car->brake = driver->brake;
+				car->throttle = driver->throttle;
+				car->steering = driver->steering;
+				car->driftTuning = driver->getDescriptor();
+				car->assistance = driver->getDescriptor().Assistance;
+				car->highSpeedSteering = driver->getDescriptor().HighSpeedSteering;
+				car->steeringMode = driver->getDescriptor().Steering;
+				car->transmission = driver->getDescriptor().Transmission;
+				car->gear = driver->gear();
+				car->handbrake = driver->handbrake;
+				car->nitroRequested = driver->nitroRequested;
+			}
+			else if (mSimulation->vehicle(b->id)) {
+				mSimulation->detachVehicle(b->id);
+			}
 			if (c.pendingForce.squareMagnitude() > 0) {
 				mSimulation->applyForce(b->id, c.pendingForce, b->getPosition());
 			}
@@ -432,8 +465,13 @@ void Physics3DSystem::onFixedUpdate(ECS::World&, ECS::CommandBuffer&, std::chron
 		}
 		if (auto c = object->getComponent<Physics3DComponent>(); c && c->runtime) {
 			if (auto* b = mSimulation->body(c->simulationId()); b && b->type == P::BodyType::Dynamic) {
-				object->tryGetTransform()->setLocalPosition(b->getPosition());
+				object->tryGetTransform()->setLocalPosition(b->getPointInWorldSpace(-b->centerOfMass));
 				object->tryGetTransform()->setLocalRotation(b->getOrientation());
+				if (auto driver = object->getComponent<VehicleComponent>()) {
+					if (auto* car = mSimulation->vehicle(b->id)) {
+						driver->present(*car);
+					}
+				}
 			}
 		}
 	}

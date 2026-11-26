@@ -1,0 +1,116 @@
+{
+  "Version": 1,
+  "Dimension": "3D",
+  "Parameters": {
+    "Rate": {
+      "Type": "float",
+      "Default": 0
+    },
+    "Tint": {
+      "Type": "color",
+      "Default": [
+        0.5,
+        0.5,
+        0.5,
+        0.5
+      ]
+    },
+    "Size": {
+      "Type": "vec2",
+      "Default": [
+        0.1,
+        0.1
+      ]
+    }
+  },
+  "Emitters": [
+    {
+      "Id": "spray",
+      "SimulationSpace": "world",
+      "Capacity": 32,
+      "Timing": {
+        "Duration": 1,
+        "Loops": 0
+      },
+      "Emission": {
+        "Rate": {
+          "Mode": "parameter",
+          "Parameter": "Rate"
+        }
+      },
+      "Spawn": [
+        {
+          "Id": "origin",
+          "Type": "Shape",
+          "Shape": "sphere",
+          "Radius": 0.055
+        },
+        {
+          "Id": "init",
+          "Type": "Initialize",
+          "Lifetime": {
+            "Mode": "uniform",
+            "Min": 0.22,
+            "Max": 0.65,
+            "RandomChannels": "independent"
+          },
+          "Size": {
+            "Mode": "parameter",
+            "Parameter": "Size"
+          },
+          "Color": {
+            "Mode": "parameter",
+            "Parameter": "Tint"
+          },
+          "Velocity": {
+            "Mode": "uniform",
+            "Min": [
+              -0.9,
+              0.4,
+              -2.6
+            ],
+            "Max": [
+              0.9,
+              2,
+              -0.4
+            ],
+            "RandomChannels": "independent"
+          }
+        }
+      ],
+      "Update": [
+        {
+          "Id": "motion",
+          "Type": "IntegrateMotion"
+        },
+        {
+          "Id": "fade",
+          "Type": "AlphaOverLife",
+          "Operation": "multiplyBase",
+          "Value": {
+            "Mode": "curve",
+            "Domain": "particleNormalizedAge",
+            "Keys": [
+              {
+                "Time": 0,
+                "Value": 1,
+                "Interpolation": "linear"
+              },
+              {
+                "Time": 1,
+                "Value": 0
+              }
+            ]
+          }
+        }
+      ],
+      "Renderer": {
+        "Type": "billboard3D",
+        "Alignment": "camera",
+        "Blend": "alpha",
+        "DepthTest": true,
+        "Texture": "/textures/vehicle/spray.png"
+      }
+    }
+  ]
+}

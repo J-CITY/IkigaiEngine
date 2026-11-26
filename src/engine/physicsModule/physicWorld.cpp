@@ -52,6 +52,7 @@ struct PhysicWorld::TickCheckpoint {
 		std::vector<Vec3> previous {};
 	};
 	std::vector<BodyState> bodies {};
+	std::vector<std::pair<Vehicle*, VehicleState>> vehicles {};
 	std::vector<JointState> joints {};
 	std::vector<SoftState> softBodies {};
 	std::vector<FluidState> fluids {};
@@ -65,6 +66,10 @@ struct PhysicWorld::TickCheckpoint {
 		bodies.reserve(world.mBodies.size());
 		for (auto& [id, b] : world.mBodies) {
 			bodies.push_back({ &b, b, b.force, b.torque });
+		}
+		vehicles.clear();
+		for (auto& [id, vehicle] : world.mVehicles) {
+			vehicles.emplace_back(&vehicle, vehicle.state);
 		}
 		joints.clear();
 		joints.reserve(world.mJoints.size());
@@ -110,6 +115,9 @@ struct PhysicWorld::TickCheckpoint {
 			static_cast<RigidBody&>(*state.body) = state.rigid;
 			state.body->force = state.force;
 			state.body->torque = state.torque;
+		}
+		for (const auto& [vehicle, state] : vehicles) {
+			vehicle->state = state;
 		}
 		for (const auto& state : joints) {
 			state.joint->anchorImpulse = state.impulse;
@@ -197,6 +205,7 @@ Fluid* PhysicWorld::fluid(Id id) {
 Id PhysicWorld::createBody(const BodyDef& d) {
 	require(finite(d.position) && finite(d.velocity) && finite(d.angularVelocity) && finite(d.acceleration) && finite(d.orientation),
 		"Nonfinite body state");
+	require(d.roadSurface >= RoadSurface::Collider && d.roadSurface <= RoadSurface::DirtRoad, "Invalid road surface");
 	require(d.type == BodyType::Static || d.type == BodyType::Dynamic, "Invalid body type");
 	require(std::isfinite(d.mass) && d.mass > 0 && std::isfinite(d.friction) && d.friction >= 0 && std::isfinite(d.restitution) && d.restitution >= 0
 			&& d.restitution <= 1 && std::isfinite(d.gravityScale) && std::isfinite(d.linearDamping) && d.linearDamping >= 0
@@ -250,6 +259,7 @@ Id PhysicWorld::createBody(const BodyDef& d) {
 	}
 	b.id = mNextId++;
 	b.type = d.type;
+	b.roadSurface = d.roadSurface;
 	b.friction = d.friction;
 	b.restitution = d.restitution;
 	b.gravityScale = d.gravityScale;
@@ -301,6 +311,26 @@ std::vector<Id> PhysicWorld::createBodies(std::span<const BodyDef> definitions) 
 }
 void PhysicWorld::refreshBroadPhase() {
 	auto& broad = *mPipeline.broadPhase;
+	// For small worlds keep even the largest road slab within a few grid cells per axis.
+	// All proxies still enter the configured index, including those used by external queries.
+	constexpr size_t smallWorldSize = 16;
+	if (mBodies.size() <= smallWorldSize && dynamic_cast<GridBroadPhase3D*>(&broad)) {
+		std::array<std::pair<Id, IBroadPhase3D::Bounds>, smallWorldSize> proxies;
+		size_t count = 0;
+		float cellSize = settings.cellSize;
+		for (const auto& [id, body] : mBodies) {
+			const auto bounds = COLLISION::bounds(geometry(body));
+			for (size_t axis = 0; axis < 3; ++axis) {
+				cellSize = std::max(cellSize, .25f * bounds.max[axis] - .25f * bounds.min[axis]);
+			}
+			proxies[count++] = { id, bounds };
+		}
+		broad.reset(cellSize);
+		for (size_t i = 0; i < count; ++i) {
+			broad.upsert(proxies[i].first, proxies[i].second);
+		}
+		return;
+	}
 	broad.reset(settings.cellSize);
 	for (const auto& [id, body] : mBodies) {
 		broad.upsert(id, COLLISION::bounds(geometry(body)));
@@ -363,6 +393,93 @@ const std::map<Id, RigidJoint>& PhysicWorld::joints() const {
 bool PhysicWorld::collisionEnabled(Id a, Id b) const {
 	return !mJointCollisionExclusions.contains(std::minmax(a, b));
 }
+Vehicle& PhysicWorld::attachVehicle(Id id, const VehicleConfig& config) {
+	if (!body(id) || body(id)->type != BodyType::Dynamic) {
+		throw std::invalid_argument("Vehicle requires a dynamic chassis");
+	}
+	config.validate();
+	auto [it, inserted] = mVehicles.try_emplace(id);
+	if (!inserted) {
+		throw std::invalid_argument("Vehicle already attached");
+	}
+	auto& chassis = *body(id);
+	auto& vehicle = it->second;
+	vehicle.originalShape = chassis.shape;
+	vehicle.originalInverseInertia = chassis.getInverseInertiaTensor();
+	vehicle.originalMass = chassis.getMass();
+	configureVehicle(id, config);
+	for (auto& wheel : it->second.state.wheels) {
+		wheel.length = vehicle.config.restLength;
+	}
+	wake(id);
+	return it->second;
+}
+Vehicle* PhysicWorld::vehicle(Id id) {
+	auto it = mVehicles.find(id);
+	return it == mVehicles.end() ? nullptr : &it->second;
+}
+void PhysicWorld::configureVehicle(Id id, const VehicleConfig& config) {
+	auto& vehicle = mVehicles.at(id);
+	if (vehicle.authored == config) {
+		return;
+	}
+	config.validate();
+	auto& chassis = mBodies.at(id);
+	const auto effective = config.resolved();
+	if (config.chassis != vehicle.authored.chassis || config.massOverrideKg != vehicle.authored.massOverrideKg) {
+		if (config.chassis == ChassisStyle::Authored) {
+			chassis.shape = vehicle.originalShape;
+			const float mass = config.massOverrideKg > 0 ? config.massOverrideKg : vehicle.originalMass;
+			chassis.setMass(mass);
+			chassis.setInverseInertiaTensor(vehicle.originalInverseInertia * (vehicle.originalMass / mass));
+		}
+		else {
+			const auto dimensions = chassisDimensions(config.chassis);
+			chassis.shape = Shape::box(dimensions.halfSize);
+			const float mass = config.massOverrideKg > 0 ? config.massOverrideKg : dimensions.mass;
+			chassis.setMass(mass);
+			const auto h = dimensions.halfSize;
+			const auto inertia = Vec3 { h.y * h.y + h.z * h.z, h.x * h.x + h.z * h.z, h.x * h.x + h.y * h.y } * (mass / 3);
+			chassis.setInertiaTensor(MATH::Matrix3f(inertia.x, 0, 0, 0, inertia.y, 0, 0, 0, inertia.z));
+		}
+	}
+	// The rigid body's origin is the mass centre. Keep the authored geometry
+	// and its instantaneous velocity continuous while redistributing ballast.
+	const auto localShift = config.centerOfMass - chassis.centerOfMass;
+	const auto shift = chassis.getDirectionInWorldSpace(localShift);
+	chassis.setPosition(chassis.getPosition() + shift);
+	chassis.setVelocity(chassis.getVelocity() + chassis.getRotation().cross(shift));
+	if (localShift.squareMagnitude() > 0) {
+		for (auto& [jointId, joint] : mJoints) {
+			if (joint.bodyA == id) {
+				joint.anchorA -= localShift;
+			}
+			if (joint.bodyB == id) {
+				joint.anchorB -= localShift;
+			}
+			if (joint.bodyA == id || joint.bodyB == id) {
+				joint.anchorImpulse = {};
+				joint.previousStep = 0;
+			}
+		}
+		for (auto& [attachmentId, attachment] : mAttachments) {
+			if (attachment.body == id) {
+				attachment.point -= localShift;
+			}
+		}
+	}
+	chassis.centerOfMass = config.centerOfMass;
+	chassis.calculateDerivedData();
+	vehicle.authored = config;
+	vehicle.config = effective;
+	wake(id);
+}
+void PhysicWorld::detachVehicle(Id id) {
+	if (vehicle(id)) {
+		configureVehicle(id, VehicleConfig {});
+	}
+	mVehicles.erase(id);
+}
 void PhysicWorld::destroyBody(Id id) {
 	const auto found = mBodies.find(id);
 	if (found == mBodies.end()) {
@@ -388,6 +505,7 @@ void PhysicWorld::destroyBody(Id id) {
 	const auto remaining = std::remove_if(
 		mContacts.begin(), end, [removed](const Contact& contact) { return contact.body[0] == removed || contact.body[1] == removed; });
 	mContactCount = static_cast<std::size_t>(remaining - mContacts.begin());
+	mVehicles.erase(id);
 	mBodies.erase(found);
 }
 void PhysicWorld::destroySoftBody(Id id) {
@@ -411,6 +529,7 @@ void PhysicWorld::clear() {
 	mAttachments.clear();
 	mJoints.clear();
 	mJointCollisionExclusions.clear();
+	mVehicles.clear();
 	mBodies.clear();
 	mSoft.clear();
 	mFluids.clear();
@@ -613,6 +732,10 @@ void PhysicWorld::advance(float dt) {
 			if (b.type == BodyType::Dynamic) {
 				Vec3 generated, torque;
 				bool shouldWake = false;
+				if (auto* car = vehicle(id)) {
+					stepVehicle(*this, b, *car, h, generated, torque);
+					shouldWake = true;
+				}
 				for (auto& [fid, f] : forces.fields()) {
 					if ((f.target && f.target != id) || !(f.targets & PHYSICS_COMMON::Rigid) || !(f.mask & b.layer)) {
 						continue;

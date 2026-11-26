@@ -7,6 +7,7 @@
 #include "narrowPhase.h"
 #include "physicsCommon/constraints.h"
 #include "rigidJoint.h"
+#include "vehicle.h"
 #include <array>
 #include <map>
 #include <memory>
@@ -34,17 +35,20 @@ struct BodyDef {
 	std::uint32_t layer = 1, mask = ~0u;
 	// Required for dynamic compounds, about the body origin (which must be its COM).
 	std::optional<MATH::Matrix3f> compoundInertiaPerUnitMass {};
+	RoadSurface roadSurface = RoadSurface::Collider;
 };
 struct Body : RigidBody {
+	Vec3 centerOfMass {};
 	Id id = 0;
 	Shape shape;
+	RoadSurface roadSurface = RoadSurface::Collider;
 	BodyType type = BodyType::Dynamic;
 	Vec3 force, torque, extraAcceleration;
 	float friction = 0.5f, restitution = 0.1f, gravityScale = 1;
 	std::uint32_t layer = 1, mask = ~0u;
 };
 inline COLLISION::ShapeView3D geometry(const Body& b) {
-	return { b.shape, b.getPosition(),
+	return { b.shape, b.getPosition() - b.getDirectionInWorldSpace(b.centerOfMass),
 		{ b.getDirectionInWorldSpace({ 1, 0, 0 }), b.getDirectionInWorldSpace({ 0, 1, 0 }), b.getDirectionInWorldSpace({ 0, 0, 1 }) } };
 }
 struct Particle {
@@ -129,6 +133,10 @@ public:
 	// Creates candidates between simulation steps. Failure publishes none and does not wake contact islands.
 	std::vector<Id> createBodies(std::span<const BodyDef> definitions);
 	std::vector<Id> queryBodies(const MATH::GEOMETRY::Aabb<3>& bounds);
+	Vehicle& attachVehicle(Id chassis, const VehicleConfig& config = {});
+	Vehicle* vehicle(Id chassis);
+	void configureVehicle(Id chassis, const VehicleConfig& config);
+	void detachVehicle(Id chassis);
 	Id createJoint(const RigidJointDef& def);
 	void destroyJoint(Id id);
 	const std::map<Id, RigidJoint>& joints() const;
@@ -195,6 +203,7 @@ private:
 	Id mNextId = 1;
 	double mTime = 0;
 	std::map<Id, Body> mBodies;
+	std::map<Id, Vehicle> mVehicles {};
 	std::map<Id, RigidJoint> mJoints {};
 	std::map<std::pair<Id, Id>, std::size_t> mJointCollisionExclusions {};
 	std::map<Id, SoftBody> mSoft;

@@ -16,6 +16,7 @@ function(ikigai_add_physics3d_library)
     add_library(ikigai_earcut INTERFACE)
     target_include_directories(ikigai_earcut SYSTEM INTERFACE "${root}/3rd/earcut-hpp/include")
     add_library(ikigai_physics3d STATIC
+        "${root}/src/engine/physicsModule/vehicle.cpp"
         "${root}/src/engine/physicsModule/body.cpp"
         "${root}/src/engine/physicsModule/contacts.cpp"
         "${root}/src/engine/physicsModule/characterQueries.cpp"
@@ -64,6 +65,7 @@ function(ikigai_configure_physics3d target)
         "engine/destructionModule/supportAnchors.cpp"
         "engine/destructionModule/supportGraph.cpp")
     ikigai_exclude_sources(sources
+        "engine/physicsModule/vehicle.cpp"
         "engine/physicsModule/body.cpp"
         "engine/physicsModule/characterQueries.cpp"
         "engine/physicsModule/contacts.cpp"

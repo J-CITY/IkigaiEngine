@@ -38,6 +38,17 @@ namespace {
 		}
 		ImGui::Text("Bodies: %zu  Soft/cloth: %zu  Fluids: %zu  Fields: %zu", world.bodies().size(), world.softBodies().size(), world.fluids().size(),
 			world.forces.fields().size());
+		for (const auto& [id, body] : world.bodies()) {
+			if (auto* car = world.vehicle(id)) {
+				ImGui::Text("Vehicle %llu  %s  %.1f km/h", static_cast<unsigned long long>(id),
+					car->profile == VehicleProfile::Casual ? "Casual" : "Simulation", 3.6f * std::sqrt(body.getVelocity().squareMagnitude()));
+				constexpr std::array labels { "FL", "FR", "RL", "RR" };
+				for (size_t i = 0; i < labels.size(); ++i) {
+					const auto& wheel = car->state.wheels[i];
+					ImGui::Text("%s  compression %.1f cm   load %.0f N", labels[i], 100 * (car->config.restLength - wheel.length), wheel.normalLoad);
+				}
+			}
+		}
 		// An orthographic preview makes the simulation inspectable with any renderer.
 		static float scale = 80;
 		ImGui::SliderFloat("Preview scale", &scale, 10, 250);

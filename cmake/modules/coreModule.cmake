@@ -78,6 +78,8 @@ set(IKIGAI_MANIFEST_coreModule
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/particleSystemComponent.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/physics2dComponent.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/physics2dComponent.h"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/vehicleComponent.cpp"
+    "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/vehicleComponent.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/physicsGrabComponent.cpp"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/physicsGrabComponent.h"
     "${IKIGAI_SOURCE_ROOT}/engine/coreModule/ecs/components/physics3dComponent.cpp"

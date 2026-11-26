@@ -124,11 +124,23 @@ Separation separation(const Capsule& capsule, const Body& body) {
 Hit sweep(const World& world, Capsule capsule, Vec3 displacement, Filter filter, float skin, float minNormalY) {
 	Hit closest;
 	const float travel = length(displacement);
+	// Enclose both end spheres and their paths, including the contact tolerance.
+	MATH::GEOMETRY::Aabb<3> sweptBounds;
+	const float padding = capsule.radius + std::max(0.f, skin) + 1e-4f;
+	for (int axis = 0; axis < 3; ++axis) {
+		const float first = capsule.feet[axis] + (axis == 1 ? capsule.radius : 0.f);
+		const float last = capsule.feet[axis] + (axis == 1 ? capsule.height - capsule.radius : 0.f);
+		sweptBounds.min[axis] = std::min(first, last) + std::min(0.f, displacement[axis]) - padding;
+		sweptBounds.max[axis] = std::max(first, last) + std::max(0.f, displacement[axis]) + padding;
+	}
 	for (const auto& [id, body] : world.bodies()) {
 		if (!filter.accepts(body)) {
 			continue;
 		}
 		const auto shape = geometry(body);
+		if (shape.shape.kind == Shape::Kind::Compound && !sweptBounds.overlaps(COLLISION::bounds(shape))) {
+			continue;
+		}
 		const auto leafCount = COLLISION::compoundLeafCount(shape);
 		// A leaf behind or beside the motion can be closest initially. Advance
 		// against each leaf independently to find the first impact along the path.
@@ -147,7 +159,10 @@ bool overlaps(const World& world, Capsule c, Filter filter, float tolerance) {
 	}
 	return false;
 }
+}
+
+namespace IKIGAI::PHYSICS::QUERY {
 Hit raycast(const World& world, Vec3 origin, Vec3 delta, Filter filter) {
-	return sweep(world, { origin, 0, 0 }, delta, filter, 0);
+	return CHARACTER::sweep(world, { origin, 0, 0 }, delta, filter, 0);
 }
 }

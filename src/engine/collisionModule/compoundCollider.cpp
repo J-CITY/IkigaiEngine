@@ -62,7 +62,13 @@ namespace {
 }
 
 CompoundCollider3D::CompoundCollider3D(std::vector<Child> children)
-	: mChildren(validateChildren(std::move(children))) { }
+	: mChildren(validateChildren(std::move(children))) {
+	const auto& first = mChildren.front();
+	mLocalBounds = bounds({ first.shape, first.position, first.axes });
+	for (const auto& child : std::span(mChildren).subspan(1)) {
+		mLocalBounds = Aabb::merge(mLocalBounds, bounds({ child.shape, child.position, child.axes }));
+	}
+}
 
 std::span<const CompoundCollider3D::Child> CompoundCollider3D::children() const {
 	return mChildren;

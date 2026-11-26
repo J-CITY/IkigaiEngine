@@ -21,7 +21,7 @@ AudioComponent::AudioComponent(UTILS::Ref<ECS::Object> _obj, const Descriptor& d
 			descriptor.AudioPath, descriptor.AudioPath.ends_with(".sound") ? RESOURCES::ELoadingType::RESOURCE : RESOURCES::ELoadingType::FILE);
 		// Decode/cache the sample once; every component keeps its own voice.
 		if (prepared) {
-			res = std::make_shared<AUDIO::SoundResource>(prepared->path, prepared->data);
+			res = std::make_shared<AUDIO::SoundResource>(descriptor.AudioPath, prepared->data);
 			res->clip = prepared->clip;
 		}
 	}
@@ -33,8 +33,9 @@ AudioComponent::AudioComponent(UTILS::Ref<ECS::Object> _obj)
 }
 
 std::string AudioComponent::getSourcePath() const {
-	if (!res)
-		return { };
+	if (!res) {
+		return {};
+	}
 	return res->path;
 }
 void AudioComponent::setSourcePath(std::string val) {
@@ -42,12 +43,14 @@ void AudioComponent::setSourcePath(std::string val) {
 }
 
 void AudioComponent::onStart() {
-	if (res && !res->id)
+	if (res && !res->id) {
 		AUDIO::AudioManagerAL::GetInstance().addSource(*res);
+	}
 }
 void AudioComponent::onDestroy() {
-	if (res && res->id)
+	if (res && res->id) {
 		AUDIO::AudioManagerAL::GetInstance().stop(*res);
+	}
 }
 
 std::string AudioComponent::getSoundPath() const {

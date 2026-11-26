@@ -56,6 +56,7 @@ void MenuBar::draw() {
 				demo("Ragdoll", "/scenes/ragdoll-demo.json", USE_PHYSICS_3D);
 				demo("Environment - Landscape and Weather", "/scenes/environment-demo.json");
 				demo("Drifting Boat", "/scenes/drifting-boat.json", USE_PHYSICS_3D);
+				demo("Vehicle proving ground", "/scenes/vehicle-proving-ground.json", USE_PHYSICS_3D);
 				demo("3D Physics", "/scenes/physics-3d-demo.json", USE_PHYSICS_3D);
 				demo("Destruction Playground", "/scenes/destruction-playground.json", USE_PHYSICS_3D);
 				demo("Layered Materials", "/scenes/layered-materials.json");

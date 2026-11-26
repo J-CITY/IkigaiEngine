@@ -27,6 +27,14 @@
 #include "misc/cpp/imgui_stdlib.h"
 #include "pbrMaterialEditor.h"
 #include "physicsDebugWindow.h"
+#if USE_PHYSICS_3D
+#include "coreModule/ecs/components/materialRenderer.h"
+#include "coreModule/ecs/components/physics3dComponent.h"
+#include "coreModule/ecs/components/vehicleComponent.h"
+#include "resourceModule/materialManager.h"
+#include <magic_enum.hpp>
+#include <numbers>
+#endif
 #include "profillerWindow.h"
 #include "renderModule/backends/interface/resourceStruct.h"
 #include "renderingDemos.h"
@@ -45,6 +53,265 @@
 using namespace IKIGAI::EDITOR;
 
 namespace {
+#if USE_PHYSICS_3D
+template <class E> bool selectVehiclePart(const char* label, E& current) {
+	bool changed = false;
+	if (ImGui::BeginCombo(label, magic_enum::enum_name(current).data())) {
+		for (auto option : magic_enum::enum_values<E>()) {
+			const bool selected = option == current;
+			if (ImGui::Selectable(magic_enum::enum_name(option).data(), selected)) {
+				current = option;
+				changed = true;
+			}
+			if (selected) {
+				ImGui::SetItemDefaultFocus();
+			}
+		}
+		ImGui::EndCombo();
+	}
+	return changed;
+}
+void drawCircuitSurface(IKIGAI::SCENE_SYSTEM::Scene& scene) {
+	using namespace IKIGAI;
+	using PHYSICS::RoadSurface;
+	const auto track = scene.findObjectByName("Circuit road");
+	if (!track) {
+		return;
+	}
+	auto collider = track->getComponent<ECS::Physics3DComponent>();
+	auto renderer = track->getComponent<ECS::MaterialRenderer>();
+	if (!collider || !renderer) {
+		return;
+	}
+	struct SurfaceOption {
+		RoadSurface surface;
+		const char* name;
+		const char* material;
+	};
+	static constexpr SurfaceOption options[] { { RoadSurface::Asphalt, "Asphalt", "/materials/vehicle/Asphalt.mat" },
+		{ RoadSurface::WetAsphalt, "Wet asphalt", "/materials/vehicle/WetAsphalt.mat" }, { RoadSurface::Ice, "Ice", "/materials/vehicle/Ice.mat" },
+		{ RoadSurface::Mud, "Mud", "/materials/vehicle/Mud.mat" }, { RoadSurface::Sand, "Sand", "/materials/vehicle/Sand.mat" },
+		{ RoadSurface::Snow, "Snow", "/materials/vehicle/Snow.mat" }, { RoadSurface::DirtRoad, "Dirt road", "/materials/vehicle/DirtRoad.mat" } };
+	const auto current = std::ranges::find(options, collider->settings.Surface, &SurfaceOption::surface);
+	if (ImGui::BeginCombo("Track surface", current == std::end(options) ? "Collider" : current->name)) {
+		for (const auto& option : options) {
+			const bool selected = option.surface == collider->settings.Surface;
+			if (ImGui::Selectable(option.name, selected) && !selected) {
+				if (auto material = RESOURCES::ServiceManager::Get<RESOURCES::MaterialLoader>().loadResource(option.material)) {
+					renderer->setMaterial(0, material);
+					collider->settings.Surface = option.surface;
+					collider->settings.Friction = PHYSICS::tireResponse(PHYSICS::TireStyle::Road, option.surface, 1.f).grip;
+				}
+			}
+			if (selected) {
+				ImGui::SetItemDefaultFocus();
+			}
+		}
+		ImGui::EndCombo();
+	}
+}
+void drawVehicleWorkshop(IKIGAI::SCENE_SYSTEM::Scene& scene, bool& open) {
+	using namespace IKIGAI;
+	using namespace PHYSICS;
+	ImGui::SetNextWindowSize({ 425, 600 }, ImGuiCond_FirstUseEver);
+	if (ImGui::Begin("Vehicle workshop", &open)) {
+		drawCircuitSurface(scene);
+		bool found = false;
+		for (auto& driver : scene.getWorld().getComponentManager()->getComponentsArray<ECS::VehicleComponent>()) {
+			if (!scene.getObjectIndex(driver.obj.get())) {
+				continue;
+			}
+			found = true;
+			ImGui::PushID(&driver);
+			ImGui::TextUnformatted(driver.obj->getName().c_str());
+			const auto& settings = driver.getDescriptor();
+			float assistPercent = settings.Assistance * 100.f;
+			auto steering = settings.Steering;
+			auto transmission = settings.Transmission;
+			ImGui::TextUnformatted("Handling assist: Simulation to Arcade");
+			ImGui::SetNextItemWidth(-1.f);
+			bool controlsChanged = ImGui::SliderFloat("##HandlingAssist", &assistPercent, 0.f, 100.f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp);
+			if (ImGui::IsItemHovered()) {
+				ImGui::SetTooltip("Arcade increases launch torque, cornering grip and steering response.");
+			}
+			float highSpeedSteering = settings.HighSpeedSteering * 100.f;
+			ImGui::SetNextItemWidth(-150.f);
+			if (ImGui::SliderFloat("High-speed steering", &highSpeedSteering, Vehicle::minHighSpeedSteering * 100.f,
+					Vehicle::maxHighSpeedSteering * 100.f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp)) {
+				driver.setHighSpeedSteering(highSpeedSteering / 100.f);
+			}
+			if (ImGui::IsItemHovered()) {
+				ImGui::SetTooltip("Higher values tighten fast turns. 100%% uses the original steering.");
+			}
+			DriftTuning tuning = settings;
+			if (ImGui::Checkbox("Arcade drift", &tuning.driftEnabled)) {
+				driver.setDriftTuning(tuning);
+			}
+			if (!tuning.driftEnabled) {
+				float strength = tuning.antiSkidStrength * 100.f;
+				if (ImGui::SliderFloat("Anti-skid assist", &strength, 0.f, 100.f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp)) {
+					tuning.antiSkidStrength = strength / 100.f;
+					driver.setDriftTuning(tuning);
+				}
+			}
+			if (tuning.driftEnabled && ImGui::TreeNode("Drift tuning")) {
+				ImGui::PushItemWidth(-165.f);
+				float sensitivity = tuning.breakawaySensitivity * 100.f;
+				bool edited = ImGui::SliderFloat("Handbrake sensitivity", &sensitivity, 0.f, 100.f, "%.0f%%", ImGuiSliderFlags_AlwaysClamp);
+				if (edited) {
+					tuning.breakawaySensitivity = sensitivity / 100.f;
+				}
+				if (ImGui::IsItemHovered()) {
+					ImGui::SetTooltip("Higher values start a slide with less steering and a shorter handbrake tap.");
+				}
+				edited |= ImGui::SliderFloat(
+					"Power angle", &tuning.powerAngleDegrees, DriftTuning::minAngle, DriftTuning::maxAngle, "%.0f deg", ImGuiSliderFlags_AlwaysClamp);
+				if (ImGui::IsItemHovered()) {
+					ImGui::SetTooltip("Target slip angle at full throttle with centred steering.");
+				}
+				edited |= ImGui::SliderFloat("Recovery time", &tuning.recoverySeconds, DriftTuning::minRecovery, DriftTuning::maxRecovery, "%.2f s",
+					ImGuiSliderFlags_AlwaysClamp);
+				if (ImGui::IsItemHovered()) {
+					ImGui::SetTooltip("Time for drift assistance to fade after lifting the throttle.");
+				}
+				if (edited) {
+					driver.setDriftTuning(tuning);
+				}
+				ImGui::PopItemWidth();
+				ImGui::TreePop();
+			}
+			controlsChanged |= selectVehiclePart("Steering", steering);
+			controlsChanged |= selectVehiclePart("Transmission", transmission);
+			if (controlsChanged) {
+				driver.setControls(assistPercent / 100.f, steering, transmission);
+			}
+			if (transmission == TransmissionMode::Direct) {
+				ImGui::TextUnformatted("W forward / S reverse");
+			}
+			else {
+				const int gear = driver.gear();
+				if (transmission == TransmissionMode::ForwardReverse) {
+					ImGui::Text("W throttle   Q reverse / E drive   [%s]", gear < 0 ? "R" : "D");
+				}
+				else {
+					ImGui::Text("W throttle   Q down / E up   [%s]", gear < 0 ? "R" : gear == 0 ? "N" : std::to_string(gear).c_str());
+				}
+			}
+			ImGui::TextUnformatted("A/D steer   Space handbrake   LCtrl brake");
+			if (tuning.driftEnabled && assistPercent > 0.f) {
+				ImGui::TextDisabled("Drift: tap Space in a turn, then hold W.");
+			}
+			if (auto rigidBody = driver.obj->getComponent<ECS::Physics3DComponent>(); rigidBody && rigidBody->runtime) {
+				if (auto world = rigidBody->runtime->world.lock()) {
+					if (auto* car = world->vehicle(rigidBody->simulationId())) {
+						ImGui::Text("%.0f km/h    Nitro (LShift + W)   %.0f%%", car->state.speed * 3.6f, car->state.nitroCharge * 100.f);
+						if (std::abs(car->state.driftEngagement) > .05f) {
+							ImGui::Text("Drift angle   %.0f deg", std::abs(car->state.driftAngle) * 180.f / std::numbers::pi_v<float>);
+						}
+					}
+				}
+			}
+			ImGui::Separator();
+			auto parts = driver.config();
+			bool changed = false;
+			if (ImGui::Button("Sports car")) {
+				parts = vehiclePreset(ChassisStyle::Sport);
+				changed = true;
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Crossover")) {
+				parts = vehiclePreset(ChassisStyle::Crossover);
+				changed = true;
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Truck")) {
+				parts = vehiclePreset(ChassisStyle::Truck);
+				changed = true;
+			}
+			changed |= selectVehiclePart("Chassis", parts.chassis);
+			auto rigid = driver.obj->getComponent<ECS::Physics3DComponent>();
+			if (rigid) {
+				const float chassisMass = parts.chassis == ChassisStyle::Authored ? rigid->settings.Mass : chassisDimensions(parts.chassis).mass;
+				float mass = parts.massOverrideKg > 0 ? parts.massOverrideKg : chassisMass;
+				if (ImGui::DragFloat("Mass (kg)", &mass, 5.f, 1.f, 100000.f, "%.0f", ImGuiSliderFlags_AlwaysClamp)) {
+					parts.massOverrideKg = mass;
+					changed = true;
+				}
+				if (parts.massOverrideKg > 0 && ImGui::SmallButton("Use chassis mass")) {
+					parts.massOverrideKg = 0;
+					changed = true;
+				}
+			}
+			changed |= selectVehiclePart("Suspension", parts.suspension);
+			changed |= selectVehiclePart("Tires", parts.tires);
+			changed |= selectVehiclePart("Brakes", parts.brakes);
+			changed |= selectVehiclePart("Engine", parts.engine);
+			changed |= selectVehiclePart("Drive", parts.drive);
+			ImGui::Separator();
+			if (ImGui::TreeNode("Fine tuning")) {
+				auto effective = parts.resolved();
+				if (ImGui::SliderFloat("Drive torque", &effective.driveTorque, 200, 6000, "%.0f Nm")) {
+					parts.engine = EngineStyle::Authored;
+					parts.driveTorque = effective.driveTorque;
+					changed = true;
+				}
+				bool adjustSpring = ImGui::SliderFloat("Spring rate", &effective.stiffness, 15000, 140000, "%.0f N/m");
+				adjustSpring |= ImGui::SliderFloat("Compression damping", &effective.compressionDamping, 500, 15000, "%.0f Ns/m");
+				adjustSpring |= ImGui::SliderFloat("Rebound damping", &effective.reboundDamping, 500, 20000, "%.0f Ns/m");
+				if (adjustSpring) {
+					parts.suspension = SuspensionStyle::Authored;
+					parts.restLength = effective.restLength;
+					parts.maxCompression = effective.maxCompression;
+					parts.maxDroop = effective.maxDroop;
+					parts.antiRollStiffness = effective.antiRollStiffness;
+					parts.maxSuspensionForce = effective.maxSuspensionForce;
+					parts.stiffness = effective.stiffness;
+					parts.compressionDamping = effective.compressionDamping;
+					parts.reboundDamping = effective.reboundDamping;
+					changed = true;
+				}
+				ImGui::TreePop();
+			}
+			ImGui::TextUnformatted("Centre of mass (metres)");
+			changed |= ImGui::SliderFloat("Lateral X", &parts.centerOfMass.x, -.65f, .65f, "%.2f");
+			changed |= ImGui::SliderFloat("Height Y", &parts.centerOfMass.y, -.45f, .65f, "%.2f");
+			changed |= ImGui::SliderFloat("Forward Z", &parts.centerOfMass.z, -1.f, 1.f, "%.2f");
+			if (ImGui::Button("Centre on chassis")) {
+				parts.centerOfMass = {};
+				changed = true;
+			}
+			if (changed) {
+				driver.configure(parts);
+			}
+			if (rigid && rigid->runtime) {
+				if (auto world = rigid->runtime->world.lock()) {
+					if (auto* car = world->vehicle(rigid->simulationId())) {
+						ImGui::Text("Mass %.0f kg   Drive torque %.0f Nm", rigid->body()->getMass(), car->config.driveTorque);
+						constexpr std::array names { "Front left", "Front right", "Rear left", "Rear right" };
+						for (size_t i = 0; i < names.size(); ++i) {
+							const auto& wheel = car->state.wheels[i];
+							ImGui::Text("%s: %s   %.0f N", names[i], wheel.normalLoad > 0 ? magic_enum::enum_name(wheel.surface).data() : "Air",
+								wheel.normalLoad);
+						}
+					}
+				}
+			}
+			ImGui::PopID();
+		}
+		if (!found) {
+			ImGui::TextUnformatted("Open a scene with a VehicleComponent.");
+		}
+		// The workshop stays open while driving. An idle window can hold ImGui navigation
+		// focus even when no widget consumes the driving keys.
+		const auto& io = ImGui::GetIO();
+		if (found && ImGui::IsWindowFocused() && !ImGui::IsAnyItemActive() && !io.WantTextInput && !io.NavVisible
+			&& !ImGui::IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopup)) {
+			ImGui::SetNextFrameWantCaptureKeyboard(false);
+		}
+	}
+	ImGui::End();
+}
+#endif
 void drawWaterWindow(IKIGAI::SCENE_SYSTEM::Scene& scene, bool& open) {
 	using namespace IKIGAI;
 	const auto* viewport = ImGui::GetMainViewport();
@@ -174,6 +441,7 @@ struct EditorRender::Internal {
 	SceneTransformTool mSceneTransform;
 	ScreenProbeRoomControls mScreenProbeRoom;
 	bool mWaterOpen = false;
+	bool mVehicleOpen = false;
 	bool mWorkspaceVisible = true;
 	TimelineAnimationWindow* mTimelineAnimation = nullptr;
 
@@ -289,15 +557,17 @@ void EditorRender::draw() {
 	const bool particleEvents = path == std::string_view(ParticleEventPath).substr(1);
 	const bool weatherDemo = path == "scenes/environment-demo.json";
 	const bool rocketLander = path == "scenes/rocket-lander.json";
+	const bool vehicleDemo = path == "scenes/vehicle-proving-ground.json";
 	const bool boatDemo = path == "scenes/drifting-boat.json";
 	const bool focusedDemo = screenProbeRoom || virtualGeometryGallery || furRabbit || cloth2D || cloth3D || softBody || particleEvents || weatherDemo
-		|| boatDemo || rocketLander;
+		|| boatDemo || vehicleDemo || rocketLander;
 	if (manager.hasCurrentScene() && historyScene.lock() != manager.getCurrentScene().lifetime) {
 		GlobalState.mCommandHistory.clear();
 		GlobalState.mSelectObject.reset();
 		historyScene = manager.getCurrentScene().lifetime;
 		mData->mScreenProbeRoom.reset();
 		mData->mWaterOpen = boatDemo;
+		mData->mVehicleOpen = vehicleDemo;
 		mData->mWorkspaceVisible
 			= path != "scenes/gui-widgets.json" && !destructionPlayground && !layeredPlayground && !facialPlayground && !focusedDemo;
 		if (focusedDemo) {
@@ -335,6 +605,9 @@ void EditorRender::draw() {
 			if (ImGui::MenuItem("Surface Brushes", nullptr, &surfaceOpen)) {
 				mData->mSurfaceBrushes.setOpen(surfaceOpen);
 			}
+#if USE_PHYSICS_3D
+			ImGui::MenuItem("Vehicle workshop", nullptr, &mData->mVehicleOpen);
+#endif
 			ImGui::MenuItem("Water and Wind", nullptr, &mData->mWaterOpen);
 			bool environmentOpen = mData->mEnvironment.isOpen();
 			if (ImGui::MenuItem("Environment", nullptr, &environmentOpen)) {
@@ -350,6 +623,11 @@ void EditorRender::draw() {
 	if ((mData->mWorkspaceVisible || cloth2D) && manager.hasCurrentScene()) {
 		DrawPhysicsDebug(manager.getCurrentScene(), cloth2D);
 	}
+#if USE_PHYSICS_3D
+	if (mData->mVehicleOpen && manager.hasCurrentScene()) {
+		drawVehicleWorkshop(manager.getCurrentScene(), mData->mVehicleOpen);
+	}
+#endif
 	if (mData->mWaterOpen && manager.hasCurrentScene()) {
 		drawWaterWindow(manager.getCurrentScene(), mData->mWaterOpen);
 	}

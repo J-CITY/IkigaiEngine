@@ -271,6 +271,11 @@ void IKIGAI::AUDIO::AudioManagerAL::unpause(SoundResource& source) {
 	audioEngine->setPause(source.id.value(), false);
 }
 
+void IKIGAI::AUDIO::AudioManagerAL::setPlaybackSpeed(const SoundResource& source, float speed) {
+	if (isReady() && source.id && speed > 0.f) {
+		audioEngine->setRelativePlaySpeed(*source.id, speed);
+	}
+}
 void IKIGAI::AUDIO::AudioManagerAL::setVolume(SoundResource& source, float vol) {
 	if (!source.id) {
 		// problem

@@ -41,6 +41,7 @@ public:
 	void stop(bool clear = false);
 	void restart(uint64_t seed);
 	void setParameter(const std::string& name, const std::vector<float>& value);
+	void setRuntimeParameter(const std::string& name, const std::vector<float>& value);
 	void setEventSpawnsEnabled(bool enabled);
 	bool isComplete() const {
 		return !mRuntime || mRuntime->isComplete();

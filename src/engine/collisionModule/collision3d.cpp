@@ -38,6 +38,15 @@ Shape3D Shape3D::convex(std::shared_ptr<const ConvexPolyhedron> polyhedron) {
 
 MATH::GEOMETRY::Aabb<3> bounds(const ShapeView3D& s) {
 	if (s.shape.kind == Shape3D::Kind::Compound) {
+		const std::array<Vec3, 3> identity { Vec3 { 1, 0, 0 }, Vec3 { 0, 1, 0 }, Vec3 { 0, 0, 1 } };
+		if (s.shape.compoundCollider && s.axes == identity) {
+			auto out = s.shape.compoundCollider->localBounds();
+			for (int i = 0; i < 3; ++i) {
+				out.min[i] += s.position[i];
+				out.max[i] += s.position[i];
+			}
+			return out;
+		}
 		auto out = bounds(compoundLeafView(s, 0));
 		for (std::size_t child = 1; child < compoundLeafCount(s); ++child) {
 			out = MATH::GEOMETRY::Aabb<3>::merge(out, bounds(compoundLeafView(s, child)));
